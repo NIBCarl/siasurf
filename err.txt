@@ -1,0 +1,8 @@
+﻿
+Fatal error: Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.4.0". You are running 8.2.12. in C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\composer\platform_check.php:26
+Stack trace:
+#0 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\composer\autoload_real.php(25): require()
+#1 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\autoload.php(22): ComposerAutoloaderInit53b5d56b3b7e3cbac1713e68c8850f6c::getLoader()
+#2 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\artisan(10): require('C:\\Users\\Engr. ...')
+#3 {main}
+  thrown in C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\composer\platform_check.php on line 26

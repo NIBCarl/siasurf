@@ -1,0 +1,12 @@
+[core]
+	repositoryformatversion = 0
+	filemode = false
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+[user]
+	email = siasurf.admin@gmail.com
+	name = SiaSurf Developer
+[remote "origin"]
+	url = https://github.com/NIBCarl/siasurf.git
+	fetch = +refs/heads/*:refs/remotes/origin/*

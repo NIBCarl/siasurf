@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+    /* Glassmorphism base */
+    .glass-base {
+        @apply bg-white/70 backdrop-blur-md border border-white/20;
+    }
+    
+    .glass-dark {
+        @apply bg-slate-900/40 backdrop-blur-lg border border-white/10;
+    }
+
+    /* Ocean Glow Effects */
+    .ocean-glow {
+        box-shadow: 0 0 20px -5px rgba(13, 148, 136, 0.3);
+    }
+    
+    .ocean-glow-strong {
+        box-shadow: 0 0 40px -10px rgba(13, 148, 136, 0.4);
+    }
+
+    /* Wave Animation */
+    .wave-progress {
+        animation: wave-loading 1.5s ease-in-out infinite;
+        transform-origin: left;
+    }
+    
+    @keyframes wave-loading {
+        0%, 100% { width: 0%; margin-left: 0; }
+        50% { width: 100%; margin-left: 0; }
+    }
+
+    /* Shimmer Effect */
+    .animate-shimmer {
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        background-size: 200% 100%;
+        animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+}
+
+@layer base {
+    body {
+        @apply text-slate-900 antialiased;
+        background-color: #f8fafc; /* slate-50 */
+    }
+}

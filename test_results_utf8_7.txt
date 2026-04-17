@@ -1,0 +1,132 @@
+﻿
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_view_instructors_list(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::non_admin_cannot_view_instructors_list(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_register_new_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_verify_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_suspend_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_reactivate_suspended_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_upload_certificate(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_verify_certificate(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_reject_certificate(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::instructor_registration_requires_valid_email(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::instructor_registration_requires_unique_email(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   FAIL  Tests\Feature\Http\Controllers\AdminInstructorControllerTest
+  Γ£ô admin can vΓÇª 4.87s  
+  Γ£ô non admin cΓÇª 0.06s  
+  Γ£ô admin can rΓÇª 0.06s  
+  Γ£ô admin can vΓÇª 0.18s  
+  Γ¿» admin can sΓÇª 1.39s  
+  Γ£ô admin can rΓÇª 0.09s  
+  Γ£ô admin can uΓÇª 0.07s  
+  Γ£ô admin can vΓÇª 0.05s  
+  Γ£ô admin can rΓÇª 0.06s  
+  Γ£ô instructorΓÇª  0.05s  
+  Γ£ô instructorΓÇª  0.06s  
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 500.
+Failed asserting that false is true.
+
+The following exception occurred during the last request:
+
+Error: Class "App\Notifications\InstructorSuspended" not found in C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Http\Controllers\Admin\InstructorController.php:226
+Stack trace:
+#0 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\ControllerDispatcher.php(46): App\Http\Controllers\Admin\InstructorController->suspend(Object(Illuminate\Http\Request), Object(App\Models\User))
+#1 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\Route.php(265): Illuminate\Routing\ControllerDispatcher->dispatch(Object(Illuminate\Routing\Route), Object(App\Http\Controllers\Admin\InstructorController), 'suspend')
+#2 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\Route.php(211): Illuminate\Routing\Route->runController()
+#3 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\Router.php(822): Illuminate\Routing\Route->run()
+#4 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(180): Illuminate\Routing\Router->Illuminate\Routing\{closure}(Object(Illuminate\Http\Request))
+#5 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\spatie\laravel-permission\src\Middleware\RoleMiddleware.php(41): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#6 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Spatie\Permission\Middleware\RoleMiddleware->handle(Object(Illuminate\Http\Request), Object(Closure), 'admin')
+#7 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Auth\Middleware\EnsureEmailIsVerified.php(41): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#8 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Auth\Middleware\EnsureEmailIsVerified->handle(Object(Illuminate\Http\Request), Object(Closure))
+#9 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets.php(32): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#10 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets->handle(Object(Illuminate\Http\Request), Object(Closure))
+#11 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\inertiajs\inertia-laravel\src\Middleware.php(122): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#12 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Inertia\Middleware->handle(Object(Illuminate\Http\Request), Object(Closure))
+#13 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\Middleware\SubstituteBindings.php(50): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#14 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Routing\Middleware\SubstituteBindings->handle(Object(Illuminate\Http\Request), Object(Closure))
+#15 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Auth\Middleware\Authenticate.php(63): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#16 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Auth\Middleware\Authenticate->handle(Object(Illuminate\Http\Request), Object(Closure))
+#17 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken.php(87): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#18 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Foundation\Http\Middleware\VerifyCsrfToken->handle(Object(Illuminate\Http\Request), Object(Closure))
+#19 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\View\Middleware\ShareErrorsFromSession.php(48): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#20 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\View\Middleware\ShareErrorsFromSession->handle(Object(Illuminate\Http\Request), Object(Closure))
+#21 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Session\Middleware\StartSession.php(120): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#22 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Session\Middleware\StartSession.php(63): Illuminate\Session\Middleware\StartSession->handleStatefulRequest(Object(Illuminate\Http\Request), Object(Illuminate\Session\Store), Object(Closure))
+#23 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Session\Middleware\StartSession->handle(Object(Illuminate\Http\Request), Object(Closure))
+#24 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse.php(36): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#25 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse->handle(Object(Illuminate\Http\Request), Object(Closure))
+#26 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Cookie\Middleware\EncryptCookies.php(74): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#27 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Cookie\Middleware\EncryptCookies->handle(Object(Illuminate\Http\Request), Object(Closure))
+#28 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(137): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#29 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\Router.php(821): Illuminate\Pipeline\Pipeline->then(Object(Closure))
+#30 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\Router.php(800): Illuminate\Routing\Router->runRouteWithinStack(Object(Illuminate\Routing\Route), Object(Illuminate\Http\Request))
+#31 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\Router.php(764): Illuminate\Routing\Router->runRoute(Object(Illuminate\Http\Request), Object(Illuminate\Routing\Route))
+#32 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Routing\Router.php(753): Illuminate\Routing\Router->dispatchToRoute(Object(Illuminate\Http\Request))
+#33 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Kernel.php(200): Illuminate\Routing\Router->dispatch(Object(Illuminate\Http\Request))
+#34 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(180): Illuminate\Foundation\Http\Kernel->Illuminate\Foundation\Http\{closure}(Object(Illuminate\Http\Request))
+#35 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\TransformsRequest.php(21): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#36 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull.php(31): Illuminate\Foundation\Http\Middleware\TransformsRequest->handle(Object(Illuminate\Http\Request), Object(Closure))
+#37 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull->handle(Object(Illuminate\Http\Request), Object(Closure))
+#38 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\TransformsRequest.php(21): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#39 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\TrimStrings.php(51): Illuminate\Foundation\Http\Middleware\TransformsRequest->handle(Object(Illuminate\Http\Request), Object(Closure))
+#40 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Foundation\Http\Middleware\TrimStrings->handle(Object(Illuminate\Http\Request), Object(Closure))
+#41 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Http\Middleware\ValidatePostSize.php(27): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#42 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Http\Middleware\ValidatePostSize->handle(Object(Illuminate\Http\Request), Object(Closure))
+#43 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance.php(109): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#44 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance->handle(Object(Illuminate\Http\Request), Object(Closure))
+#45 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Http\Middleware\HandleCors.php(61): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#46 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Http\Middleware\HandleCors->handle(Object(Illuminate\Http\Request), Object(Closure))
+#47 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Http\Middleware\TrustProxies.php(58): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#48 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Http\Middleware\TrustProxies->handle(Object(Illuminate\Http\Request), Object(Closure))
+#49 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks.php(22): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#50 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks->handle(Object(Illuminate\Http\Request), Object(Closure))
+#51 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Http\Middleware\ValidatePathEncoding.php(26): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#52 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(219): Illuminate\Http\Middleware\ValidatePathEncoding->handle(Object(Illuminate\Http\Request), Object(Closure))
+#53 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php(137): Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(Object(Illuminate\Http\Request))
+#54 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Kernel.php(175): Illuminate\Pipeline\Pipeline->then(Object(Closure))
+#55 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Http\Kernel.php(144): Illuminate\Foundation\Http\Kernel->sendRequestThroughRouter(Object(Illuminate\Http\Request))
+#56 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\MakesHttpRequests.php(607): Illuminate\Foundation\Http\Kernel->handle(Object(Illuminate\Http\Request))
+#57 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\MakesHttpRequests.php(397): Illuminate\Foundation\Testing\TestCase->call('POST', 'http://192.168....', Array, Array, Array, Array)
+#58 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php(114): Illuminate\Foundation\Testing\TestCase->post('http://192.168....', Array)
+#59 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\phpunit\phpunit\src\Framework\TestCase.php(1667): Tests\Feature\Http\Controllers\AdminInstructorControllerTest->admin_can_suspend_instructor()
+#60 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\phpunit\phpunit\src\Framework\TestCase.php(519): PHPUnit\Framework\TestCase->runTest()
+#61 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\phpunit\phpunit\src\Framework\TestRunner\TestRunner.php(87): PHPUnit\Framework\TestCase->runBare()
+#62 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\phpunit\phpunit\src\Framework\TestCase.php(365): PHPUnit\Framework\TestRunner->run(Object(Tests\Feature\Http\Controllers\AdminInstructorControllerTest))
+#63 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\phpunit\phpunit\src\Framework\TestSuite.php(369): PHPUnit\Framework\TestCase->run()
+#64 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\phpunit\phpunit\src\TextUI\TestRunner.php(64): PHPUnit\Framework\TestSuite->run()
+#65 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\phpunit\phpunit\src\TextUI\Application.php(211): PHPUnit\TextUI\TestRunner->run(Object(PHPUnit\TextUI\Configuration\Configuration), Object(PHPUnit\Runner\ResultCache\DefaultResultCache), Object(PHPUnit\Framework\TestSuite))
+#66 C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\phpunit\phpunit\phpunit(104): PHPUnit\TextUI\Application->run(Array)
+#67 {main}
+
+----------------------------------------------------------------------------------
+
+Class "App\Notifications\InstructorSuspended" not found
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:119
+    115Γûò                 'reason' => 'Violation of safety protocols',
+    116Γûò                 'duration_days' => 30,
+    117Γûò             ]);
+    118Γûò 
+  Γ₧£ 119Γûò         $response->assertRedirect();
+    120Γûò         
+    121Γûò         $this->assertDatabaseHas('instructor_profiles', [
+    122Γûò             'user_id' => $this->instructor->id,
+    123Γûò             'status' => InstructorStatus::Suspended->value,
+
+
+  Tests:    1 failed, 10 passed (29 assertions)
+  Duration: 7.10s
+

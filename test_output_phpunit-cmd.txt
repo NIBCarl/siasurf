@@ -1,0 +1,233 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.2.12
+Configuration: C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\phpunit.xml
+
+........................E........F..................F.FFEEFEEFFFF 65 / 78 ( 83%)
+....F........                                                     78 / 78 (100%)
+
+Time: 00:09.738, Memory: 74.00 MB
+
+There were 5 errors:
+
+1) Tests\Unit\Services\WaiverServiceTest::it_returns_all_signed_when_minor_has_both_waivers
+Illuminate\Database\UniqueConstraintViolationException: SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry '5' for key 'waivers_booking_id_unique' (Connection: mysql, Host: 172.23.224.1, Port: 3306, Database: siasurf_test, SQL: insert into `waivers` (`booking_id`, `type`, `signed_by`, `signature_data`, `pdf_path`, `signed_at`, `retention_until`, `updated_at`, `created_at`) values (5, parental_consent, Parent Name, data:image/png;base64,test, waivers/parental_consent_booking_5_1773729215.pdf, 2026-03-17 06:33:35, 2033-03-17 06:33:35, 2026-03-17 06:33:35, 2026-03-17 06:33:35))
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Processors\MySqlProcessor.php:35
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Builder.php:4140
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:2235
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1436
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1401
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1240
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:1219
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Support\helpers.php:388
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:1218
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Support\Traits\ForwardsCalls.php:23
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\WaiverService.php:59
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\WaiverServiceTest.php:178
+
+Caused by
+PDOException: SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry '5' for key 'waivers_booking_id_unique'
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:53
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:827
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Processors\MySqlProcessor.php:35
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Builder.php:4140
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:2235
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1436
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1401
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1240
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:1219
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Support\helpers.php:388
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:1218
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Support\Traits\ForwardsCalls.php:23
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\WaiverService.php:59
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\WaiverServiceTest.php:178
+
+2) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_suspend_instructor
+Error: Call to a member function update() on null
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:106
+
+3) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_reactivate_suspended_instructor
+Error: Call to a member function update() on null
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:124
+
+4) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_verify_certificate
+Illuminate\Database\QueryException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'instructor_id' in 'field list' (Connection: mysql, Host: 172.23.224.1, Port: 3306, Database: siasurf_test, SQL: insert into `certificates` (`user_id`, `type`, `file_path`, `status`, `verified_at`, `expires_at`, `admin_notes`, `instructor_id`, `updated_at`, `created_at`) values (52, surf_skill, certificates/3e681de1-abb7-3f97-89e8-6399d3f4508b.pdf, pending_verification, ?, ?, ?, 51, 2026-03-17 06:33:38, 2026-03-17 06:33:38))
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Processors\MySqlProcessor.php:35
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Builder.php:4140
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:2235
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1436
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1401
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1240
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:370
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Collections\Traits\EnumeratesValues.php:275
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:365
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:321
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:315
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:168
+
+Caused by
+PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'instructor_id' in 'field list'
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:47
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:827
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Processors\MySqlProcessor.php:35
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Builder.php:4140
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:2235
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1436
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1401
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1240
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:370
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Collections\Traits\EnumeratesValues.php:275
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:365
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:321
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:315
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:168
+
+5) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_reject_certificate
+Illuminate\Database\QueryException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'instructor_id' in 'field list' (Connection: mysql, Host: 172.23.224.1, Port: 3306, Database: siasurf_test, SQL: insert into `certificates` (`user_id`, `type`, `file_path`, `status`, `verified_at`, `expires_at`, `admin_notes`, `instructor_id`, `updated_at`, `created_at`) values (55, surf_skill, certificates/a4416e62-37b9-3d1b-8267-18f2757e1768.pdf, pending_verification, ?, 2028-07-12 14:52:48, ?, 54, 2026-03-17 06:33:38, 2026-03-17 06:33:38))
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Processors\MySqlProcessor.php:35
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Builder.php:4140
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:2235
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1436
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1401
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1240
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:370
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Collections\Traits\EnumeratesValues.php:275
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:365
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:321
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:315
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:190
+
+Caused by
+PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'instructor_id' in 'field list'
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:47
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:827
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Processors\MySqlProcessor.php:35
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Query\Builder.php:4140
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:2235
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1436
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1401
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1240
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:370
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Collections\Traits\EnumeratesValues.php:275
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:365
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:321
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:315
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:190
+
+--
+
+There were 10 failures:
+
+1) Tests\Feature\Auth\AuthenticationTest::test_users_can_register_as_instructor
+Failed asserting that null is not null.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Auth\AuthenticationTest.php:104
+
+2) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_view_instructors_list
+Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:175
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\Concerns\AssertsStatusCodes.php:16
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:46
+
+3) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_register_new_instructor
+Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:76
+
+4) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_verify_instructor
+Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:95
+
+5) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_upload_certificate
+Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:154
+
+6) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::instructor_registration_requires_valid_email
+Session is missing expected key [errors].
+Failed asserting that false is true.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1547
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1634
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:220
+
+7) Tests\Feature\Http\Controllers\AdminInstructorControllerTest::instructor_registration_requires_unique_email
+Session is missing expected key [errors].
+Failed asserting that false is true.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1547
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1634
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:236
+
+8) Tests\Feature\Http\Controllers\BookingControllerTest::student_can_view_booking_creation_form
+Inertia page component file [Booking/Create] does not exist.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\inertiajs\inertia-laravel\src\Testing\AssertableInertia.php:112
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\BookingControllerTest.php:52
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\inertiajs\inertia-laravel\src\Testing\TestResponseMacros.php:26
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Macroable\Traits\Macroable.php:126
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:2014
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\BookingControllerTest.php:51
+
+9) Tests\Feature\Http\Controllers\BookingControllerTest::student_can_create_booking_with_valid_data
+Expected response status code [201, 301, 302, 303, 307, 308] but received 200.
+Failed asserting that false is true.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\BookingControllerTest.php:73
+
+10) Tests\Feature\Http\Controllers\BookingControllerTest::student_can_view_their_bookings
+Inertia page component file [Student/Bookings/Index] does not exist.
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\inertiajs\inertia-laravel\src\Testing\AssertableInertia.php:112
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\BookingControllerTest.php:178
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\inertiajs\inertia-laravel\src\Testing\TestResponseMacros.php:26
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Macroable\Traits\Macroable.php:126
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:2014
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\BookingControllerTest.php:177
+
+ERRORS!
+Tests: 78, Assertions: 169, Errors: 5, Failures: 10, PHPUnit Deprecations: 48.

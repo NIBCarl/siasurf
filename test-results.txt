@@ -1,0 +1,743 @@
+﻿
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::level_1_instructor_can_teach_2_beginners(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::level_1_instructor_cannot_teach_3_students(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::level_1_instructor_cannot_teach_intermediate(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::level_2_instructor_can_do_1_on_1(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::level_2_instructor_cannot_handle_2_students(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::level_3_instructor_can_handle_5_students(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::level_3_instructor_cannot_handle_6_students(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::children_aged_5_to_12_require_level_3_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::children_aged_5_to_12_cannot_use_level_1_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::beginners_can_use_beginner_spots(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::beginners_cannot_use_advanced_spots(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::advanced_lessons_require_level_3_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::advanced_lessons_cannot_use_level_2_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::students_under_5_are_not_allowed(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::get_validation_errors_returns_array_of_violations(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::can_get_applicable_rules_for_level_1(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::can_get_applicable_rules_for_level_3(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::can_check_if_instructor_can_handle_group_size(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\SafetyServiceTest::can_check_if_instructor_can_teach_skill_level(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\WaiverServiceTest::it_creates_liability_waiver_for_adult_student(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\WaiverServiceTest::it_creates_parental_consent_for_minor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\WaiverServiceTest::it_detects_when_all_waivers_are_signed_for_adult(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\WaiverServiceTest::it_detects_missing_parental_consent_for_minor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\WaiverServiceTest::it_returns_all_signed_when_minor_has_both_waivers(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\WaiverServiceTest::it_identifies_missing_liability_waiver(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\WaiverServiceTest::it_generates_correct_retention_date(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Unit\Services\WaiverServiceTest::it_cleans_up_expired_waivers(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_view_instructors_list(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::non_admin_cannot_view_instructors_list(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_register_new_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_verify_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_suspend_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_reactivate_suspended_instructor(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_upload_certificate(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_verify_certificate(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::admin_can_reject_certificate(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::instructor_registration_requires_valid_email(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\AdminInstructorControllerTest::instructor_registration_requires_unique_email(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::student_can_view_booking_creation_form(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::student_can_create_booking_with_valid_data(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::booking_fails_safety_validation_for_level1_with_group(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::instructor_can_confirm_booking(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::student_cannot_confirm_booking(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::student_can_cancel_pending_booking(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::student_can_view_their_bookings(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::student_cannot_view_others_bookings(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::booking_requires_valid_date_in_future(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   WARN  Metadata found in doc-comment for method Tests\Feature\Http\Controllers\BookingControllerTest::booking_requires_surf_spot_id(). Metadata in doc-comments is deprecated and will no longer be supported in PHPUnit 12. Update your test code to use attributes instead.
+
+   PASS  Tests\Unit\ExampleTest
+  Γ£ô that true is true
+
+   FAIL  Tests\Unit\Services\SafetyServiceTest
+  Γ£ô level 1 insΓÇª 0.01s  
+  Γ¿» level 1 insΓÇª 0.02s  
+  Γ¿» level 1 instructor cannot teach intermediate
+  Γ£ô level 2 instructor can do 1 on 1
+  Γ¿» level 2 instructor cannot handle 2 students
+  Γ£ô level 3 instructor can handle 5 students
+  Γ¿» level 3 instructor cannot handle 6 students
+  Γ£ô children aged 5 to 12 require level 3 instructor
+  Γ¿» children aged 5 to 12 cannot use level 1 instructor
+  Γ£ô beginners can use beginner spots
+  Γ¿» beginners cannot use advanced spots
+  Γ£ô advanced lessons require level 3 instructor
+  Γ¿» advanced lessons cannot use level 2 instructor
+  Γ¿» students under 5 are not allowed
+  Γ£ô get validation errors returns array of violations
+  Γ£ô can get applicable rules for level 1
+  Γ£ô can get applicable rules for level 3
+  Γ£ô can check if instructor can handle group size
+  Γ£ô can check if instructor can teach skill level
+
+   FAIL  Tests\Unit\Services\WaiverServiceTest
+  Γ¿» it createsΓÇª  4.68s  
+  Γ¿» it createsΓÇª  0.06s  
+  Γ£ô it detectsΓÇª  0.10s  
+  Γ£ô it detectsΓÇª  0.09s  
+  Γ¿» it returnsΓÇª  0.12s  
+  Γ£ô it identifiΓÇª 0.06s  
+  Γ£ô it generateΓÇª 0.10s  
+  Γ£ô it cleans uΓÇª 0.05s  
+
+   FAIL  Tests\Feature\Auth\AuthenticationTest
+  Γ£ô login screeΓÇª 0.09s  
+  Γ£ô users can aΓÇª 0.04s  
+  Γ£ô users can nΓÇª 0.26s  
+  Γ£ô users can lΓÇª 0.05s  
+  Γ¿» users can rΓÇª 1.40s  
+  Γ¿» users can rΓÇª 0.64s  
+  Γ£ô registratioΓÇª 0.05s  
+  Γ£ô students caΓÇª 0.06s  
+  Γ£ô instructorsΓÇª 0.05s  
+
+   PASS  Tests\Feature\Auth\EmailVerificationTest
+  Γ£ô email verifΓÇª 0.05s  
+  Γ£ô email can bΓÇª 0.05s  
+  Γ£ô email is noΓÇª 0.05s  
+
+   PASS  Tests\Feature\Auth\PasswordConfirmationTest
+  Γ£ô confirm pasΓÇª 0.05s  
+  Γ£ô password caΓÇª 0.04s  
+  Γ£ô password isΓÇª 0.25s  
+
+   PASS  Tests\Feature\Auth\PasswordResetTest
+  Γ£ô reset passwΓÇª 0.03s  
+  Γ£ô reset passwΓÇª 0.26s  
+  Γ£ô reset passwΓÇª 0.25s  
+  Γ£ô password caΓÇª 0.27s  
+
+   PASS  Tests\Feature\Auth\PasswordUpdateTest
+  Γ£ô password caΓÇª 0.04s  
+  Γ£ô correct pasΓÇª 0.05s  
+
+   FAIL  Tests\Feature\Auth\RegistrationTest
+  Γ£ô registratioΓÇª 0.03s  
+  Γ¿» new users cΓÇª 0.03s  
+
+   PASS  Tests\Feature\ExampleTest
+  Γ£ô the applicaΓÇª 0.02s  
+
+   FAIL  Tests\Feature\Http\Controllers\AdminInstructorControllerTest
+  Γ¿» admin can vΓÇª 0.04s  
+  Γ£ô non admin cΓÇª 0.05s  
+  Γ¿» admin can rΓÇª 0.06s  
+  Γ¿» admin can vΓÇª 0.05s  
+  Γ¿» admin can sΓÇª 0.04s  
+  Γ¿» admin can rΓÇª 0.05s  
+  Γ¿» admin can uΓÇª 0.05s  
+  Γ¿» admin can vΓÇª 0.05s  
+  Γ¿» admin can rΓÇª 0.03s  
+  Γ¿» instructorΓÇª  0.06s  
+  Γ¿» instructorΓÇª  0.05s  
+
+   FAIL  Tests\Feature\Http\Controllers\BookingControllerTest
+  Γ¿» student canΓÇª 0.05s  
+  Γ¿» student canΓÇª 0.05s  
+  Γ¿» booking faiΓÇª 0.05s  
+  Γ¿» instructorΓÇª  0.04s  
+  Γ¿» student canΓÇª 0.04s  
+  Γ¿» student canΓÇª 0.05s  
+  Γ¿» student canΓÇª 0.05s  
+  Γ£ô student canΓÇª 0.05s  
+  Γ¿» booking reqΓÇª 0.06s  
+  Γ¿» booking reqΓÇª 0.04s  
+
+   PASS  Tests\Feature\ProfileTest
+  Γ£ô profile pagΓÇª 0.06s  
+  Γ£ô profile infΓÇª 0.05s  
+  Γ£ô email verifΓÇª 0.08s  
+  Γ£ô user can deΓÇª 0.05s  
+  Γ£ô correct pasΓÇª 0.05s  
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  Failed asserting that exception of type "Error" matches expected exception "App\Exceptions\SafetyViolationException". Message was: "Call to a member function connection() on null" at
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1980
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1946
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1713
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1611
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1647
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1600
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:237
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\SafetyServiceTest.php:47
+.
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  Failed asserting that exception of type "Error" matches expected exception "App\Exceptions\SafetyViolationException". Message was: "Call to a member function connection() on null" at
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1980
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1946
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1713
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1611
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1647
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1600
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:237
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\SafetyServiceTest.php:63
+.
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  Failed asserting that exception of type "Error" matches expected exception "App\Exceptions\SafetyViolationException". Message was: "Call to a member function connection() on null" at
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1980
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1946
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1713
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1611
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1647
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1600
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:237
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\SafetyServiceTest.php:93
+.
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  Failed asserting that exception of type "Error" matches expected exception "App\Exceptions\SafetyViolationException". Message was: "Call to a member function connection() on null" at
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1980
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1946
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1713
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1611
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1647
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1600
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:237
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\SafetyServiceTest.php:123
+.
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  Failed asserting that exception of type "Error" matches expected exception "App\Exceptions\SafetyViolationException". Message was: "Call to a member function connection() on null" at
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1980
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1946
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1713
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1611
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1647
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1600
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:237
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\SafetyServiceTest.php:153
+.
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  Failed asserting that exception of type "Error" matches expected exception "App\Exceptions\SafetyViolationException". Message was: "Call to a member function connection() on null" at
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1980
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1946
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1713
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1611
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1647
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1600
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:237
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\SafetyServiceTest.php:183
+.
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  Failed asserting that exception of type "Error" matches expected exception "App\Exceptions\SafetyViolationException". Message was: "Call to a member function connection() on null" at
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1980
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1946
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1713
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1611
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1647
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1600
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:237
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\SafetyServiceTest.php:213
+.
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  Failed asserting that exception of type "Error" matches expected exception "App\Exceptions\SafetyViolationException". Message was: "Call to a member function connection() on null" at
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1980
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1946
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1713
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1611
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1647
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1600
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2540
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:2556
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:237
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\app\Services\SafetyService.php:42
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Unit\Services\SafetyServiceTest.php:229
+.
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\UniΓÇª   
+  App\Enums\WaiverType Enum (Liability, 'liability') does not match expected type "string".
+
+  at tests\Unit\Services\WaiverServiceTest.php:51
+     47Γûò         $waiver = $this->waiverService->createLiabilityWaiver($booking, 'John Doe', $signatureData);
+     48Γûò 
+     49Γûò         $this->assertInstanceOf(\App\Models\Waiver::class, $waiver);
+     50Γûò         $this->assertEquals($booking->id, $waiver->booking_id);
+  Γ₧£  51Γûò         $this->assertEquals(WaiverType::Liability->value, $waiver->type);
+     52Γûò         $this->assertEquals('John Doe', $waiver->signed_by);
+     53Γûò         $this->assertNotNull($waiver->signed_at);
+     54Γûò         $this->assertNotNull($waiver->retention_until);
+     55Γûò         $this->assertTrue($waiver->retention_until->gt(now()));
+
+  1   tests\Unit\Services\WaiverServiceTest.php:51
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAΓÇª  ViewException   
+  ucfirst(): Argument #1 ($string) must be of type string, App\Enums\SkillLevel given (View: C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\resources\views\pdfs\parental_consent.blade.php)
+
+  at storage\framework\views\bd0240265509f11699a101f1509551d9.php:139
+    135Γûò                     <strong>Location:</strong> <?php echo e($booking->surfSpot->name); ?>
+    136Γûò 
+    137Γûò                 </div>
+    138Γûò                 <div class="info-item">
+  Γ₧£ 139Γûò                     <strong>Skill Level:</strong> <?php echo e(ucfirst($booking->skill_level)); ?>
+    140Γûò 
+    141Γûò                 </div>
+    142Γûò             </div>
+    143Γûò         </div>
+
+  1   storage\framework\views\bd0240265509f11699a101f1509551d9.php:139
+  2   vendor\laravel\framework\src\Illuminate\View\Engines\PhpEngine.php:59
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAΓÇª  ViewException   
+  ucfirst(): Argument #1 ($string) must be of type string, App\Enums\SkillLevel given (View: C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\resources\views\pdfs\parental_consent.blade.php)
+
+  at storage\framework\views\bd0240265509f11699a101f1509551d9.php:139
+    135Γûò                     <strong>Location:</strong> <?php echo e($booking->surfSpot->name); ?>
+    136Γûò 
+    137Γûò                 </div>
+    138Γûò                 <div class="info-item">
+  Γ₧£ 139Γûò                     <strong>Skill Level:</strong> <?php echo e(ucfirst($booking->skill_level)); ?>
+    140Γûò 
+    141Γûò                 </div>
+    142Γûò             </div>
+    143Γûò         </div>
+
+  1   storage\framework\views\bd0240265509f11699a101f1509551d9.php:139
+  2   vendor\laravel\framework\src\Illuminate\View\Engines\PhpEngine.php:59
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  The user is not authenticated
+Failed asserting that false is true.
+
+  at tests\Feature\Auth\AuthenticationTest.php:66
+     62Γûò             'role' => 'student',
+     63Γûò             'phone' => '+63 912 345 6789',
+     64Γûò         ]);
+     65Γûò 
+  Γ₧£  66Γûò         $this->assertAuthenticated();
+     67Γûò         
+     68Γûò         $this->assertDatabaseHas('users', [
+     69Γûò             'email' => 'student@example.com',
+     70Γûò             'role' => 'student',
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  The user is not authenticated
+Failed asserting that false is true.
+
+  at tests\Feature\Auth\AuthenticationTest.php:85
+     81Γûò             'role' => 'instructor',
+     82Γûò             'phone' => '+63 912 345 6789',
+     83Γûò         ]);
+     84Γûò 
+  Γ₧£  85Γûò         $this->assertAuthenticated();
+     86Γûò         
+     87Γûò         $this->assertDatabaseHas('users', [
+     88Γûò             'email' => 'instructor@example.com',
+     89Γûò             'role' => 'instructor',
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  The user is not authenticated
+Failed asserting that false is true.
+
+  at tests\Feature\Auth\RegistrationTest.php:28
+     24Γûò             'password' => 'password',
+     25Γûò             'password_confirmation' => 'password',
+     26Γûò         ]);
+     27Γûò 
+  Γ₧£  28Γûò         $this->assertAuthenticated();
+     29Γûò         $response->assertRedirect(route('dashboard', absolute: false));
+     30Γûò     }
+     31Γûò }
+     32Γûò
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:42
+     38Γûò     {
+     39Γûò         $response = $this->actingAs($this->admin)
+     40Γûò             ->get(route('admin.instructors.index'));
+     41Γûò 
+  Γ₧£  42Γûò         $response->assertOk()
+     43Γûò             ->assertInertia(fn ($page) => $page
+     44Γûò                 ->component('Admin/Instructors/Index')
+     45Γûò             );
+     46Γûò     }
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:72
+     68Γûò                 'level' => 2,
+     69Γûò                 'rate_per_hour' => 800,
+     70Γûò             ]);
+     71Γûò 
+  Γ₧£  72Γûò         $response->assertRedirect();
+     73Γûò         
+     74Γûò         $this->assertDatabaseHas('users', [
+     75Γûò             'email' => 'john@example.com',
+     76Γûò             'role' => 'instructor',
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:91
+     87Γûò     {
+     88Γûò         $response = $this->actingAs($this->admin)
+     89Γûò             ->post(route('admin.instructors.verify', $this->instructor->id));
+     90Γûò 
+  Γ₧£  91Γûò         $response->assertRedirect();
+     92Γûò         
+     93Γûò         $this->assertDatabaseHas('instructor_profiles', [
+     94Γûò             'user_id' => $this->instructor->id,
+     95Γûò             'status' => InstructorStatus::Active->value,
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  TeΓÇª  Error   
+  Call to a member function update() on null
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:102
+     98Γûò 
+     99Γûò     /** @test */
+    100Γûò     public function admin_can_suspend_instructor()
+    101Γûò     {
+  Γ₧£ 102Γûò         $this->instructor->instructorProfile->update(['status' => InstructorStatus::Active]);
+    103Γûò 
+    104Γûò         $response = $this->actingAs($this->admin)
+    105Γûò             ->post(route('admin.instructors.suspend', $this->instructor->id), [
+    106Γûò                 'reason' => 'Violation of safety protocols',
+
+  1   tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:102
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  TeΓÇª  Error   
+  Call to a member function update() on null
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:120
+    116Γûò 
+    117Γûò     /** @test */
+    118Γûò     public function admin_can_reactivate_suspended_instructor()
+    119Γûò     {
+  Γ₧£ 120Γûò         $this->instructor->instructorProfile->update([
+    121Γûò             'status' => InstructorStatus::Suspended,
+    122Γûò             'suspended_until' => now()->subDay(),
+    123Γûò         ]);
+    124Γûò
+
+  1   tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:120
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:150
+    146Γûò                 'file' => $file,
+    147Γûò                 'expires_at' => now()->addYear()->format('Y-m-d'),
+    148Γûò             ]);
+    149Γûò 
+  Γ₧£ 150Γûò         $response->assertRedirect();
+    151Γûò         
+    152Γûò         $this->assertDatabaseHas('certificates', [
+    153Γûò             'instructor_id' => $this->instructor->id,
+    154Γûò             'type' => CertificateType::BLS->value,
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  TeΓÇª  Error   
+  Undefined constant App\Enums\CertificateStatus::Pending
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:166
+    162Γûò         Storage::fake('local');
+    163Γûò         
+    164Γûò         $certificate = Certificate::factory()->create([
+    165Γûò             'instructor_id' => $this->instructor->id,
+  Γ₧£ 166Γûò             'status' => CertificateStatus::Pending,
+    167Γûò         ]);
+    168Γûò 
+    169Γûò         $response = $this->actingAs($this->admin)
+    170Γûò             ->post(route('admin.certificates.verify', $certificate->id), [
+
+  1   tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:166
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  TeΓÇª  Error   
+  Undefined constant App\Enums\CertificateStatus::Pending
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:188
+    184Γûò     public function admin_can_reject_certificate()
+    185Γûò     {
+    186Γûò         $certificate = Certificate::factory()->create([
+    187Γûò             'instructor_id' => $this->instructor->id,
+  Γ₧£ 188Γûò             'status' => CertificateStatus::Pending,
+    189Γûò         ]);
+    190Γûò 
+    191Γûò         $response = $this->actingAs($this->admin)
+    192Γûò             ->post(route('admin.certificates.reject', $certificate->id), [
+
+  1   tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:188
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Session is missing expected key [errors].
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:216
+    212Γûò                 'phone' => '+63 912 345 6789',
+    213Γûò                 'level' => 2,
+    214Γûò             ]);
+    215Γûò 
+  Γ₧£ 216Γûò         $response->assertSessionHasErrors(['email']);
+    217Γûò     }
+    218Γûò 
+    219Γûò     /** @test */
+    220Γûò     public function instructor_registration_requires_unique_email()
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Session is missing expected key [errors].
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\AdminInstructorControllerTest.php:232
+    228Γûò                 'phone' => '+63 912 345 6789',
+    229Γûò                 'level' => 2,
+    230Γûò             ]);
+    231Γûò 
+  Γ₧£ 232Γûò         $response->assertSessionHasErrors(['email']);
+    233Γûò     }
+    234Γûò }
+    235Γûò
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests\Feature\Http\Controllers\BookingControllerTest.php:37
+     33Γûò     {
+     34Γûò         $response = $this->actingAs($this->student)
+     35Γûò             ->get(route('bookings.create', $this->instructor->id));
+     36Γûò 
+  Γ₧£  37Γûò         $response->assertOk()
+     38Γûò             ->assertInertia(fn ($page) => $page
+     39Γûò                 ->component('Booking/Create')
+     40Γûò                 ->has('instructor')
+     41Γûò                 ->has('surfSpots')
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\BookingControllerTest.php:60
+     56Γûò 
+     57Γûò         $response = $this->actingAs($this->student)
+     58Γûò             ->post(route('bookings.store-details', $this->instructor->id), $bookingData);
+     59Γûò 
+  Γ₧£  60Γûò         $response->assertRedirect();
+     61Γûò         
+     62Γûò         $this->assertDatabaseHas('bookings', [
+     63Γûò             'student_id' => $this->student->id,
+     64Γûò             'instructor_id' => $this->instructor->id,
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Session is missing expected key [error].
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\BookingControllerTest.php:87
+     83Γûò 
+     84Γûò         $response = $this->actingAs($this->student)
+     85Γûò             ->post(route('bookings.store-details', $level1Instructor->id), $bookingData);
+     86Γûò 
+  Γ₧£  87Γûò         $response->assertSessionHas('error');
+     88Γûò         $this->assertDatabaseCount('bookings', 0);
+     89Γûò     }
+     90Γûò 
+     91Γûò     /** @test */
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\Feature\Http\Controllers\BookingControllerTest > instructor can confirm booking  RouteNotFoundException   
+  Route [instructor.bookings.confirm] not defined.
+
+  at vendor\laravel\framework\src\Illuminate\Routing\UrlGenerator.php:528
+    524Γûò             ! is_null($url = call_user_func($this->missingNamedRouteResolver, $name, $parameters, $absolute))) {
+    525Γûò             return $url;
+    526Γûò         }
+    527Γûò 
+  Γ₧£ 528Γûò         throw new RouteNotFoundException("Route [{$name}] not defined.");
+    529Γûò     }
+    530Γûò 
+    531Γûò     /**
+    532Γûò      * Get the URL for a given route instance.
+
+  1   vendor\laravel\framework\src\Illuminate\Routing\UrlGenerator.php:528
+  2   vendor\laravel\framework\src\Illuminate\Foundation\helpers.php:870
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\Feature\Http\Controllers\BookingControllerTest > student cannot confirm booking  RouteNotFoundException   
+  Route [instructor.bookings.confirm] not defined.
+
+  at vendor\laravel\framework\src\Illuminate\Routing\UrlGenerator.php:528
+    524Γûò             ! is_null($url = call_user_func($this->missingNamedRouteResolver, $name, $parameters, $absolute))) {
+    525Γûò             return $url;
+    526Γûò         }
+    527Γûò 
+  Γ₧£ 528Γûò         throw new RouteNotFoundException("Route [{$name}] not defined.");
+    529Γûò     }
+    530Γûò 
+    531Γûò     /**
+    532Γûò      * Get the URL for a given route instance.
+
+  1   vendor\laravel\framework\src\Illuminate\Routing\UrlGenerator.php:528
+  2   vendor\laravel\framework\src\Illuminate\Foundation\helpers.php:870
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [201, 301, 302, 303, 307, 308] but received 403.
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\BookingControllerTest.php:140
+    136Γûò             ->post(route('student.bookings.cancel', $booking->id), [
+    137Γûò                 'reason' => 'Changed my mind',
+    138Γûò             ]);
+    139Γûò 
+  Γ₧£ 140Γûò         $response->assertRedirect();
+    141Γûò         
+    142Γûò         $this->assertDatabaseHas('bookings', [
+    143Γûò             'id' => $booking->id,
+    144Γûò             'status' => BookingStatus::Cancelled->value,
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Expected response status code [200] but received 403.
+Failed asserting that 403 is identical to 200.
+
+  at tests\Feature\Http\Controllers\BookingControllerTest.php:158
+    154Γûò 
+    155Γûò         $response = $this->actingAs($this->student)
+    156Γûò             ->get(route('student.bookings.index'));
+    157Γûò 
+  Γ₧£ 158Γûò         $response->assertOk()
+    159Γûò             ->assertInertia(fn ($page) => $page
+    160Γûò                 ->component('Student/Bookings/Index')
+    161Γûò                 ->has('bookings.data', 3)
+    162Γûò             );
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Session is missing expected key [errors].
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\BookingControllerTest.php:192
+    188Γûò                 'student_count' => 1,
+    189Γûò                 'surf_spot_id' => $this->surfSpot->id,
+    190Γûò             ]);
+    191Γûò 
+  Γ₧£ 192Γûò         $response->assertSessionHasErrors(['date']);
+    193Γûò     }
+    194Γûò 
+    195Γûò     /** @test */
+    196Γûò     public function booking_requires_surf_spot_id()
+
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+   FAILED  Tests\FeaΓÇª   
+  Session is missing expected key [errors].
+Failed asserting that false is true.
+
+  at tests\Feature\Http\Controllers\BookingControllerTest.php:208
+    204Γûò                 'student_count' => 1,
+    205Γûò                 // Missing surf_spot_id
+    206Γûò             ]);
+    207Γûò 
+  Γ₧£ 208Γûò         $response->assertSessionHasErrors(['surf_spot_id']);
+    209Γûò     }
+    210Γûò }
+    211Γûò
+
+
+  Tests:    33 failed, 45 passed (125 assertions)
+  Duration: 10.97s
+

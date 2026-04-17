@@ -1,0 +1,18 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.2.12
+Configuration: C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\phpunit.xml
+
+.E........                                                        10 / 10 (100%)
+
+Time: 00:05.453, Memory: 58.00 MB
+
+There was 1 error:
+
+1) Tests\Feature\Http\Controllers\BookingControllerTest::student_can_create_booking_with_valid_data
+Error: Call to undefined method Tests\Feature\Http\Controllers\BookingControllerTest::assertSessionHas()
+
+C:\Users\Engr. John Rome\Desktop\SIASURF\siasurf-app\tests\Feature\Http\Controllers\BookingControllerTest.php:78
+
+ERRORS!
+Tests: 10, Assertions: 46, Errors: 1, PHPUnit Deprecations: 10.
