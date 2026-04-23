@@ -157,18 +157,13 @@ class SafetyService
         $skillLevel = $data['skill_level'];
         $instructorLevel = $data['instructor_level'];
 
-        // Strict 1-to-1 matching: 
-        // Level 1 -> Beginner
-        // Level 2 -> Intermediate
-        // Level 3 -> Advanced
+        // Level 1 instructors can only teach beginners
+        // Level 2 and Level 3 instructors can teach all skill levels
         
         if ($instructorLevel === 1 && $skillLevel !== SkillLevel::Beginner->value) {
-            $violations[] = 'Level 1 instructors are strictly paired with Beginner students.';
-        } elseif ($instructorLevel === 2 && $skillLevel !== SkillLevel::Intermediate->value) {
-            $violations[] = 'Level 2 instructors are strictly paired with Intermediate students.';
-        } elseif ($instructorLevel === 3 && $skillLevel !== SkillLevel::Advanced->value) {
-            $violations[] = 'Level 3 instructors are strictly paired with Advanced students.';
+            $violations[] = 'Level 1 instructors can only teach beginner students.';
         }
+        // Level 2 and Level 3 can teach any skill level - no restriction needed
     }
 
     /**
@@ -214,14 +209,14 @@ class SafetyService
             case 2:
                 $rules = [
                     'max_students' => 1,
-                    'allowed_skill_levels' => ['intermediate'],
+                    'allowed_skill_levels' => ['beginner', 'intermediate', 'advanced'],
                     'allowed_spots' => ['beginner', 'intermediate', 'advanced'],
                 ];
                 break;
             case 3:
                 $rules = [
                     'max_students' => 5,
-                    'allowed_skill_levels' => ['advanced'],
+                    'allowed_skill_levels' => ['beginner', 'intermediate', 'advanced'],
                     'allowed_spots' => ['beginner', 'intermediate', 'advanced'],
                     'can_teach_children' => true,
                 ];
@@ -273,8 +268,7 @@ class SafetyService
     {
         return match ($instructorLevel) {
             1 => $skillLevel === SkillLevel::Beginner->value,
-            2 => $skillLevel === SkillLevel::Intermediate->value,
-            3 => $skillLevel === SkillLevel::Advanced->value,
+            2, 3 => true, // Level 2 and Level 3 can teach all skill levels
             default => false,
         };
     }

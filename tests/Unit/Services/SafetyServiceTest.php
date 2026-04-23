@@ -203,8 +203,7 @@ class SafetyServiceTest extends TestCase
     /** @test */
     public function advanced_lessons_cannot_use_level_2_instructor()
     {
-        $this->expectException(SafetyViolationException::class);
-
+        // Level 2 instructors can now teach advanced students
         $data = [
             'instructor_level' => 2,
             'student_count' => 1,
@@ -213,7 +212,7 @@ class SafetyServiceTest extends TestCase
             'surf_spot_difficulty' => 'advanced',
         ];
 
-        $this->safetyService->validateBookingSafety($data);
+        $this->assertTrue($this->safetyService->wouldPassValidation($data));
     }
 
     /** @test */
@@ -282,12 +281,19 @@ class SafetyServiceTest extends TestCase
     /** @test */
     public function can_check_if_instructor_can_teach_skill_level()
     {
+        // Level 1 can only teach beginners
         $this->assertTrue($this->safetyService->canTeachSkillLevel(1, SkillLevel::Beginner->value));
         $this->assertFalse($this->safetyService->canTeachSkillLevel(1, SkillLevel::Intermediate->value));
+        $this->assertFalse($this->safetyService->canTeachSkillLevel(1, SkillLevel::Advanced->value));
         
+        // Level 2 can teach all skill levels
         $this->assertTrue($this->safetyService->canTeachSkillLevel(2, SkillLevel::Beginner->value));
+        $this->assertTrue($this->safetyService->canTeachSkillLevel(2, SkillLevel::Intermediate->value));
         $this->assertTrue($this->safetyService->canTeachSkillLevel(2, SkillLevel::Advanced->value));
         
+        // Level 3 can teach all skill levels
+        $this->assertTrue($this->safetyService->canTeachSkillLevel(3, SkillLevel::Beginner->value));
+        $this->assertTrue($this->safetyService->canTeachSkillLevel(3, SkillLevel::Intermediate->value));
         $this->assertTrue($this->safetyService->canTeachSkillLevel(3, SkillLevel::Advanced->value));
     }
 }

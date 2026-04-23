@@ -27,11 +27,11 @@ class InstructorSearchController extends Controller
                   });
             });
 
-        // Strict 1-to-1 Skill Level Matching
+        // Skill Level Matching - Show instructors who can teach the student's skill level
         $skillLevel = null;
         
         if (auth()->check() && auth()->user()->isStudent() && auth()->user()->studentProfile) {
-            // Force strict match based on student profile if logged in
+            // Match based on student profile if logged in
             $skillLevel = auth()->user()->studentProfile->skill_level;
         } elseif ($request->has('skill_level')) {
             $skillLevel = $request->skill_level;
@@ -39,12 +39,17 @@ class InstructorSearchController extends Controller
 
         if ($skillLevel) {
             $query->whereHas('instructorProfile', function ($q) use ($skillLevel) {
+                // Level 1 instructors can teach beginners
+                // Level 2 and Level 3 instructors can teach all skill levels
                 if ($skillLevel === 'beginner') {
-                    $q->where('level', 1);
+                    // All instructor levels can teach beginners
+                    $q->whereIn('level', [1, 2, 3]);
                 } elseif ($skillLevel === 'intermediate') {
-                    $q->where('level', 2);
+                    // Only Level 2 and Level 3 can teach intermediate
+                    $q->whereIn('level', [2, 3]);
                 } elseif ($skillLevel === 'advanced') {
-                    $q->where('level', 3);
+                    // Only Level 2 and Level 3 can teach advanced
+                    $q->whereIn('level', [2, 3]);
                 }
             });
         }
