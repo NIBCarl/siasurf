@@ -54,6 +54,12 @@ defineProps<{
                         <span class="inline-flex items-center rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-700">
                             Level {{ instructor.instructor_profile.level }}
                         </span>
+                        <span v-if="instructor.instructor_profile.level === 1" class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600">
+                            Beginners Only
+                        </span>
+                        <span v-else class="inline-flex items-center rounded-md bg-ocean-50 px-2 py-0.5 text-[9px] font-bold text-ocean-700">
+                            All Levels
+                        </span>
                     </div>
                 </div>
                 <div class="text-right">

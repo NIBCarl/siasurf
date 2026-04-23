@@ -27,6 +27,12 @@ const instructorLevelLabel: Record<number, string> = {
     2: 'Level 2 (SISA/BLS Certified)',
     3: 'Level 3 (ISA International Certified)'
 };
+
+const instructorLevelDescription: Record<number, string> = {
+    1: 'Certified to teach beginner students only. Maximum 2 students per session.',
+    2: 'Certified to teach all skill levels (beginner, intermediate, advanced). Maximum 1 student per session (1-on-1).',
+    3: 'Master instructor certified to teach all skill levels and group sessions. Maximum 5 students.'
+};
 </script>
 
 <template>

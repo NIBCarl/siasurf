@@ -107,15 +107,15 @@ function clearFilters() {
                     <label class="font-black text-[10px] uppercase text-slate-400 tracking-widest pl-2">Skill Level</label>
                     <select v-model="filters.skill_level" class="rounded-2xl border-none bg-slate-50 py-3.5 text-xs font-black ring-1 ring-slate-100 focus:ring-2 focus:ring-ocean-500 transition-all">
                         <option value="">All Levels</option>
-                        <option value="beginner">Beginner</option>
-                        <option value="intermediate">Intermediate</option>
-                        <option value="advanced">Advanced</option>
+                        <option value="beginner">Beginner (Level 1, 2, 3 instructors)</option>
+                        <option value="intermediate">Intermediate (Level 2, 3 instructors)</option>
+                        <option value="advanced">Advanced (Level 2, 3 instructors)</option>
                     </select>
                 </div>
                 <div v-else class="flex flex-col gap-3">
-                    <label class="font-black text-[10px] uppercase text-ocean-600 tracking-widest pl-2">Skill Level Match</label>
+                    <label class="font-black text-[10px] uppercase text-ocean-600 tracking-widest pl-2">Your Skill Level</label>
                     <div class="rounded-2xl border border-ocean-100 bg-ocean-50 py-3.5 px-4 text-xs font-black text-ocean-700 flex items-center gap-2">
-                        <span>Strictly matched to profile</span>
+                        <span>Matched to your profile</span>
                     </div>
                 </div>
                 <div class="flex flex-col gap-3">
