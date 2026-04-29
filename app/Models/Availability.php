@@ -18,6 +18,8 @@ class Availability extends Model
         'user_id',
         'day_of_week',
         'time_period',
+        'start_time',
+        'end_time',
         'is_available',
         'specific_date',
     ];
@@ -25,6 +27,8 @@ class Availability extends Model
     protected $casts = [
         'day_of_week' => DayOfWeek::class,
         'time_period' => TimePeriod::class,
+        'start_time' => 'datetime:H:i',
+        'end_time' => 'datetime:H:i',
         'is_available' => 'boolean',
         'specific_date' => 'date',
     ];
@@ -54,6 +58,18 @@ class Availability extends Model
     public function scopeForTimePeriod($query, TimePeriod $timePeriod)
     {
         return $query->where('time_period', $timePeriod);
+    }
+
+    public function scopeForStartTime($query, string $startTime)
+    {
+        return $query->where('start_time', '<=', $startTime)
+                     ->where('end_time', '>', $startTime);
+    }
+
+    public function scopeIsAvailableAt($query, string $time)
+    {
+        return $query->where('start_time', '<=', $time)
+                     ->where('end_time', '>', $time);
     }
 
     public function scopeForDate($query, $date)

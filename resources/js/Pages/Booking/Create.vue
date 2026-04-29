@@ -46,7 +46,7 @@ const maxStudents = computed(() => {
 
 const form = useForm({
   date: '',
-  time_period: 'morning',
+  start_time: '',
   skill_level: 'beginner',
   student_age: 18,
   height: '' as string | number,
@@ -56,6 +56,26 @@ const form = useForm({
   has_board: false,
   notes: '',
 })
+
+// Generate available time slots
+const morningHours = [
+  { value: '05:00', label: '5:00 AM' },
+  { value: '06:00', label: '6:00 AM' },
+  { value: '07:00', label: '7:00 AM' },
+  { value: '08:00', label: '8:00 AM' },
+  { value: '09:00', label: '9:00 AM' },
+  { value: '10:00', label: '10:00 AM' },
+  { value: '11:00', label: '11:00 AM' },
+]
+
+const afternoonHours = [
+  { value: '13:00', label: '1:00 PM' },
+  { value: '14:00', label: '2:00 PM' },
+  { value: '15:00', label: '3:00 PM' },
+  { value: '16:00', label: '4:00 PM' },
+  { value: '17:00', label: '5:00 PM' },
+  { value: '18:00', label: '6:00 PM' },
+]
 
 // Watch student_count to ensure it doesn't exceed max
 watch(() => maxStudents.value, (newMax) => {
@@ -157,33 +177,33 @@ const submit = () => {
                       class="mt-1 block w-full"
                       v-model="form.date"
                       required
-                      :min="new Date(Date.now() + 86400000).toISOString().split('T')[0]"
+                      :min="new Date().toISOString().split('T')[0]"
                     />
                     <InputError class="mt-2" :message="form.errors.date" />
                   </div>
 
-                  <!-- Time Period -->
+                  <!-- Start Time -->
                   <div>
-                    <InputLabel value="Time Period" />
-                    <div class="grid grid-cols-2 gap-3 mt-1">
-                      <button 
-                        type="button"
-                        v-for="period in ['morning', 'afternoon']"
-                        :key="period"
-                        @click="form.time_period = period"
-                        :class="[
-                          'px-4 py-2 text-sm font-medium rounded-lg border transition-all truncate',
-                          form.time_period === period 
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-100' 
-                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50'
-                        ]"
-                      >
-                        <span class="capitalize">{{ period }}</span>
-                        <span class="block text-[10px] opacity-80">
-                          {{ period === 'morning' ? '8AM - 12PM' : '1PM - 5PM' }}
-                        </span>
-                      </button>
-                    </div>
+                    <InputLabel value="Start Time (1-hour sessions)" />
+                    <select 
+                      v-model="form.start_time"
+                      class="mt-1 block w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg shadow-sm"
+                      required
+                    >
+                      <option value="" disabled>Select a time slot</option>
+                      <optgroup label="Morning (5AM - 12PM)">
+                        <option v-for="hour in morningHours" :key="hour.value" :value="hour.value">
+                          {{ hour.label }}
+                        </option>
+                      </optgroup>
+                      <optgroup label="Afternoon (1PM - 6PM)">
+                        <option v-for="hour in afternoonHours" :key="hour.value" :value="hour.value">
+                          {{ hour.label }}
+                        </option>
+                      </optgroup>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Sessions are 1 hour long</p>
+                    <InputError class="mt-2" :message="form.errors.start_time" />
                   </div>
 
                   <!-- Skill Level -->
