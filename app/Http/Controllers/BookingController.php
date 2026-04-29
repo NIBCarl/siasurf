@@ -67,8 +67,8 @@ class BookingController extends Controller
         Gate::authorize('create', Booking::class);
 
         $validated = $request->validate([
-            'date' => 'required|date|after:today',
-            'time_period' => 'required|in:morning,afternoon',
+            'date' => 'required|date|after_or_equal:today',
+            'start_time' => 'required|date_format:H:i|after:' . now()->subHour()->format('H:i'),
             'skill_level' => 'required|in:beginner,intermediate,advanced',
             'student_age' => 'required|integer|min:5|max:100',
             'height' => 'required|numeric|min:50|max:250',
@@ -78,6 +78,15 @@ class BookingController extends Controller
             'has_board' => 'required|boolean',
             'notes' => 'nullable|string|max:1000',
         ]);
+
+        // Calculate end time (1 hour sessions)
+        $startTime = \Carbon\Carbon::parse($validated['start_time']);
+        $endTime = $startTime->copy()->addHour();
+        $validated['end_time'] = $endTime->format('H:i');
+        $validated['duration_hours'] = 1;
+
+        // Determine time period based on start time
+        $validated['time_period'] = $startTime->hour < 12 ? 'morning' : 'afternoon';
 
         // Get surf spot for validation
         $surfSpot = SurfSpot::findOrFail($validated['surf_spot_id']);
@@ -108,6 +117,9 @@ class BookingController extends Controller
             'surf_spot_id' => $validated['surf_spot_id'],
             'date' => $validated['date'],
             'time_period' => $validated['time_period'],
+            'start_time' => $validated['start_time'],
+            'end_time' => $validated['end_time'],
+            'duration_hours' => $validated['duration_hours'],
             'skill_level' => $validated['skill_level'],
             'student_age' => $validated['student_age'],
             'height' => $validated['height'],
