@@ -35,6 +35,15 @@ interface Props {
 
 const props = defineProps<Props>()
 
+// Compute max students based on instructor level
+const maxStudents = computed(() => {
+  const level = props.instructor.instructor_profile.level
+  if (level === 1) return 2
+  if (level === 2) return 1
+  if (level === 3) return 5
+  return 1 // default fallback
+})
+
 const form = useForm({
   date: '',
   time_period: 'morning',
@@ -46,6 +55,13 @@ const form = useForm({
   surf_spot_id: props.surfSpots[0]?.id || '',
   has_board: false,
   notes: '',
+})
+
+// Watch student_count to ensure it doesn't exceed max
+watch(() => maxStudents.value, (newMax) => {
+  if (form.student_count > newMax) {
+    form.student_count = newMax
+  }
 })
 
 // Client-side pricing calculation
@@ -195,11 +211,13 @@ const submit = () => {
                       <span class="text-lg font-bold w-4 text-center">{{ form.student_count }}</span>
                       <button 
                         type="button" 
-                        @click="form.student_count < 10 && form.student_count++"
+                        @click="form.student_count < maxStudents && form.student_count++"
                         class="w-10 h-10 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50"
                       >+</button>
                     </div>
-                    <p class="mt-1 text-xs text-gray-500">Max students depends on instructor level</p>
+                    <p class="mt-1 text-xs text-gray-500">
+                      Max {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }} for {{ instructor.instructor_profile.level === 1 ? 'Level 1' : instructor.instructor_profile.level === 2 ? 'Level 2 (1-on-1)' : 'Level 3 (Group)' }} instructors
+                    </p>
                   </div>
 
                   <!-- Student Age -->
@@ -416,12 +434,12 @@ const submit = () => {
               <div class="mt-8 space-y-4">
                 <h4 class="text-xs font-bold uppercase tracking-widest text-gray-400">Safety Standards</h4>
                 
-                <div v-if="instructor.instructor_profile.level === 1 && form.student_count > 2" class="p-3 bg-red-50 border border-red-100 rounded-xl flex items-start">
+                <div v-if="form.student_count > maxStudents" class="p-3 bg-red-50 border border-red-100 rounded-xl flex items-start">
                   <svg class="w-5 h-5 text-red-500 mr-2 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <p class="text-xs text-red-700 leading-tight">
-                    Level 1 instructors are legally limited to 2 students. Your request may be rejected unless you split the group.
+                    This instructor is limited to {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }}. Please reduce the number of students or choose a different instructor.
                   </p>
                 </div>
 

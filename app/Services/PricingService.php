@@ -48,6 +48,14 @@ class PricingService
         array $addOns = [],
         ?string $discountType = null
     ): array {
+        // Validate student count against instructor level limits
+        $maxStudents = $profile->maxStudents();
+        if ($studentCount > $maxStudents) {
+            throw new \InvalidArgumentException(
+                "Student count ({$studentCount}) exceeds instructor's maximum capacity ({$maxStudents})"
+            );
+        }
+
         $baseRate = $profile->rate_per_hour ?? self::BASE_RATES[$profile->level->value] ?? 600.00;
         $hours = self::STANDARD_HOURS;
 
@@ -82,6 +90,7 @@ class PricingService
             'discount' => $discount,
             'subtotal' => $subtotal,
             'total' => $total,
+            'max_students' => $maxStudents,
         ];
     }
 

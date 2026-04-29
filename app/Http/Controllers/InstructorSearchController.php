@@ -39,18 +39,21 @@ class InstructorSearchController extends Controller
 
         if ($skillLevel) {
             $query->whereHas('instructorProfile', function ($q) use ($skillLevel) {
-                // Level 1 instructors can teach beginners
-                // Level 2 and Level 3 instructors can teach all skill levels
+                // Use the enum's allowedSkillLevels method for proper filtering
+                // Level 1: [beginner]
+                // Level 2: [beginner, intermediate, advanced]
+                // Level 3: [beginner, intermediate, advanced]
+                $allowedLevels = [];
+                
                 if ($skillLevel === 'beginner') {
                     // All instructor levels can teach beginners
-                    $q->whereIn('level', [1, 2, 3]);
-                } elseif ($skillLevel === 'intermediate') {
-                    // Only Level 2 and Level 3 can teach intermediate
-                    $q->whereIn('level', [2, 3]);
-                } elseif ($skillLevel === 'advanced') {
-                    // Only Level 2 and Level 3 can teach advanced
-                    $q->whereIn('level', [2, 3]);
+                    $allowedLevels = [1, 2, 3];
+                } elseif ($skillLevel === 'intermediate' || $skillLevel === 'advanced') {
+                    // Only Level 2 and Level 3 can teach intermediate/advanced
+                    $allowedLevels = [2, 3];
                 }
+                
+                $q->whereIn('level', $allowedLevels);
             });
         }
 
