@@ -24,21 +24,16 @@ interface Props {
 const props = defineProps<Props>()
 
 const form = useForm({
-  rating: 0,
   comment: '',
   photo: null as File | null,
   photo_preview: null as string | null,
 })
 
-const hoverRating = ref(0)
 
 const isValid = computed(() => {
-  return form.rating > 0 && form.comment.length >= 20
+  return form.comment.length >= 20
 })
 
-const setRating = (rating: number) => {
-  form.rating = rating
-}
 
 const handlePhotoChange = (event: Event) => {
   const input = event.target as HTMLInputElement
@@ -61,7 +56,6 @@ const submitReview = () => {
   if (!isValid.value) return
 
   const formData = new FormData()
-  formData.append('rating', form.rating.toString())
   formData.append('comment', form.comment)
   if (form.photo) {
     formData.append('photo', form.photo)
@@ -84,16 +78,6 @@ const formatDate = (dateString: string): string => {
   })
 }
 
-const getRatingLabel = (rating: number): string => {
-  const labels: Record<number, string> = {
-    1: 'Poor',
-    2: 'Fair',
-    3: 'Good',
-    4: 'Very Good',
-    5: 'Excellent'
-  }
-  return labels[rating] || ''
-}
 
 const charCount = computed(() => form.comment.length)
 </script>
@@ -131,47 +115,6 @@ const charCount = computed(() => form.comment.length)
         </div>
 
         <form @submit.prevent="submitReview" class="space-y-6">
-          <!-- Star Rating -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <label class="block text-sm font-medium text-gray-700 mb-3">
-              How would you rate your experience? *
-            </label>
-            
-            <div class="flex items-center gap-1">
-              <button
-                v-for="n in 5"
-                :key="n"
-                type="button"
-                @click="setRating(n)"
-                @mouseenter="hoverRating = n"
-                @mouseleave="hoverRating = 0"
-                class="p-1 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-              >
-                <svg
-                  class="w-10 h-10 transition-colors"
-                  :class="[
-                    (hoverRating ? n <= hoverRating : n <= form.rating) 
-                      ? 'text-yellow-400 fill-current' 
-                      : 'text-gray-300'
-                  ]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                </svg>
-              </button>
-            </div>
-            
-            <p v-if="form.rating > 0" class="mt-2 text-sm font-medium text-gray-900">
-              {{ getRatingLabel(form.rating) }}
-            </p>
-            
-            <p v-if="form.errors.rating" class="mt-1 text-sm text-red-600">
-              {{ form.errors.rating }}
-            </p>
-          </div>
 
           <!-- Written Review -->
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

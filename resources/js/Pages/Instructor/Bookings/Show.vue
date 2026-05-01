@@ -29,6 +29,7 @@ interface Booking {
   surf_spot: { name: string }
   payment?: { amount: number; payment_method: string; status: string; paid_at: string }
   waiver?: { signed_at: string }
+  review?: { id: number; rating: number | null; comment: string; photo_path: string | null; created_at: string }
 }
 
 interface Props {
@@ -321,6 +322,30 @@ const getStatusVariant = (status: string) => {
                      <p class="text-sm text-gray-600 italic">
                         {{ booking.notes || "No special instructions provided by the student for this session." }}
                      </p>
+                  </div>
+               </div>
+
+               <!-- Student Feedback (New) -->
+               <div v-if="booking.review" class="mt-12 pt-8 border-t border-gray-50">
+                  <h3 class="text-xs font-black uppercase text-blue-400 tracking-widest mb-6 flex items-center gap-2">
+                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                     Student Feedback
+                  </h3>
+                  <div class="bg-blue-50/30 p-8 rounded-[2.5rem] border border-blue-100 flex flex-col md:flex-row gap-8">
+                     <div v-if="booking.review.photo_path" class="w-full md:w-40 shrink-0">
+                        <img :src="'/storage/' + booking.review.photo_path" alt="Feedback Photo" class="w-full aspect-square object-cover rounded-3xl shadow-sm border-4 border-white" />
+                     </div>
+                     <div class="flex-1 space-y-4">
+                        <div class="flex items-center gap-2">
+                           <div class="flex gap-0.5">
+                              <svg v-for="i in 5" :key="i" class="w-4 h-4" :class="booking.review.rating && i <= booking.review.rating ? 'text-yellow-400 fill-current' : 'text-gray-200'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                              </svg>
+                           </div>
+                        </div>
+                        <p class="text-gray-700 italic text-lg font-medium leading-relaxed">"{{ booking.review.comment }}"</p>
+                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Received on {{ new Date(booking.review.created_at).toLocaleDateString() }}</p>
+                     </div>
                   </div>
                </div>
             </div>

@@ -32,7 +32,8 @@ interface Booking {
   instructor: { name: string; email: string }
   surf_spot: { name: string }
   payment?: { amount: number; payment_method: string; status: string; paid_at: string }
-  waiver?: { signed_at: string; pdf_path: string }
+  waiver?: { id: number; signed_at: string; pdf_path: string }
+  review?: { id: number; rating: number | null; comment: string; photo_path: string | null; created_at: string }
 }
 
 interface Props {
@@ -203,6 +204,43 @@ const getStatusVariant = (status: string) => {
                     </div>
                 </div>
 
+                <!-- Student Feedback Section (New) -->
+                <div v-if="booking.review" class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-10 opacity-5">
+                        <CheckBadgeIcon class="w-32 h-32 text-reef-600" />
+                    </div>
+                    
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-2 mb-8">
+                            <DocumentTextIcon class="w-5 h-5 text-reef-600" />
+                            <h3 class="text-xs font-black uppercase text-slate-400 tracking-widest">Student Feedback</h3>
+                        </div>
+
+                        <div class="flex flex-col md:flex-row gap-8">
+                            <div v-if="booking.review.photo_path" class="w-full md:w-48 shrink-0">
+                                <img :src="'/storage/' + booking.review.photo_path" alt="Review Photo" class="w-full aspect-square object-cover rounded-3xl shadow-lg border-4 border-white" />
+                            </div>
+                            
+                            <div class="flex-1 space-y-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex gap-0.5">
+                                        <svg v-for="i in 5" :key="i" class="w-4 h-4" :class="booking.review.rating && i <= booking.review.rating ? 'text-yellow-400 fill-current' : 'text-slate-200'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                        </svg>
+                                    </div>
+                                    <span v-if="!booking.review.rating" class="text-[10px] font-black uppercase text-slate-400 tracking-widest bg-slate-50 px-2 py-0.5 rounded">Text Review Only</span>
+                                </div>
+                                
+                                <p class="text-slate-600 italic leading-relaxed text-lg">"{{ booking.review.comment }}"</p>
+                                
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest pt-4 border-t border-slate-50">
+                                    Submitted on {{ new Date(booking.review.created_at).toLocaleDateString() }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Financials & Compliance Row -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <!-- Payment Status -->
@@ -264,9 +302,13 @@ const getStatusVariant = (status: string) => {
                                     <p class="text-[10px] font-bold opacity-30 tracking-tight">Signed: {{ new Date(booking.waiver.signed_at).toLocaleString() }}</p>
                                 </div>
                                 <div class="pt-4">
-                                    <Link :href="route('waivers.view', booking.id)" class="px-8 py-2.5 bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5">
+                                    <a 
+                                        :href="route('waivers.view', booking.waiver.id)" 
+                                        target="_blank"
+                                        class="inline-block px-8 py-2.5 bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5"
+                                    >
                                         Open Document
-                                    </Link>
+                                    </a>
                                 </div>
                             </div>
                             <div v-else class="flex flex-col items-center justify-center py-8 text-rose-400 italic">

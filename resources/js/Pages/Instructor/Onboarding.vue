@@ -5,6 +5,7 @@ import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import TextInput from '@/Components/TextInput.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
+import Badge from '@/Components/Atoms/Badge.vue'
 
 const form = useForm({
   bio: '',
@@ -147,6 +148,7 @@ const levelInfo = [
                </div>
             </div>
             <p class="mt-4 text-xs text-gray-500 text-center italic">Supported formats: PDF, JPG, PNG (Max 10MB per file)</p>
+            <InputError class="mt-2 text-center" :message="form.errors.certificates" />
           </div>
 
           <div class="pt-6">

@@ -122,7 +122,7 @@ class SafetyService
             if (isset($data['instructor_level'])) {
                 // If single instructor, must be level 3
                 if ($data['instructor_level'] !== 3) {
-                    $violations[] = 'Children aged 5-12 require a Level 3 instructor OR 2 instructors (1 Level 3 + 1 Level 2+).';
+                    $violations[] = "For safety, students aged 5-12 must be taught by a Level 3 Instructor (Expert) or a team of 2 instructors. Please choose a Level 3 instructor for this age group.";
                 }
             }
         }

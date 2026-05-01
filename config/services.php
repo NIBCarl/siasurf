@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'stormglass' => [
+        'key' => env('STORMGLASS_API_KEY'),
+    ],
+
 ];

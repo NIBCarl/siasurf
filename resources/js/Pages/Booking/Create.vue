@@ -31,6 +31,7 @@ interface Props {
   surfSpots: SurfSpot[]
   safetyRules: any
   step: number
+  tideData: Record<string, any[]>
 }
 
 const props = defineProps<Props>()
@@ -82,6 +83,30 @@ watch(() => maxStudents.value, (newMax) => {
   if (form.student_count > newMax) {
     form.student_count = newMax
   }
+})
+
+// Tide Information
+const dailyTides = computed(() => {
+  if (!form.date || !props.tideData || !props.tideData[form.date]) return []
+  return props.tideData[form.date]
+})
+
+const tideWarning = computed(() => {
+  if (!form.date || !form.start_time || dailyTides.value.length === 0) return null
+  
+  const tides = dailyTides.value
+  const sessionStart = new Date(`${form.date}T${form.start_time}:00+08:00`).getTime() / 1000
+  const sessionEnd = sessionStart + 3600 // 1 hour session
+  
+  const bufferStart = sessionStart - 1800 // 30 mins
+  const bufferEnd = sessionEnd + 1800 // 30 mins
+  
+  for (const tide of tides) {
+    if (tide.type === 'low' && tide.height < 0.3 && tide.timestamp >= bufferStart && tide.timestamp <= bufferEnd) {
+      return `⚠️ Low tide (${tide.height}m) expected at ${tide.time} — shallow reef conditions. Extra caution advised for beginners.`
+    }
+  }
+  return null
 })
 
 // Client-side pricing calculation
@@ -165,6 +190,19 @@ const submit = () => {
                 <p class="text-gray-600 mt-1">Configure your surfing session with {{ instructor.name }}</p>
               </div>
 
+              <!-- Flash Error Alert -->
+              <div v-if="$page.props.flash.error" class="mx-8 mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start animate-shake">
+                <div class="bg-red-100 p-2 rounded-lg mr-3">
+                  <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-red-800">Safety Requirement Not Met</h4>
+                  <p class="text-xs text-red-700 mt-1">{{ $page.props.flash.error }}</p>
+                </div>
+              </div>
+
               <form @submit.prevent="submit" class="p-8 space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   
@@ -204,6 +242,35 @@ const submit = () => {
                     </select>
                     <p class="mt-1 text-xs text-gray-500">Sessions are 1 hour long</p>
                     <InputError class="mt-2" :message="form.errors.start_time" />
+                  </div>
+
+                  <!-- Real-Time Tide Forecast -->
+                  <div v-if="dailyTides.length > 0" class="col-span-full bg-blue-50/50 p-5 rounded-2xl border border-blue-100/50">
+                    <h4 class="text-sm font-bold text-gray-900 mb-3 flex items-center">
+                      <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Tide Forecast for {{ form.date }}
+                    </h4>
+                    <div class="flex flex-wrap gap-3">
+                      <span v-for="tide in dailyTides" :key="tide.time" class="text-sm bg-white px-3 py-1.5 rounded-lg shadow-sm border border-gray-100">
+                        <strong :class="tide.type === 'high' ? 'text-blue-600' : 'text-amber-600'">{{ tide.type === 'high' ? 'High' : 'Low' }}</strong>: {{ tide.time }} ({{ tide.height }}m)
+                      </span>
+                    </div>
+                    
+                    <!-- Dynamic Warning -->
+                    <div v-if="tideWarning" class="mt-4 p-3 bg-amber-50 rounded-lg border-l-4 border-amber-400 flex items-start animate-shake">
+                      <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                      </div>
+                      <div class="ml-3">
+                        <p class="text-xs text-amber-800 font-medium leading-relaxed">
+                          {{ tideWarning }}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   <!-- Skill Level -->

@@ -63,11 +63,13 @@ class CertificateController extends Controller
             abort(403, 'Unauthorized access to certificate.');
         }
 
-        if (!Storage::disk('local')->exists($certificate->file_path)) {
+        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        
+        if (!Storage::disk($disk)->exists($certificate->file_path)) {
             abort(404, 'Certificate file not found.');
         }
 
-        return Storage::disk('local')->response($certificate->file_path);
+        return Storage::disk($disk)->response($certificate->file_path);
     }
 
     /**

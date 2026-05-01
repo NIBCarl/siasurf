@@ -137,6 +137,17 @@ class User extends Authenticatable
     {
         return $this->isInstructor() && 
                $this->instructorProfile !== null && 
-               $this->instructorProfile->status === 'active';
+               $this->instructorProfile->status === \App\Enums\InstructorStatus::Active;
+    }
+
+    public function hasVerifiedCertificate(): bool
+    {
+        return $this->certificates()->where('status', \App\Enums\CertificateStatus::Verified)->exists();
+    }
+
+    public function isBookable(): bool
+    {
+        return $this->isVerifiedInstructor() && 
+               ($this->instructorProfile->suspended_until === null || $this->instructorProfile->suspended_until <= now());
     }
 }

@@ -136,7 +136,7 @@ class ReviewController extends Controller
             'booking_id' => $booking->id,
             'student_id' => $request->user()->id,
             'instructor_id' => $booking->instructor_id,
-            'rating' => $validated['rating'],
+            'rating' => $validated['rating'] ?? null,
             'comment' => $validated['comment'],
         ]);
 
@@ -183,7 +183,7 @@ class ReviewController extends Controller
 
         $validated = $request->validated();
 
-        $review->edit($validated['comment'], $validated['rating']);
+        $review->edit($validated['comment'], $validated['rating'] ?? $review->rating);
 
         // Handle photo update
         if ($request->hasFile('photo')) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 
@@ -8,6 +8,18 @@ interface Props {
 }
 
 defineProps<Props>()
+
+const form = useForm({
+  certificates: [] as File[]
+})
+
+const submitAdditionalDocs = () => {
+  form.post(route('instructor.certificates.store'), {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => form.reset('certificates'),
+  })
+}
 </script>
 
 <template>
@@ -56,9 +68,13 @@ defineProps<Props>()
              </ul>
           </div>
           <div class="p-6 bg-gray-50 rounded-2xl text-left border border-gray-100">
-             <h4 class="font-bold text-gray-900 mb-2">Need help?</h4>
-             <p class="text-sm text-gray-500 mb-4">If you forgot to upload a document or need to make urgent changes:</p>
-             <BaseButton variant="secondary" size="sm" class="w-full justify-center" outline>Contact Support</BaseButton>
+             <h4 class="font-bold text-gray-900 mb-2">Upload Additional Documents</h4>
+             <p class="text-sm text-gray-500 mb-4">Did the Admin request more files? Upload them here:</p>
+             <form @submit.prevent="submitAdditionalDocs">
+               <input type="file" multiple class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-2" @change="(e) => form.certificates = Array.from((e.target as HTMLInputElement).files || [])" accept=".pdf,.jpg,.png">
+               <div v-if="form.errors.certificates" class="text-red-500 text-xs mb-2">{{ form.errors.certificates }}</div>
+               <BaseButton type="submit" variant="primary" size="sm" class="w-full justify-center" :loading="form.processing" :disabled="form.certificates.length === 0">Upload Files</BaseButton>
+             </form>
           </div>
         </div>
 

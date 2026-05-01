@@ -144,6 +144,20 @@ class InstructorController extends Controller
             return back()->with('error', 'Instructor profile not found.');
         }
 
+        // Update certificates status if provided
+        if ($request->has('certificate_ids') && !empty($request->certificate_ids)) {
+            Certificate::whereIn('id', $request->certificate_ids)
+                ->update([
+                    'status' => CertificateStatus::Verified->value,
+                    'verified_at' => now(),
+                ]);
+        }
+
+        // Final safety check: Does the instructor have ANY verified certificates now?
+        if (!$instructor->hasVerifiedCertificate()) {
+            return back()->with('error', 'Instructor must have at least one verified certificate before they can be licensed.');
+        }
+
         // Generate QR code
         $qrPath = $this->qrCodeService->generateInstructorQR($profile);
 
@@ -152,15 +166,6 @@ class InstructorController extends Controller
             'status' => InstructorStatus::Active->value,
             'qr_code_path' => $qrPath,
         ]);
-
-        // Update certificates status if provided
-        if ($request->has('certificate_ids')) {
-            Certificate::whereIn('id', $request->certificate_ids)
-                ->update([
-                    'status' => CertificateStatus::Verified->value,
-                    'verified_at' => now(),
-                ]);
-        }
 
         // Send notification to instructor
         try {
@@ -258,5 +263,52 @@ class InstructorController extends Controller
         }
 
         return back()->with('success', 'Instructor reactivated successfully.');
+    }
+
+    /**
+     * Show the form for editing an instructor.
+     */
+    public function edit(User $instructor): Response
+    {
+        $instructor->load('instructorProfile');
+        
+        return Inertia::render('Admin/Instructors/Edit', [
+            'instructor' => $instructor,
+        ]);
+    }
+
+    /**
+     * Update the specified instructor.
+     */
+    public function update(Request $request, User $instructor): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $instructor->id,
+            'phone' => 'nullable|string|max:20',
+            'bio' => 'nullable|string',
+            'level' => 'required|integer|in:1,2,3',
+            'rate_per_hour' => 'required|numeric|min:600',
+            'status' => 'required|string',
+        ]);
+
+        // Update user
+        $instructor->update([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
+        ]);
+
+        // Update profile
+        $instructor->instructorProfile->update([
+            'bio' => $validated['bio'] ?? null,
+            'level' => $validated['level'],
+            'status' => $validated['status'],
+            'rate_per_hour' => $validated['rate_per_hour'],
+        ]);
+
+        return redirect()
+            ->route('admin.instructors.show', $instructor->id)
+            ->with('success', 'Instructor dossier updated successfully.');
     }
 }

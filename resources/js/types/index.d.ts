@@ -31,6 +31,11 @@ export type PageProps<
     auth: {
         user: User;
     };
+    flash: {
+        success?: string;
+        error?: string;
+        tideWarning?: string;
+    };
 };
 
 export type WaiverType = 'liability' | 'parental_consent';

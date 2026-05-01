@@ -11,6 +11,7 @@ use App\Enums\SkillLevel;
 use App\Enums\TimePeriod;
 use App\Services\SafetyService;
 use App\Services\PricingService;
+use App\Services\StormglassService;
 use App\Events\BookingCreated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,13 +24,16 @@ class BookingController extends Controller
 {
     protected SafetyService $safetyService;
     protected PricingService $pricingService;
+    protected StormglassService $stormglassService;
 
     public function __construct(
         SafetyService $safetyService,
-        PricingService $pricingService
+        PricingService $pricingService,
+        StormglassService $stormglassService
     ) {
         $this->safetyService = $safetyService;
         $this->pricingService = $pricingService;
+        $this->stormglassService = $stormglassService;
     }
 
     /**
@@ -38,6 +42,10 @@ class BookingController extends Controller
     public function create(Request $request, User $instructor): Response
     {
         Gate::authorize('create', Booking::class);
+
+        if (!$instructor->isBookable()) {
+            return redirect()->route('instructors.search')->with('error', 'This instructor is currently not available for bookings.');
+        }
 
         $instructor->load(['instructorProfile', 'availabilities']);
 
@@ -55,6 +63,7 @@ class BookingController extends Controller
             'instructor' => $instructor,
             'surfSpots' => $surfSpots,
             'safetyRules' => $safetyRules,
+            'tideData' => $this->stormglassService->getUpcomingTides(7),
             'step' => 1,
         ]);
     }
@@ -66,9 +75,22 @@ class BookingController extends Controller
     {
         Gate::authorize('create', Booking::class);
 
+        if (!$instructor->isBookable()) {
+            return redirect()->route('instructors.search')->with('error', 'This instructor is currently not available for bookings.');
+        }
+
         $validated = $request->validate([
             'date' => 'required|date|after_or_equal:today',
-            'start_time' => 'required|date_format:H:i|after:' . now()->subHour()->format('H:i'),
+            'start_time' => [
+                'required',
+                'date_format:H:i',
+                function ($attribute, $value, $fail) use ($request) {
+                    $dateTime = \Carbon\Carbon::parse($request->date . ' ' . $value);
+                    if ($dateTime->isPast()) {
+                        $fail('The ' . $attribute . ' must be in the future.');
+                    }
+                }
+            ],
             'skill_level' => 'required|in:beginner,intermediate,advanced',
             'student_age' => 'required|integer|min:5|max:100',
             'height' => 'required|numeric|min:50|max:250',
@@ -90,6 +112,12 @@ class BookingController extends Controller
 
         // Get surf spot for validation
         $surfSpot = SurfSpot::findOrFail($validated['surf_spot_id']);
+
+        // Check tide conditions for the selected date/time
+        $tideWarning = $this->stormglassService->getTideWarning(
+            $validated['date'],
+            $validated['start_time']
+        );
 
         // Step 3: Safety validation using SafetyService
         try {
@@ -132,8 +160,14 @@ class BookingController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        return redirect()->route('bookings.waiver', $booking->id)
+        $redirect = redirect()->route('bookings.waiver', $booking->id)
             ->with('success', 'Details saved. Please sign the waiver.');
+
+        if ($tideWarning) {
+            $redirect = $redirect->with('tideWarning', $tideWarning);
+        }
+
+        return $redirect;
     }
 
     /**

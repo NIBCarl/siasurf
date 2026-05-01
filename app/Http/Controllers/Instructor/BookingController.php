@@ -36,7 +36,7 @@ class BookingController extends Controller
             abort(403);
         }
 
-        $booking->load(['student.studentProfile', 'student.skillUpgradeRequests', 'surfSpot', 'payment', 'waiver']);
+        $booking->load(['student.studentProfile', 'student.skillUpgradeRequests', 'surfSpot', 'payment', 'waiver', 'review']);
 
         return Inertia::render('Instructor/Bookings/Show', [
             'booking' => $booking,

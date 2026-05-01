@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::table('bookings', function (Blueprint $table) {
             $table->time('start_time')->nullable()->after('time_period');
             $table->time('end_time')->nullable()->after('start_time');
-            $table->integer('duration_hours')->default(1)->after('end_time');
+            $table->integer('duration_hours')->default(1)->after('end_time')->change();
             
             // Add index for time-based queries
             $table->index(['instructor_id', 'date', 'start_time']);
@@ -33,7 +33,7 @@ return new class extends Migration
     {
         Schema::table('bookings', function (Blueprint $table) {
             $table->dropIndex(['instructor_id', 'date', 'start_time']);
-            $table->dropColumn(['start_time', 'end_time', 'duration_hours']);
+            $table->dropColumn(['start_time', 'end_time']);
         });
 
         Schema::table('availabilities', function (Blueprint $table) {

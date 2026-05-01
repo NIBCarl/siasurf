@@ -48,14 +48,14 @@ Route::get('/dashboard', function () {
     }
     
     if ($user->hasRole('instructor')) {
-        // If not verified, send to boarding/pending
-        if (!$user->instructorProfile) {
+        // If no profile or no certificates, they must onboard
+        if (!$user->instructorProfile || $user->certificates()->count() === 0) {
             return redirect()->route('instructor.onboarding');
         }
-        if ($user->instructorProfile->status === 'pending_verification') {
+        if ($user->instructorProfile->status === \App\Enums\InstructorStatus::PendingVerification) {
             return redirect()->route('instructor.pending');
         }
-        if ($user->instructorProfile->status === 'suspended') {
+        if ($user->instructorProfile->status === \App\Enums\InstructorStatus::Suspended) {
             return redirect()->route('instructor.suspended');
         }
         
@@ -160,6 +160,10 @@ Route::middleware(['auth', 'verified', 'role:instructor'])->prefix('instructor')
     Route::get('/onboarding', function () {
         return Inertia::render('Instructor/Onboarding');
     })->name('onboarding');
+    Route::post('/onboarding', [\App\Http\Controllers\Instructor\OnboardingController::class, 'store'])->name('onboarding.store');
+
+    // Instructor Certificate Upload
+    Route::post('/certificates', [\App\Http\Controllers\Instructor\CertificateController::class, 'store'])->name('certificates.store');
 });
 
 // Verified instructor only routes
@@ -190,6 +194,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
     Route::get('/instructors/create', [InstructorController::class, 'create'])->name('instructors.create');
     Route::post('/instructors', [InstructorController::class, 'store'])->name('instructors.store');
     Route::get('/instructors/{instructor}', [InstructorController::class, 'show'])->name('instructors.show');
+    Route::get('/instructors/{instructor}/edit', [InstructorController::class, 'edit'])->name('instructors.edit');
+    Route::put('/instructors/{instructor}', [InstructorController::class, 'update'])->name('instructors.update');
     
     // Instructor verification actions
     Route::post('/instructors/{instructor}/verify', [InstructorController::class, 'verify'])->name('instructors.verify');

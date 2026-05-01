@@ -50,9 +50,25 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const verifyForm = useForm({})
+const verifyForm = useForm({
+  certificate_ids: [] as number[]
+})
 const verifyInstructor = () => {
+  if (props.instructor.certificates.filter(c => c.status === 'pending_verification').length > 0 && verifyForm.certificate_ids.length === 0) {
+    if (!confirm('You are about to verify this instructor without approving any of their pending certificates. Proceed?')) {
+      return;
+    }
+  }
   verifyForm.post(route('admin.instructors.verify', props.instructor.id))
+}
+
+const toggleCertificate = (id: number) => {
+  const index = verifyForm.certificate_ids.indexOf(id)
+  if (index === -1) {
+    verifyForm.certificate_ids.push(id)
+  } else {
+    verifyForm.certificate_ids.splice(index, 1)
+  }
 }
 
 const suspendForm = useForm({
@@ -107,13 +123,20 @@ const getStatusVariant = (status: string) => {
                 </div>
             </div>
             
+            
+            <div v-if="instructor.instructor_profile.status === 'pending_verification' && instructor.certificates.length === 0" class="flex items-center gap-3 px-4 py-2 bg-amber-50 border border-amber-100 rounded-xl text-amber-700 text-[10px] font-black uppercase">
+                <ExclamationTriangleIcon class="w-4 h-4" />
+                No Certificates Uploaded
+            </div>
+
             <div class="flex gap-2">
                 <BaseButton 
                     v-if="instructor.instructor_profile.status === 'pending_verification'" 
                     @click="verifyInstructor" 
                     :loading="verifyForm.processing" 
+                    :disabled="instructor.certificates.length === 0"
                     variant="success"
-                    class="rounded-xl shadow-lg shadow-emerald-600/20"
+                    class="rounded-xl shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:grayscale"
                 >
                     <ShieldCheckIcon class="w-4 h-4 mr-2" />
                     Verify & License
@@ -129,10 +152,13 @@ const getStatusVariant = (status: string) => {
                     Suspend Profile
                 </BaseButton>
 
-                <button class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/10">
+                <Link 
+                    :href="route('admin.instructors.edit', instructor.id)"
+                    class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/10"
+                >
                     <PencilSquareIcon class="w-4 h-4" />
                     Edit Dossier
-                </button>
+                </Link>
             </div>
         </div>
 
@@ -227,8 +253,17 @@ const getStatusVariant = (status: string) => {
                             <tr v-for="cert in instructor.certificates" :key="cert.id" class="group hover:bg-slate-50 transition-colors">
                                 <td class="pl-8 pr-4 py-6">
                                     <div class="flex items-center gap-4">
+                                        <div v-if="instructor.instructor_profile.status === 'pending_verification' && cert.status !== 'verified'" class="flex items-center">
+                                            <input 
+                                                type="checkbox" 
+                                                :id="'cert-' + cert.id"
+                                                :checked="verifyForm.certificate_ids.includes(cert.id)"
+                                                @change="toggleCertificate(cert.id)"
+                                                class="w-5 h-5 rounded border-slate-200 text-ocean-600 focus:ring-ocean-500 transition-all"
+                                            />
+                                        </div>
                                         <div class="w-10 h-10 bg-slate-100 text-slate-400 group-hover:bg-ocean-100 group-hover:text-ocean-600 rounded-xl flex items-center justify-center text-[10px] font-black shadow-inner transition-all">PDF</div>
-                                        <span class="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-ocean-600 transition-colors">{{ cert.type.replace('_', ' ') }}</span>
+                                        <label :for="'cert-' + cert.id" class="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-ocean-600 transition-colors cursor-pointer">{{ cert.type.replace('_', ' ') }}</label>
                                     </div>
                                 </td>
                                 <td class="px-4 py-6 text-center">
@@ -238,10 +273,12 @@ const getStatusVariant = (status: string) => {
                                 </td>
                                 <td class="pl-4 pr-8 py-6 text-right">
                                     <div class="flex justify-end gap-2">
-                                        <BaseButton size="sm" variant="secondary" outline class="rounded-lg">
-                                            <ArrowUpTrayIcon class="w-4 h-4 mr-1 text-slate-400" />
-                                            Inspect
-                                        </BaseButton>
+                                        <a :href="route('admin.certificates.show', cert.id)" target="_blank">
+                                            <BaseButton size="sm" variant="secondary" outline class="rounded-lg">
+                                                <ArrowUpTrayIcon class="w-4 h-4 mr-1 text-slate-400" />
+                                                Inspect
+                                            </BaseButton>
+                                        </a>
                                         <BaseButton 
                                             v-if="cert.status !== 'verified'" 
                                             @click="verifyCert(cert.id)" 

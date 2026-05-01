@@ -50,13 +50,7 @@ class RegisteredUserController extends Controller
         // Assign Spatie role
         $user->assignRole($request->role);
         
-        if ($request->role === 'instructor') {
-            $user->instructorProfile()->create([
-                'status' => \App\Enums\InstructorStatus::PendingVerification,
-                'level' => \App\Enums\InstructorLevel::Level1,
-                'rate_per_hour' => 600, // Default minimum rate
-            ]);
-        } elseif ($request->role === 'student') {
+        if ($request->role === 'student') {
             $user->studentProfile()->create([
                 'skill_level' => $request->skill_level ?? 'beginner',
                 'is_first_time' => $request->is_first_time ?? true,

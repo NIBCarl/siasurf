@@ -115,7 +115,7 @@ class Review extends Model
         $this->update(['instructor_response' => $response]);
     }
 
-    public function edit(string $comment, int $rating): void
+    public function edit(string $comment, ?int $rating = null): void
     {
         $this->update([
             'comment' => $comment,

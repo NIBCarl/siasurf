@@ -22,7 +22,7 @@ class StoreReviewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'rating' => 'required|integer|between:1,5',
+            'rating' => 'nullable|integer|between:1,5',
             'comment' => 'required|string|min:20|max:1000',
             'photo' => 'nullable|image|max:5120', // Max 5MB
         ];
