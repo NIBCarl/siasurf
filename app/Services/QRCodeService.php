@@ -3,69 +3,61 @@
 namespace App\Services;
 
 use App\Models\InstructorProfile;
+use App\Models\StudentProfile;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class QRCodeService
 {
     /**
-     * Generate a QR code for an instructor
-     * Note: Using simple SVG generation without external library
+     * Generate a scannable QR code for an instructor.
+     * The QR encodes a URL pointing to the walk-in scan page.
      */
     public function generateInstructorQR(InstructorProfile $instructor): string
     {
-        $qrData = json_encode([
-            'v' => '1.0',
-            'type' => 'siasurf_instructor',
-            'id' => $instructor->user_id,
-            'name' => $instructor->user->name,
-            'level' => $instructor->level,
-            'verified_at' => $instructor->created_at->format('Y-m-d'),
-        ]);
+        $qrData = route('walkin.scan', ['instructor' => $instructor->user_id]);
 
         $filename = "instructors/{$instructor->user_id}/qr-code.svg";
-        
-        // Simple SVG QR code representation
-        $svg = $this->generateSimpleSVG($qrData);
-        
-        Storage::disk('local')->put($filename, $svg);
-        
+
+        $qrCode = QrCode::format('svg')
+            ->size(400)
+            ->margin(2)
+            ->generate($qrData);
+
+        Storage::disk('local')->put($filename, $qrCode);
+
+        $instructor->update(['qr_code_path' => $filename]);
+
         return $filename;
     }
 
     /**
-     * Generate a simple SVG representation
-     * In production, replace with actual QR library
+     * Generate a QR code for a student (walk-in check-in).
      */
-    private function generateSimpleSVG(string $data): string
+    public function generateStudentQR(StudentProfile $student): string
     {
-        $hash = md5($data);
-        $size = 400;
-        $cellSize = 20;
-        
-        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $size . '" height="' . $size . '" viewBox="0 0 ' . $size . ' ' . $size . '">';
-        $svg .= '<rect width="100%" height="100%" fill="white"/>';
-        
-        // Create a pattern based on the hash
-        for ($i = 0; $i < strlen($hash); $i += 2) {
-            $x = (hexdec($hash[$i]) % ($size / $cellSize)) * $cellSize;
-            $y = (hexdec($hash[$i + 1]) % ($size / $cellSize)) * $cellSize;
-            $svg .= '<rect x="' . $x . '" y="' . $y . '" width="' . $cellSize . '" height="' . $cellSize . '" fill="black"/>';
-        }
-        
-        // Add corner markers (QR code style)
-        $markerSize = 60;
-        $svg .= '<rect x="20" y="20" width="' . $markerSize . '" height="' . $markerSize . '" fill="black"/>';
-        $svg .= '<rect x="' . ($size - 80) . '" y="20" width="' . $markerSize . '" height="' . $markerSize . '" fill="black"/>';
-        $svg .= '<rect x="20" y="' . ($size - 80) . '" width="' . $markerSize . '" height="' . $markerSize . '" fill="black"/>';
-        
-        $svg .= '</svg>';
-        
-        return $svg;
+        $qrData = json_encode([
+            'v' => '1.0',
+            'type' => 'siasurf_student',
+            'id' => $student->user_id,
+            'name' => $student->user->name,
+            'token' => $student->walkin_token,
+        ]);
+
+        $filename = "students/{$student->user_id}/qr-code.svg";
+
+        $qrCode = QrCode::format('svg')
+            ->size(400)
+            ->margin(2)
+            ->generate($qrData);
+
+        Storage::disk('local')->put($filename, $qrCode);
+
+        return $filename;
     }
 
     /**
-     * Get the URL for an instructor's QR code
+     * Get the URL for an instructor's QR code.
      */
     public function getQRCodeUrl(InstructorProfile $instructor): ?string
     {
@@ -77,7 +69,7 @@ class QRCodeService
     }
 
     /**
-     * Delete an instructor's QR code
+     * Delete an instructor's QR code.
      */
     public function deleteQRCode(InstructorProfile $instructor): void
     {

@@ -70,7 +70,7 @@ const getSeverityVariant = (severity: string) => {
                     </ol>
                 </nav>
                 <div class="flex items-center gap-4">
-                    <h1 class="text-3xl font-black text-slate-900 tracking-tight uppercase">Security Report</h1>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight uppercase">Security Report</h1>
                     <Badge :variant="getSeverityVariant(incident.severity)" size="md">
                         {{ incident.severity.toUpperCase() }}
                     </Badge>
@@ -101,10 +101,10 @@ const getSeverityVariant = (severity: string) => {
                     <div class="relative z-10">
                         <div class="flex items-center gap-2 mb-6">
                             <div class="w-2 h-8 bg-rose-500 rounded-full"></div>
-                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Occurrence Dossier</h2>
+                            <h2 class="text-xs font-extrabold text-slate-400 uppercase tracking-[0.2em]">Occurrence Dossier</h2>
                         </div>
                         
-                        <h3 class="text-2xl font-black text-slate-900 mb-8 tracking-tight">
+                        <h3 class="text-2xl font-bold text-slate-900 mb-8 tracking-tight">
                             {{ incident.type.replace('_', ' ') }}
                         </h3>
                         
@@ -117,7 +117,7 @@ const getSeverityVariant = (severity: string) => {
                 <!-- Technical Details -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                             <MapPinIcon class="w-3 h-3" />
                             Precise Location
                         </h4>
@@ -126,7 +126,7 @@ const getSeverityVariant = (severity: string) => {
                     </div>
                     
                     <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                             <ClockIcon class="w-3 h-3" />
                             Time Signature
                         </h4>
@@ -140,7 +140,7 @@ const getSeverityVariant = (severity: string) => {
             <div class="lg:col-span-4 space-y-6">
                 <!-- Accountable Personnel -->
                 <div class="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl shadow-slate-900/10">
-                    <h3 class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-8">Responsible Entity</h3>
+                    <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-8">Responsible Entity</h3>
                     
                     <div class="flex items-center gap-4 mb-10">
                         <div class="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center border border-white/5 shadow-inner">

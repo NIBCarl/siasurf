@@ -30,15 +30,15 @@ const formatCurrency = (value: number): string => {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">Revenue Over Time</h2>
+  <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-4">Revenue Over Time</h2>
 
     <div v-if="isLoading" class="h-64 flex items-center justify-center">
-      <p class="text-gray-500">Loading...</p>
+      <p class="text-slate-500">Loading...</p>
     </div>
 
     <div v-else-if="revenueData.data.length === 0" class="h-64 flex items-center justify-center">
-      <p class="text-gray-500">No revenue data available</p>
+      <p class="text-slate-500">No revenue data available</p>
     </div>
 
     <div v-else class="h-64">
@@ -51,17 +51,17 @@ const formatCurrency = (value: number): string => {
         >
           <!-- Bar -->
           <div
-            class="w-full bg-blue-500 rounded-t transition-all duration-500 hover:bg-blue-600 relative group"
+            class="w-full bg-ocean-500 rounded-t transition-all duration-500 hover:bg-ocean-600 relative group"
             :style="{ height: `${(value / maxValue()) * 100}%` }"
           >
             <!-- Tooltip -->
-            <div class="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            <div class="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
               {{ formatCurrency(value) }}
             </div>
           </div>
           
           <!-- Label -->
-          <span class="text-xs text-gray-500 mt-2 truncate w-full text-center">
+          <span class="text-xs text-slate-500 mt-2 truncate w-full text-center">
             {{ revenueData.labels[index] }}
           </span>
         </div>

@@ -53,7 +53,7 @@ const handleMouseEnter = (rating: number, interactive: boolean) => {
       <svg
         :class="sizeClasses[size]"
         class="transition-colors"
-        :class="n <= rating ? 'text-yellow-400 fill-current' : 'text-gray-300'"
+        :class="n <= rating ? 'text-yellow-400 fill-current' : 'text-slate-300'"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"

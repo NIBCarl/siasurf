@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use App\Models\User;
+use App\Models\SafetyIncident;
+use App\Observers\SafetyIncidentObserver;
 use App\Contracts\PaymentServiceInterface;
 use App\Services\MockPaymentService;
 use App\Services\PayMongoPaymentService;
@@ -34,6 +36,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        // Register safety incident observer
+        SafetyIncident::observe(SafetyIncidentObserver::class);
 
         // Define gates for role-based access
         Gate::define('admin', function (User $user) {

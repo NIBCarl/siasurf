@@ -69,7 +69,7 @@ const getStatusVariant = (status: string) => {
                     Back to Bookings
                 </Link>
                 <div class="flex items-center gap-3">
-                    <h1 class="text-3xl font-black text-slate-900 tracking-tight">Session Dossier</h1>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Session Dossier</h1>
                     <Badge :variant="getStatusVariant(booking.status)" size="sm">
                         {{ booking.status.toUpperCase() }}
                     </Badge>
@@ -103,7 +103,7 @@ const getStatusVariant = (status: string) => {
                     <div class="relative z-10">
                         <div class="flex items-center gap-2 mb-8">
                             <ClockIcon class="w-5 h-5 text-ocean-600" />
-                            <h3 class="text-xs font-black uppercase text-slate-400 tracking-widest">Session Logic & Allocation</h3>
+                            <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest">Session Logic & Allocation</h3>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -124,7 +124,7 @@ const getStatusVariant = (status: string) => {
                             </div>
                         </div>
 
-                        <div v-if="booking.notes" class="mt-10 p-6 bg-slate-50 rounded-2xl border-l-4 border-ocean-500">
+                        <div v-if="booking.notes" class="mt-10 p-6 bg-slate-50 rounded-2xl border border-ocean-100">
                             <div class="flex items-start gap-3">
                                 <InformationCircleIcon class="w-5 h-5 text-ocean-600 shrink-0 mt-0.5" />
                                 <div>
@@ -145,7 +145,7 @@ const getStatusVariant = (status: string) => {
                                 <div class="w-10 h-10 bg-ocean-50 rounded-xl flex items-center justify-center">
                                     <UserIcon class="w-5 h-5 text-ocean-600" />
                                 </div>
-                                <h3 class="text-xs font-black uppercase text-slate-400 tracking-widest">Student Profile</h3>
+                                <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest">Student Profile</h3>
                             </div>
                         </div>
                         
@@ -178,7 +178,7 @@ const getStatusVariant = (status: string) => {
                                 <div class="w-10 h-10 bg-reef-50 rounded-xl flex items-center justify-center">
                                     <IdentificationIcon class="w-5 h-5 text-reef-600" />
                                 </div>
-                                <h3 class="text-xs font-black uppercase text-slate-400 tracking-widest">Instructor Lead</h3>
+                                <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest">Instructor Lead</h3>
                             </div>
                         </div>
 
@@ -213,7 +213,7 @@ const getStatusVariant = (status: string) => {
                     <div class="relative z-10">
                         <div class="flex items-center gap-2 mb-8">
                             <DocumentTextIcon class="w-5 h-5 text-reef-600" />
-                            <h3 class="text-xs font-black uppercase text-slate-400 tracking-widest">Student Feedback</h3>
+                            <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest">Student Feedback</h3>
                         </div>
 
                         <div class="flex flex-col md:flex-row gap-8">
@@ -251,7 +251,7 @@ const getStatusVariant = (status: string) => {
                         
                         <div class="relative z-10 h-full flex flex-col">
                             <div class="flex items-center justify-between mb-8">
-                                <h3 class="text-[10px] font-black uppercase opacity-60 tracking-widest">Payment Settlement</h3>
+                                <h3 class="text-[10px] font-bold uppercase opacity-60 tracking-widest">Payment Settlement</h3>
                                 <div class="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
                                     <CreditCardIcon class="w-4 h-4" />
                                 </div>
@@ -287,7 +287,7 @@ const getStatusVariant = (status: string) => {
 
                         <div class="relative z-10 h-full flex flex-col">
                             <div class="flex items-center justify-between mb-8">
-                                <h3 class="text-[10px] font-black uppercase opacity-60 tracking-widest">Legal Compliance</h3>
+                                <h3 class="text-[10px] font-bold uppercase opacity-60 tracking-widest">Legal Compliance</h3>
                                 <div class="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center">
                                     <ShieldCheckIcon class="w-4 h-4" />
                                 </div>
@@ -324,8 +324,8 @@ const getStatusVariant = (status: string) => {
             <div class="lg:col-span-2 space-y-8">
                 <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden">
                     <div class="flex items-center justify-between mb-8 pb-4 border-b border-slate-50">
-                        <h3 class="text-xs font-black uppercase text-slate-400 tracking-widest">Activity Timeline</h3>
-                        <span class="px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">Vault Protected</span>
+                        <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest">Activity Timeline</h3>
+                        <span class="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-black text-slate-500 uppercase tracking-widest">Vault Protected</span>
                     </div>
 
                     <div class="relative pl-8 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
@@ -333,9 +333,9 @@ const getStatusVariant = (status: string) => {
                         <div class="relative group/step">
                             <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-ocean-600 border-4 border-white shadow-sm ring-4 ring-ocean-50 z-10 transition-transform group-hover/step:scale-125"></div>
                             <div class="flex flex-col">
-                                <span class="text-[9px] font-black text-ocean-600 uppercase tracking-tighter">14:22 • TODAY</span>
+                                <span class="text-[10px] font-black text-ocean-600 uppercase tracking-tighter">14:22 • TODAY</span>
                                 <span class="text-sm font-bold text-slate-900">Booking Confirmed</span>
-                                <span class="text-[11px] text-slate-400 mt-0.5">Automated system release after verification.</span>
+                                <span class="text-[10px] text-slate-400 mt-0.5">Automated system release after verification.</span>
                             </div>
                         </div>
 
@@ -343,9 +343,9 @@ const getStatusVariant = (status: string) => {
                         <div class="relative group/step">
                             <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-reef-500 border-4 border-white shadow-sm ring-4 ring-reef-50 z-10 transition-transform group-hover/step:scale-125"></div>
                             <div class="flex flex-col">
-                                <span class="text-[9px] font-black text-reef-600 uppercase tracking-tighter">14:15 • TODAY</span>
+                                <span class="text-[10px] font-black text-reef-600 uppercase tracking-tighter">14:15 • TODAY</span>
                                 <span class="text-sm font-bold text-slate-900">Payment Secured</span>
-                                <span class="text-[11px] text-slate-400 mt-0.5">GCash transaction verified by PayMongo.</span>
+                                <span class="text-[10px] text-slate-400 mt-0.5">GCash transaction verified by PayMongo.</span>
                             </div>
                         </div>
 
@@ -353,9 +353,9 @@ const getStatusVariant = (status: string) => {
                         <div class="relative group/step">
                             <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-wave-500 border-4 border-white shadow-sm ring-4 ring-wave-50 z-10 transition-transform group-hover/step:scale-125"></div>
                             <div class="flex flex-col">
-                                <span class="text-[9px] font-black text-wave-600 uppercase tracking-tighter">14:02 • TODAY</span>
+                                <span class="text-[10px] font-black text-wave-600 uppercase tracking-tighter">14:02 • TODAY</span>
                                 <span class="text-sm font-bold text-slate-900">Signature Affixed</span>
-                                <span class="text-[11px] text-slate-400 mt-0.5">Electronic waveform capture successful.</span>
+                                <span class="text-[10px] text-slate-400 mt-0.5">Electronic waveform capture successful.</span>
                             </div>
                         </div>
 
@@ -363,9 +363,9 @@ const getStatusVariant = (status: string) => {
                         <div class="relative group/step">
                             <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-slate-300 border-4 border-white shadow-sm ring-4 ring-slate-50 z-10 transition-transform group-hover/step:scale-125"></div>
                             <div class="flex flex-col opacity-60">
-                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">14:00 • TODAY</span>
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">14:00 • TODAY</span>
                                 <span class="text-sm font-bold text-slate-900">Reservation Inflow</span>
-                                <span class="text-[11px] text-slate-400 mt-0.5">Inquiry registered via Cloud9 entry.</span>
+                                <span class="text-[10px] text-slate-400 mt-0.5">Inquiry registered via Cloud9 entry.</span>
                             </div>
                         </div>
                     </div>

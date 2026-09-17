@@ -5,6 +5,7 @@ namespace App\Enums;
 enum BookingStatus: string
 {
     case Pending = 'pending';
+    case AwaitingPayment = 'awaiting_payment';
     case Confirmed = 'confirmed';
     case InProgress = 'in_progress';
     case Completed = 'completed';
@@ -15,6 +16,7 @@ enum BookingStatus: string
     {
         return match($this) {
             self::Pending => 'Pending',
+            self::AwaitingPayment => 'Awaiting Payment',
             self::Confirmed => 'Confirmed',
             self::InProgress => 'In Progress',
             self::Completed => 'Completed',
@@ -27,6 +29,7 @@ enum BookingStatus: string
     {
         return match($this) {
             self::Pending => 'yellow',
+            self::AwaitingPayment => 'amber',
             self::Confirmed => 'green',
             self::InProgress => 'blue',
             self::Completed => 'indigo',

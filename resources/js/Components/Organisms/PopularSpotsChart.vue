@@ -27,15 +27,15 @@ const maxBookings = () => {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">Popular Surf Spots</h2>
+  <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-4">Popular Surf Spots</h2>
 
     <div v-if="isLoading" class="h-48 flex items-center justify-center">
-      <p class="text-gray-500">Loading...</p>
+      <p class="text-slate-500">Loading...</p>
     </div>
 
     <div v-else-if="spots.length === 0" class="h-48 flex items-center justify-center">
-      <p class="text-gray-500">No data available</p>
+      <p class="text-slate-500">No data available</p>
     </div>
 
     <div v-else class="space-y-3">
@@ -44,17 +44,17 @@ const maxBookings = () => {
         :key="spot.name"
         class="flex items-center"
       >
-        <span class="text-sm font-medium text-gray-700 w-8">{{ index + 1 }}</span>
+        <span class="text-sm font-medium text-slate-700 w-8">{{ index + 1 }}</span>
         
         <div class="flex-1 mx-3">
           <div class="flex items-center justify-between mb-1">
-            <span class="text-sm text-gray-900 truncate">{{ spot.name }}</span>
-            <span class="text-sm text-gray-500">{{ spot.total_bookings }} bookings</span>
+            <span class="text-sm text-slate-900 truncate">{{ spot.name }}</span>
+            <span class="text-sm text-slate-500">{{ spot.total_bookings }} bookings</span>
           </div>
           
-          <div class="w-full bg-gray-200 rounded-full h-2">
+          <div class="w-full bg-slate-200 rounded-full h-2">
             <div
-              class="bg-blue-500 h-2 rounded-full transition-all duration-500"
+              class="bg-ocean-500 h-2 rounded-full transition-all duration-500"
               :style="{ width: `${(spot.total_bookings / maxBookings()) * 100}%` }"
             ></div>
           </div>

@@ -132,6 +132,16 @@ class BookingController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
+        // Check for time slot conflicts (double-booking prevention)
+        if ($this->safetyService->hasTimeConflict(
+            $instructor->id,
+            $validated['date'],
+            $validated['start_time'],
+            $validated['end_time']
+        )) {
+            return back()->with('error', 'This time slot is no longer available. Please choose another time.');
+        }
+
         // Calculate pricing using PricingService
         $pricing = $this->pricingService->calculatePrice(
             $instructor->instructorProfile,
@@ -291,47 +301,90 @@ class BookingController extends Controller
     {
         Gate::authorize('confirm', $booking);
 
-        $booking->confirm();
+        // Re-check for time slot conflicts before confirming
+        if ($this->safetyService->hasTimeConflict(
+            $booking->instructor_id,
+            $booking->date instanceof \DateTimeInterface ? $booking->date->format('Y-m-d') : $booking->date,
+            $booking->start_time,
+            $booking->end_time,
+            $booking->id
+        )) {
+            return back()->with('error', 'This time slot has been taken by another booking. Cannot confirm.');
+        }
 
-        return back()->with('success', 'Booking confirmed successfully.');
-    }
+        $payment = $booking->payment;
+        $paymentMethod = $payment ? $payment->payment_method->value : 'cash';
 
-    /**
-     * Create booking record
-     */
-    private function createBooking(array $data, string $paymentMethod): Booking
-    {
-        return DB::transaction(function () use ($data, $paymentMethod) {
-            $booking = Booking::create([
-                'student_id' => auth()->id(),
-                'instructor_id' => $data['instructor_id'],
-                'surf_spot_id' => $data['surf_spot_id'],
-                'date' => $data['date'],
-                'time_period' => $data['time_period'],
-                'skill_level' => $data['skill_level'],
-                'student_age' => $data['student_age'],
-                'student_count' => $data['student_count'],
-                'status' => BookingStatus::Pending,
-                'total_amount' => $data['pricing']['total'],
-                'payment_status' => $paymentMethod === 'cash' 
-                    ? PaymentStatus::PendingCash 
-                    : PaymentStatus::Pending,
-                'notes' => $data['notes'] ?? null,
-            ]);
+        if ($paymentMethod === 'gcash') {
+            DB::transaction(function () use ($booking, $payment) {
+                // Set status to AwaitingPayment and payment_deadline_at to 30 minutes from now
+                $booking->update([
+                    'status' => BookingStatus::AwaitingPayment,
+                    'payment_deadline_at' => now()->addMinutes(30),
+                ]);
 
-            // Create payment record
-            $booking->payment()->create([
-                'amount' => $data['pricing']['total'],
-                'payment_method' => $paymentMethod,
-                'status' => $paymentMethod === 'cash' 
-                    ? PaymentStatus::PendingCash 
-                    : PaymentStatus::Pending,
-            ]);
+                $bookingDate = $booking->date instanceof \DateTimeInterface ? $booking->date : new \DateTime($booking->date);
+                $dayOfWeek = (int) $bookingDate->format('w');
 
-            // Broadcast booking created event
-            broadcast(new BookingCreated($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
+                // Block instructor availability for that time slot
+                \App\Models\Availability::updateOrCreate(
+                    [
+                        'user_id' => $booking->instructor_id,
+                        'specific_date' => $booking->date instanceof \DateTimeInterface ? $booking->date->format('Y-m-d') : $booking->date,
+                        'time_period' => $booking->time_period instanceof \BackedEnum ? $booking->time_period->value : $booking->time_period,
+                    ],
+                    [
+                        'day_of_week' => $dayOfWeek,
+                        'is_available' => false,
+                    ]
+                );
 
-            return $booking;
-        });
+                // Create GCash payment intent using the active payment service
+                $paymentService = app(\App\Contracts\PaymentServiceInterface::class);
+                $paymentIntent = $paymentService->createPaymentIntent($booking);
+
+                // Update the payment record with the transaction ID and save checkout URL to notes
+                if ($payment) {
+                    $payment->update([
+                        'transaction_id' => $paymentIntent['transaction_id'],
+                        'notes' => json_encode(['checkout_url' => $paymentIntent['checkout_url']]),
+                    ]);
+                }
+
+                // Broadcast Awaiting Payment WebSocket event
+                broadcast(new \App\Events\BookingAwaitingPayment($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
+
+                // Dispatch ExpirePaymentWindowJob to run in 30 minutes
+                \App\Jobs\ExpirePaymentWindowJob::dispatch($booking)->delay(now()->addMinutes(30));
+            });
+
+            return back()->with('success', 'Booking accepted. Awaiting payment from the student.');
+        } else {
+            DB::transaction(function () use ($booking) {
+                // Cash payment method -> Confirm directly
+                $booking->update(['status' => BookingStatus::Confirmed]);
+
+                $bookingDate = $booking->date instanceof \DateTimeInterface ? $booking->date : new \DateTime($booking->date);
+                $dayOfWeek = (int) $bookingDate->format('w');
+
+                // Block instructor availability for that time slot
+                \App\Models\Availability::updateOrCreate(
+                    [
+                        'user_id' => $booking->instructor_id,
+                        'specific_date' => $booking->date instanceof \DateTimeInterface ? $booking->date->format('Y-m-d') : $booking->date,
+                        'time_period' => $booking->time_period instanceof \BackedEnum ? $booking->time_period->value : $booking->time_period,
+                    ],
+                    [
+                        'day_of_week' => $dayOfWeek,
+                        'is_available' => false,
+                    ]
+                );
+
+                // Broadcast booking confirmed event
+                broadcast(new \App\Events\BookingConfirmed($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
+            });
+
+            return back()->with('success', 'Booking confirmed successfully.');
+        }
     }
 }

@@ -10,6 +10,7 @@ class StudentProfile extends Model
         'user_id',
         'skill_level',
         'is_first_time',
+        'status',
     ];
 
     protected $casts = [

@@ -39,7 +39,7 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // Mock payment routes (development only)
-if (app()->environment('local', 'development')) {
+if (app()->environment('local', 'development', 'testing')) {
     Route::get('/mock-checkout/{transactionId}', [PaymentController::class, 'mockCheckout'])
         ->name('payments.mock-checkout');
     Route::post('/mock-checkout/{transactionId}/process', [PaymentController::class, 'processMockPayment'])

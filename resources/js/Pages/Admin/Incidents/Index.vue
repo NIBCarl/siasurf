@@ -60,7 +60,7 @@ const getSeverityVariant = (severity: string) => {
                     </ol>
                 </nav>
                 <div class="flex items-center gap-3">
-                    <h1 class="text-3xl font-black text-slate-900 tracking-tight">Safety Monitoring</h1>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Safety Monitoring</h1>
                     <div class="flex h-2 w-2 relative">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
@@ -128,7 +128,7 @@ const getSeverityVariant = (severity: string) => {
                         </div>
                     </div>
                     
-                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <div class="w-1.5 h-1.5 rounded-full" :class="incident.severity.toLowerCase() === 'critical' ? 'bg-rose-600 animate-pulse' : 'bg-slate-400'"></div>
                         {{ incident.type.replace('_', ' ') }}
                     </h3>
@@ -143,13 +143,14 @@ const getSeverityVariant = (severity: string) => {
                                 <UserCircleIcon class="w-6 h-6 text-slate-400" />
                             </div>
                             <div>
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter leading-none">Instructor</p>
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none">Instructor</p>
                                 <p class="text-xs font-bold text-slate-900 mt-1">{{ incident.instructor.name }}</p>
                             </div>
                         </div>
                         
                         <Link :href="route('admin.incidents.show', incident.id)">
-                            <button class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-rose-600 hover:text-white transition-all shadow-sm">
+                            <button class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 transition-all shadow-sm
+                                hover:bg-rose-600 hover:text-white">
                                 <ChevronRightIcon class="w-4 h-4" />
                             </button>
                         </Link>
@@ -162,7 +163,7 @@ const getSeverityVariant = (severity: string) => {
                 <div class="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 shadow-inner">
                     <LifebuoyIcon class="w-10 h-10" />
                 </div>
-                <h3 class="text-xl font-black text-slate-900 tracking-tight">System All-Clear</h3>
+                <h3 class="text-xl font-bold text-slate-900 tracking-tight">System All-Clear</h3>
                 <p class="text-slate-400 mt-2 max-w-sm mx-auto">No safety incidents or rule violations recorded. Siargao waters remain secure.</p>
             </div>
         </div>

@@ -64,7 +64,7 @@ const getStatusVariant = (status: string) => {
                             </div>
                         </ol>
                     </nav>
-                    <h1 class="text-3xl font-black text-slate-900 tracking-tight">Booking Manifest</h1>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Booking Manifest</h1>
                     <p class="text-slate-500 mt-1">Registry of all surf sessions and student reservations.</p>
                 </div>
                 

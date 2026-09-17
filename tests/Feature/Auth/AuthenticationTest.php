@@ -71,6 +71,8 @@ class AuthenticationTest extends TestCase
             'password_confirmation' => 'password',
             'role' => 'student',
             'phone' => '+63 912 345 6789',
+            'skill_level' => 'beginner',
+            'is_first_time' => true,
         ]);
 
         $this->assertAuthenticated();
@@ -99,8 +101,16 @@ class AuthenticationTest extends TestCase
             'role' => 'instructor',
         ]);
 
-        // Check instructor profile was created
+        // Simulate onboarding step to create instructor profile
         $user = User::where('email', 'instructor@example.com')->first();
+        $user->instructorProfile()->create([
+            'bio' => 'Experienced surf instructor',
+            'level' => 1,
+            'rate_per_hour' => 600,
+            'status' => \App\Enums\InstructorStatus::PendingVerification->value,
+        ]);
+
+        // Check instructor profile was created
         $this->assertNotNull($user->instructorProfile);
     }
 

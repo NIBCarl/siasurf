@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class AdminInstructorControllerTest extends TestCase
@@ -41,7 +42,7 @@ class AdminInstructorControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_view_instructors_list()
     {
         $response = $this->actingAs($this->admin)
@@ -53,7 +54,7 @@ class AdminInstructorControllerTest extends TestCase
             );
     }
 
-    /** @test */
+    #[Test]
     public function non_admin_cannot_view_instructors_list()
     {
         $response = $this->actingAs($this->instructor)
@@ -62,7 +63,7 @@ class AdminInstructorControllerTest extends TestCase
         $response->assertForbidden();
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_register_new_instructor()
     {
         Storage::fake('local');
@@ -91,9 +92,15 @@ class AdminInstructorControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_verify_instructor()
     {
+        $this->instructor->certificates()->create([
+            'type' => CertificateType::SurfSkill,
+            'file_path' => 'certificates/test.pdf',
+            'status' => CertificateStatus::Verified,
+        ]);
+
         $response = $this->actingAs($this->admin)
             ->post(route('admin.instructors.verify', $this->instructor->id));
 
@@ -105,7 +112,7 @@ class AdminInstructorControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_suspend_instructor()
     {
         $this->instructor->instructorProfile()->update(['status' => InstructorStatus::Active]);
@@ -124,7 +131,7 @@ class AdminInstructorControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_reactivate_suspended_instructor()
     {
         $this->instructor->instructorProfile()->update([
@@ -143,7 +150,7 @@ class AdminInstructorControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_upload_certificate()
     {
         Storage::fake('local');
@@ -166,7 +173,7 @@ class AdminInstructorControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_verify_certificate()
     {
         Storage::fake('local');
@@ -189,7 +196,7 @@ class AdminInstructorControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_reject_certificate()
     {
         $certificate = Certificate::factory()->create([
@@ -211,7 +218,7 @@ class AdminInstructorControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function instructor_registration_requires_valid_email()
     {
         $response = $this->actingAs($this->admin)
@@ -225,7 +232,7 @@ class AdminInstructorControllerTest extends TestCase
         $response->assertSessionHasErrors(['email']);
     }
 
-    /** @test */
+    #[Test]
     public function instructor_registration_requires_unique_email()
     {
         User::factory()->create(['email' => 'existing@example.com']);

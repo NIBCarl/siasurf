@@ -10,10 +10,10 @@
 const props = defineProps<Props>()
 
 const colorClasses: Record<string, { bg: string; icon: string; text: string }> = {
-  blue: { bg: 'bg-blue-50', icon: 'text-blue-600', text: 'text-blue-900' },
-  green: { bg: 'bg-green-50', icon: 'text-green-600', text: 'text-green-900' },
+  blue: { bg: 'bg-ocean-50', icon: 'text-ocean-600', text: 'text-ocean-900' },
+  green: { bg: 'bg-emerald-50', icon: 'text-emerald-600', text: 'text-emerald-900' },
   yellow: { bg: 'bg-yellow-50', icon: 'text-yellow-600', text: 'text-yellow-900' },
-  red: { bg: 'bg-red-50', icon: 'text-red-600', text: 'text-red-900' },
+  red: { bg: 'bg-rose-50', icon: 'text-rose-600', text: 'text-rose-900' },
   purple: { bg: 'bg-purple-50', icon: 'text-purple-600', text: 'text-purple-900' },
 }
 
@@ -34,12 +34,12 @@ const trendText = () => {
 
 const trendColor = () => {
   if (props.trend === undefined) return ''
-  return props.trend >= 0 ? 'text-green-600' : 'text-red-600'
+  return props.trend >= 0 ? 'text-emerald-600' : 'text-rose-600'
 }
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+  <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
     <div class="flex items-center">
       <div :class="['p-3 rounded-lg', colorClasses[color].bg]">
         <svg :class="['w-6 h-6', colorClasses[color].icon]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -48,7 +48,7 @@ const trendColor = () => {
       </div>
       
       <div class="ml-4 flex-1">
-        <p class="text-sm font-medium text-gray-500">{{ title }}</p>
+        <p class="text-sm font-medium text-slate-500">{{ title }}</p>
         <div class="flex items-baseline">
           <p :class="['text-2xl font-bold', colorClasses[color].text]">{{ value }}</p>
           <span v-if="trend !== undefined" :class="['ml-2 text-sm font-medium', trendColor()]">
@@ -58,6 +58,6 @@ const trendColor = () => {
       </div>
     </div>
     
-    <p class="mt-3 text-sm text-gray-600">{{ subtitle }}</p>
+    <p class="mt-3 text-sm text-slate-600">{{ subtitle }}</p>
   </div>
 </template>

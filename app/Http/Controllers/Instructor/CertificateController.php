@@ -15,21 +15,24 @@ class CertificateController extends Controller
             'certificates' => 'required|array|min:1',
             'certificates.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // Max 10MB
         ], [
-            'certificates.required' => 'You must upload at least one certificate.',
-            'certificates.min' => 'You must upload at least one certificate.',
+            'certificates.required' => 'Choose at least one file (PDF, JPG, or PNG) to upload.',
+            'certificates.min' => 'Choose at least one file (PDF, JPG, or PNG) to upload.',
+            'certificates.*.max' => 'Each document must be 10 MB or smaller.',
+            'certificates.*.mimes' => 'Documents must be a PDF, JPG, or PNG file.',
+            'certificates.*.uploaded' => 'A document could not be uploaded because it is larger than this server allows (max ' . $this->uploadMaxSizeLabel() . ' per file). Compress it and try again.',
         ]);
 
         $user = auth()->user();
 
         if ($request->hasFile('certificates')) {
             foreach ($request->file('certificates') as $file) {
-                // Determine certificate type
+                // Determine certificate type ('sisa' before 'isa' — "sisa" contains "isa")
                 $type = \App\Enums\CertificateType::SurfSkill;
                 $filename = strtolower($file->getClientOriginalName());
                 if (str_contains($filename, 'bls')) $type = \App\Enums\CertificateType::BLS;
                 elseif (str_contains($filename, 'wasar')) $type = \App\Enums\CertificateType::WaSAR;
-                elseif (str_contains($filename, 'isa')) $type = \App\Enums\CertificateType::ISA;
                 elseif (str_contains($filename, 'sisa')) $type = \App\Enums\CertificateType::SISA;
+                elseif (str_contains($filename, 'isa')) $type = \App\Enums\CertificateType::ISA;
                 elseif (str_contains($filename, 'surf')) $type = \App\Enums\CertificateType::SurfSkill;
 
                 // Store file based on environment configuration
@@ -45,5 +48,24 @@ class CertificateController extends Controller
         }
 
         return back()->with('success', 'Certificates uploaded successfully and are pending verification.');
+    }
+
+    private function uploadMaxSizeLabel(): string
+    {
+        $value = trim((string) ini_get('upload_max_filesize'));
+
+        if ($value === '') {
+            return 'the server limit';
+        }
+
+        $bytes = (int) $value;
+        $bytes = match (strtolower(substr($value, -1))) {
+            'g' => $bytes * 1073741824,
+            'm' => $bytes * 1048576,
+            'k' => $bytes * 1024,
+            default => $bytes,
+        };
+
+        return $bytes > 0 ? round($bytes / 1048576) . ' MB' : 'the server limit';
     }
 }

@@ -60,22 +60,24 @@ class BookingControllerTest extends TestCase
     {
         $bookingData = [
             'date' => now()->addDay()->format('Y-m-d'),
-            'time_period' => 'morning',
+            'start_time' => '09:00',
             'skill_level' => 'beginner',
             'student_age' => 25,
+            'height' => 170,
+            'weight' => 65,
             'student_count' => 1,
+            'has_board' => true,
             'surf_spot_id' => $this->surfSpot->id,
         ];
 
         $response = $this->actingAs($this->student)
+            ->followingRedirects()
             ->post(route('bookings.store-details', $this->instructor->id), $bookingData);
 
         $response->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Booking/Waiver')
             );
-        
-        $response->assertSessionHas('booking_data');
     }
 
     /** @test */
@@ -91,10 +93,13 @@ class BookingControllerTest extends TestCase
 
         $bookingData = [
             'date' => now()->addDay()->format('Y-m-d'),
-            'time_period' => 'morning',
+            'start_time' => '09:00',
             'skill_level' => 'beginner',
             'student_age' => 25,
+            'height' => 170,
+            'weight' => 65,
             'student_count' => 3, // Exceeds Level 1 max of 2
+            'has_board' => true,
             'surf_spot_id' => $this->surfSpot->id,
         ];
 
@@ -200,10 +205,13 @@ class BookingControllerTest extends TestCase
         $response = $this->actingAs($this->student)
             ->post(route('bookings.store-details', $this->instructor->id), [
                 'date' => now()->subDay()->format('Y-m-d'), // Past date
-                'time_period' => 'morning',
+                'start_time' => '09:00',
                 'skill_level' => 'beginner',
                 'student_age' => 25,
+                'height' => 170,
+                'weight' => 65,
                 'student_count' => 1,
+                'has_board' => true,
                 'surf_spot_id' => $this->surfSpot->id,
             ]);
 
@@ -216,13 +224,94 @@ class BookingControllerTest extends TestCase
         $response = $this->actingAs($this->student)
             ->post(route('bookings.store-details', $this->instructor->id), [
                 'date' => now()->addDay()->format('Y-m-d'),
-                'time_period' => 'morning',
+                'start_time' => '09:00',
                 'skill_level' => 'beginner',
                 'student_age' => 25,
+                'height' => 170,
+                'weight' => 65,
                 'student_count' => 1,
+                'has_board' => true,
                 // Missing surf_spot_id
             ]);
 
         $response->assertSessionHasErrors(['surf_spot_id']);
+    }
+
+    /** @test */
+    public function instructor_confirms_gcash_booking_transitions_to_awaiting_payment()
+    {
+        \Illuminate\Support\Facades\Queue::fake();
+
+        $booking = Booking::factory()->create([
+            'student_id' => $this->student->id,
+            'instructor_id' => $this->instructor->id,
+            'status' => BookingStatus::Pending,
+        ]);
+
+        $payment = \App\Models\Payment::create([
+            'booking_id' => $booking->id,
+            'amount' => $booking->total_amount,
+            'payment_method' => \App\Enums\PaymentMethod::GCash,
+            'status' => PaymentStatus::Pending,
+        ]);
+
+        $response = $this->actingAs($this->instructor)
+            ->patch(route('instructor.bookings.confirm', $booking->id));
+
+        $response->assertRedirect();
+        
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+            'status' => BookingStatus::AwaitingPayment->value,
+        ]);
+
+        $this->assertNotNull($booking->fresh()->payment_deadline_at);
+
+        // Verify availability is blocked
+        $this->assertDatabaseHas('availabilities', [
+            'user_id' => $this->instructor->id,
+            'specific_date' => $booking->date->format('Y-m-d'),
+            'time_period' => $booking->time_period->value,
+            'is_available' => false,
+        ]);
+
+        // Verify expiration job is dispatched
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\ExpirePaymentWindowJob::class);
+    }
+
+    /** @test */
+    public function expiration_job_cancels_booking_and_releases_availability()
+    {
+        $booking = Booking::factory()->create([
+            'student_id' => $this->student->id,
+            'instructor_id' => $this->instructor->id,
+            'status' => BookingStatus::AwaitingPayment,
+            'payment_deadline_at' => now()->subMinutes(1),
+        ]);
+
+        // Mock availability as blocked
+        $bookingDate = $booking->date;
+        $dayOfWeek = (int) $bookingDate->format('w');
+        \App\Models\Availability::create([
+            'user_id' => $this->instructor->id,
+            'specific_date' => $bookingDate->format('Y-m-d'),
+            'day_of_week' => $dayOfWeek,
+            'time_period' => $booking->time_period,
+            'is_available' => false,
+        ]);
+
+        // Run job
+        $job = new \App\Jobs\ExpirePaymentWindowJob($booking);
+        $job->handle();
+
+        $this->assertEquals(BookingStatus::Cancelled, $booking->fresh()->status);
+
+        // Verify availability is released (blocked record is deleted)
+        $this->assertDatabaseMissing('availabilities', [
+            'user_id' => $this->instructor->id,
+            'specific_date' => $bookingDate->format('Y-m-d'),
+            'time_period' => $booking->time_period->value,
+            'is_available' => false,
+        ]);
     }
 }

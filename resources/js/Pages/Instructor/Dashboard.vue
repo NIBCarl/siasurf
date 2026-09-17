@@ -106,7 +106,7 @@ const getStrikeColor = (count: number) => {
             <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-8 py-4">
                 <div class="relative">
                     <div class="absolute -left-4 top-1/2 -translate-y-1/2 w-1.5 h-16 bg-ocean-500 rounded-full blur-sm"></div>
-                    <h1 class="text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-none uppercase">
+                    <h1 class="text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight leading-none uppercase">
                         Stoke <span class="text-ocean-500">Dashboard</span>
                     </h1>
                     <p class="text-slate-500 font-bold mt-3 text-lg lg:max-w-md">Manage your waves, tracks, and student progress from your cinematic portal.</p>
@@ -135,8 +135,8 @@ const getStrikeColor = (count: number) => {
                     <div class="absolute top-0 right-0 p-8 opacity-10 scale-150 group-hover:scale-[2] transition-transform duration-700">
                         <BanknotesIcon class="w-24 h-24 text-white" />
                     </div>
-                    <p class="text-[11px] font-black uppercase tracking-[0.2em] text-white/70">Total Earnings</p>
-                    <h3 class="text-3xl font-black text-white mt-2">{{ stats.total_earnings }}</h3>
+                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Total Earnings</p>
+                    <h3 class="text-3xl font-bold text-white mt-2">{{ stats.total_earnings }}</h3>
                     <div class="mt-6 inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full border border-white/20">
                         <span class="text-[10px] font-black text-white uppercase tracking-wider">{{ stats.this_month_earnings }} this month</span>
                     </div>
@@ -147,8 +147,8 @@ const getStrikeColor = (count: number) => {
                     <div class="absolute top-0 right-0 p-8 opacity-5 scale-150 group-hover:scale-[2] transition-transform duration-700">
                         <CalendarIcon class="w-24 h-24 text-slate-900" />
                     </div>
-                    <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Lessons Taught</p>
-                    <h3 class="text-3xl font-black text-slate-900 mt-2">{{ stats.completed_lessons }} <span class="text-lg font-bold text-slate-400 ml-1">Total</span></h3>
+                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Lessons Taught</p>
+                    <h3 class="text-3xl font-bold text-slate-900 mt-2">{{ stats.completed_lessons }} <span class="text-lg font-bold text-slate-400 ml-1">Total</span></h3>
                     <div class="mt-6 flex items-center gap-2">
                         <div class="flex -space-x-2">
                             <div v-for="i in 3" :key="i" class="w-6 h-6 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center">
@@ -164,9 +164,9 @@ const getStrikeColor = (count: number) => {
                     <div class="absolute top-0 right-0 p-8 opacity-5 scale-150 group-hover:scale-[2] transition-transform duration-700 text-amber-500">
                         <StarIcon class="w-24 h-24" />
                     </div>
-                    <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Instructor Rating</p>
+                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Instructor Rating</p>
                     <div class="flex items-baseline gap-2 mt-2">
-                        <h3 class="text-3xl font-black text-slate-900">{{ profile.average_rating }}</h3>
+                        <h3 class="text-3xl font-bold text-slate-900">{{ profile.average_rating }}</h3>
                         <div class="flex text-amber-400">
                             <StarIcon v-for="i in 5" :key="i" class="w-4 h-4 fill-current" :class="{ 'opacity-30': i > Math.round(profile.average_rating) }" />
                         </div>
@@ -181,8 +181,8 @@ const getStrikeColor = (count: number) => {
                     <div class="absolute top-0 right-0 p-8 opacity-5 scale-150 group-hover:scale-[2] transition-transform duration-700 text-rose-500">
                         <ExclamationTriangleIcon class="w-24 h-24" />
                     </div>
-                    <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Safety Strikes</p>
-                    <h3 class="text-3xl font-black mt-2" :class="getStrikeColor(profile.strike_count)">
+                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Safety Strikes</p>
+                    <h3 class="text-3xl font-bold mt-2" :class="getStrikeColor(profile.strike_count)">
                         {{ profile.strike_count }} <span class="text-lg font-bold text-slate-400 ml-1">Strikes</span>
                     </h3>
                     <div class="mt-6 flex items-center gap-2">
@@ -213,7 +213,7 @@ const getStrikeColor = (count: number) => {
                                     <Badge variant="success" class="self-start px-3 py-1 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Session Active</Badge>
                                     <div>
                                         <p class="text-ocean-200 text-xs font-black uppercase tracking-widest">Ongoing Session</p>
-                                        <h4 class="text-white text-3xl font-black mt-2 leading-tight">{{ activities.ongoing_session.student_name }}</h4>
+                                        <h4 class="text-white text-3xl font-bold mt-2 leading-tight">{{ activities.ongoing_session.student_name }}</h4>
                                         <div class="flex items-center gap-2 text-white/70 mt-4">
                                             <MapPinIcon class="w-4 h-4" />
                                             <span class="text-sm font-bold">{{ activities.ongoing_session.spot_name }}</span>
@@ -257,7 +257,7 @@ const getStrikeColor = (count: number) => {
                         <div class="w-16 h-16 bg-slate-50 rounded-[1.5rem] flex items-center justify-center mb-6">
                             <ClockIcon class="w-8 h-8 text-slate-300" />
                         </div>
-                        <h4 class="text-xl font-black text-slate-900 uppercase tracking-tight">System Idle</h4>
+                        <h4 class="text-xl font-bold text-slate-900 uppercase tracking-tight">System Idle</h4>
                         <p class="text-slate-500 font-bold mt-2 max-w-sm">No active sessions at the moment. Keep your availability updated to attract more students.</p>
                         <BaseButton variant="secondary" :href="route('instructor.availability.index')" class="mt-8 rounded-2xl px-8">
                             Update Schedule
@@ -271,7 +271,7 @@ const getStrikeColor = (count: number) => {
                                 <div class="p-3 bg-amber-50 rounded-2xl text-amber-500">
                                     <StarIcon class="w-6 h-6" />
                                 </div>
-                                <h3 class="text-2xl font-black text-slate-900 tracking-tight uppercase">Recent Feedback</h3>
+                                <h3 class="text-2xl font-bold text-slate-900 tracking-tight uppercase">Recent Feedback</h3>
                             </div>
                             <Link :href="route('instructor.bookings.index')" class="text-xs font-black text-ocean-600 uppercase tracking-widest hover:text-ocean-700 transition-colors">View All</Link>
                         </div>
@@ -285,7 +285,7 @@ const getStrikeColor = (count: number) => {
                                         </div>
                                         <div>
                                             <p class="text-xs font-black text-slate-900 leading-none">{{ review.student_name }}</p>
-                                            <p class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{{ review.date }}</p>
+                                            <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{{ review.date }}</p>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1">
@@ -309,7 +309,7 @@ const getStrikeColor = (count: number) => {
                             <div class="p-2.5 bg-rose-50 rounded-2xl text-rose-500">
                                 <InboxIcon class="w-5 h-5" />
                             </div>
-                            <h4 class="font-black text-slate-900 uppercase tracking-tighter">Action Items</h4>
+                            <h4 class="font-bold text-slate-900 uppercase tracking-tighter">Action Items</h4>
                         </div>
                         
                         <div class="space-y-4">
@@ -331,7 +331,7 @@ const getStrikeColor = (count: number) => {
                     <!-- Upcoming Timeline -->
                     <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/40 p-8">
                         <div class="flex items-center justify-between mb-8">
-                            <h4 class="font-black text-slate-900 uppercase tracking-tighter">Next Waves</h4>
+                            <h4 class="font-bold text-slate-900 uppercase tracking-tighter">Next Waves</h4>
                             <CalendarIcon class="w-5 h-5 text-slate-300" />
                         </div>
 
@@ -341,13 +341,13 @@ const getStrikeColor = (count: number) => {
                             
                             <div v-for="booking in activities.upcoming_bookings" :key="booking.id" class="relative flex gap-6">
                                 <div class="relative z-10 w-12 h-12 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center flex-shrink-0 group-hover:border-ocean-300 transition-colors">
-                                    <span class="text-[9px] font-black text-ocean-500 uppercase leading-none">{{ booking.date.split(' ')[0] }}</span>
+                                    <span class="text-[10px] font-black text-ocean-500 uppercase leading-none">{{ booking.date.split(' ')[0] }}</span>
                                     <span class="text-lg font-black text-slate-900 mt-0.5">{{ booking.date.split(' ')[1].replace(',', '') }}</span>
                                 </div>
                                 <div class="flex-1 pt-1.5">
                                     <div class="flex items-center justify-between">
                                         <p class="text-sm font-black text-slate-900">{{ booking.student_name }}</p>
-                                        <p class="text-[9px] font-black text-ocean-600 uppercase tracking-widest">{{ booking.time_period }}</p>
+                                        <p class="text-[10px] font-black text-ocean-600 uppercase tracking-widest">{{ booking.time_period }}</p>
                                     </div>
                                     <div class="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                                         <MapPinIcon class="w-2.5 h-2.5" />
@@ -371,16 +371,16 @@ const getStrikeColor = (count: number) => {
                             <div class="w-16 h-16 bg-white/10 rounded-2xl mx-auto flex items-center justify-center mb-6">
                                 <span class="text-2xl font-black text-white">L{{ profile.level }}</span>
                             </div>
-                            <h4 class="text-white font-black uppercase tracking-[0.2em] text-sm">Certified Expert</h4>
+                            <h4 class="text-white font-bold uppercase tracking-[0.2em] text-sm">Certified Expert</h4>
                             <p class="text-slate-400 font-bold text-xs mt-3 leading-relaxed">You are authorized to teach up to {{ profile.level > 1 ? 'Intermediate' : 'Beginner' }} level students at sanctioned spots.</p>
                             <div class="mt-8 pt-6 border-t border-white/5 flex gap-4">
                                 <div class="flex-1 bg-white/5 rounded-xl p-3">
-                                    <p class="text-[9px] font-black text-slate-500 uppercase">Verification</p>
-                                    <p class="text-[11px] font-black text-emerald-400 uppercase tracking-widest mt-0.5">Active</p>
+                                    <p class="text-[10px] font-black text-slate-500 uppercase">Verification</p>
+                                    <p class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mt-0.5">Active</p>
                                 </div>
                                 <div class="flex-1 bg-white/5 rounded-xl p-3">
-                                    <p class="text-[9px] font-black text-slate-500 uppercase">Renewal</p>
-                                    <p class="text-[11px] font-black text-white uppercase tracking-widest mt-0.5">June 2026</p>
+                                    <p class="text-[10px] font-black text-slate-500 uppercase">Renewal</p>
+                                    <p class="text-[10px] font-black text-white uppercase tracking-widest mt-0.5">June 2026</p>
                                 </div>
                             </div>
                         </div>

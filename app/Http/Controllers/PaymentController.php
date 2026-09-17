@@ -235,9 +235,20 @@ class PaymentController extends Controller
         try {
             $this->paymentService->simulatePayment($transactionId, $success);
 
+            $payment = Payment::where('transaction_id', $transactionId)->first();
+            $booking = $payment?->booking;
+
             if ($success) {
+                if ($booking) {
+                    return redirect()->route('bookings.confirmation', $booking->id)
+                        ->with('success', 'Payment completed successfully!');
+                }
                 return redirect()->route('dashboard')->with('success', 'Mock payment successful!');
             } else {
+                if ($booking) {
+                    return redirect()->route('student.bookings.show', $booking->id)
+                        ->with('error', 'Payment failed. You can try again.');
+                }
                 return redirect()->route('dashboard')->with('error', 'Mock payment failed.');
             }
         } catch (\Exception $e) {

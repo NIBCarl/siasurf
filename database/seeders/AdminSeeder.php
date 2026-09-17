@@ -13,7 +13,7 @@ class AdminSeeder extends Seeder
         $admin = User::create([
             'name' => 'SiaSurf Admin',
             'email' => 'siasurfadmin@gmail.com',
-            'password' => Hash::make(env('ADMIN_DEFAULT_PASSWORD', 'admin123')),
+            'password' => Hash::make(env('ADMIN_DEFAULT_PASSWORD', 'siasurfadmin')),
             'role' => 'admin',
             'email_verified_at' => now(),
         ]);

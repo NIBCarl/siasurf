@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Booking;
 use App\Models\User;
 use App\Models\SurfSpot;
 use App\Models\SafetyValidationLog;
+use App\Enums\BookingStatus;
 use App\Exceptions\SafetyViolationException;
 use App\Enums\InstructorLevel;
 use App\Enums\SkillLevel;
@@ -271,5 +273,50 @@ class SafetyService
             2, 3 => true, // Level 2 and Level 3 can teach all skill levels
             default => false,
         };
+    }
+
+    /**
+     * Check if an instructor already has a booking that overlaps with the given time slot.
+     */
+    public function hasTimeConflict(
+        int $instructorId,
+        string $date,
+        string $startTime,
+        string $endTime,
+        ?int $excludeBookingId = null
+    ): bool {
+        $query = Booking::where('instructor_id', $instructorId)
+            ->where('date', $date)
+            ->whereNotIn('status', [BookingStatus::Cancelled, BookingStatus::NoShow])
+            ->where(function ($q) use ($startTime, $endTime) {
+                $q->whereBetween('start_time', [$startTime, $endTime])
+                  ->orWhereBetween('end_time', [$startTime, $endTime])
+                  ->orWhere(function ($q2) use ($startTime, $endTime) {
+                      $q2->where('start_time', '<=', $startTime)
+                         ->where('end_time', '>=', $endTime);
+                  });
+            });
+
+        if ($excludeBookingId) {
+            $query->where('id', '!=', $excludeBookingId);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * Get all booked time slots for an instructor on a given date.
+     */
+    public function getBookedSlots(int $instructorId, string $date): array
+    {
+        return Booking::where('instructor_id', $instructorId)
+            ->where('date', $date)
+            ->whereNotIn('status', [BookingStatus::Cancelled, BookingStatus::NoShow])
+            ->get(['start_time', 'end_time'])
+            ->map(fn ($b) => [
+                'start_time' => $b->start_time,
+                'end_time' => $b->end_time,
+            ])
+            ->toArray();
     }
 }

@@ -72,9 +72,9 @@ const submit = () => {
                             name="role"
                             value="student"
                             v-model="form.role"
-                            class="text-indigo-600 focus:ring-indigo-500"
+                            class="text-wave-600 focus:ring-wave-500"
                         />
-                        <span class="ml-2 text-sm text-gray-700">Student/Tourist</span>
+                        <span class="ml-2 text-sm text-slate-700">Student/Tourist</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
                         <input
@@ -82,9 +82,9 @@ const submit = () => {
                             name="role"
                             value="instructor"
                             v-model="form.role"
-                            class="text-indigo-600 focus:ring-indigo-500"
+                            class="text-wave-600 focus:ring-wave-500"
                         />
-                        <span class="ml-2 text-sm text-gray-700">Surf Instructor</span>
+                        <span class="ml-2 text-sm text-slate-700">Surf Instructor</span>
                     </label>
                 </div>
 
@@ -92,16 +92,16 @@ const submit = () => {
             </div>
 
             <!-- Student Profile Fields -->
-            <div v-if="form.role === 'student'" class="mt-6 border-t border-gray-200 pt-4">
-                <h3 class="text-sm font-medium text-gray-900">Surf Experience</h3>
-                <p class="text-xs text-gray-500 mb-4">This helps us match you with the right instructor.</p>
+            <div v-if="form.role === 'student'" class="mt-6 border-t border-slate-200 pt-4">
+                <h3 class="text-sm font-medium text-slate-900">Surf Experience</h3>
+                <p class="text-xs text-slate-500 mb-4">This helps us match you with the right instructor.</p>
                 
                 <div class="mt-4">
                     <InputLabel for="skill_level" value="Skill Level" />
                     <select
                         id="skill_level"
                         v-model="form.skill_level"
-                        class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                        class="mt-1 block w-full border-slate-300 focus:border-wave-500 focus:ring-wave-500 rounded-md shadow-sm"
                         required
                     >
                         <option value="beginner">Beginner (Never surfed or still learning basics)</option>
@@ -117,12 +117,12 @@ const submit = () => {
                             id="is_first_time"
                             type="checkbox"
                             v-model="form.is_first_time"
-                            class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            class="h-4 w-4 rounded border-slate-300 text-wave-600 focus:ring-wave-500"
                         />
                     </div>
                     <div class="ml-3 text-sm">
-                        <label for="is_first_time" class="font-medium text-gray-700">This is my first time surfing in Siargao</label>
-                        <p class="text-gray-500">We'll give you extra care and tips for beginners.</p>
+                        <label for="is_first_time" class="font-medium text-slate-700">This is my first time surfing in Siargao</label>
+                        <p class="text-slate-500">We'll give you extra care and tips for beginners.</p>
                     </div>
                 </div>
             </div>
@@ -166,7 +166,7 @@ const submit = () => {
             <div class="mt-4 flex items-center justify-end">
                 <Link
                     :href="route('login')"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    class="rounded-md text-sm text-slate-600 underline hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-wave-500 focus:ring-offset-2"
                 >
                     Already registered?
                 </Link>

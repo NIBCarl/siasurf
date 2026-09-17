@@ -48,15 +48,22 @@ Route::get('/dashboard', function () {
     }
     
     if ($user->hasRole('instructor')) {
-        // If no profile or no certificates, they must onboard
-        if (!$user->instructorProfile || $user->certificates()->count() === 0) {
-            return redirect()->route('instructor.onboarding');
+        if ($user->instructorProfile && $user->instructorProfile->status === \App\Enums\InstructorStatus::Suspended) {
+            return redirect()->route('instructor.suspended');
         }
+        
+        // If no profile or no certificates, they must onboard
+        $certificateCount = $user->certificates()->count();
+        if (!$user->instructorProfile || $certificateCount === 0) {
+            $message = $user->instructorProfile
+                ? 'Your instructor profile is saved, but no certificate has been uploaded yet. Upload at least one certificate (PDF, JPG, or PNG) to continue verification.'
+                : 'Complete your instructor onboarding to continue.';
+
+            return redirect()->route('instructor.onboarding')->with('error', $message);
+        }
+        
         if ($user->instructorProfile->status === \App\Enums\InstructorStatus::PendingVerification) {
             return redirect()->route('instructor.pending');
-        }
-        if ($user->instructorProfile->status === \App\Enums\InstructorStatus::Suspended) {
-            return redirect()->route('instructor.suspended');
         }
         
         // Verified instructors go to their real dashboard
@@ -158,7 +165,17 @@ Route::middleware(['auth', 'verified', 'role:instructor'])->prefix('instructor')
 
     // Onboarding page
     Route::get('/onboarding', function () {
-        return Inertia::render('Instructor/Onboarding');
+        $user = auth()->user();
+        $profile = $user->instructorProfile;
+
+        return Inertia::render('Instructor/Onboarding', [
+            'profile' => $profile ? [
+                'bio' => $profile->bio,
+                'level' => $profile->level->value,
+                'rate_per_hour' => (float) $profile->rate_per_hour,
+            ] : null,
+            'uploadedCertificates' => $user->certificates()->count(),
+        ]);
     })->name('onboarding');
     Route::post('/onboarding', [\App\Http\Controllers\Instructor\OnboardingController::class, 'store'])->name('onboarding.store');
 
@@ -173,6 +190,7 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'verified.instructor']
 
 // API routes for availability (public)
 Route::get('/api/availability/{instructor}', [AvailabilityController::class, 'getAvailableSlots'])->name('api.availability');
+Route::get('/api/availability/{instructor}/booked-slots', [AvailabilityController::class, 'getBookedSlots'])->name('api.availability.booked-slots');
 
 // Admin routes
 Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admin.')->group(function () {
@@ -213,6 +231,11 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
     // All bookings view
     Route::get('/bookings', [AdminBookingController::class, 'index'])->name('bookings.index');
     Route::get('/bookings/{booking}', [AdminBookingController::class, 'show'])->name('bookings.show');
+
+    // Student Management
+    Route::get('/students', [\App\Http\Controllers\Admin\StudentController::class, 'index'])->name('students.index');
+    Route::get('/students/{user}', [\App\Http\Controllers\Admin\StudentController::class, 'show'])->name('students.show');
+    Route::post('/students/{user}/toggle-status', [\App\Http\Controllers\Admin\StudentController::class, 'toggleStatus'])->name('students.toggle-status');
 
     // Safety incidents
     Route::get('/incidents', [IncidentController::class, 'index'])->name('incidents.index');

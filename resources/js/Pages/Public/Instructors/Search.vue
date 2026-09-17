@@ -4,7 +4,7 @@ import { ref, watch, computed } from 'vue';
 import { MagnifyingGlassIcon, AdjustmentsHorizontalIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline';
 import InstructorCard from '@/Components/Molecules/InstructorCard.vue';
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue';
-import { debounce } from 'lodash';
+import debounce from 'lodash/debounce';
 
 const props = defineProps<{
     instructors: {
@@ -159,7 +159,7 @@ function clearFilters() {
 
         <div class="mb-10 flex items-center justify-between px-4">
             <div>
-                <h2 class="text-3xl font-black text-slate-900 tracking-tight">
+                <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">
                     {{ instructors.total }} <span class="text-ocean-600">Experts</span> Currently surfing 🏄‍♂️
                 </h2>
                 <p class="text-sm text-slate-400 font-bold mt-2 uppercase tracking-widest">Verified by SiaSurf Safety Board</p>
@@ -178,7 +178,7 @@ function clearFilters() {
             <div class="mb-8 rounded-full bg-slate-50 p-12 text-slate-200">
                 <MagnifyingGlassIcon class="h-20 w-20" />
             </div>
-            <h3 class="mb-3 text-2xl font-black text-slate-900">No instructors found</h3>
+            <h3 class="mb-3 text-2xl font-bold text-slate-900">No instructors found</h3>
             <p class="text-slate-400 font-bold max-w-md mx-auto">Try adjusting your filters or search terms to find instructors matching your criteria.</p>
             <button @click="clearFilters" class="mt-8 rounded-2xl bg-ocean-600 px-10 py-4 font-black text-white transition-all hover:bg-ocean-700 shadow-xl shadow-ocean-200 active:scale-95">
                 Reset All Filters

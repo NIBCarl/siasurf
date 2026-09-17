@@ -93,23 +93,23 @@ const charCount = computed(() => form.comment.length)
       <div class="max-w-2xl mx-auto sm:px-6 lg:px-8">
         <div class="mb-8">
           <div class="flex items-center gap-2 mb-4">
-            <a :href="route('student.bookings.show', booking.id)" class="text-sm text-blue-600 hover:text-blue-800">
+            <a :href="route('student.bookings.show', booking.id)" class="text-sm text-ocean-600 hover:text-ocean-800">
               ← Back to Booking
             </a>
           </div>
           
-          <h1 class="text-3xl font-bold text-gray-900">Write a Review</h1>
-          <p class="mt-2 text-gray-600">
+          <h1 class="text-3xl font-bold text-slate-900">Write a Review</h1>
+          <p class="mt-2 text-slate-600">
             Share your experience with {{ booking.instructor.name }}
           </p>
         </div>
 
         <!-- Booking Summary -->
-        <div class="mb-8 bg-blue-50 rounded-lg p-4 border border-blue-100">
+        <div class="mb-8 bg-ocean-50 rounded-lg p-4 border border-ocean-100">
           <div class="flex items-center gap-4">
             <div class="flex-1">
-              <p class="text-sm text-blue-900 font-medium">{{ booking.instructor.name }}</p>
-              <p class="text-sm text-blue-700">{{ formatDate(booking.date) }} at {{ booking.surf_spot.name }}</p>
+              <p class="text-sm text-ocean-900 font-medium">{{ booking.instructor.name }}</p>
+              <p class="text-sm text-ocean-700">{{ formatDate(booking.date) }} at {{ booking.surf_spot.name }}</p>
             </div>
           </div>
         </div>
@@ -117,8 +117,8 @@ const charCount = computed(() => form.comment.length)
         <form @submit.prevent="submitReview" class="space-y-6">
 
           <!-- Written Review -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <label for="comment" class="block text-sm font-medium text-gray-700 mb-2">
+          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <label for="comment" class="block text-sm font-medium text-slate-700 mb-2">
               Tell us about your experience *
             </label>
             
@@ -126,23 +126,23 @@ const charCount = computed(() => form.comment.length)
               id="comment"
               v-model="form.comment"
               rows="5"
-              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
               placeholder="What did you like? What could be improved? Share specific details about the lesson..."
             ></textarea>
             
             <div class="mt-2 flex justify-between items-center">
-              <p v-if="form.errors.comment" class="text-sm text-red-600">
+              <p v-if="form.errors.comment" class="text-sm text-rose-600">
                 {{ form.errors.comment }}
               </p>
-              <p class="text-sm text-gray-500">
+              <p class="text-sm text-slate-500">
                 {{ charCount }} characters (minimum 20)
               </p>
             </div>
           </div>
 
           <!-- Photo Upload -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
+          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <label class="block text-sm font-medium text-slate-700 mb-2">
               Add a photo (optional)
             </label>
             
@@ -156,7 +156,7 @@ const charCount = computed(() => form.comment.length)
                 <button
                   type="button"
                   @click="removePhoto"
-                  class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  class="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 hover:bg-rose-600"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -166,24 +166,24 @@ const charCount = computed(() => form.comment.length)
             </div>
             
             <div v-else class="mt-2">
-              <label class="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-gray-400 cursor-pointer">
+              <label class="flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-md hover:border-slate-400 cursor-pointer">
                 <div class="space-y-1 text-center">
-                  <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                  <svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                     <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                   </svg>
-                  <div class="flex text-sm text-gray-600">
-                    <label for="file-upload" class="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                  <div class="flex text-sm text-slate-600">
+                    <label for="file-upload" class="relative cursor-pointer bg-white rounded-md font-medium text-ocean-600 hover:text-ocean-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-ocean-500">
                       <span>Upload a file</span>
                       <input id="file-upload" name="file-upload" type="file" class="sr-only" accept="image/*" @change="handlePhotoChange">
                     </label>
                     <p class="pl-1">or drag and drop</p>
                   </div>
-                  <p class="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
+                  <p class="text-xs text-slate-500">PNG, JPG, GIF up to 5MB</p>
                 </div>
               </label>
             </div>
             
-            <p v-if="form.errors.photo" class="mt-1 text-sm text-red-600">
+            <p v-if="form.errors.photo" class="mt-1 text-sm text-rose-600">
               {{ form.errors.photo }}
             </p>
           </div>

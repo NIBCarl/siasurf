@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -58,6 +60,10 @@
 }
 
 @layer base {
+    html {
+        /* Payments-dense product: keep digits aligned in prices, IDs, and live timers */
+        font-variant-numeric: tabular-nums;
+    }
     body {
         @apply text-slate-900 antialiased;
         background-color: #f8fafc; /* slate-50 */

@@ -89,7 +89,7 @@ const quickActions = [
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <span class="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-black uppercase tracking-wider rounded-full">+{{ stats.total_bookings.today }} today</span>
+            <span class="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-wider rounded-full">+{{ stats.total_bookings.today }} today</span>
           </div>
           <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Bookings</p>
           <p class="text-4xl font-black text-slate-900 tracking-tight">{{ stats.total_bookings.value }}</p>
@@ -130,7 +130,7 @@ const quickActions = [
             <div class="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center group-hover:bg-rose-500 transition-colors duration-300">
               <ExclamationCircleIcon class="w-6 h-6 text-rose-600 group-hover:text-white" />
             </div>
-            <span v-if="stats.incidents.critical > 0" class="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-wider rounded-full italic">{{ stats.incidents.critical }} CRITICAL</span>
+            <span v-if="stats.incidents.critical > 0" class="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-wider rounded-full italic">{{ stats.incidents.critical }} CRITICAL</span>
           </div>
           <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Safety Incidents</p>
           <p class="text-4xl font-black text-slate-900 tracking-tight">{{ stats.incidents.total }}</p>
@@ -161,7 +161,7 @@ const quickActions = [
             <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
                 <div class="flex items-center justify-between mb-10">
                     <div>
-                        <h3 class="text-xl font-black text-slate-900 tracking-tight uppercase">Revenue Velocity</h3>
+                        <h3 class="text-xl font-bold text-slate-900 tracking-tight uppercase">Revenue Velocity</h3>
                         <p class="text-slate-400 text-xs font-medium mt-1 uppercase tracking-widest italic">Performance metric over time</p>
                     </div>
                     <div class="bg-slate-50 p-1.5 rounded-xl flex items-center">
@@ -175,7 +175,7 @@ const quickActions = [
             <!-- Top Instructors Table -->
             <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
                 <div class="flex items-center justify-between mb-8">
-                    <h3 class="text-xl font-black text-slate-900 tracking-tight uppercase">Leaderboard</h3>
+                    <h3 class="text-xl font-bold text-slate-900 tracking-tight uppercase">Leaderboard</h3>
                     <Link :href="route('admin.instructors.index')" class="flex items-center text-xs font-black text-ocean-600 uppercase tracking-widest hover:text-ocean-800 transition-colors group">
                         Full View
                         <ChevronRightIcon class="w-3 h-3 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -189,13 +189,13 @@ const quickActions = [
         <div class="space-y-8">
             <!-- Booking Distribution -->
             <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                <h3 class="text-lg font-black text-slate-900 tracking-tight uppercase mb-8">Skill Mix</h3>
+                <h3 class="text-lg font-bold text-slate-900 tracking-tight uppercase mb-8">Skill Mix</h3>
                 <BookingDistributionChart />
             </div>
 
             <!-- Quick Actions -->
             <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                <h3 class="text-lg font-black text-slate-900 tracking-tight uppercase mb-8">Operations</h3>
+                <h3 class="text-lg font-bold text-slate-900 tracking-tight uppercase mb-8">Operations</h3>
                 <div class="grid grid-cols-1 gap-4">
                     <Link
                         v-for="action in quickActions"
@@ -227,7 +227,7 @@ const quickActions = [
 
             <!-- Popular Spots -->
             <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                <h3 class="text-lg font-black text-slate-900 tracking-tight uppercase mb-8">Spot Demand</h3>
+                <h3 class="text-lg font-bold text-slate-900 tracking-tight uppercase mb-8">Spot Demand</h3>
                 <PopularSpotsChart />
             </div>
         </div>
@@ -236,7 +236,7 @@ const quickActions = [
       <!-- Activity Feed (Full Width) -->
       <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
           <div class="flex items-center justify-between mb-10">
-              <h3 class="text-xl font-black text-slate-900 tracking-tight uppercase">System Stream</h3>
+              <h3 class="text-xl font-bold text-slate-900 tracking-tight uppercase">System Stream</h3>
               <span class="text-[10px] font-bold text-ocean-600 uppercase tracking-[0.2em] italic">Real-time alerts</span>
           </div>
           <ActivityFeed :activities="activity" />
@@ -245,7 +245,7 @@ const quickActions = [
       <!-- Ongoing Sessions Monitor -->
       <div v-if="ongoingSessions.length > 0" class="bg-white rounded-[2.5rem] border border-ocean-200 shadow-xl shadow-ocean-100 overflow-hidden">
         <div class="px-8 py-7 bg-gradient-to-r from-ocean-600 to-ocean-800 flex items-center justify-between">
-            <h2 class="text-lg font-black text-white flex items-center uppercase tracking-widest">
+            <h2 class="text-lg font-extrabold text-white flex items-center uppercase tracking-widest">
                 <span class="relative flex h-3 w-3 mr-4">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-3 w-3 bg-white"></span>

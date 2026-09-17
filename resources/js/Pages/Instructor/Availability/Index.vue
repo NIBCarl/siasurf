@@ -123,19 +123,19 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
     <template #header>
       <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
         <div class="flex flex-col">
-          <h2 class="text-4xl font-black text-white tracking-tight leading-none mb-2">
-            Schedule <span class="text-blue-400">Builder</span>
+          <h2 class="text-4xl font-extrabold text-slate-900 tracking-tight leading-none mb-2">
+            Schedule <span class="text-ocean-600">Builder</span>
           </h2>
-          <p class="text-blue-100/70 text-lg font-medium max-w-2xl">
+          <p class="text-slate-600 text-lg font-medium max-w-2xl">
             Design your weekly surf presence. Your recurring schedule helps tourists find you when the waves are pumping.
           </p>
         </div>
         
         <div class="flex items-center gap-3">
-           <BaseButton @click="clearAll" variant="outline" class="border-white/20 text-white hover:bg-white/10 rounded-2xl px-6 py-4 h-auto">
+           <BaseButton @click="clearAll" variant="secondary" outline class="rounded-xl px-6 py-4 h-auto shadow-sm">
              Reset Schedule
            </BaseButton>
-           <BaseButton @click="saveWeekly" :loading="weeklyForm.processing" size="md" variant="primary" class="rounded-2xl shadow-2xl shadow-blue-600/40 px-10 py-4 h-auto text-lg font-black">
+           <BaseButton @click="saveWeekly" :loading="weeklyForm.processing" size="md" variant="primary" class="rounded-xl shadow-xl shadow-ocean-600/30 px-10 py-4 h-auto text-sm font-black">
              Publish Schedule
            </BaseButton>
         </div>
@@ -145,11 +145,11 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
     <div class="space-y-12 pb-20 text-neutral-900">
       
       <!-- Quick Sync Toolbar -->
-      <div class="bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-4 flex flex-wrap items-center gap-4">
-        <span class="text-xs font-black uppercase tracking-[0.2em] text-blue-200/50 ml-4 mr-2">Quick Actions:</span>
-        <button @click="setAllAvailable('morning')" class="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-bold hover:bg-white/20 transition-all border border-white/5">☀️ Set All Mornings</button>
-        <button @click="setAllAvailable('afternoon')" class="px-4 py-2 rounded-xl bg-white/10 text-white text-xs font-bold hover:bg-white/20 transition-all border border-white/5">🌊 Set All Afternoons</button>
-        <button @click="setAllAvailable()" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20">🔥 Set Full Availability</button>
+      <div class="bg-white border border-slate-100 shadow-sm rounded-[2rem] p-4 flex flex-wrap items-center gap-4">
+        <span class="text-xs font-black uppercase tracking-[0.2em] text-slate-400 ml-4 mr-2">Quick Actions:</span>
+        <button @click="setAllAvailable('morning')" class="px-4 py-2 rounded-xl bg-slate-50 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-all border border-slate-200">☀️ Set All Mornings</button>
+        <button @click="setAllAvailable('afternoon')" class="px-4 py-2 rounded-xl bg-slate-50 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-all border border-slate-200">🌊 Set All Afternoons</button>
+        <button @click="setAllAvailable()" class="px-4 py-2 rounded-xl bg-ocean-600 text-white text-xs font-bold hover:bg-ocean-500 transition-all shadow-lg shadow-ocean-600/20">🔥 Set Full Availability</button>
       </div>
 
       <div class="grid grid-cols-1 xl:grid-cols-4 gap-10">
@@ -158,10 +158,10 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
         <div class="xl:col-span-3 space-y-8">
            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
              <div v-for="day in daysOfWeek" :key="day.value" 
-               class="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white/20 shadow-xl overflow-hidden flex flex-col transition-all hover:translate-y-[-4px] hover:shadow-2xl hover:shadow-blue-500/10 group"
+               class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col transition-all hover:translate-y-[-4px] hover:shadow-xl hover:shadow-ocean-500/10 group"
              >
-                <div class="p-6 text-center border-b border-gray-100/50 bg-gradient-to-b from-gray-50/50 to-transparent">
-                  <span class="text-xs font-black uppercase tracking-widest text-neutral-400 block mb-1">{{ day.label?.slice(0,3) }}</span>
+                <div class="p-6 text-center border-b border-slate-50 bg-slate-50/50">
+                  <span class="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1">{{ day.label?.slice(0,3) }}</span>
                   <p class="text-xl font-black text-neutral-900 leading-none">{{ day.label }}</p>
                 </div>
                 
@@ -171,16 +171,16 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
                     :class="[
                       'relative p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 flex flex-col items-center justify-center gap-2 group/tile',
                       gridState[`${day.value}-${period.value}`] 
-                        ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-600/20 text-white translate-y-[-2px]' 
-                        : 'bg-neutral-50 border-gray-100/50 text-neutral-400 hover:border-blue-200 hover:bg-blue-50/30'
+                        ? 'bg-ocean-600 border-ocean-500 shadow-lg shadow-ocean-600/20 text-white translate-y-[-2px]' 
+                        : 'bg-neutral-50 border-slate-100/50 text-slate-500 hover:border-slate-300 hover:bg-slate-100'
                     ]"
                   >
-                    <div class="absolute inset-0 opacity-0 group-hover/tile:opacity-100 transition-opacity bg-gradient-to-tr from-white/10 to-transparent pointer-events-none rounded-2xl"></div>
+                    <div class="absolute inset-0 opacity-0 group-hover/tile:opacity-100 transition-opacity bg-slate-50/50 pointer-events-none rounded-2xl"></div>
                     
                     <span v-if="period.value === 'morning'" class="text-2xl">☀️</span>
                     <span v-else class="text-2xl">🌊</span>
                     
-                    <span class="text-[10px] font-black uppercase tracking-tighter leading-none">
+                    <span class="text-xs font-black uppercase tracking-tight leading-none text-center">
                       {{ period.label }}
                     </span>
                     
@@ -194,16 +194,16 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
            </div>
 
            <!-- Legend / Guide -->
-           <div class="flex items-center gap-8 px-6 text-white/60">
+           <div class="flex items-center gap-8 px-6 text-slate-600">
              <div class="flex items-center gap-3">
-               <div class="w-4 h-4 rounded-md bg-blue-600 shadow-lg shadow-blue-600/30"></div>
+               <div class="w-4 h-4 rounded-md bg-ocean-600 shadow-sm"></div>
                <span class="text-xs font-bold tracking-tight">Available for Bookings</span>
              </div>
              <div class="flex items-center gap-3">
-               <div class="w-4 h-4 rounded-md bg-neutral-100/20 border border-white/10"></div>
+               <div class="w-4 h-4 rounded-md bg-slate-100 border border-slate-200"></div>
                <span class="text-xs font-bold tracking-tight">Off Duty / Rest</span>
              </div>
-             <div class="ml-auto flex items-center gap-2 text-blue-300">
+             <div class="ml-auto flex items-center gap-2 text-ocean-600">
                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                </svg>
@@ -216,7 +216,7 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
         <div class="space-y-8">
           <div class="bg-neutral-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden ring-1 ring-white/10">
              <!-- Deep Ocean Effect -->
-             <div class="absolute inset-0 bg-gradient-to-br from-blue-900/40 via-transparent to-transparent opacity-50 pointer-events-none"></div>
+             <div class="absolute inset-0 bg-gradient-to-br from-ocean-900/40 via-transparent to-transparent opacity-50 pointer-events-none"></div>
              
              <div class="relative z-10">
                <div class="flex items-center mb-8">
@@ -225,7 +225,7 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                    </svg>
                  </div>
-                 <h2 class="text-2xl font-black tracking-tight leading-none">Block Dates</h2>
+                 <h2 class="text-2xl font-extrabold tracking-tight leading-none">Block Dates</h2>
                </div>
                
                <div class="space-y-8">
@@ -235,10 +235,10 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
                      <input 
                       type="date" 
                       v-model="blockDate"
-                      class="flex-1 rounded-2xl border-white/5 bg-white/5 p-4 focus:border-blue-500 focus:ring-blue-500 text-sm font-bold transition-all text-white placeholder-white/20"
+                      class="flex-1 rounded-2xl border-white/5 bg-white/5 p-4 focus:border-ocean-500 focus:ring-ocean-500 text-sm font-bold transition-all text-white placeholder-white/20"
                       :min="new Date().toISOString().split('T')[0]"
                      >
-                     <button @click="addBlockDate" class="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center hover:bg-blue-500 transition-all font-black text-2xl shadow-lg shadow-blue-600/20">+</button>
+                     <button @click="addBlockDate" class="w-14 h-14 bg-ocean-600 text-white rounded-2xl flex items-center justify-center hover:bg-ocean-500 transition-all font-black text-2xl shadow-lg shadow-ocean-600/20">+</button>
                    </div>
                  </div>
 
@@ -248,7 +248,7 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
                       class="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between group"
                     >
                       <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500">
+                        <div class="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500">
                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                            </svg>
@@ -265,7 +265,7 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
 
                  <div>
                     <label class="block text-xs font-black uppercase tracking-[0.2em] text-white/40 mb-4">Time Period</label>
-                    <select v-model="blockForm.time_period" class="w-full rounded-2xl border-white/5 bg-white/5 p-4 focus:border-blue-500 focus:ring-blue-500 text-sm font-black transition-all text-white">
+                    <select v-model="blockForm.time_period" class="w-full rounded-2xl border-white/5 bg-white/5 p-4 focus:border-ocean-500 focus:ring-ocean-500 text-sm font-black transition-all text-white">
                       <option value="" class="bg-neutral-800">No Lessons (Full Day)</option>
                       <option v-for="period in timePeriods" :key="period.value" :value="period.value" class="bg-neutral-800">{{ period.label }} Only</option>
                     </select>
@@ -276,7 +276,7 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
                   :disabled="blockForm.dates.length === 0 || blockForm.processing"
                   :loading="blockForm.processing"
                   variant="primary" 
-                  class="w-full justify-center h-16 rounded-2xl font-black text-lg tracking-tight shadow-2xl shadow-blue-600/20"
+                  class="w-full justify-center h-16 rounded-2xl font-black text-sm tracking-tight shadow-xl shadow-ocean-600/20"
                 >
                   Confirm Block
                 </BaseButton>
@@ -292,7 +292,7 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
              <div class="absolute -top-12 -right-12 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
              <div class="relative z-10 flex items-center justify-between">
                 <div>
-                  <h3 class="text-xl font-black uppercase tracking-tight leading-none mb-1">Vacation Mode</h3>
+                  <h3 class="text-xl font-bold uppercase tracking-tight leading-none mb-1">Vacation Mode</h3>
                   <p class="text-xs font-bold text-amber-100/70 uppercase">
                     {{ isVacationMode ? 'Currently Hidden' : 'Visible to seekers' }}
                   </p>
@@ -301,7 +301,7 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
                   @click="toggleVacationMode"
                   :class="[
                     'w-14 h-8 rounded-full p-1 relative transition-all duration-500',
-                    isVacationMode ? 'bg-red-500' : 'bg-black/20'
+                    isVacationMode ? 'bg-rose-500' : 'bg-black/20'
                   ]"
                 >
                   <div :class="[
@@ -324,11 +324,11 @@ const isVacationMode = computed(() => props.profile?.status === 'inactive')
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);

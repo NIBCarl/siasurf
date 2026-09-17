@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
+import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
@@ -72,6 +73,10 @@ const formatTimePeriod = (period: string): string => {
   }
   return periods[period] || period
 }
+
+const goBack = () => {
+  window.history.back()
+}
 </script>
 
 <template>
@@ -80,17 +85,19 @@ const formatTimePeriod = (period: string): string => {
   <AppSidebarLayout title="Liability Waiver">
     <div class="py-12">
       <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+        <!-- Progress Stepper -->
+        <BookingStepper :current="4" class="mt-6" />
+
         <!-- Header -->
         <div class="mb-8 text-center">
-          <Badge :variant="'warning'" class="mb-2">Step 4 of 6</Badge>
-          <h1 class="text-3xl font-bold text-gray-900">Sign {{ waiverTypeLabel }}</h1>
-          <p class="mt-2 text-gray-600">
+          <h1 class="text-3xl font-bold text-slate-900">Sign {{ waiverTypeLabel }}</h1>
+          <p class="mt-2 text-slate-600">
             Please read and sign the liability waiver for your surfing lesson
           </p>
         </div>
 
         <!-- Tide Warning -->
-        <div v-if="$page.props.flash.tideWarning" class="mb-8 bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-md">
+        <div v-if="$page.props.flash.tideWarning" class="mb-8 bg-amber-50 border border-amber-200 p-4 rounded-lg">
           <div class="flex">
             <div class="flex-shrink-0">
               <svg class="h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -106,23 +113,23 @@ const formatTimePeriod = (period: string): string => {
         </div>
 
         <!-- Booking Summary -->
-        <div v-if="booking && booking.instructor" class="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">Booking Details</h2>
+        <div v-if="booking && booking.instructor" class="mb-8 bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+          <h2 class="text-lg font-semibold text-slate-900 mb-4">Booking Details</h2>
           <div class="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span class="text-gray-500">Instructor:</span>
+              <span class="text-slate-500">Instructor:</span>
               <span class="ml-2 font-medium">{{ booking.instructor.name }}</span>
             </div>
             <div>
-              <span class="text-gray-500">Location:</span>
+              <span class="text-slate-500">Location:</span>
               <span class="ml-2 font-medium">{{ booking.surf_spot ? booking.surf_spot.name : 'TBD' }}</span>
             </div>
             <div>
-              <span class="text-gray-500">Date:</span>
+              <span class="text-slate-500">Date:</span>
               <span class="ml-2 font-medium">{{ formatDate(booking.date) }}</span>
             </div>
             <div>
-              <span class="text-gray-500">Time:</span>
+              <span class="text-slate-500">Time:</span>
               <span class="ml-2 font-medium">{{ formatTimePeriod(booking.time_period) }}</span>
             </div>
           </div>
@@ -131,10 +138,10 @@ const formatTimePeriod = (period: string): string => {
         <!-- Waiver Form -->
         <form @submit.prevent="submitWaiver" class="space-y-6">
           <!-- Waiver Text -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Liability Waiver</h2>
+          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 mb-4">Liability Waiver</h2>
             
-            <div class="prose prose-sm max-w-none text-gray-600 space-y-4">
+            <div class="prose max-w-none text-slate-700 space-y-4">
               <p class="font-medium">
                 PLEASE READ CAREFULLY - THIS IS A LEGAL DOCUMENT
               </p>
@@ -184,12 +191,12 @@ const formatTimePeriod = (period: string): string => {
           </div>
 
           <!-- Signature Section -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Electronic Signature</h2>
+          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 mb-4">Electronic Signature</h2>
             
             <!-- Name Input -->
             <div class="mb-6">
-              <label for="signed_by" class="block text-sm font-medium text-gray-700 mb-2">
+              <label for="signed_by" class="block text-sm font-medium text-slate-700 mb-2">
                 Full Name *
               </label>
               <input
@@ -197,17 +204,17 @@ const formatTimePeriod = (period: string): string => {
                 v-model="form.signed_by"
                 type="text"
                 required
-                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
                 placeholder="Enter your full legal name"
               />
-              <p v-if="form.errors.signed_by" class="mt-1 text-sm text-red-600">
+              <p v-if="form.errors.signed_by" class="mt-1 text-sm text-rose-600">
                 {{ form.errors.signed_by }}
               </p>
             </div>
 
             <!-- Signature Pad -->
             <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">
+              <label class="block text-sm font-medium text-slate-700 mb-2">
                 Draw Your Signature *
               </label>
               <SignaturePad
@@ -216,7 +223,7 @@ const formatTimePeriod = (period: string): string => {
                 :height="200"
                 class="mx-auto"
               />
-              <p v-if="form.errors.signature" class="mt-1 text-sm text-red-600 text-center">
+              <p v-if="form.errors.signature" class="mt-1 text-sm text-rose-600 text-center">
                 {{ form.errors.signature }}
               </p>
             </div>
@@ -224,36 +231,37 @@ const formatTimePeriod = (period: string): string => {
             <!-- Agreement Checkbox -->
             <div class="mb-6">
               <div class="flex items-start">
-                <div class="flex items-center h-5">
+                <div class="flex items-center">
                   <input
                     id="agreement"
                     v-model="form.agreement"
                     type="checkbox"
                     required
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    class="min-h-[44px] min-w-[44px] text-ocean-600 focus:ring-ocean-500 border-slate-300 rounded cursor-pointer"
                   />
                 </div>
                 <div class="ml-3">
-                  <label for="agreement" class="text-sm text-gray-700">
+                  <label for="agreement" class="text-sm text-slate-700">
                     I have read and agree to the Liability Waiver and Release of Liability 
                     Agreement above. I understand that by signing electronically, I am 
                     entering into a legally binding contract. *
                   </label>
                 </div>
               </div>
-              <p v-if="form.errors.agreement" class="mt-1 text-sm text-red-600">
+              <p v-if="form.errors.agreement" class="mt-1 text-sm text-rose-600">
                 {{ form.errors.agreement }}
               </p>
             </div>
 
             <!-- Submit Buttons -->
             <div class="flex justify-between items-center">
-              <a
-                :href="route('bookings.create', booking.instructor.id)"
-                class="text-sm text-gray-600 hover:text-gray-900"
+              <BaseButton
+                type="button"
+                @click="goBack"
+                variant="secondary"
               >
-                ← Back to Details
-              </a>
+                ← Back
+              </BaseButton>
               
               <BaseButton
                 type="submit"
@@ -269,7 +277,7 @@ const formatTimePeriod = (period: string): string => {
         </form>
 
         <!-- Footer Note -->
-        <div class="mt-8 text-center text-sm text-gray-500">
+        <div class="mt-8 text-center text-sm text-slate-500">
           <p>
             Your signature and agreement will be stored securely for 7 years as required by law.
           </p>

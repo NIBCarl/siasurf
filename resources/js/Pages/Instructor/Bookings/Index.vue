@@ -71,7 +71,7 @@ const confirmBooking = (id: number) => {
       <!-- Header Summary -->
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 class="text-3xl font-black text-slate-900 tracking-tight">Upcoming Sessions</h1>
+          <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Upcoming Sessions</h1>
           <p class="text-slate-500 font-medium mt-1">Accept and manage your surfing lessons from one place.</p>
         </div>
         <div class="flex items-center gap-3">
@@ -94,9 +94,9 @@ const confirmBooking = (id: number) => {
              <!-- Left: Date & Student Info -->
              <div class="p-8 lg:p-10 flex items-start gap-8 flex-1">
                 <div class="text-center min-w-[100px] p-6 bg-gradient-to-br from-ocean-500 to-ocean-600 text-white rounded-[2rem] shadow-xl shadow-ocean-200 group-hover:scale-105 transition-transform duration-500">
-                  <p class="text-[11px] font-black uppercase tracking-[0.2em] opacity-80">{{ new Date(booking.date).toLocaleDateString('en-US', { month: 'short' }) }}</p>
+                  <p class="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">{{ new Date(booking.date).toLocaleDateString('en-US', { month: 'short' }) }}</p>
                   <p class="text-4xl font-black my-1">{{ new Date(booking.date).getDate() }}</p>
-                  <p class="text-[9px] font-bold uppercase tracking-widest opacity-70">{{ booking.time_period }}</p>
+                  <p class="text-[10px] font-bold uppercase tracking-widest opacity-70">{{ booking.time_period }}</p>
                 </div>
                 
                 <div class="space-y-4">
@@ -110,7 +110,7 @@ const confirmBooking = (id: number) => {
                         <div class="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-sm text-sm">{{ getSkillIcon(booking.skill_level) }}</div>
                      </div>
                      <div>
-                       <h4 class="font-black text-slate-900 text-xl tracking-tight mb-1">{{ booking.student.name }}</h4>
+                       <h4 class="font-bold text-slate-900 text-xl tracking-tight mb-1">{{ booking.student.name }}</h4>
                        <div class="flex items-center gap-2 text-slate-500">
                          <span class="text-xs font-bold">{{ booking.skill_level.charAt(0).toUpperCase() + booking.skill_level.slice(1) }}</span>
                          <span class="w-1 h-1 bg-slate-300 rounded-full"></span>
@@ -143,7 +143,7 @@ const confirmBooking = (id: number) => {
                    v-if="booking.status === 'pending'" 
                    @click="confirmBooking(booking.id)" 
                    :loading="confirmForm.processing" 
-                   class="rounded-2xl px-6 py-3 bg-ocean-600 text-white font-black uppercase tracking-widest text-[11px] shadow-xl shadow-ocean-100 hover:shadow-ocean-300 hover:scale-[1.05] transition-all duration-300 flex-1 lg:flex-none"
+                   class="rounded-2xl px-6 py-3 bg-ocean-600 text-white font-black uppercase tracking-widest text-[10px] shadow-xl shadow-ocean-100 hover:shadow-ocean-300 hover:scale-[1.05] transition-all duration-300 flex-1 lg:flex-none"
                  >
                    Confirm Session
                  </BaseButton>
@@ -151,13 +151,13 @@ const confirmBooking = (id: number) => {
                  <BaseButton 
                    v-if="booking.status === 'confirmed'" 
                    variant="secondary" 
-                   class="rounded-2xl px-6 py-3 border-2 border-slate-100 font-black uppercase tracking-widest text-[11px] hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all duration-300"
+                   class="rounded-2xl px-6 py-3 border-2 border-slate-100 font-black uppercase tracking-widest text-[10px] hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all duration-300"
                  >
                    Attendance
                  </BaseButton>
 
                  <Link :href="route('instructor.bookings.show', booking.id)" class="flex-1 lg:flex-none">
-                    <BaseButton variant="secondary" outline class="w-full rounded-2xl px-6 py-3 border-2 border-slate-100 font-black uppercase tracking-widest text-[11px] hover:bg-slate-100 transition-all">Details</BaseButton>
+                    <BaseButton variant="secondary" outline class="w-full rounded-2xl px-6 py-3 border-2 border-slate-100 font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all">Details</BaseButton>
                  </Link>
               </div>
 
@@ -175,7 +175,7 @@ const confirmBooking = (id: number) => {
               </svg>
            </div>
          </div>
-         <h3 class="text-3xl font-black text-slate-900 mb-4 tracking-tight">No Active Sessions</h3>
+         <h3 class="text-3xl font-bold text-slate-900 mb-4 tracking-tight">No Active Sessions</h3>
          <p class="text-slate-500 max-w-sm mx-auto mb-10 font-medium leading-relaxed">Your surfing schedule is currently empty. New student bookings will appear here.</p>
          <div class="flex justify-center">
            <div class="inline-flex items-center px-5 py-2.5 bg-slate-50 text-slate-500 rounded-2xl border border-slate-100">

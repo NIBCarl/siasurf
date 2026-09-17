@@ -34,6 +34,8 @@ class RegistrationTest extends TestCase
             'password' => 'password',
             'password_confirmation' => 'password',
             'role' => 'student',
+            'skill_level' => 'beginner',
+            'is_first_time' => true,
         ]);
 
         $this->assertAuthenticated();

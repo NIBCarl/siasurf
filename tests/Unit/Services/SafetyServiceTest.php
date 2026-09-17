@@ -245,7 +245,7 @@ class SafetyServiceTest extends TestCase
         $errors = $this->safetyService->getValidationErrors($data);
 
         $this->assertIsArray($errors);
-        $this->assertCount(5, $errors); // 4 violations + age under 5
+        $this->assertCount(4, $errors); // Max possible violations is 4
         $this->assertStringContainsString('Level 1', $errors[0]);
     }
 

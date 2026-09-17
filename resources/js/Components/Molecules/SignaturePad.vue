@@ -179,12 +179,12 @@ defineExpose({
 }
 
 .signature-pad {
-  @apply relative rounded-lg border-2 border-dashed border-gray-300 bg-white overflow-hidden;
+  @apply relative rounded-lg border-2 border-dashed border-slate-300 bg-white overflow-hidden;
   @apply transition-colors duration-200;
 }
 
 .signature-pad:hover {
-  @apply border-blue-400;
+  @apply border-ocean-400;
 }
 
 .signature-canvas {
@@ -196,7 +196,7 @@ defineExpose({
 }
 
 .placeholder-text {
-  @apply text-gray-400 text-lg font-medium;
+  @apply text-slate-400 text-lg font-medium;
 }
 
 .signature-actions {
@@ -204,8 +204,8 @@ defineExpose({
 }
 
 .clear-button {
-  @apply px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md;
-  @apply hover:bg-gray-50 hover:text-gray-700 transition-colors duration-200;
-  @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+  @apply px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-md;
+  @apply hover:bg-slate-50 hover:text-slate-700 transition-colors duration-200;
+  @apply focus:outline-none focus:ring-2 focus:ring-ocean-500 focus:ring-offset-2;
 }
 </style>

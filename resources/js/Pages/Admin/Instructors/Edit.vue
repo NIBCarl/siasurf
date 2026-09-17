@@ -45,14 +45,14 @@ const submit = () => {
     <div class="py-12 px-6 max-w-4xl mx-auto">
       
       <div class="mb-12">
-        <Link :href="route('admin.instructors.show', instructor.id)" class="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-gray-900 transition-colors flex items-center mb-4">
+        <Link :href="route('admin.instructors.show', instructor.id)" class="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors flex items-center mb-4">
            &larr; Back to Dossier
         </Link>
-        <h1 class="text-4xl font-black text-gray-900 tracking-tight text-blue-600">Update Instructor Dossier</h1>
-        <p class="text-gray-500 mt-2">Modify the credentials and professional profile for {{ instructor.name }}.</p>
+        <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight text-ocean-600">Update Instructor Dossier</h1>
+        <p class="text-slate-500 mt-2">Modify the credentials and professional profile for {{ instructor.name }}.</p>
       </div>
 
-      <form @submit.prevent="submit" class="bg-white rounded-[3rem] p-12 border border-blue-100 shadow-xl shadow-blue-200/50 space-y-8">
+      <form @submit.prevent="submit" class="bg-white rounded-[3rem] p-12 border border-ocean-100 shadow-xl shadow-ocean-200/50 space-y-8">
          
          <!-- Personal Info -->
          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -76,7 +76,7 @@ const submit = () => {
 
             <div>
                <InputLabel value="Operational Status" class="mb-2" />
-               <select v-model="form.status" class="w-full border-gray-100 rounded-2xl focus:ring-blue-500 focus:border-blue-500 font-bold">
+               <select v-model="form.status" class="w-full border-slate-100 rounded-2xl focus:ring-ocean-500 focus:border-ocean-500 font-bold">
                   <option value="active">Active (Verified)</option>
                   <option value="pending_verification">Pending Verification</option>
                   <option value="suspended">Suspended</option>
@@ -87,10 +87,10 @@ const submit = () => {
          </div>
 
          <!-- Professional Info -->
-         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-gray-50">
+         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-slate-50">
             <div>
                <InputLabel value="Teaching Level" class="mb-2" />
-               <select v-model="form.level" class="w-full border-gray-100 rounded-2xl focus:ring-blue-500 focus:border-blue-500 font-bold text-ocean-600">
+               <select v-model="form.level" class="w-full border-slate-100 rounded-2xl focus:ring-ocean-500 focus:border-ocean-500 font-bold text-ocean-600">
                   <option :value="1">Level 1 - Beginner (Groups max 2)</option>
                   <option :value="2">Level 2 - Specialized (1-on-1)</option>
                   <option :value="3">Level 3 - Expert (Groups max 5)</option>
@@ -100,7 +100,7 @@ const submit = () => {
 
             <div>
                <InputLabel value="Hourly Rate (₱)" class="mb-2" />
-               <TextInput v-model="form.rate_per_hour" type="number" class="w-full font-black text-blue-600" required />
+               <TextInput v-model="form.rate_per_hour" type="number" class="w-full font-black text-ocean-600" required />
                <InputError :message="form.errors.rate_per_hour" />
             </div>
          </div>
@@ -109,20 +109,20 @@ const submit = () => {
             <InputLabel value="Professional Bio" class="mb-2" />
             <textarea 
                v-model="form.bio" 
-               class="w-full border-gray-100 rounded-3xl focus:ring-blue-500 focus:border-blue-500 h-32 p-4 text-sm"
+               class="w-full border-slate-100 rounded-3xl focus:ring-ocean-500 focus:border-ocean-500 h-32 p-4 text-sm"
                placeholder="Briefly describe the instructor's background and surfing style..."
             ></textarea>
             <InputError :message="form.errors.bio" />
          </div>
 
          <div class="pt-8 flex items-center justify-between">
-            <div class="flex items-center space-x-2 text-xs text-blue-400 font-bold uppercase tracking-tighter">
+            <div class="flex items-center space-x-2 text-xs text-ocean-400 font-bold uppercase tracking-tighter">
                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
                </svg>
                <span>Changes take effect immediately on public profile</span>
             </div>
-            <BaseButton variant="primary" size="lg" :loading="form.processing" class="px-12 shadow-xl shadow-blue-200">
+            <BaseButton variant="primary" size="lg" :loading="form.processing" class="px-12 shadow-xl shadow-ocean-200">
                Update Dossier &rarr;
             </BaseButton>
          </div>

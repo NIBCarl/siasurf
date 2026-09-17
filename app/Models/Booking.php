@@ -38,6 +38,7 @@ class Booking extends Model
         'completed_at',
         'height',
         'weight',
+        'payment_deadline_at',
     ];
 
     protected $casts = [
@@ -58,6 +59,7 @@ class Booking extends Model
         'completed_at' => 'datetime',
         'height' => 'decimal:2',
         'weight' => 'decimal:2',
+        'payment_deadline_at' => 'datetime',
     ];
 
     // Relationships
@@ -176,7 +178,7 @@ class Booking extends Model
 
     public function canBeCancelled(): bool
     {
-        return $this->isPending() || $this->isConfirmed();
+        return $this->isPending() || $this->isConfirmed() || $this->status === BookingStatus::AwaitingPayment;
     }
 
     public function confirm(): void
@@ -223,5 +225,41 @@ class Booking extends Model
         $remaining = now()->diffInSeconds($endTime, false);
 
         return max(0, (int) $remaining);
+    }
+
+    /**
+     * Get recommended board dimensions based on student height, weight, and skill level.
+     */
+    public function getRecommendedBoardSize(): array
+    {
+        $weight = $this->weight ?? 70; // kg
+        $height = $this->height ?? 170; // cm
+        $skillLevel = $this->skill_level instanceof \App\Enums\SkillLevel
+            ? $this->skill_level->value
+            : $this->skill_level;
+
+        $skillFactor = match ($skillLevel) {
+            'beginner' => 1.1,
+            'intermediate' => 0.9,
+            'advanced' => 0.7,
+            default => 1.0,
+        };
+
+        $volumeLiters = (int) round(($weight * $skillFactor) + 20);
+
+        $lengthRange = match (true) {
+            $height < 155 => "5'6\" – 6'0\"",
+            $height < 170 => "6'0\" – 6'6\"",
+            $height < 185 => "6'6\" – 7'0\"",
+            default => "7'0\" – 7'6\"",
+        };
+
+        $boardType = $skillLevel === 'beginner' ? 'Soft-top / Foamie' : 'Hard-top / Shortboard';
+
+        return [
+            'volume_liters' => $volumeLiters,
+            'length_range' => $lengthRange,
+            'type' => $boardType,
+        ];
     }
 }

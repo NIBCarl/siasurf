@@ -21,7 +21,8 @@ onMounted(() => {
 <template>
     <Head title="SiaSurf | Smart Booking & Instructor Verification" />
 
-    <div class="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-teal-500 selection:text-white">
+    <div class="min-h-screen bg-slate-50 font-sans text-slate-900
+        selection:bg-teal-500 selection:text-white">
         <!-- Navigation -->
         <nav 
             :class="[
@@ -89,7 +90,7 @@ onMounted(() => {
                     <span class="mb-4 inline-block rounded-full bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md">
                         Siargao's Official Surf Booking
                     </span>
-                    <h1 class="mx-auto mb-6 max-w-4xl text-5xl font-extrabold tracking-tight text-white md:text-7xl">
+                    <h1 class="mx-auto mb-6 max-w-4xl text-[clamp(2.25rem,6vw,4.5rem)] font-extrabold leading-[1.05] tracking-tight text-white">
                         Surf with Confidence. <br/> 
                         <span class="text-teal-300 italic">Verified</span> by SiaSurf.
                     </h1>
@@ -197,7 +198,7 @@ onMounted(() => {
             <div class="container mx-auto px-6">
                 <div class="mb-16 text-center">
                     <h2 class="mb-4 text-3xl font-bold text-slate-900 md:text-5xl">Explore the Island's Best</h2>
-                    <p class="mx-auto max-w-2xl text-slate-600">Siargao is home to world-class breaks. Find the perfect spot for your skill level.</p>
+                    <p class="mx-auto max-w-2xl text-slate-600">Every break on the island, mapped with its difficulty and local conditions. Find the spot that matches your skill level.</p>
                 </div>
 
                 <div class="grid gap-8 md:grid-cols-3">
@@ -206,9 +207,9 @@ onMounted(() => {
                         <div class="p-8">
                             <div class="mb-2 flex items-center justify-between">
                                 <h3 class="text-xl font-bold text-slate-900">Cloud 9</h3>
-                                <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600 uppercase tracking-wider">Advanced</span>
+                                <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-600 uppercase tracking-wider">Advanced</span>
                             </div>
-                            <p class="text-sm text-slate-600">The crown jewel of Siargao. Famous for its thick, hollow tubes and world-class barrels.</p>
+                            <p class="text-sm text-slate-600">The island's most famous break. Thick, hollow tubes at mid-to-high tide.</p>
                         </div>
                     </div>
 

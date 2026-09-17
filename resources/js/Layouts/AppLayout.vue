@@ -3,6 +3,10 @@ import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import AppSidebarLayout from './AppSidebarLayout.vue';
 
+const props = defineProps<{
+    hideSidebar?: boolean
+}>();
+
 const page = usePage();
 const user = computed(() => page.props.auth.user);
 
@@ -11,7 +15,7 @@ const layout = AppSidebarLayout;
 </script>
 
 <template>
-    <component :is="layout">
+    <component :is="layout" :hide-sidebar="hideSidebar">
         <template v-if="$slots.header" #header>
             <slot name="header" />
         </template>

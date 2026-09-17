@@ -20,10 +20,15 @@ import {
     ChatBubbleLeftRightIcon
 } from '@heroicons/vue/24/outline';
 
+const props = defineProps<{
+    hideSidebar?: boolean
+}>();
+
 const isSidebarOpen = ref(false);
 const page = usePage();
 const user = computed(() => page.props.auth.user);
 const hasUser = computed(() => !!user.value);
+const shouldShowSidebar = computed(() => hasUser.value && !props.hideSidebar);
 
 const toggleSidebar = () => {
     isSidebarOpen.value = !isSidebarOpen.value;
@@ -39,6 +44,7 @@ onMounted(() => {
 const adminNavigation = [
     { name: 'Dashboard', href: route('admin.dashboard'), icon: Squares2X2Icon, active: route().current('admin.dashboard') },
     { name: 'Instructors', href: route('admin.instructors.index'), icon: UserGroupIcon, active: route().current('admin.instructors.*') },
+    { name: 'Students', href: route('admin.students.index'), icon: UserGroupIcon, active: route().current('admin.students.*') },
     { name: 'Bookings', href: route('admin.bookings.index'), icon: CalendarIcon, active: route().current('admin.bookings.*') },
     { name: 'Incidents', href: route('admin.incidents.index'), icon: ExclamationTriangleIcon, active: route().current('admin.incidents.*') },
     { name: 'Skill Upgrades', href: route('admin.skill-upgrades.index'), icon: AcademicCapIcon, active: route().current('admin.skill-upgrades.*') },
@@ -85,7 +91,7 @@ const brandingSubtext = computed(() => {
 
         <!-- Sidebar -->
         <aside 
-            v-if="hasUser"
+            v-if="shouldShowSidebar"
             :class="[
                 'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-300 transform lg:translate-x-0',
                 isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -164,11 +170,12 @@ const brandingSubtext = computed(() => {
         </aside>
 
         <!-- Main Content Area -->
-        <div :class="[hasUser ? 'lg:pl-72' : '']" class="flex flex-col min-h-screen">
+        <div :class="[shouldShowSidebar ? 'lg:pl-72' : '']" class="flex flex-col min-h-screen">
             <!-- Top Navigation -->
             <header class="sticky top-0 z-30 flex h-20 w-full items-center justify-between border-b border-slate-100 bg-white/70 px-6 backdrop-blur-xl lg:px-12">
                 <div class="flex items-center">
                     <button 
+                        v-if="shouldShowSidebar"
                         @click="toggleSidebar"
                         class="mr-4 rounded-xl p-2.5 text-slate-500 bg-slate-50 hover:bg-ocean-50 hover:text-ocean-600 lg:hidden transition-colors duration-200"
                     >
@@ -215,12 +222,12 @@ const brandingSubtext = computed(() => {
             <!-- Footer -->
             <footer class="border-t border-slate-100 bg-white/50 px-6 py-8 lg:px-12">
                 <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center md:text-left">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center md:text-left">
                         &copy; {{ new Date().getFullYear() }} SiaSurf Platform. All rights reserved.
                     </p>
                     <div class="flex gap-6">
-                        <a href="#" class="text-[11px] font-bold text-slate-400 hover:text-ocean-600 uppercase tracking-widest transition-colors">Privacy</a>
-                        <a href="#" class="text-[11px] font-bold text-slate-400 hover:text-ocean-600 uppercase tracking-widest transition-colors">Terms</a>
+                        <a href="#" class="text-[10px] font-bold text-slate-400 hover:text-ocean-600 uppercase tracking-widest transition-colors">Privacy</a>
+                        <a href="#" class="text-[10px] font-bold text-slate-400 hover:text-ocean-600 uppercase tracking-widest transition-colors">Terms</a>
                     </div>
                 </div>
             </footer>
@@ -236,10 +243,10 @@ const brandingSubtext = computed(() => {
     background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #E2E8F0;
-    border-radius: 10px;
+    background: theme('colors.slate.200');
+    border-radius: 8px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #CBD5E1;
+    background: theme('colors.slate.300');
 }
 </style>

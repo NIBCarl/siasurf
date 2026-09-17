@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Availability;
 use App\Enums\DayOfWeek;
 use App\Enums\TimePeriod;
+use App\Services\SafetyService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -189,6 +190,24 @@ class AvailabilityController extends Controller
         return response()->json([
             'date' => $date,
             'available_slots' => $availableSlots,
+        ]);
+    }
+
+    /**
+     * Get booked time slots for an instructor on a given date (API endpoint).
+     */
+    public function getBookedSlots(Request $request, $instructorId): JsonResponse
+    {
+        $validated = $request->validate([
+            'date' => 'required|date',
+        ]);
+
+        $safetyService = app(SafetyService::class);
+        $bookedSlots = $safetyService->getBookedSlots((int) $instructorId, $validated['date']);
+
+        return response()->json([
+            'date' => $validated['date'],
+            'booked_slots' => $bookedSlots,
         ]);
     }
 

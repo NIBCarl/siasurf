@@ -18,12 +18,12 @@ class PricingService
     /**
      * Standard session duration in hours
      */
-    const STANDARD_HOURS = 2;
+    const STANDARD_HOURS = 1;
 
     /**
-     * Standard package price (2 hours)
+     * Standard package price (1 hour)
      */
-    const STANDARD_PACKAGE_PRICE = 1200.00;
+    const STANDARD_PACKAGE_PRICE = 800.00;
 
     /**
      * Discount rates

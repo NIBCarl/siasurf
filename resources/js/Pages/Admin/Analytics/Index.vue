@@ -46,7 +46,7 @@ defineProps<Props>()
                         </li>
                     </ol>
                 </nav>
-                <h1 class="text-3xl font-black text-slate-900 tracking-tight">Platform Insights</h1>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Platform Insights</h1>
                 <p class="text-slate-500 mt-1">Deep dive into SiaSurf's performance and trends.</p>
             </div>
             <div class="flex gap-2">
@@ -71,7 +71,7 @@ defineProps<Props>()
                 <div class="relative z-10">
                     <div class="flex items-center justify-between mb-8">
                         <div>
-                            <h3 class="text-xl font-black text-slate-900">Revenue Velocity</h3>
+                            <h3 class="text-xl font-bold text-slate-900">Revenue Velocity</h3>
                             <p class="text-slate-500 text-sm">Monthly growth and income patterns</p>
                         </div>
                         <div class="flex items-center gap-2">
@@ -97,7 +97,7 @@ defineProps<Props>()
                 
                 <div class="relative z-10 h-full flex flex-col">
                     <div class="mb-6 text-white">
-                        <h3 class="text-xl font-black">Skill Distribution</h3>
+                        <h3 class="text-xl font-bold">Skill Distribution</h3>
                         <p class="text-slate-400 text-sm">Engagement by surfer level</p>
                     </div>
                     
@@ -125,7 +125,7 @@ defineProps<Props>()
                             <MapPinIcon class="w-6 h-6 text-reef-600" />
                         </div>
                         <div>
-                            <h3 class="text-xl font-black text-slate-900">Regional Hotspots</h3>
+                            <h3 class="text-xl font-bold text-slate-900">Regional Hotspots</h3>
                             <p class="text-slate-500 text-sm">Most booked surf spots this season</p>
                         </div>
                     </div>
@@ -144,7 +144,7 @@ defineProps<Props>()
                         <UserIcon class="w-24 h-24" />
                     </div>
                     <p class="text-white/70 text-sm font-bold uppercase tracking-wider mb-1">Peak Student Age</p>
-                    <h4 class="text-3xl font-black">18-24</h4>
+                    <h4 class="text-3xl font-bold">18-24</h4>
                     <p class="text-white/60 text-xs mt-4">Generation Z accounts for 42% of total island bookings.</p>
                 </div>
 
@@ -154,7 +154,7 @@ defineProps<Props>()
                         <CalendarIcon class="w-24 h-24 text-ocean-600" />
                     </div>
                     <p class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-1">Busiest Day</p>
-                    <h4 class="text-3xl font-black text-ocean-600">Saturday</h4>
+                    <h4 class="text-3xl font-bold text-ocean-600">Saturday</h4>
                     <p class="text-slate-500 text-xs mt-4">Weekend surges see 3.5x more bookings than weekdays.</p>
                 </div>
             </div>

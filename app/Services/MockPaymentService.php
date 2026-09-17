@@ -48,7 +48,7 @@ class MockPaymentService implements PaymentServiceInterface
                 ],
             ],
             'checkout_url' => route('payments.mock-checkout', [
-                'transaction_id' => $transactionId,
+                'transactionId' => $transactionId,
                 'force_success' => $forceSuccess,
             ]),
             'transaction_id' => $transactionId,
@@ -123,16 +123,16 @@ class MockPaymentService implements PaymentServiceInterface
      */
     public function simulatePayment(string $transactionId, bool $success): void
     {
-        if (!isset(self::$simulatedPayments[$transactionId])) {
+        $dbPayment = Payment::where('transaction_id', $transactionId)->first();
+
+        if (!$dbPayment) {
             throw new \InvalidArgumentException("Transaction {$transactionId} not found");
         }
 
-        $payment = self::$simulatedPayments[$transactionId];
-        
         if ($success) {
-            $this->processSuccessfulPayment($payment['booking_id'], $transactionId);
+            $this->processSuccessfulPayment($dbPayment->booking_id, $transactionId);
         } else {
-            $this->processFailedPayment($payment['booking_id'], $transactionId);
+            $this->processFailedPayment($dbPayment->booking_id, $transactionId);
         }
     }
 

@@ -208,11 +208,33 @@ class PayMongoPaymentService implements PaymentServiceInterface
     }
 
     /**
-     * Not applicable for real PayMongo service
+     * Simulate payment completion (dev/testing only)
      */
     public function simulatePayment(string $transactionId, bool $success): void
     {
-        throw new \RuntimeException('Cannot simulate payments with real PayMongo service');
+        $payment = Payment::where('transaction_id', $transactionId)->first();
+
+        if (!$payment) {
+            throw new \InvalidArgumentException("Transaction {$transactionId} not found");
+        }
+
+        $booking = $payment->booking;
+
+        if ($success) {
+            $booking->update([
+                'status' => 'confirmed',
+                'payment_status' => PaymentStatus::Completed,
+            ]);
+
+            $payment->update([
+                'status' => PaymentStatus::Completed,
+                'paid_at' => now(),
+            ]);
+        } else {
+            $payment->update([
+                'status' => PaymentStatus::Failed,
+            ]);
+        }
     }
 
     /**

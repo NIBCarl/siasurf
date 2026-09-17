@@ -229,7 +229,7 @@ class InstructorController extends Controller
         // Send suspension notification
         try {
             $instructor->notify(new \App\Notifications\InstructorSuspended($validated['reason'], $validated['duration_days']));
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             \Log::error('Failed to send suspension notification: ' . $e->getMessage());
         }
 

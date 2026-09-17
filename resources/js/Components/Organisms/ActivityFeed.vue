@@ -16,11 +16,11 @@ const props = defineProps<Props>()
 
 const getIconClass = (icon: string): string => {
   const classes: Record<string, string> = {
-    calendar: 'text-blue-500 bg-blue-100',
-    alert: 'text-red-500 bg-red-100',
+    calendar: 'text-ocean-500 bg-ocean-100',
+    alert: 'text-rose-500 bg-rose-100',
     star: 'text-yellow-500 bg-yellow-100',
   }
-  return classes[icon] || 'text-gray-500 bg-gray-100'
+  return classes[icon] || 'text-slate-500 bg-slate-100'
 }
 
 const getIconPath = (icon: string): string => {
@@ -45,17 +45,17 @@ const formatTime = (time: string): string => {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+  <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-lg font-semibold text-gray-900">Recent Activity</h2>
-      <a href="#" class="text-sm text-blue-600 hover:text-blue-800">View all</a>
+      <h2 class="text-lg font-semibold text-slate-900">Recent Activity</h2>
+      <a href="#" class="text-sm text-ocean-600 hover:text-ocean-800">View all</a>
     </div>
 
     <div class="space-y-4">
       <div
         v-for="(activity, index) in activities"
         :key="index"
-        class="flex items-start space-x-3 pb-4 border-b border-gray-100 last:border-0 last:pb-0"
+        class="flex items-start space-x-3 pb-4 border-b border-slate-100 last:border-0 last:pb-0"
       >
         <div :class="['flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center', getIconClass(activity.icon)]">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,14 +64,14 @@ const formatTime = (time: string): string => {
         </div>
         
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-gray-900">{{ activity.message }}</p>
-          <p class="text-sm text-gray-500">{{ activity.details }}</p>
+          <p class="text-sm font-medium text-slate-900">{{ activity.message }}</p>
+          <p class="text-sm text-slate-500">{{ activity.details }}</p>
         </div>
         
-        <span class="text-xs text-gray-400 flex-shrink-0">{{ formatTime(activity.time) }}</span>
+        <span class="text-xs text-slate-400 flex-shrink-0">{{ formatTime(activity.time) }}</span>
       </div>
 
-      <div v-if="activities.length === 0" class="text-center py-8 text-gray-500">
+      <div v-if="activities.length === 0" class="text-center py-8 text-slate-500">
         No recent activity
       </div>
     </div>

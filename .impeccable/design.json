@@ -1,0 +1,120 @@
+﻿{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-24T00:00:00.000Z",
+  "title": "Design System: SiaSurf",
+  "extensions": {
+    "colorMeta": {
+      "ocean-primary": { "role": "primary", "displayName": "Siargao Cerulean", "canonical": "#0284c7", "tonalRamp": ["#f0f9ff", "#e0f2fe", "#bae6fd", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7", "#0369a1"] },
+      "ocean-500": { "role": "primary", "displayName": "Ocean 500", "canonical": "#0ea5e9", "tonalRamp": ["#f0f9ff", "#e0f2fe", "#bae6fd", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7", "#0369a1"] },
+      "ocean-600": { "role": "primary", "displayName": "Ocean 600", "canonical": "#0284c7", "tonalRamp": ["#f0f9ff", "#e0f2fe", "#bae6fd", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7", "#075985"] },
+      "ocean-700": { "role": "primary", "displayName": "Ocean 700", "canonical": "#0369a1", "tonalRamp": ["#e0f2fe", "#bae6fd", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7", "#0369a1", "#075985"] },
+      "reef-primary": { "role": "primary", "displayName": "Reef Teal", "canonical": "#0d9488", "tonalRamp": ["#f0fdfa", "#ccfbf1", "#99f6e4", "#5eead4", "#2dd4bf", "#14b8a6", "#0d9488", "#0f766e"] },
+      "reef-500": { "role": "primary", "displayName": "Reef 500", "canonical": "#14b8a6", "tonalRamp": ["#f0fdfa", "#ccfbf1", "#99f6e4", "#5eead4", "#2dd4bf", "#14b8a6", "#0d9488", "#115e59"] },
+      "sand-primary": { "role": "neutral", "displayName": "Sand Dune", "canonical": "#c4ab7c", "tonalRamp": ["#fdfbf7", "#f7f3eb", "#ede5d5", "#e0d4ba", "#d0c09a", "#c4ab7c", "#b89763", "#655138"] },
+      "sand-50": { "role": "neutral", "displayName": "Sand Paper", "canonical": "#fdfbf7", "tonalRamp": ["#fdfbf7", "#f7f3eb", "#ede5d5", "#e0d4ba", "#d0c09a", "#c4ab7c", "#b89763", "#655138"] },
+      "sand-100": { "role": "neutral", "displayName": "Sand Ledger", "canonical": "#f7f3eb", "tonalRamp": ["#fdfbf7", "#f7f3eb", "#ede5d5", "#e0d4ba", "#d0c09a", "#c4ab7c", "#b89763", "#655138"] },
+      "wave-primary": { "role": "tertiary", "displayName": "Wave Indigo", "canonical": "#818cf8", "tonalRamp": ["#f5f7ff", "#eef2ff", "#e0e7ff", "#c7d2fe", "#a5b4fc", "#818cf8", "#6366f1", "#3730a3"] },
+      "wave-600": { "role": "tertiary", "displayName": "Wave 600", "canonical": "#6366f1", "tonalRamp": ["#eef2ff", "#e0e7ff", "#c7d2fe", "#a5b4fc", "#818cf8", "#6366f1", "#4f46e5", "#3730a3"] },
+      "neutral-slate-900": { "role": "neutral", "displayName": "Slate Ink", "canonical": "#0f172a", "tonalRamp": ["#f8fafc", "#f1f5f9", "#e2e8f0", "#cbd5e1", "#94a3b8", "#64748b", "#334155", "#0f172a"] },
+      "neutral-slate-50": { "role": "neutral", "displayName": "Slate Shell", "canonical": "#f8fafc", "tonalRamp": ["#f8fafc", "#f1f5f9", "#e2e8f0", "#cbd5e1", "#94a3b8", "#64748b", "#334155", "#0f172a"] },
+      "neutral-white": { "role": "neutral", "displayName": "White Paper", "canonical": "#ffffff", "tonalRamp": ["#ffffff", "#ffffff", "#ffffff", "#ffffff", "#f8fafc", "#f1f5f9", "#e2e8f0", "#cbd5e1"] },
+      "critical-rose-500": { "role": "primary", "displayName": "Critical Rose", "canonical": "#f43f5e", "tonalRamp": ["#fff1f2", "#ffe4e6", "#fecdd3", "#fda4af", "#fb7185", "#f43f5e", "#e11d48", "#9f1239"] },
+      "success-emerald-600": { "role": "primary", "displayName": "Success Emerald", "canonical": "#059669", "tonalRamp": ["#ecfdf5", "#d1fae5", "#a7f3d0", "#6ee7b7", "#34d399", "#059669", "#047857", "#064e3b"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero single-thesis only, Outfit 800, clamp hero scale" },
+      "headline": { "displayName": "Headline", "purpose": "Section theses, bento titles uppercase" },
+      "title": { "displayName": "Title", "purpose": "Card titles, instructor names" },
+      "body": { "displayName": "Body", "purpose": "Descriptions, bio clamps, table copy, 65-72ch" },
+      "label": { "displayName": "Label", "purpose": "Eyebrow chips, badges, mono IDs, verification states" },
+      "serif-accent": { "displayName": "Serif Seal", "purpose": "Cinzel ceremonial stamp, max 1x per viewport" }
+    },
+    "shadows": [
+      { "name": "ocean", "value": "0 4px 20px -2px rgba(14,165,233,0.25)", "purpose": "Bento hover lift for ocean-verified cards" },
+      { "name": "reef", "value": "0 4px 20px -2px rgba(20,184,166,0.25)", "purpose": "Secondary verification cards" },
+      { "name": "sand", "value": "0 4px 20px -2px rgba(196,171,124,0.25)", "purpose": "Revenue/sand cards" },
+      { "name": "wave", "value": "0 4px 20px -2px rgba(129,140,248,0.25)", "purpose": "Tertiary analytics fills" },
+      { "name": "glow-ocean", "value": "0 0 40px -10px rgba(14,165,233,0.5)", "purpose": "Live session glow, active CTAs" },
+      { "name": "glow-reef", "value": "0 0 40px -10px rgba(20,184,166,0.5)", "purpose": "Success confirmation" }
+    ],
+    "motion": [
+      { "name": "wave", "value": "wave 3s ease-in-out infinite", "purpose": "Ambient wave sway, hero divider" },
+      { "name": "float", "value": "float 6s ease-in-out infinite", "purpose": "Floating brand/card drift" },
+      { "name": "pulse-slow", "value": "pulse 4s cubic-bezier(0.4,0,0.6,1) infinite", "purpose": "Live dot, active session pulse" },
+      { "name": "shimmer", "value": "shimmer 2s linear infinite", "purpose": "Loading shimmer, skeletal ledger" },
+      { "name": "ease-standard", "value": "cubic-bezier(0.4,0,0.2,1)", "purpose": "Default state transition, 300-500ms" }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Pill CTA for verified actions, tactile lift on hover",
+      "html": "<button class=\"ds-btn-primary\">Book a Lesson</button>",
+      "css": ".ds-btn-primary{background:#0284c7;color:#fff;padding:12px 20px;border-radius:9999px;font-family:Outfit,ui-sans-serif,system-ui,sans-serif;font-weight:600;font-size:14px;letter-spacing:0.01em;border:none;box-shadow:0 4px 20px -2px rgba(14,165,233,0.25);transition:background 200ms cubic-bezier(0.4,0,0.2,1),transform 200ms cubic-bezier(0.4,0,0.2,1),box-shadow 200ms;}.ds-btn-primary:hover{background:#0369a1;transform:translateY(-1px);box-shadow:0 0 40px -10px rgba(14,165,233,0.5);}.ds-btn-primary:focus-visible{outline:2px solid #0ea5e9;outline-offset:2px;}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ledger secondary, white on slate border, inverts on hover",
+      "html": "<button class=\"ds-btn-secondary\">View All 500+ Pros</button>",
+      "css": ".ds-btn-secondary{background:#fff;color:#0f172a;padding:12px 20px;border-radius:9999px;font-family:Outfit,ui-sans-serif,system-ui,sans-serif;font-weight:700;font-size:14px;border:2px solid #0f172a;transition:background 200ms, color 200ms;}.ds-btn-secondary:hover{background:#0f172a;color:#fff;}"
+    },
+    {
+      "name": "Verified Badge",
+      "kind": "chip",
+      "refersTo": "badge-verified",
+      "description": "Stamp-like pill for Live/Verified state, blurred paper",
+      "html": "<span class=\"ds-badge-verified\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M9 12l2 2 4-4\"/><circle cx=\"12\" cy=\"12\" r=\"9\"/></svg> Verified</span>",
+      "css": ".ds-badge-verified{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.9);color:#0d9488;padding:6px 12px;border-radius:9999px;font-family:Outfit,ui-sans-serif,system-ui,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;backdrop-filter:blur(8px);box-shadow:0 1px 2px rgba(0,0,0,0.06);border:1px solid rgba(13,148,136,0.1);}"
+    },
+    {
+      "name": "Bento Card",
+      "kind": "card",
+      "refersTo": "card-bento",
+      "description": "Ledger bento container, soft layered lift on hover",
+      "html": "<div class=\"ds-card-bento\"><div class=\"ds-card-bento-icon\"></div><p class=\"ds-card-bento-label\">Total Bookings</p><p class=\"ds-card-bento-value\">1,247</p></div>",
+      "css": ".ds-card-bento{background:#fff;color:#0f172a;padding:28px;border-radius:32px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.04);transition:transform 500ms cubic-bezier(0.4,0,0.2,1), box-shadow 500ms;}.ds-card-bento:hover{transform:translateY(-4px);box-shadow:0 4px 20px -2px rgba(14,165,233,0.25);}.ds-card-bento-icon{width:48px;height:48px;background:#f0f9ff;border-radius:16px;margin-bottom:20px;}.ds-card-bento-label{font-family:Outfit,sans-serif;font-weight:900;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin:0 0 4px 0;}.ds-card-bento-value{font-family:Outfit,sans-serif;font-weight:900;font-size:36px;letter-spacing:-0.02em;color:#0f172a;margin:0;}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Quiet ledger field, teal focus ring",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Email</span><input class=\"ds-input\" placeholder=\"shaka@siargao.com\"/></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:6px;}.ds-field-label{font-family:Outfit,sans-serif;font-weight:600;font-size:12px;color:#0f172a;}.ds-input{background:#fff;color:#0f172a;padding:10px 14px;border-radius:16px;border:1px solid #e2e8f0;font-family:Outfit,sans-serif;font-size:14px;outline:none;transition:border-color 200ms, box-shadow 200ms;}.ds-input::placeholder{color:#b89763;}.ds-input:focus{border-color:#14b8a6;box-shadow:0 0 0 3px rgba(20,184,166,0.15);}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav",
+      "description": "Fixed transparent -> blurred white ledger header",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-brand\">Sia<span>S</span>urf</span><a class=\"ds-nav-link\">Find Instructors</a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:rgba(255,255,255,0.8);backdrop-filter:blur(12px);border-bottom:1px solid #f1f5f9;}.ds-nav-brand{font-family:Outfit,sans-serif;font-weight:700;font-size:20px;letter-spacing:-0.02em;color:#0f172a;}.ds-nav-brand span{color:#14b8a6;}.ds-nav-link{font-family:Outfit,sans-serif;font-weight:500;font-size:14px;color:#64748b;text-decoration:none;transition:color 200ms;}.ds-nav-link:hover{color:#14b8a6;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Reef Ledger",
+    "overview": "SiaSurf is a shoreline registry, not a surf brochure. The system reads as a verified ledger brought to the beach: institutional calm, stamped validation, and live accountable monitoring. Every surface balances SISA authority with island approachability — tonal sand and slate grounds, ocean/reef as the single signal of verification, and bento containers that feel lifted only when they earn attention. The philosophy is verified & sunlit. Density is composed, not crowded: wave-dividers, generous section padding (96px vertical rhythm), and rounded-[2rem] bento that breathe between tasks. Motion is ambient (wave 3s, float 6s, pulse-slow 4s, shimmer 2s) and never bounce-elastic; verification is tactile — badges, QR seals, and countdown bars — not decorative chrome.",
+    "keyCharacteristics": ["Ledger-first: bento cards, audit tables, and real-time streams over marketing gloss", "Ocean-led signal: neutral grounds carried by sand/slate, ocean/reef reserved for verified state", "Soft-layered lift: flat at rest, ambient shadow+lift on interaction", "Tactile & verified: pill badges, stamp-like verification, and human-readable safety copy", "Mobile beach to desktop watchtower: same tokens, rhythmic density shifts"],
+    "rules": [
+      { "name": "The One Verification Color Rule", "body": "Only ocean/reef may signal verified/live/success. Sand, slate, wave, and rose never borrow that meaning; a teal badge off-system is a defect.", "section": "colors" },
+      { "name": "The Sand Ground Rule", "body": "Neutral grounds are tinted sand/slate, never pure gray. Gray washes verification; sand tints it.", "section": "colors" },
+      { "name": "The 12% Cap Rule", "body": "Saturated ocean/reef fields occupy ≤12% of any viewport; rarity is the trust signal.", "section": "colors" },
+      { "name": "The Weight-Not-Face Rule", "body": "Hierarchy via weight 400→700→900 and tracking, not a new family. Introducing a new display face requires an explicit ledger reason.", "section": "typography" },
+      { "name": "The Cinzel Seal Rule", "body": "Cinzel appears ≤1× per viewport, as a seal or ceremony; running headings stay Outfit.", "section": "typography" },
+      { "name": "The Lift Means Live Rule", "body": "Shadows/glow signal live/verified/hover only. A static marketing card with persistent glow is a defect.", "section": "elevation" },
+      { "name": "The Flat Ledger Rule", "body": "Interiors of registry tables and forms sit tonal and flat; depth is reserved for container state, not chrome.", "section": "elevation" }
+    ],
+    "dos": ["Do keep verification pill-first (rounded-full, backdrop-blur-md, CheckBadgeIcon) — its calm stamp is the trust signal.", "Do use weight+tracking for hierarchy (900 + tracking-widest at 10px) over new families; check flat-type-hierarchy detector before adding a size.", "Do pair white cards on sand grounds (bg-white on bg-sand-50/bg-slate-50); the tint carries the island light.", "Do animate with wave/float/pulse-slow/shimmer + ease-out-quart only; no animate-bounce.", "Do resolve every gray-on-color finding: gray text on bg-teal-*/bg-rose-* becomes text-white, text-slate-900, or darker tint of the field."],
+    "donts": ["Don't add border-l-4 side-tab accents to cards or nav — 4 files flagged; use pill or tonal fill instead.", "Don't place gray text on colored fields (text-gray-400 on bg-green-500 etc.) or text-slate-400 on bg-rose-600.", "Don't use animate-bounce or elastic/bounce easing — decelerate smoothly.", "Don't add marketing buzzwords (world-class, streamline, enterprise-grade) to copy.", "Don't add numbered section markers 01/02/03 or new Playfair/Inter-as-display faces — Outfit carries display, Cinzel only as seal.", "Don't nest cards in cards for sake of enclosure; flatten parent to bg-slate-50 and let child be the signal."]
+  }
+}

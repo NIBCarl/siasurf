@@ -89,7 +89,7 @@ const instructorLevelDescription: Record<number, string> = {
                                 <span class="inline-block rounded-xl bg-sand-100 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-sand-700 mb-4">
                                     Verified Surf Professional
                                 </span>
-                                <h1 class="text-5xl font-black text-slate-900 capitalize tracking-tight leading-tight">
+                                <h1 class="text-5xl font-extrabold text-slate-900 capitalize tracking-tight leading-tight">
                                     {{ instructor.name }}
                                 </h1>
                             </div>
@@ -112,7 +112,7 @@ const instructorLevelDescription: Record<number, string> = {
                     </div>
 
                     <div class="mt-12 pt-10 border-t border-slate-50">
-                        <h2 class="mb-6 text-xl font-black text-slate-900 uppercase tracking-widest">Professional Bio</h2>
+                        <h2 class="mb-6 text-xl font-extrabold text-slate-900 uppercase tracking-widest">Professional Bio</h2>
                         <p class="text-lg leading-relaxed text-slate-600 font-medium italic">
                             "{{ instructor.instructor_profile.bio || 'This instructor is a dedicated member of the Siargao surfing community, certified to provide professional and safe surfing lessons for various skill levels.' }}"
                         </p>
@@ -121,7 +121,7 @@ const instructorLevelDescription: Record<number, string> = {
 
                 <!-- Certificates -->
                 <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
-                    <h2 class="mb-8 text-xl font-black text-slate-900 uppercase tracking-widest">Verified Credentials</h2>
+                    <h2 class="mb-8 text-xl font-extrabold text-slate-900 uppercase tracking-widest">Verified Credentials</h2>
                     <div class="grid gap-6 sm:grid-cols-2">
                         <div v-for="cert in instructor.certificates" :key="cert.id" class="flex items-center gap-5 rounded-3xl border border-slate-50 bg-slate-50/50 p-6 transition-all hover:bg-white hover:shadow-xl hover:shadow-slate-100 group">
                             <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white text-ocean-600 shadow-sm group-hover:scale-110 transition-transform">
@@ -141,7 +141,7 @@ const instructorLevelDescription: Record<number, string> = {
                 <!-- Reviews -->
                 <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
                     <div class="mb-10 flex items-center justify-between">
-                        <h2 class="text-xl font-black text-slate-900 uppercase tracking-widest">Student Feedback</h2>
+                        <h2 class="text-xl font-extrabold text-slate-900 uppercase tracking-widest">Student Feedback</h2>
                         <div class="flex items-center gap-3 rounded-2xl bg-slate-900 px-6 py-2.5 text-xs font-black text-white uppercase tracking-widest">
                             <ChatBubbleLeftRightIcon class="h-4 w-4" />
                             {{ totalReviews }} Feedback
@@ -200,14 +200,14 @@ const instructorLevelDescription: Record<number, string> = {
                                     <ShieldCheckOutline class="h-6 w-6 shrink-0 text-emerald-400" />
                                     <div>
                                         <p class="text-xs font-black uppercase tracking-widest mb-1 text-emerald-400">Safety Guard</p>
-                                        <p class="text-[11px] font-bold text-slate-400 leading-tight">Board-certified safety and CPR standards.</p>
+                                        <p class="text-[10px] font-bold text-slate-400 leading-tight">Board-certified safety and CPR standards.</p>
                                     </div>
                                 </div>
                                 <div class="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
                                     <CalendarIcon class="h-6 w-6 shrink-0 text-ocean-400" />
                                     <div>
                                         <p class="text-xs font-black uppercase tracking-widest mb-1 text-ocean-400">Smart Booking</p>
-                                        <p class="text-[11px] font-bold text-slate-400 leading-tight">Real-time availability and instant confirmation.</p>
+                                        <p class="text-[10px] font-bold text-slate-400 leading-tight">Real-time availability and instant confirmation.</p>
                                     </div>
                                 </div>
                             </div>
@@ -234,7 +234,7 @@ const instructorLevelDescription: Record<number, string> = {
                     <div class="rounded-[2.5rem] border border-slate-100 bg-white p-8 shadow-sm">
                         <div class="flex items-center gap-3 mb-4">
                             <AcademicCapIcon class="w-5 h-5 text-sand-500" />
-                            <h4 class="text-xs font-black text-slate-900 uppercase tracking-widest">Instructor Insights</h4>
+                            <h4 class="text-xs font-bold text-slate-900 uppercase tracking-widest">Instructor Insights</h4>
                         </div>
                         <p class="text-xs font-bold leading-relaxed text-slate-400 italic">
                             "This instructor is best known for their patience with beginners and deep knowledge of the Cloud 9 break pattern. Highly recommended for early morning sessions."

@@ -72,7 +72,7 @@ const getLevelVariant = (level: number) => {
                         </div>
                     </ol>
                 </nav>
-                <h1 class="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
                     Instructor Guild
                     <Badge variant="ocean" size="sm" class="rounded-full">ACTIVE</Badge>
                 </h1>

@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Head, useForm, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
 import { 
     ChevronLeftIcon,
     IdentificationIcon,
@@ -53,13 +55,36 @@ const props = defineProps<Props>()
 const verifyForm = useForm({
   certificate_ids: [] as number[]
 })
-const verifyInstructor = () => {
+
+const showVerifyModal = ref(false)
+const showSuspendModal = ref(false)
+const showRejectModal = ref(false)
+
+const rejectForm = useForm({ reason: '' })
+
+const confirmVerify = () => {
   if (props.instructor.certificates.filter(c => c.status === 'pending_verification').length > 0 && verifyForm.certificate_ids.length === 0) {
-    if (!confirm('You are about to verify this instructor without approving any of their pending certificates. Proceed?')) {
-      return;
-    }
+    showVerifyModal.value = true
+  } else {
+    verifyForm.post(route('admin.instructors.verify', props.instructor.id))
   }
+}
+
+const submitVerify = () => {
+  showVerifyModal.value = false
   verifyForm.post(route('admin.instructors.verify', props.instructor.id))
+}
+
+const submitSuspend = () => {
+  suspendForm.post(route('admin.instructors.suspend', props.instructor.id), {
+    onSuccess: () => { showSuspendModal.value = false; suspendForm.reset() }
+  })
+}
+
+const submitReject = () => {
+  rejectForm.post(route('admin.instructors.reject', props.instructor.id), {
+    onSuccess: () => { showRejectModal.value = false; rejectForm.reset() }
+  })
 }
 
 const toggleCertificate = (id: number) => {
@@ -116,7 +141,7 @@ const getStatusVariant = (status: string) => {
                     </ol>
                 </nav>
                 <div class="flex items-center gap-4">
-                    <h1 class="text-3xl font-black text-slate-900 tracking-tight uppercase">Instructor Dossier</h1>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight uppercase">Instructor Dossier</h1>
                     <Badge :variant="getStatusVariant(instructor.instructor_profile.status)" size="md">
                         {{ instructor.instructor_profile.status?.toUpperCase().replace('_', ' ') }}
                     </Badge>
@@ -132,7 +157,7 @@ const getStatusVariant = (status: string) => {
             <div class="flex gap-2">
                 <BaseButton 
                     v-if="instructor.instructor_profile.status === 'pending_verification'" 
-                    @click="verifyInstructor" 
+                    @click="confirmVerify" 
                     :loading="verifyForm.processing" 
                     :disabled="instructor.certificates.length === 0"
                     variant="success"
@@ -141,9 +166,21 @@ const getStatusVariant = (status: string) => {
                     <ShieldCheckIcon class="w-4 h-4 mr-2" />
                     Verify & License
                 </BaseButton>
+
+                <BaseButton 
+                    v-if="instructor.instructor_profile.status === 'pending_verification'" 
+                    @click="showRejectModal = true" 
+                    variant="danger"
+                    outline
+                    class="rounded-xl"
+                >
+                    <ExclamationTriangleIcon class="w-4 h-4 mr-2" />
+                    Reject
+                </BaseButton>
                 
                 <BaseButton 
                     v-if="instructor.instructor_profile.status === 'active'" 
+                    @click="showSuspendModal = true"
                     variant="danger" 
                     outline
                     class="rounded-xl"
@@ -177,7 +214,7 @@ const getStatusVariant = (status: string) => {
                                 <UserIcon class="w-10 h-10 text-ocean-600" />
                             </div>
                             <div>
-                                <h2 class="text-2xl font-black text-slate-900 leading-none mb-2">{{ instructor.name }}</h2>
+                                <h2 class="text-2xl font-extrabold text-slate-900 leading-none mb-2">{{ instructor.name }}</h2>
                                 <div class="flex gap-4">
                                     <span class="flex items-center gap-1.5 text-xs font-bold text-slate-400">
                                         <EnvelopeIcon class="w-3.5 h-3.5" />
@@ -192,7 +229,7 @@ const getStatusVariant = (status: string) => {
                         </div>
 
                         <div class="space-y-6">
-                            <h3 class="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Operational Biography</h3>
+                            <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em]">Operational Biography</h3>
                             <div class="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 italic text-slate-600 leading-relaxed text-lg shadow-inner">
                                 "{{ instructor.instructor_profile.bio || 'No biography provided.' }}"
                             </div>
@@ -236,7 +273,7 @@ const getStatusVariant = (status: string) => {
                             <div class="w-10 h-10 bg-ocean-50 text-ocean-600 rounded-xl flex items-center justify-center">
                                 <DocumentTextIcon class="w-6 h-6" />
                             </div>
-                            <h3 class="text-sm font-black text-slate-900 uppercase tracking-widest">Document Registry</h3>
+                            <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest">Document Registry</h3>
                         </div>
                         <span class="px-3 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-500 uppercase">{{ instructor.certificates.length }} FILES AUDITED</span>
                     </div>
@@ -316,7 +353,7 @@ const getStatusVariant = (status: string) => {
                     <div class="relative z-10 text-center flex flex-col items-center">
                         <div class="flex items-center gap-2 mb-8 self-start bg-white/10 px-4 py-1.5 rounded-full border border-white/10">
                             <QrCodeIcon class="w-4 h-4 text-ocean-200" />
-                            <h4 class="text-[10px] font-black uppercase tracking-[0.2em] text-ocean-100">Official I.D. Artifact</h4>
+                            <h4 class="text-[10px] font-bold uppercase tracking-[0.2em] text-ocean-100">Official I.D. Artifact</h4>
                         </div>
                         
                         <div class="bg-white p-6 rounded-[3rem] shadow-2xl shadow-ocean-900/30 mb-8 transform group-hover:rotate-2 transition-transform">
@@ -343,7 +380,7 @@ const getStatusVariant = (status: string) => {
                 <!-- Risk Management & Surveillance Activity -->
                 <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8 space-y-8">
                     <div>
-                        <h3 class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6">Security Intelligence</h3>
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-6">Security Intelligence</h3>
                         <div class="space-y-4">
                             <!-- Incident Action -->
                             <div class="p-6 bg-rose-50 rounded-[2rem] border border-rose-100 group transition-all hover:bg-rose-100">
@@ -359,7 +396,7 @@ const getStatusVariant = (status: string) => {
                             
                             <!-- Audit Logs -->
                             <div class="px-6 py-8 bg-slate-50 rounded-[2rem] border border-slate-100">
-                                <h4 class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6 flex items-center justify-between">
+                                <h4 class="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-6 flex items-center justify-between">
                                     <span>Audit Trail</span>
                                     <ShieldCheckIcon class="w-3 h-3 text-emerald-500" />
                                 </h4>
@@ -384,5 +421,79 @@ const getStatusVariant = (status: string) => {
             </div>
         </div>
     </div>
+    <!-- Verify Modal -->
+    <Modal :show="showVerifyModal" @close="showVerifyModal = false">
+        <div class="p-6">
+            <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <ShieldCheckIcon class="w-6 h-6 text-emerald-600" />
+                Confirm Verification
+            </h2>
+            <p class="text-sm text-slate-600 mb-6">
+                You are about to verify this instructor without approving any of their pending certificates. Are you sure you want to proceed?
+            </p>
+            <div class="flex justify-end gap-3">
+                <BaseButton variant="secondary" @click="showVerifyModal = false">Cancel</BaseButton>
+                <BaseButton variant="success" @click="submitVerify" :loading="verifyForm.processing">
+                    Proceed Anyway
+                </BaseButton>
+            </div>
+        </div>
+    </Modal>
+
+    <!-- Reject Modal -->
+    <Modal :show="showRejectModal" @close="showRejectModal = false">
+        <div class="p-6">
+            <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <ExclamationTriangleIcon class="w-6 h-6 text-amber-600" />
+                Reject Verification
+            </h2>
+            <p class="text-sm text-slate-600 mb-4">
+                Please provide a reason for rejecting the instructor's verification application. They will be notified to correct the issue.
+            </p>
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Rejection Reason <span class="text-amber-500">*</span></label>
+                <textarea 
+                    v-model="rejectForm.reason"
+                    class="w-full rounded-xl border-slate-200 shadow-sm focus:ring-amber-500 focus:border-amber-500 sm:text-sm p-4 min-h-[100px]"
+                    placeholder="Enter reason for rejection..."
+                    required
+                ></textarea>
+            </div>
+            <div class="flex justify-end gap-3">
+                <BaseButton variant="secondary" @click="showRejectModal = false">Cancel</BaseButton>
+                <BaseButton variant="danger" @click="submitReject" :disabled="!rejectForm.reason" :loading="rejectForm.processing">
+                    Confirm Rejection
+                </BaseButton>
+            </div>
+        </div>
+    </Modal>
+
+    <!-- Suspend Modal -->
+    <Modal :show="showSuspendModal" @close="showSuspendModal = false">
+        <div class="p-6">
+            <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <ShieldExclamationIcon class="w-6 h-6 text-rose-600" />
+                Suspend Instructor
+            </h2>
+            <p class="text-sm text-slate-600 mb-4">
+                Please provide a mandatory reason for suspending this instructor. This action will hide them from the public search and prevent them from accepting new bookings.
+            </p>
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Suspension Reason <span class="text-rose-500">*</span></label>
+                <textarea 
+                    v-model="suspendForm.reason"
+                    class="w-full rounded-xl border-slate-200 shadow-sm focus:ring-rose-500 focus:border-rose-500 sm:text-sm p-4 min-h-[100px]"
+                    placeholder="Enter detailed reason for suspension..."
+                    required
+                ></textarea>
+            </div>
+            <div class="flex justify-end gap-3">
+                <BaseButton variant="secondary" @click="showSuspendModal = false">Cancel</BaseButton>
+                <BaseButton variant="danger" @click="submitSuspend" :disabled="!suspendForm.reason" :loading="suspendForm.processing">
+                    Confirm Suspension
+                </BaseButton>
+            </div>
+        </div>
+    </Modal>
     </AppLayout>
 </template>

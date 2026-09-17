@@ -31,6 +31,7 @@ class IncidentController extends Controller
     {
         return Inertia::render('Admin/Incidents/Create', [
             'instructors' => \App\Models\User::where('role', 'instructor')
+                ->whereHas('instructorProfile')
                 ->with('instructorProfile')
                 ->get(),
             'bookings' => \App\Models\Booking::with(['student', 'instructor'])

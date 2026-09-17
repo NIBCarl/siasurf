@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
+import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
@@ -71,6 +72,10 @@ const formatTimePeriod = (period: string): string => {
   }
   return periods[period] || period
 }
+
+const goBack = () => {
+  window.history.back()
+}
 </script>
 
 <template>
@@ -79,39 +84,42 @@ const formatTimePeriod = (period: string): string => {
   <AppSidebarLayout title="Parental Consent">
     <div class="py-12">
       <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+        <!-- Progress Stepper -->
+        <BookingStepper :current="4" class="mt-6" />
+
+
         <!-- Header -->
         <div class="mb-8 text-center">
-          <Badge :variant="'warning'" class="mb-2">Step 4b of 6</Badge>
-          <h1 class="text-3xl font-bold text-gray-900">Parental Consent</h1>
-          <p class="mt-2 text-gray-600">
+          <h1 class="text-3xl font-bold text-slate-900">Parental Consent</h1>
+          <p class="mt-2 text-slate-600">
             Since the student is under 18, parental consent and guardian information is required
           </p>
-          <div class="mt-4 inline-flex items-center px-4 py-2 bg-blue-50 border border-blue-200 rounded-md">
-            <svg class="w-5 h-5 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="mt-4 inline-flex items-center px-4 py-2 bg-ocean-50 border border-ocean-200 rounded-md">
+            <svg class="w-5 h-5 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <span class="text-sm text-blue-800">Student Age: {{ booking.student_age }} years old</span>
+            <span class="text-sm text-ocean-800">Student Age: {{ booking.student_age }} years old</span>
           </div>
         </div>
 
         <!-- Booking Summary -->
-        <div class="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">Booking Details</h2>
+        <div class="mb-8 bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+          <h2 class="text-lg font-semibold text-slate-900 mb-4">Booking Details</h2>
           <div class="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span class="text-gray-500">Instructor:</span>
+              <span class="text-slate-500">Instructor:</span>
               <span class="ml-2 font-medium">{{ booking.instructor.name }}</span>
             </div>
             <div>
-              <span class="text-gray-500">Location:</span>
+              <span class="text-slate-500">Location:</span>
               <span class="ml-2 font-medium">{{ booking.surf_spot.name }}</span>
             </div>
             <div>
-              <span class="text-gray-500">Date:</span>
+              <span class="text-slate-500">Date:</span>
               <span class="ml-2 font-medium">{{ formatDate(booking.date) }}</span>
             </div>
             <div>
-              <span class="text-gray-500">Time:</span>
+              <span class="text-slate-500">Time:</span>
               <span class="ml-2 font-medium">{{ formatTimePeriod(booking.time_period) }}</span>
             </div>
           </div>
@@ -120,10 +128,10 @@ const formatTimePeriod = (period: string): string => {
         <!-- Parental Consent Form -->
         <form @submit.prevent="submitConsent" class="space-y-6">
           <!-- Consent Text -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Parental Consent & Release</h2>
+          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 mb-4">Parental Consent & Release</h2>
             
-            <div class="prose prose-sm max-w-none text-gray-600 space-y-4">
+            <div class="prose max-w-none text-slate-700 space-y-4">
               <p class="font-medium">
                 PARENTAL CONSENT FOR MINOR PARTICIPATION
               </p>
@@ -165,13 +173,13 @@ const formatTimePeriod = (period: string): string => {
           </div>
 
           <!-- Emergency Contact Information -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Emergency Contact Information</h2>
+          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 mb-4">Emergency Contact Information</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Parent/Guardian Name -->
               <div class="md:col-span-2">
-                <label for="parent_name" class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="parent_name" class="block text-sm font-medium text-slate-700 mb-2">
                   Parent/Guardian Full Name *
                 </label>
                 <input
@@ -179,17 +187,17 @@ const formatTimePeriod = (period: string): string => {
                   v-model="form.parent_name"
                   type="text"
                   required
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
                   placeholder="Enter your full legal name"
                 />
-                <p v-if="form.errors.parent_name" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.parent_name" class="mt-1 text-sm text-rose-600">
                   {{ form.errors.parent_name }}
                 </p>
               </div>
 
               <!-- Emergency Contact Name -->
               <div>
-                <label for="emergency_contact_name" class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="emergency_contact_name" class="block text-sm font-medium text-slate-700 mb-2">
                   Emergency Contact Name *
                 </label>
                 <input
@@ -197,17 +205,17 @@ const formatTimePeriod = (period: string): string => {
                   v-model="form.emergency_contact_name"
                   type="text"
                   required
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
                   placeholder="Name of emergency contact"
                 />
-                <p v-if="form.errors.emergency_contact_name" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.emergency_contact_name" class="mt-1 text-sm text-rose-600">
                   {{ form.errors.emergency_contact_name }}
                 </p>
               </div>
 
               <!-- Emergency Contact Phone -->
               <div>
-                <label for="emergency_contact_phone" class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="emergency_contact_phone" class="block text-sm font-medium text-slate-700 mb-2">
                   Emergency Contact Phone *
                 </label>
                 <input
@@ -215,27 +223,27 @@ const formatTimePeriod = (period: string): string => {
                   v-model="form.emergency_contact_phone"
                   type="tel"
                   required
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
                   placeholder="+63 XXX XXX XXXX"
                 />
-                <p v-if="form.errors.emergency_contact_phone" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.emergency_contact_phone" class="mt-1 text-sm text-rose-600">
                   {{ form.errors.emergency_contact_phone }}
                 </p>
               </div>
 
               <!-- Medical Information -->
               <div class="md:col-span-2">
-                <label for="medical_info" class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="medical_info" class="block text-sm font-medium text-slate-700 mb-2">
                   Medical Information / Allergies (Optional)
                 </label>
                 <textarea
                   id="medical_info"
                   v-model="form.medical_info"
                   rows="3"
-                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
                   placeholder="Please list any medical conditions, allergies, or medications the instructor should be aware of"
                 ></textarea>
-                <p v-if="form.errors.medical_info" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.medical_info" class="mt-1 text-sm text-rose-600">
                   {{ form.errors.medical_info }}
                 </p>
               </div>
@@ -243,12 +251,12 @@ const formatTimePeriod = (period: string): string => {
           </div>
 
           <!-- Signature Section -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Electronic Signature</h2>
+          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 mb-4">Electronic Signature</h2>
             
             <!-- Signature Pad -->
             <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">
+              <label class="block text-sm font-medium text-slate-700 mb-2">
                 Parent/Guardian Signature *
               </label>
               <SignaturePad
@@ -257,7 +265,7 @@ const formatTimePeriod = (period: string): string => {
                 :height="200"
                 class="mx-auto"
               />
-              <p v-if="form.errors.parent_signature" class="mt-1 text-sm text-red-600 text-center">
+              <p v-if="form.errors.parent_signature" class="mt-1 text-sm text-rose-600 text-center">
                 {{ form.errors.parent_signature }}
               </p>
             </div>
@@ -265,36 +273,37 @@ const formatTimePeriod = (period: string): string => {
             <!-- Agreement Checkbox -->
             <div class="mb-6">
               <div class="flex items-start">
-                <div class="flex items-center h-5">
+                <div class="flex items-center">
                   <input
                     id="agreement"
                     v-model="form.agreement"
                     type="checkbox"
                     required
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    class="min-h-[44px] min-w-[44px] text-ocean-600 focus:ring-ocean-500 border-slate-300 rounded cursor-pointer"
                   />
                 </div>
                 <div class="ml-3">
-                  <label for="agreement" class="text-sm text-gray-700">
+                  <label for="agreement" class="text-sm text-slate-700">
                     I am the parent or legal guardian of the student. I have read and agree 
                     to the Parental Consent and Release above. I understand the risks involved 
                     in surfing activities and give my consent for my child to participate. *
                   </label>
                 </div>
               </div>
-              <p v-if="form.errors.agreement" class="mt-1 text-sm text-red-600">
+              <p v-if="form.errors.agreement" class="mt-1 text-sm text-rose-600">
                 {{ form.errors.agreement }}
               </p>
             </div>
 
             <!-- Submit Buttons -->
             <div class="flex justify-between items-center">
-              <a
-                :href="route('bookings.waiver', booking.id)"
-                class="text-sm text-gray-600 hover:text-gray-900"
+              <BaseButton
+                type="button"
+                @click="goBack"
+                variant="secondary"
               >
-                ← Back to Liability Waiver
-              </a>
+                ← Back
+              </BaseButton>
               
               <BaseButton
                 type="submit"
@@ -310,7 +319,7 @@ const formatTimePeriod = (period: string): string => {
         </form>
 
         <!-- Footer Note -->
-        <div class="mt-8 text-center text-sm text-gray-500">
+        <div class="mt-8 text-center text-sm text-slate-500">
           <p>
             This parental consent form will be stored securely for 7 years as required by law.
           </p>

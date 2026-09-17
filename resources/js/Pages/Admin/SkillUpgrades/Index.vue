@@ -72,10 +72,10 @@ const getStatusBadgeClass = (status: string) => {
 
 const getLevelBadgeClass = (level: string) => {
     switch(level) {
-        case 'beginner': return 'bg-blue-50 text-blue-700 ring-blue-600/20';
-        case 'intermediate': return 'bg-indigo-50 text-indigo-700 ring-indigo-600/20';
+        case 'beginner': return 'bg-ocean-50 text-ocean-700 ring-ocean-600/20';
+        case 'intermediate': return 'bg-wave-50 text-wave-700 ring-wave-600/20';
         case 'advanced': return 'bg-purple-50 text-purple-700 ring-purple-600/20';
-        default: return 'bg-gray-50 text-gray-700 ring-gray-600/20';
+        default: return 'bg-slate-50 text-slate-700 ring-slate-600/20';
     }
 };
 </script>

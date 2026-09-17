@@ -34,22 +34,22 @@ const statusLabels: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-500',
-  confirmed: 'bg-blue-500',
-  completed: 'bg-green-500',
-  cancelled: 'bg-red-500',
+  confirmed: 'bg-ocean-500',
+  completed: 'bg-emerald-500',
+  cancelled: 'bg-rose-500',
 }
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">Booking Status Distribution</h2>
+  <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-4">Booking Status Distribution</h2>
 
     <div v-if="isLoading" class="h-64 flex items-center justify-center">
-      <p class="text-gray-500">Loading...</p>
+      <p class="text-slate-500">Loading...</p>
     </div>
 
     <div v-else-if="total() === 0" class="h-64 flex items-center justify-center">
-      <p class="text-gray-500">No booking data available</p>
+      <p class="text-slate-500">No booking data available</p>
     </div>
 
     <div v-else class="space-y-4">
@@ -76,7 +76,7 @@ const statusColors: Record<string, string> = {
           </svg>
           
           <div class="absolute inset-0 flex items-center justify-center">
-            <span class="text-lg font-bold text-gray-900">{{ total() }}</span>
+            <span class="text-lg font-bold text-slate-900">{{ total() }}</span>
           </div>
         </div>
       </div>
@@ -89,7 +89,7 @@ const statusColors: Record<string, string> = {
           class="flex items-center text-sm"
         >
           <div :class="['w-3 h-3 rounded-full mr-2', statusColors[key]]"></div>
-          <span class="text-gray-600">{{ statusLabels[key] }}: {{ value }} ({{ getPercentage(value) }}%)</span>
+          <span class="text-slate-600">{{ statusLabels[key] }}: {{ value }} ({{ getPercentage(value) }}%)</span>
         </div>
       </div>
     </div>
