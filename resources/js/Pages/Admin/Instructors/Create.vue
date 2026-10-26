@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { Head, useForm, Link } from '@inertiajs/vue3'
+import { Head, useForm, Link, usePage } from '@inertiajs/vue3'
+import { computed, nextTick, ref } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import TextInput from '@/Components/TextInput.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
+import RateCapDialog from '@/Components/Molecules/RateCapDialog.vue'
+
+const page = usePage()
+
+// Published hourly-rate band, shared from the server.
+const rateMin = computed(() => Number((page.props as any).pricing?.minRatePerHour ?? 600))
+const rateMax = computed(() => Number((page.props as any).pricing?.maxRatePerHour ?? 1500))
 
 const form = useForm({
   name: '',
@@ -16,7 +24,36 @@ const form = useForm({
   rate_per_hour: 600,
 })
 
+const rateDialogOpen = ref(false)
+const lastOverCapValue = ref<number | null>(null)
+
+const rateOverCap = computed(() => Number(form.rate_per_hour) > rateMax.value)
+
+const checkRate = () => {
+  if (rateOverCap.value) {
+    lastOverCapValue.value = Number(form.rate_per_hour)
+    rateDialogOpen.value = true
+    return false
+  }
+
+  return true
+}
+
+const useCapRate = () => {
+  form.rate_per_hour = rateMax.value
+  rateDialogOpen.value = false
+}
+
+const dismissRateDialog = () => {
+  rateDialogOpen.value = false
+  nextTick(() => document.getElementById('rate_per_hour')?.focus())
+}
+
 const submit = () => {
+  if (!checkRate()) {
+    return
+  }
+
   form.post(route('admin.instructors.store'), {
     onSuccess: () => form.reset(),
   })
@@ -80,7 +117,23 @@ const submit = () => {
 
             <div>
                <InputLabel value="Hourly Rate (₱)" class="mb-2" />
-               <TextInput v-model="form.rate_per_hour" type="number" class="w-full font-black text-ocean-600" required />
+               <TextInput
+                  id="rate_per_hour"
+                  v-model="form.rate_per_hour"
+                  type="number"
+                  class="w-full font-black text-ocean-600"
+                  :min="rateMin"
+                  :max="rateMax"
+                  step="50"
+                  required
+                  @blur="checkRate"
+               />
+               <p v-if="rateOverCap" class="mt-1 text-xs font-bold text-rose-600">
+                  Standard pricing cannot exceed ₱{{ rateMax.toLocaleString() }} per hour.
+               </p>
+               <p v-else class="mt-1 text-xs text-slate-500">
+                  Allowed range: ₱{{ rateMin.toLocaleString() }} – ₱{{ rateMax.toLocaleString() }} per hour.
+               </p>
                <InputError :message="form.errors.rate_per_hour" />
             </div>
          </div>
@@ -110,5 +163,14 @@ const submit = () => {
       </form>
 
     </div>
+
+    <RateCapDialog
+      :show="rateDialogOpen"
+      :entered="lastOverCapValue"
+      :min="rateMin"
+      :max="rateMax"
+      @close="dismissRateDialog"
+      @use-max="useCapRate"
+    />
   </AppLayout>
 </template>

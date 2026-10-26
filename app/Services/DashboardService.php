@@ -335,6 +335,32 @@ class DashboardService
 
         $pendingRequests = $activeBookings->where('status', BookingStatus::Pending)->count();
 
+        // FR 1.9.3 - the live request queue, inside the 2 hour response window.
+        $pendingRequestList = $activeBookings->where('status', BookingStatus::Pending)
+            ->filter(fn (Booking $booking) => !$booking->acceptDeadlinePassed())
+            ->sortBy('accept_deadline_at')
+            ->take(5)
+            ->map(fn (Booking $booking) => [
+                'id' => $booking->id,
+                'student_name' => $booking->student->name,
+                'date' => $booking->date->format('M d, Y'),
+                'time_period' => $booking->time_period->value,
+                'skill_level' => $booking->skill_level->value,
+                'accept_time_remaining' => $booking->getAcceptTimeRemaining(),
+            ])
+            ->values()
+            ->toArray();
+
+        // FR 1.10.1 - lessons that still need an attendance record.
+        $attendanceDue = $user->bookingsAsInstructor()
+            ->whereIn('status', [
+                BookingStatus::Confirmed,
+                BookingStatus::InProgress,
+                BookingStatus::Completed,
+            ])
+            ->whereNull('attendance_status')
+            ->count();
+
         $recentReviews = $user->reviewsAsInstructor()
             ->with('student')
             ->orderByDesc('created_at')
@@ -378,6 +404,9 @@ class DashboardService
                     'comment' => $r->comment,
                     'date' => $r->created_at->diffForHumans(),
                 ])->toArray(),
+                // FR 1.9.3 / 1.10.1 - action items for the instructor.
+                'pending_request_list' => $pendingRequestList,
+                'attendance_due' => $attendanceDue,
             ],
         ];
     }

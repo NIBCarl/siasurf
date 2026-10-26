@@ -39,4 +39,19 @@ return [
         'key' => env('STORMGLASS_API_KEY'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Upload malware scanning
+    |--------------------------------------------------------------------------
+    |
+    | Certificates are the only user-supplied files the platform accepts. When
+    | enabled, each upload is piped through ClamAV; a missing scanner fails the
+    | upload rather than letting it through unscanned.
+    |
+    */
+    'virus_scan' => [
+        'enabled' => env('VIRUS_SCAN_ENABLED', false),
+        'binary' => env('VIRUS_SCAN_BINARY', 'clamdscan'),
+    ],
+
 ];

@@ -2,9 +2,23 @@
 
 namespace App\Http\Controllers\Instructor;
 
+use App\Enums\AttendanceStatus;
+use App\Enums\BookingStatus;
+use App\Enums\ChangeRequestStatus;
+use App\Events\BookingDeclined;
+use App\Exceptions\BookingChangeException;
+use App\Exceptions\BookingRequestException;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\SurfSpot;
+use App\Notifications\BookingDeclinedNotification;
+use App\Services\AvailabilityService;
+use App\Services\BookingAcceptanceService;
+use App\Services\BookingChangeService;
+use App\Events\SessionAttendanceMarked;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -13,17 +27,45 @@ class BookingController extends Controller
     /**
      * Display a listing of bookings for the instructor.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $user = auth()->user();
+        $status = $request->query('status');
 
-        $bookings = Booking::with(['student', 'surfSpot'])
+        $bookings = Booking::with(['student', 'surfSpot', 'changeRequests'])
             ->where('instructor_id', $user->id)
-            ->latest()
-            ->paginate(10);
+            ->when(
+                $status && $status !== 'all',
+                fn ($query) => $query->where('status', $status)
+            )
+            ->orderByRaw("FIELD(status, 'pending', 'awaiting_payment', 'confirmed', 'in_progress') DESC")
+            ->orderByDesc('date')
+            ->paginate(10)
+            ->withQueryString();
+
+        // FR 1.9.3 - the accept countdown and FR 1.9.4 approval flag are computed
+        // server side so the card renders correctly on first paint.
+        $bookings->through(function (Booking $booking) {
+            return array_merge($booking->toArray(), [
+                'accept_time_remaining' => $booking->getAcceptTimeRemaining(),
+                'can_be_declined' => $booking->isAwaitingInstructorResponse() && !$booking->acceptDeadlinePassed(),
+                'requires_admin_approval_for_change' => $booking->changeRequiresAdminApproval(),
+                'has_pending_change_request' => $booking->changeRequests
+                    ->where('status', ChangeRequestStatus::Pending)
+                    ->isNotEmpty(),
+                'attendance_label' => $booking->attendance_status?->label(),
+            ]);
+        });
 
         return Inertia::render('Instructor/Bookings/Index', [
             'bookings' => $bookings,
+            'filters' => ['status' => $status ?? 'all'],
+            'counts' => [
+                'pending' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Pending)->count(),
+                'confirmed' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Confirmed)->count(),
+                'in_progress' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::InProgress)->count(),
+                'completed' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Completed)->count(),
+            ],
         ]);
     }
 
@@ -36,100 +78,71 @@ class BookingController extends Controller
             abort(403);
         }
 
-        $booking->load(['student.studentProfile', 'student.skillUpgradeRequests', 'surfSpot', 'payment', 'waiver', 'review']);
+        $booking->load([
+            'student.studentProfile',
+            'student.skillUpgradeRequests',
+            'surfSpot',
+            'payment',
+            'waiver',
+            'review',
+            'changeRequests' => fn ($query) => $query->with(['requestedBy', 'reviewedBy'])->latest(),
+        ]);
+
+        $surfSpots = SurfSpot::where('is_active', true)->orderBy('name')->get(['id', 'name', 'difficulty']);
 
         return Inertia::render('Instructor/Bookings/Show', [
             'booking' => $booking,
+            'surfSpots' => $surfSpots,
+            'acceptTimeRemaining' => $booking->getAcceptTimeRemaining(),
+            'requiresAdminApprovalForChange' => $booking->changeRequiresAdminApproval(),
+            'hoursUntilLesson' => $booking->hoursUntilLesson(),
+            'changeApprovalThresholdHours' => Booking::CHANGE_APPROVAL_THRESHOLD_HOURS,
+            // FR 1.10.1 - why "Start Session" is unavailable, or null when it is.
+            'startBlockReason' => $booking->startSessionBlockReason(),
+            'canStartSession' => $booking->canStartSession(),
+            'paymentHoldMinutes' => Booking::PAYMENT_HOLD_MINUTES,
+            'paymentTimeRemaining' => $booking->getPaymentTimeRemaining(),
         ]);
     }
 
     /**
-     * Confirm a booking.
+     * Confirm a booking request (FR 1.9.3).
+     *
+     * All of the GCash/cash work lives in BookingAcceptanceService so Instant
+     * Book produces exactly the same result.
      */
-    public function confirm(Booking $booking)
+    public function confirm(Booking $booking, BookingAcceptanceService $acceptanceService)
     {
         if ($booking->instructor_id !== auth()->id()) {
             abort(403);
         }
 
-        $payment = $booking->payment;
-        $paymentMethod = $payment ? $payment->payment_method->value : 'cash';
+        try {
+            $accepted = $acceptanceService->accept($booking);
+        } catch (BookingRequestException $exception) {
+            return back()->with('error', $exception->getMessage());
+        } catch (\Throwable $exception) {
+            report($exception);
 
-        if ($paymentMethod === 'gcash') {
-            \Illuminate\Support\Facades\DB::transaction(function () use ($booking, $payment) {
-                // Set status to AwaitingPayment and payment_deadline_at to 30 minutes from now
-                $booking->update([
-                    'status' => \App\Enums\BookingStatus::AwaitingPayment,
-                    'payment_deadline_at' => now()->addMinutes(30),
-                ]);
-
-                $bookingDate = $booking->date instanceof \DateTimeInterface ? $booking->date : new \DateTime($booking->date);
-                $dayOfWeek = (int) $bookingDate->format('w');
-
-                // Block instructor availability for that time slot
-                \App\Models\Availability::updateOrCreate(
-                    [
-                        'user_id' => $booking->instructor_id,
-                        'specific_date' => $booking->date instanceof \DateTimeInterface ? $booking->date->format('Y-m-d') : $booking->date,
-                        'time_period' => $booking->time_period instanceof \BackedEnum ? $booking->time_period->value : $booking->time_period,
-                    ],
-                    [
-                        'day_of_week' => $dayOfWeek,
-                        'is_available' => false,
-                    ]
-                );
-
-                // Create GCash payment intent using the active payment service
-                $paymentService = app(\App\Contracts\PaymentServiceInterface::class);
-                $paymentIntent = $paymentService->createPaymentIntent($booking);
-
-                // Update the payment record with the transaction ID and save checkout URL to notes
-                if ($payment) {
-                    $payment->update([
-                        'transaction_id' => $paymentIntent['transaction_id'],
-                        'notes' => json_encode(['checkout_url' => $paymentIntent['checkout_url']]),
-                    ]);
-                }
-
-                // Broadcast Awaiting Payment WebSocket event
-                broadcast(new \App\Events\BookingAwaitingPayment($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
-
-                // Dispatch ExpirePaymentWindowJob to run in 30 minutes
-                \App\Jobs\ExpirePaymentWindowJob::dispatch($booking)->delay(now()->addMinutes(30));
-            });
-
-            return back()->with('success', 'Booking accepted. Awaiting payment from the student.');
-        } else {
-            \Illuminate\Support\Facades\DB::transaction(function () use ($booking) {
-                // Cash payment method -> Confirm directly
-                $booking->update(['status' => \App\Enums\BookingStatus::Confirmed]);
-
-                $bookingDate = $booking->date instanceof \DateTimeInterface ? $booking->date : new \DateTime($booking->date);
-                $dayOfWeek = (int) $bookingDate->format('w');
-
-                // Block instructor availability for that time slot
-                \App\Models\Availability::updateOrCreate(
-                    [
-                        'user_id' => $booking->instructor_id,
-                        'specific_date' => $booking->date instanceof \DateTimeInterface ? $booking->date->format('Y-m-d') : $booking->date,
-                        'time_period' => $booking->time_period instanceof \BackedEnum ? $booking->time_period->value : $booking->time_period,
-                    ],
-                    [
-                        'day_of_week' => $dayOfWeek,
-                        'is_available' => false,
-                    ]
-                );
-
-                // Broadcast booking confirmed event
-                broadcast(new \App\Events\BookingConfirmed($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
-            });
-
-            return back()->with('success', 'Booking confirmed successfully.');
+            return back()->with('error', 'Could not accept this booking: ' . $exception->getMessage());
         }
+
+        if ($accepted->status === BookingStatus::AwaitingPayment) {
+            return back()->with(
+                'success',
+                'Booking accepted. The student has '
+                . Booking::PAYMENT_HOLD_MINUTES . ' minutes to pay.'
+            );
+        }
+
+        return back()->with('success', 'Booking confirmed successfully.');
     }
 
     /**
-     * Start a surfing session.
+     * Start a surfing session (FR 1.10.1).
+     *
+     * The date/time rule lives on the Booking model so it cannot be bypassed
+     * from any other entry point.
      */
     public function startSession(Booking $booking)
     {
@@ -137,9 +150,10 @@ class BookingController extends Controller
             abort(403);
         }
 
-        // Only confirmed bookings can start
-        if ($booking->status !== \App\Enums\BookingStatus::Confirmed) {
-            return back()->with('error', 'Only confirmed bookings can be started.');
+        $blockReason = $booking->startSessionBlockReason();
+
+        if ($blockReason !== null) {
+            return back()->with('error', $blockReason);
         }
 
         $booking->startSession();
@@ -246,5 +260,173 @@ class BookingController extends Controller
         ]);
 
         return back()->with('success', 'Skill upgrade request submitted to admin for approval.');
+    }
+
+    /**
+     * FR 1.9.3 - decline a booking request inside the 2 hour response window.
+     */
+    public function decline(Request $request, Booking $booking): RedirectResponse
+    {
+        if ($booking->instructor_id !== auth()->id()) {
+            abort(403);
+        }
+
+        if (!$booking->isAwaitingInstructorResponse()) {
+            return back()->with('error', 'This booking request has already been handled.');
+        }
+
+        if ($booking->acceptDeadlinePassed()) {
+            return back()->with('error', 'The 2 hour response window has closed, so this request was released automatically.');
+        }
+
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $reason = $validated['reason'] ?? null;
+
+        DB::transaction(function () use ($booking, $reason) {
+            $booking->decline($reason);
+
+            // FR 1.8.3 - hand the slot back in case an accept had already locked it.
+            app(AvailabilityService::class)->releaseForBooking($booking);
+
+            broadcast(new BookingDeclined(
+                $booking->fresh(['student', 'instructor', 'surfSpot']),
+                $reason
+            ))->toOthers();
+        });
+
+        // FR 1.9.3 - the student is told straight away and can rebook.
+        $booking->student?->notify(new BookingDeclinedNotification($booking, false));
+
+        return back()->with('success', 'Booking request declined. The student has been notified.');
+    }
+
+    /**
+     * FR 1.9.4 - cancel or reschedule a booking. Changes filed less than
+     * 24 hours before the lesson are parked for SISA approval instead of
+     * being applied immediately.
+     */
+    public function requestChange(Request $request, Booking $booking, BookingChangeService $changeService): RedirectResponse
+    {
+        if ($booking->instructor_id !== auth()->id()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'type' => ['required', 'string', 'in:cancellation,reschedule'],
+            'reason' => ['nullable', 'string', 'max:500'],
+            'date' => ['nullable', 'required_if:type,reschedule', 'date', 'after_or_equal:today'],
+            'time_period' => ['nullable', 'required_if:type,reschedule', 'string', 'in:morning,afternoon'],
+            'start_time' => ['nullable', 'required_if:type,reschedule', 'date_format:H:i'],
+            'end_time' => ['nullable', 'required_if:type,reschedule', 'date_format:H:i', 'after:start_time'],
+        ], [
+            'date.required_if' => 'Please choose the new lesson date.',
+            'date.after_or_equal' => 'The new lesson date must be today or later.',
+            'time_period.required_if' => 'Please choose morning or afternoon.',
+            'end_time.after' => 'The end time must be after the start time.',
+        ]);
+
+        try {
+            if ($validated['type'] === \App\Enums\ChangeRequestType::Cancellation->value) {
+                $changeRequest = $changeService->requestCancellation(
+                    $booking,
+                    auth()->user(),
+                    $validated['reason'] ?? null
+                );
+            } else {
+                $changeRequest = $changeService->requestReschedule(
+                    $booking,
+                    auth()->user(),
+                    [
+                        'date' => $validated['date'],
+                        'time_period' => $validated['time_period'],
+                        'start_time' => $validated['start_time'],
+                        'end_time' => $validated['end_time'],
+                    ],
+                    $validated['reason'] ?? null
+                );
+            }
+        } catch (BookingChangeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        if ($changeRequest->requires_admin_approval) {
+            return back()->with(
+                'success',
+                'Your request needs SISA approval because the lesson starts in under '
+                . Booking::CHANGE_APPROVAL_THRESHOLD_HOURS . ' hours. It will apply once approved.'
+            );
+        }
+
+        return back()->with('success', ucfirst($changeRequest->type->value) . ' applied successfully.');
+    }
+
+    /**
+     * FR 1.9.4 - withdraw a change request that SISA has not decided on yet.
+     */
+    public function cancelChangeRequest(Booking $booking): RedirectResponse
+    {
+        if ($booking->instructor_id !== auth()->id()) {
+            abort(403);
+        }
+
+        $pending = $booking->changeRequests()
+            ->pending()
+            ->where('requested_by', auth()->id())
+            ->latest()
+            ->first();
+
+        if (!$pending) {
+            return back()->with('error', 'There is no pending change request to withdraw.');
+        }
+
+        $pending->delete();
+
+        return back()->with('success', 'Change request withdrawn. The booking keeps its original slot.');
+    }
+
+    /**
+     * FR 1.10.1 - mark whether the student turned up for the lesson.
+     */
+    public function markAttendance(Request $request, Booking $booking): RedirectResponse
+    {
+        if ($booking->instructor_id !== auth()->id()) {
+            abort(403);
+        }
+
+        $recordable = in_array($booking->status, [
+            BookingStatus::Confirmed,
+            BookingStatus::InProgress,
+            BookingStatus::Completed,
+            BookingStatus::NoShow,
+        ], true);
+
+        if (!$recordable) {
+            return back()->with('error', 'Attendance can only be recorded once the booking is confirmed.');
+        }
+
+        $validated = $request->validate([
+            'attendance_status' => ['required', \Illuminate\Validation\Rule::enum(AttendanceStatus::class)],
+        ]);
+
+        $status = AttendanceStatus::from($validated['attendance_status']);
+
+        DB::transaction(function () use ($booking, $status) {
+            $booking->markAttendance($status, auth()->id());
+
+            // A student who never arrived cannot have a session running.
+            if ($status === AttendanceStatus::Absent && $booking->status === BookingStatus::InProgress) {
+                $booking->complete();
+            }
+
+            broadcast(new SessionAttendanceMarked(
+                $booking->fresh(['student', 'instructor']),
+                $status
+            ))->toOthers();
+        });
+
+        return back()->with('success', 'Attendance recorded: ' . $status->label() . '.');
     }
 }

@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import SidebarLink from '@/Components/Atoms/SidebarLink.vue';
+import NotificationDropdown from '@/Components/Molecules/NotificationDropdown.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import { 
@@ -17,7 +18,9 @@ import {
     UserCircleIcon,
     ChevronDownIcon,
     MagnifyingGlassIcon,
-    ChatBubbleLeftRightIcon
+    ChatBubbleLeftRightIcon,
+    ClipboardDocumentCheckIcon,
+    MapPinIcon
 } from '@heroicons/vue/24/outline';
 
 const props = defineProps<{
@@ -46,7 +49,10 @@ const adminNavigation = [
     { name: 'Instructors', href: route('admin.instructors.index'), icon: UserGroupIcon, active: route().current('admin.instructors.*') },
     { name: 'Students', href: route('admin.students.index'), icon: UserGroupIcon, active: route().current('admin.students.*') },
     { name: 'Bookings', href: route('admin.bookings.index'), icon: CalendarIcon, active: route().current('admin.bookings.*') },
+    { name: 'Change Requests', href: route('admin.change-requests.index'), icon: ClipboardDocumentCheckIcon, active: route().current('admin.change-requests.*') },
     { name: 'Incidents', href: route('admin.incidents.index'), icon: ExclamationTriangleIcon, active: route().current('admin.incidents.*') },
+    { name: 'Live Sessions', href: route('admin.live-sessions.index'), icon: MapPinIcon, active: route().current('admin.live-sessions.*') },
+    { name: 'Surf Spots', href: route('admin.surf-spots.index'), icon: MapPinIcon, active: route().current('admin.surf-spots.*') },
     { name: 'Skill Upgrades', href: route('admin.skill-upgrades.index'), icon: AcademicCapIcon, active: route().current('admin.skill-upgrades.*') },
     { name: 'Analytics', href: route('admin.analytics.index'), icon: ChartBarIcon, active: route().current('admin.analytics.*') },
 ];
@@ -60,6 +66,7 @@ const instructorNavigation = [
 const studentNavigation = [
     { name: 'Overview', href: route('dashboard'), icon: Squares2X2Icon, active: route().current('dashboard') },
     { name: 'Find Instructor', href: route('instructors.search'), icon: MagnifyingGlassIcon, active: route().current('instructors.search') },
+    { name: 'Surf Spots', href: route('surf-spots.index'), icon: MapPinIcon, active: route().current('surf-spots.*') },
     { name: 'My Bookings', href: route('student.bookings.index'), icon: CalendarIcon, active: route().current('student.bookings.*') },
     { name: 'My Reviews', href: route('student.reviews.index'), icon: ChatBubbleLeftRightIcon, active: route().current('student.reviews.*') },
 ];
@@ -172,12 +179,13 @@ const brandingSubtext = computed(() => {
         <!-- Main Content Area -->
         <div :class="[shouldShowSidebar ? 'lg:pl-72' : '']" class="flex flex-col min-h-screen">
             <!-- Top Navigation -->
-            <header class="sticky top-0 z-30 flex h-20 w-full items-center justify-between border-b border-slate-100 bg-white/70 px-6 backdrop-blur-xl lg:px-12">
+            <header class="sticky top-0 z-30 flex h-16 lg:h-20 w-full items-center justify-between border-b border-slate-100 bg-white/70 px-4 sm:px-6 backdrop-blur-xl lg:px-12">
                 <div class="flex items-center">
                     <button 
                         v-if="shouldShowSidebar"
                         @click="toggleSidebar"
-                        class="mr-4 rounded-xl p-2.5 text-slate-500 bg-slate-50 hover:bg-ocean-50 hover:text-ocean-600 lg:hidden transition-colors duration-200"
+                        class="mr-4 rounded-xl p-2.5 text-slate-500 bg-slate-50 hover:bg-ocean-50 hover:text-ocean-600 lg:hidden transition-colors duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                        aria-label="Toggle navigation menu"
                     >
                         <Bars3Icon class="h-6 w-6" />
                     </button>
@@ -191,11 +199,12 @@ const brandingSubtext = computed(() => {
 
                 <div class="flex items-center space-x-4">
                     <template v-if="hasUser">
-                        <!-- Notifications/Quick Actions -->
+                        <!-- FR 1.9.1 - live booking notifications over Reverb -->
                         <div class="hidden md:flex items-center space-x-2 bg-slate-50 rounded-2xl p-1">
-                            <button class="p-2 rounded-xl hover:bg-white hover:text-ocean-600 transition-all duration-200 text-slate-400">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                            </button>
+                            <NotificationDropdown
+                                :user-id="user.id"
+                                :user-role="user.role"
+                            />
                         </div>
                     </template>
                     <template v-else>
@@ -213,14 +222,14 @@ const brandingSubtext = computed(() => {
             </header>
 
             <!-- Page Content -->
-            <main class="flex-1 p-6 lg:p-12">
+            <main class="flex-1 p-4 sm:p-6 lg:p-8">
                 <div class="max-w-[1600px] mx-auto">
                     <slot />
                 </div>
             </main>
 
             <!-- Footer -->
-            <footer class="border-t border-slate-100 bg-white/50 px-6 py-8 lg:px-12">
+            <footer class="border-t border-slate-100 bg-white/50 px-4 py-6 sm:px-6 lg:px-12">
                 <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center md:text-left">
                         &copy; {{ new Date().getFullYear() }} SiaSurf Platform. All rights reserved.

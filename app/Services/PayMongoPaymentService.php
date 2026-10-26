@@ -257,7 +257,19 @@ class PayMongoPaymentService implements PaymentServiceInterface
             ]);
         }
 
-        // TODO: Broadcast payment received event (Phase 11)
-        // broadcast(new PaymentReceived($booking));
+        // Phase 11 - broadcast so the student's booking page and the admin
+        // dashboard update without a refresh.
+        try {
+            $booking->loadMissing(['student', 'instructor', 'surfSpot']);
+
+            if ($booking->payment) {
+                broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to broadcast payment received.', [
+                'booking_id' => $booking->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 }

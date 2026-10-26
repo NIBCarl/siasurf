@@ -12,6 +12,9 @@ use App\Enums\TimePeriod;
 use App\Services\SafetyService;
 use App\Services\PricingService;
 use App\Services\StormglassService;
+use App\Services\BookingAcceptanceService;
+use App\Services\BookingRequestGuard;
+use App\Exceptions\BookingRequestException;
 use App\Events\BookingCreated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,15 +28,24 @@ class BookingController extends Controller
     protected SafetyService $safetyService;
     protected PricingService $pricingService;
     protected StormglassService $stormglassService;
+    protected BookingRequestGuard $requestGuard;
+    protected BookingAcceptanceService $acceptanceService;
+    protected \App\Services\AvailabilityService $availabilityService;
 
     public function __construct(
         SafetyService $safetyService,
         PricingService $pricingService,
-        StormglassService $stormglassService
+        StormglassService $stormglassService,
+        BookingRequestGuard $requestGuard,
+        BookingAcceptanceService $acceptanceService,
+        \App\Services\AvailabilityService $availabilityService
     ) {
         $this->safetyService = $safetyService;
         $this->pricingService = $pricingService;
         $this->stormglassService = $stormglassService;
+        $this->requestGuard = $requestGuard;
+        $this->acceptanceService = $acceptanceService;
+        $this->availabilityService = $availabilityService;
     }
 
     /**
@@ -142,11 +154,36 @@ class BookingController extends Controller
             return back()->with('error', 'This time slot is no longer available. Please choose another time.');
         }
 
+        // FR 1.8 - the instructor's own availability must be respected. Without
+        // this the weekly schedule and personal blocks had no effect on booking.
+        try {
+            $this->availabilityService->assertSlotIsBookable(
+                $instructor->id,
+                $validated['date'],
+                $validated['time_period'],
+                $validated['start_time']
+            );
+        } catch (BookingRequestException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
         // Calculate pricing using PricingService
         $pricing = $this->pricingService->calculatePrice(
             $instructor->instructorProfile,
             $validated['student_count']
         );
+
+        // Abuse guard: block a duplicate request for the same slot, and cap how
+        // many unanswered requests one student can hold.
+        try {
+            $this->requestGuard->assertStudentMayRequest(auth()->user(), [
+                'instructor_id' => $instructor->id,
+                'date' => $validated['date'],
+                'time_period' => $validated['time_period'],
+            ]);
+        } catch (BookingRequestException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
 
         // Create initial booking record in database
         $booking = Booking::create([
@@ -204,13 +241,19 @@ class BookingController extends Controller
             'payment_method' => 'required|in:gcash,cash',
         ]);
 
-        return DB::transaction(function () use ($booking, $validated) {
+        // Instant Book: a trusted instructor's calendar confirms immediately, so
+        // the student skips the 2-hour acceptance wait entirely.
+        $instantBook = (bool) $booking->instructor?->instructorProfile?->usesInstantBook();
+
+        DB::transaction(function () use ($booking, $validated, $instantBook) {
             // Update booking status
             $booking->update([
                 'payment_status' => $validated['payment_method'] === 'cash' 
                     ? PaymentStatus::PendingCash 
                     : PaymentStatus::Pending,
                 'status' => BookingStatus::Pending, // Status remains pending until confirmed or paid
+                // FR 1.9.3 - the instructor now has 2 hours to accept or decline.
+                'accept_deadline_at' => $booking->acceptDeadlineFrom(),
             ]);
 
             // Create or update payment record
@@ -222,12 +265,52 @@ class BookingController extends Controller
                     : PaymentStatus::Pending,
             ]);
 
-            // Broadcast booking created event (since it's now finalized for the student)
-            broadcast(new BookingCreated($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
+            // Instant Book skips the request queue, so there is nothing to notify the
+            // instructor about or to expire.
+            if (!$instantBook) {
+                broadcast(new BookingCreated($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
 
-            return redirect()->route('bookings.confirmation', $booking->id)
-                ->with('success', 'Booking finalized! Please wait for confirmation.');
+                // FR 1.9.3 - auto-release the request if the instructor stays silent.
+                \App\Jobs\ExpireBookingAcceptanceJob::dispatch($booking)
+                    ->delay($booking->accept_deadline_at ?? now()->addHours(Booking::ACCEPT_WINDOW_HOURS));
+            }
         });
+
+        if ($instantBook) {
+            return $this->finalizeInstantBook($booking);
+        }
+
+        return redirect()->route('bookings.confirmation', $booking->id)
+            ->with('success', 'Booking request sent! Your instructor has '
+                . Booking::ACCEPT_WINDOW_HOURS . ' hours to accept.');
+    }
+
+    /**
+     * Instant Book: accept on the instructor's behalf, then send the student to
+     * whichever step comes next (payment, or straight to confirmation).
+     */
+    private function finalizeInstantBook(Booking $booking): RedirectResponse
+    {
+        try {
+            $accepted = $this->acceptanceService->accept(
+                $booking->fresh(['payment', 'instructor.instructorProfile', 'student', 'surfSpot'])
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('student.bookings.show', $booking->id)
+                ->with('error', 'Your request was saved but could not be auto-confirmed. '
+                    . 'The instructor will respond shortly.');
+        }
+
+        if ($accepted->status === BookingStatus::AwaitingPayment) {
+            return redirect()->route('student.bookings.show', $accepted->id)
+                ->with('success', 'Instant Book confirmed! You have '
+                    . Booking::PAYMENT_HOLD_MINUTES . ' minutes to complete payment.');
+        }
+
+        return redirect()->route('bookings.confirmation', $accepted->id)
+            ->with('success', 'Instant Book confirmed! This lesson is locked in.');
     }
 
 
@@ -281,7 +364,7 @@ class BookingController extends Controller
     /**
      * Cancel a booking
      */
-    public function cancel(Request $request, Booking $booking): RedirectResponse
+    public function cancel(Request $request, Booking $booking, \App\Services\AvailabilityService $availabilityService): RedirectResponse
     {
         Gate::authorize('cancel', $booking);
 
@@ -289,102 +372,26 @@ class BookingController extends Controller
             'reason' => 'required|string|max:500',
         ]);
 
-        $booking->cancel($validated['reason']);
+        // FR 1.8.3 - remember the slot before the booking loses its date.
+        $date = $availabilityService->dateOf($booking);
+        $period = $availabilityService->timePeriodOf($booking);
+        $instructorId = $booking->instructor_id;
+
+        $booking->cancel($validated['reason'], \App\Enums\CancellationReason::Student);
+
+        // Hand the time slot back so the instructor can be booked again.
+        $availabilityService->releaseSlot($instructorId, $date, $period, $booking->id);
+
+        broadcast(new \App\Events\BookingCancelled(
+            $booking->fresh(['student', 'instructor', 'surfSpot']),
+            $validated['reason']
+        ))->toOthers();
+
+        foreach ([$booking->student, $booking->instructor] as $party) {
+            $party?->notify(new \App\Notifications\BookingCancelledNotification($booking, $validated['reason']));
+        }
 
         return back()->with('success', 'Booking cancelled successfully.');
     }
 
-    /**
-     * Confirm a booking (Instructor only)
-     */
-    public function confirm(Booking $booking): RedirectResponse
-    {
-        Gate::authorize('confirm', $booking);
-
-        // Re-check for time slot conflicts before confirming
-        if ($this->safetyService->hasTimeConflict(
-            $booking->instructor_id,
-            $booking->date instanceof \DateTimeInterface ? $booking->date->format('Y-m-d') : $booking->date,
-            $booking->start_time,
-            $booking->end_time,
-            $booking->id
-        )) {
-            return back()->with('error', 'This time slot has been taken by another booking. Cannot confirm.');
-        }
-
-        $payment = $booking->payment;
-        $paymentMethod = $payment ? $payment->payment_method->value : 'cash';
-
-        if ($paymentMethod === 'gcash') {
-            DB::transaction(function () use ($booking, $payment) {
-                // Set status to AwaitingPayment and payment_deadline_at to 30 minutes from now
-                $booking->update([
-                    'status' => BookingStatus::AwaitingPayment,
-                    'payment_deadline_at' => now()->addMinutes(30),
-                ]);
-
-                $bookingDate = $booking->date instanceof \DateTimeInterface ? $booking->date : new \DateTime($booking->date);
-                $dayOfWeek = (int) $bookingDate->format('w');
-
-                // Block instructor availability for that time slot
-                \App\Models\Availability::updateOrCreate(
-                    [
-                        'user_id' => $booking->instructor_id,
-                        'specific_date' => $booking->date instanceof \DateTimeInterface ? $booking->date->format('Y-m-d') : $booking->date,
-                        'time_period' => $booking->time_period instanceof \BackedEnum ? $booking->time_period->value : $booking->time_period,
-                    ],
-                    [
-                        'day_of_week' => $dayOfWeek,
-                        'is_available' => false,
-                    ]
-                );
-
-                // Create GCash payment intent using the active payment service
-                $paymentService = app(\App\Contracts\PaymentServiceInterface::class);
-                $paymentIntent = $paymentService->createPaymentIntent($booking);
-
-                // Update the payment record with the transaction ID and save checkout URL to notes
-                if ($payment) {
-                    $payment->update([
-                        'transaction_id' => $paymentIntent['transaction_id'],
-                        'notes' => json_encode(['checkout_url' => $paymentIntent['checkout_url']]),
-                    ]);
-                }
-
-                // Broadcast Awaiting Payment WebSocket event
-                broadcast(new \App\Events\BookingAwaitingPayment($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
-
-                // Dispatch ExpirePaymentWindowJob to run in 30 minutes
-                \App\Jobs\ExpirePaymentWindowJob::dispatch($booking)->delay(now()->addMinutes(30));
-            });
-
-            return back()->with('success', 'Booking accepted. Awaiting payment from the student.');
-        } else {
-            DB::transaction(function () use ($booking) {
-                // Cash payment method -> Confirm directly
-                $booking->update(['status' => BookingStatus::Confirmed]);
-
-                $bookingDate = $booking->date instanceof \DateTimeInterface ? $booking->date : new \DateTime($booking->date);
-                $dayOfWeek = (int) $bookingDate->format('w');
-
-                // Block instructor availability for that time slot
-                \App\Models\Availability::updateOrCreate(
-                    [
-                        'user_id' => $booking->instructor_id,
-                        'specific_date' => $booking->date instanceof \DateTimeInterface ? $booking->date->format('Y-m-d') : $booking->date,
-                        'time_period' => $booking->time_period instanceof \BackedEnum ? $booking->time_period->value : $booking->time_period,
-                    ],
-                    [
-                        'day_of_week' => $dayOfWeek,
-                        'is_available' => false,
-                    ]
-                );
-
-                // Broadcast booking confirmed event
-                broadcast(new \App\Events\BookingConfirmed($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
-            });
-
-            return back()->with('success', 'Booking confirmed successfully.');
-        }
-    }
 }

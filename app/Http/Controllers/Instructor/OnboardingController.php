@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\Instructor;
 
+use App\Enums\CertificateStatus;
+use App\Enums\CertificateType;
+use App\Enums\InstructorStatus;
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Http\RedirectResponse;
 use App\Models\Certificate;
-use Illuminate\Support\Facades\Storage;
+use App\Services\FileScanService;
+use App\Services\PricingService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class OnboardingController extends Controller
 {
@@ -17,14 +21,16 @@ class OnboardingController extends Controller
         // required" even though the user did attach files. Detect and explain it.
         if ($this->requestBodyWasDiscarded($request)) {
             return back()->withErrors([
-                'certificates' => 'Your upload was larger than this server accepts (max ' . $this->postMaxSizeLabel() . ' per submission). Please compress your files or upload them one at a time.',
+                'certificates' => 'Your upload was larger than this server accepts (max '.$this->postMaxSizeLabel().' per submission). Please compress your files or upload them one at a time.',
             ]);
         }
 
         $validated = $request->validate([
             'bio' => 'required|string|max:1000',
             'level' => 'required|integer|in:1,2,3',
-            'rate_per_hour' => 'required|numeric|min:600',
+            // Bounded on both ends: a floor-only rule let absurd values reach
+            // decimal(10,2) and fail as a raw SQL error.
+            'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
             'certificates' => 'required|array|min:1',
             'certificates.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // Max 10MB
         ], [
@@ -32,10 +38,12 @@ class OnboardingController extends Controller
             'certificates.min' => 'Attach at least one certificate file (PDF, JPG, or PNG) before submitting.',
             'certificates.*.max' => 'Each certificate must be 10 MB or smaller. Compress or scan it at a lower quality and try again.',
             'certificates.*.mimes' => 'Certificates must be a PDF, JPG, or PNG file.',
-            'certificates.*.uploaded' => 'A certificate could not be uploaded because it is larger than this server allows (max ' . $this->uploadMaxSizeLabel() . ' per file). Compress it and try again.',
+            'certificates.*.uploaded' => 'A certificate could not be uploaded because it is larger than this server allows (max '.$this->uploadMaxSizeLabel().' per file). Compress it and try again.',
             'bio.max' => 'Keep your bio to 1000 characters or fewer.',
             'bio.required' => 'Tell students about your experience before submitting.',
-            'rate_per_hour.min' => 'The base rate must be at least ₱600 per hour.',
+            'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
+            'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
+            'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
         ]);
 
         $user = auth()->user();
@@ -47,22 +55,40 @@ class OnboardingController extends Controller
                 'bio' => $validated['bio'],
                 'level' => $validated['level'],
                 'rate_per_hour' => $validated['rate_per_hour'],
-                'status' => \App\Enums\InstructorStatus::PendingVerification,
+                'status' => InstructorStatus::PendingVerification,
             ]
         );
 
         // Upload certificates
         if ($request->hasFile('certificates')) {
+            $scanner = app(FileScanService::class);
+
             foreach ($request->file('certificates') as $file) {
+                // Phase 13 - verify the real MIME type and (when enabled) scan
+                // for malware before the file is written anywhere.
+                try {
+                    $scanner->assertSafe($file);
+                } catch (\RuntimeException $exception) {
+                    return back()->withErrors([
+                        'certificates' => $exception->getMessage(),
+                    ]);
+                }
+
                 // Try to determine certificate type based on filename, otherwise default to SurfSkill
                 // NOTE: 'sisa' must be tested before 'isa' — "sisa" contains "isa".
-                $type = \App\Enums\CertificateType::SurfSkill;
+                $type = CertificateType::SurfSkill;
                 $filename = strtolower($file->getClientOriginalName());
-                if (str_contains($filename, 'bls')) $type = \App\Enums\CertificateType::BLS;
-                elseif (str_contains($filename, 'wasar')) $type = \App\Enums\CertificateType::WaSAR;
-                elseif (str_contains($filename, 'sisa')) $type = \App\Enums\CertificateType::SISA;
-                elseif (str_contains($filename, 'isa')) $type = \App\Enums\CertificateType::ISA;
-                elseif (str_contains($filename, 'surf')) $type = \App\Enums\CertificateType::SurfSkill;
+                if (str_contains($filename, 'bls')) {
+                    $type = CertificateType::BLS;
+                } elseif (str_contains($filename, 'wasar')) {
+                    $type = CertificateType::WaSAR;
+                } elseif (str_contains($filename, 'sisa')) {
+                    $type = CertificateType::SISA;
+                } elseif (str_contains($filename, 'isa')) {
+                    $type = CertificateType::ISA;
+                } elseif (str_contains($filename, 'surf')) {
+                    $type = CertificateType::SurfSkill;
+                }
 
                 // Store file based on environment configuration
                 $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
@@ -71,7 +97,7 @@ class OnboardingController extends Controller
                 $user->certificates()->create([
                     'type' => $type,
                     'file_path' => $path,
-                    'status' => \App\Enums\CertificateStatus::PendingVerification,
+                    'status' => CertificateStatus::PendingVerification,
                 ]);
             }
         }
@@ -107,7 +133,7 @@ class OnboardingController extends Controller
 
     private function formatMb(int $bytes): string
     {
-        return $bytes > 0 ? round($bytes / 1048576) . ' MB' : 'the server limit';
+        return $bytes > 0 ? round($bytes / 1048576).' MB' : 'the server limit';
     }
 
     /**

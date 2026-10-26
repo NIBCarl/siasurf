@@ -5,6 +5,7 @@ import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import TextInput from '@/Components/TextInput.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
+import RateCapDialog from '@/Components/Molecules/RateCapDialog.vue'
 import { 
   Check, 
   Compass, 
@@ -18,7 +19,7 @@ import {
   X,
   FileCheck
 } from '@lucide/vue'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 
 const props = defineProps<{
   profile?: { bio: string | null; level: number; rate_per_hour: number } | null
@@ -44,6 +45,38 @@ const form = useForm({
 
 const fileErrors = ref<string[]>([])
 
+// Published hourly-rate band, shared from the server so the UI can never drift
+// from the validation rules in PricingService.
+const pricing = computed(() => (page.props as any).pricing ?? {})
+const rateMin = computed(() => Number(pricing.value.minRatePerHour ?? 600))
+const rateMax = computed(() => Number(pricing.value.maxRatePerHour ?? 1500))
+
+const rateDialogOpen = ref(false)
+const lastOverCapValue = ref<number | null>(null)
+
+const rateOverCap = computed(() => Number(form.rate_per_hour) > rateMax.value)
+
+const checkRate = () => {
+  if (rateOverCap.value) {
+    lastOverCapValue.value = Number(form.rate_per_hour)
+    rateDialogOpen.value = true
+    return false
+  }
+
+  return true
+}
+
+const useCapRate = () => {
+  form.rate_per_hour = rateMax.value
+  rateDialogOpen.value = false
+}
+
+const dismissRateDialog = () => {
+  rateDialogOpen.value = false
+  // Send focus back to the field the user needs to fix.
+  nextTick(() => document.getElementById('rate')?.focus())
+}
+
 const totalUploadMb = computed(() =>
   form.certificates.reduce((sum, file) => sum + file.size, 0) / 1048576,
 )
@@ -67,6 +100,12 @@ watch(() => form.level, (newLevel) => {
 })
 
 const submit = () => {
+  // Block an over-cap submission client-side so the user gets the dialog
+  // instead of a round-trip that ends in a validation bounce.
+  if (!checkRate()) {
+    return
+  }
+
   form.post(route('instructor.onboarding.store'), {
     forceFormData: true,
   })
@@ -306,14 +345,25 @@ const handleFileChange = (e: Event) => {
                         class="pl-9 block w-full border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500 rounded-lg transition-all duration-200 bg-white py-3.5 text-sm font-bold text-slate-900"
                         placeholder="600"
                         required
-                        :min="form.level === 3 ? 1500 : 600"
+                        :min="form.level === 3 ? 1500 : rateMin"
+                        :max="rateMax"
+                        step="50"
+                        @blur="checkRate"
                       />
                     </div>
-                    
+                    <p
+                      v-if="rateOverCap"
+                      class="mt-2 flex items-center gap-1.5 text-xs font-bold text-rose-600"
+                    >
+                      <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-100 text-[10px]">!</span>
+                      Standard pricing cannot exceed ₱{{ rateMax.toLocaleString() }} per hour.
+                    </p>
+
                     <div class="mt-4 border-l-2 border-sand-400 pl-4 py-1">
                       <p class="text-xs text-slate-600 font-medium leading-relaxed">
-                        For <span class="font-bold text-slate-900">{{ levelInfo.find(l => l.level === form.level)?.label }} Level</span>, the minimum base rate is 
-                        <span class="font-bold text-slate-900">₱{{ form.level === 3 ? '1,500' : '600' }}/hour</span>.
+                        For <span class="font-bold text-slate-900">{{ levelInfo.find(l => l.level === form.level)?.label }} Level</span>, the base rate must be between
+                        <span class="font-bold text-slate-900">₱{{ (form.level === 3 ? 1500 : rateMin).toLocaleString() }}</span> and
+                        <span class="font-bold text-slate-900">₱{{ rateMax.toLocaleString() }}/hour</span>.
                       </p>
                     </div>
                     <InputError class="mt-2 text-xs font-bold" :message="form.errors.rate_per_hour" />
@@ -435,6 +485,15 @@ const handleFileChange = (e: Event) => {
 
       </div>
     </div>
+
+    <RateCapDialog
+      :show="rateDialogOpen"
+      :entered="lastOverCapValue"
+      :min="rateMin"
+      :max="rateMax"
+      @close="dismissRateDialog"
+      @use-max="useCapRate"
+    />
   </AppLayout>
 </template>
 

@@ -2,9 +2,8 @@
 
 namespace App\Events;
 
-use App\Models\User;
 use App\Enums\InstructorStatus;
-use Illuminate\Broadcasting\Channel;
+use App\Models\User;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -16,8 +15,11 @@ class InstructorStatusChanged implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public User $instructor;
+
     public InstructorStatus $oldStatus;
+
     public InstructorStatus $newStatus;
+
     public ?string $reason;
 
     public function __construct(User $instructor, InstructorStatus $oldStatus, InstructorStatus $newStatus, ?string $reason = null)
@@ -31,7 +33,7 @@ class InstructorStatusChanged implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('instructor.' . $this->instructor->id),
+            new PrivateChannel('instructor.'.$this->instructor->id),
             new PrivateChannel('admin.notifications'),
         ];
     }
@@ -61,10 +63,10 @@ class InstructorStatusChanged implements ShouldBroadcast
 
     private function getMessage(): string
     {
-        return match($this->newStatus) {
-            InstructorStatus::Active => "Congratulations! Your instructor account has been verified and activated.",
-            InstructorStatus::Suspended => "Your instructor account has been suspended. Please contact admin for details.",
-            InstructorStatus::Rejected => "Your instructor verification has been rejected. Please contact admin.",
+        return match ($this->newStatus) {
+            InstructorStatus::Active => 'Congratulations! Your instructor account is active and visible to students.',
+            InstructorStatus::Suspended => 'Your instructor account has been suspended. Please contact admin for details.',
+            InstructorStatus::Inactive => 'Your instructor profile is currently inactive and hidden from search.',
             default => "Your instructor status has been updated to {$this->newStatus->label()}.",
         };
     }

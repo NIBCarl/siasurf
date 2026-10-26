@@ -29,6 +29,7 @@ class PricingService
      * Discount rates
      */
     const WEEKLY_DISCOUNT = 0.10;  // 10% off for weekly bookings
+
     const MONTHLY_DISCOUNT = 0.20; // 20% off for monthly bookings
 
     /**
@@ -40,10 +41,46 @@ class PricingService
     ];
 
     /**
+     * Lowest published hourly rate (BR-4.1).
+     */
+    public static function minRatePerHour(): float
+    {
+        return (float) config('siasurf.pricing.min_rate_per_hour', 600);
+    }
+
+    /**
+     * Highest published hourly rate (the standard ceiling).
+     *
+     * Values above this are rejected by validation rather than being allowed to
+     * reach `instructor_profiles.rate_per_hour`, which is `decimal(10,2)` and
+     * raises SQLSTATE[22003] for anything past 99,999,999.99.
+     */
+    public static function maxRatePerHour(): float
+    {
+        return (float) config('siasurf.pricing.max_rate_per_hour', 1500);
+    }
+
+    /**
+     * The validation rule string for the rate field, e.g. "min:600|max:1500".
+     */
+    public static function rateRangeRule(): string
+    {
+        return 'min:'.self::minRatePerHour().'|max:'.self::maxRatePerHour();
+    }
+
+    /**
+     * Human-readable bounds for validation messages and the UI.
+     */
+    public static function rateRangeLabel(): string
+    {
+        return '₱'.number_format(self::minRatePerHour()).'–₱'.number_format(self::maxRatePerHour());
+    }
+
+    /**
      * Calculate price for a booking
      */
     public function calculatePrice(
-        InstructorProfile $profile, 
+        InstructorProfile $profile,
         int $studentCount,
         array $addOns = [],
         ?string $discountType = null
@@ -103,12 +140,15 @@ class PricingService
     }
 
     /**
-     * Validate that instructor rate meets minimum requirements
+     * Validate that instructor rate sits inside the published band.
+     *
+     * Previously this only checked the floor, so a 10-billion-peso rate was
+     * "valid" right up until MySQL rejected the insert.
      */
     public function isRateValid(float $rate, int $level): bool
     {
-        $minimumRate = $this->getMinimumRate($level);
-        return $rate >= $minimumRate;
+        return $rate >= $this->getMinimumRate($level)
+            && $rate <= static::maxRatePerHour();
     }
 
     /**
@@ -117,11 +157,11 @@ class PricingService
     public function getPriceBreakdown(array $priceData): array
     {
         return [
-            'Base Rate' => '₱' . number_format($priceData['base_rate'], 2) . ' x ' . $priceData['hours'] . ' hours x ' . $priceData['student_count'] . ' students',
-            'Base Price' => '₱' . number_format($priceData['base_price'], 2),
-            'Add-ons' => $priceData['add_on_total'] > 0 ? '₱' . number_format($priceData['add_on_total'], 2) : null,
-            'Discount' => $priceData['discount'] > 0 ? '-₱' . number_format($priceData['discount'], 2) . ' (' . ($priceData['discount_type'] === 'weekly' ? '10%' : '20%') . ' off)' : null,
-            'Total' => '₱' . number_format($priceData['total'], 2),
+            'Base Rate' => '₱'.number_format($priceData['base_rate'], 2).' x '.$priceData['hours'].' hours x '.$priceData['student_count'].' students',
+            'Base Price' => '₱'.number_format($priceData['base_price'], 2),
+            'Add-ons' => $priceData['add_on_total'] > 0 ? '₱'.number_format($priceData['add_on_total'], 2) : null,
+            'Discount' => $priceData['discount'] > 0 ? '-₱'.number_format($priceData['discount'], 2).' ('.($priceData['discount_type'] === 'weekly' ? '10%' : '20%').' off)' : null,
+            'Total' => '₱'.number_format($priceData['total'], 2),
         ];
     }
 }

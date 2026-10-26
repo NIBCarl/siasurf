@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\SurfSpot;
 use App\Enums\InstructorStatus;
 use App\Enums\InstructorLevel;
+use App\Services\AvailabilityService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -133,7 +134,7 @@ class InstructorSearchController extends Controller
     /**
      * Display single instructor profile
      */
-    public function show(User $instructor): Response
+    public function show(User $instructor, AvailabilityService $availabilityService): Response
     {
         $instructor->load([
             'instructorProfile',
@@ -160,6 +161,9 @@ class InstructorSearchController extends Controller
             'instructor' => $instructor,
             'averageRating' => round($averageRating, 1),
             'totalReviews' => $totalReviews,
+            // FR 1.8.2 - show the weekly schedule up front so students do not
+            // have to guess which days this instructor actually works.
+            'weeklyAvailability' => $availabilityService->weeklyPattern($instructor->id),
         ]);
     }
 }

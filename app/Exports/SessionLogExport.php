@@ -37,8 +37,9 @@ class SessionLogExport implements FromCollection, WithHeadings, WithStyles, Shou
 
     public function map($booking): array
     {
-        $duration = 2; // Standard 2-hour sessions
-        $ratePerHour = $booking->total_amount / $duration;
+        // FR 1.10.2 - log the real session window, not a fixed 2 hour block.
+        $duration = (int) ($booking->duration_hours ?: 2);
+        $ratePerHour = $duration > 0 ? $booking->total_amount / $duration : 0;
 
         return [
             $booking->id,
@@ -53,6 +54,8 @@ class SessionLogExport implements FromCollection, WithHeadings, WithStyles, Shou
             '₱' . number_format($ratePerHour, 2) . '/hr',
             '₱' . number_format($booking->total_amount, 2),
             $booking->payment->status->label() ?? 'N/A',
+            $booking->attendance_status?->label() ?? 'Not Recorded',
+            $booking->started_at ? $booking->started_at->format('Y-m-d H:i:s') : 'N/A',
             $booking->completed_at ? $booking->completed_at->format('Y-m-d H:i:s') : 'N/A',
         ];
     }
@@ -72,7 +75,9 @@ class SessionLogExport implements FromCollection, WithHeadings, WithStyles, Shou
             'Rate',
             'Total Amount',
             'Payment Status',
-            'Completed At',
+            'Attendance',
+            'Session Started At',
+            'Session Ended At',
         ];
     }
 

@@ -2,19 +2,24 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Models\InstructorProfile;
-use App\Models\Certificate;
-use App\Services\QRCodeService;
-use App\Enums\InstructorStatus;
 use App\Enums\CertificateStatus;
+use App\Enums\InstructorStatus;
+use App\Events\InstructorStatusChanged;
+use App\Http\Controllers\Controller;
+use App\Models\Certificate;
+use App\Models\InstructorProfile;
+use App\Models\User;
+use App\Notifications\InstructorReactivated;
+use App\Notifications\InstructorRejected;
+use App\Notifications\InstructorSuspended;
+use App\Notifications\InstructorVerified;
+use App\Services\PricingService;
+use App\Services\QRCodeService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Http\RedirectResponse;
 
 class InstructorController extends Controller
 {
@@ -53,7 +58,7 @@ class InstructorController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
@@ -86,7 +91,11 @@ class InstructorController extends Controller
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
-            'rate_per_hour' => 'required|numeric|min:600',
+            'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
+        ], [
+            'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
+            'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
+            'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
         ]);
 
         // Create user
@@ -139,13 +148,15 @@ class InstructorController extends Controller
         ]);
 
         $profile = $instructor->instructorProfile;
-        
-        if (!$profile) {
+
+        if (! $profile) {
             return back()->with('error', 'Instructor profile not found.');
         }
 
+        $oldStatus = $profile->status;
+
         // Update certificates status if provided
-        if ($request->has('certificate_ids') && !empty($request->certificate_ids)) {
+        if ($request->has('certificate_ids') && ! empty($request->certificate_ids)) {
             Certificate::whereIn('id', $request->certificate_ids)
                 ->update([
                     'status' => CertificateStatus::Verified->value,
@@ -154,7 +165,7 @@ class InstructorController extends Controller
         }
 
         // Final safety check: Does the instructor have ANY verified certificates now?
-        if (!$instructor->hasVerifiedCertificate()) {
+        if (! $instructor->hasVerifiedCertificate()) {
             return back()->with('error', 'Instructor must have at least one verified certificate before they can be licensed.');
         }
 
@@ -169,10 +180,12 @@ class InstructorController extends Controller
 
         // Send notification to instructor
         try {
-            $instructor->notify(new \App\Notifications\InstructorVerified($profile->fresh()));
+            $instructor->notify(new InstructorVerified($profile->fresh()));
         } catch (\Exception $e) {
-            \Log::error('Failed to send verification notification: ' . $e->getMessage());
+            \Log::error('Failed to send verification notification: '.$e->getMessage());
         }
+
+        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Active, 'Verification approved.');
 
         return back()->with('success', 'Instructor verified successfully. QR code generated.');
     }
@@ -189,10 +202,12 @@ class InstructorController extends Controller
         ]);
 
         $profile = $instructor->instructorProfile;
-        
-        if (!$profile) {
+
+        if (! $profile) {
             return back()->with('error', 'Instructor profile not found.');
         }
+
+        $oldStatus = $profile->status;
 
         $profile->update([
             'status' => InstructorStatus::Inactive->value,
@@ -200,10 +215,12 @@ class InstructorController extends Controller
 
         // Send rejection notification
         try {
-            $instructor->notify(new \App\Notifications\InstructorRejected($validated['reason']));
+            $instructor->notify(new InstructorRejected($validated['reason']));
         } catch (\Exception $e) {
-            \Log::error('Failed to send rejection notification: ' . $e->getMessage());
+            \Log::error('Failed to send rejection notification: '.$e->getMessage());
         }
+
+        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Inactive, $validated['reason']);
 
         return back()->with('success', 'Instructor application rejected.');
     }
@@ -221,17 +238,21 @@ class InstructorController extends Controller
         ]);
 
         $profile = $instructor->instructorProfile;
-        
+
+        $oldStatus = $profile->status;
+
         $profile->status = InstructorStatus::Suspended;
         $profile->suspended_until = now()->addDays($validated['duration_days']);
         $profile->save();
 
         // Send suspension notification
         try {
-            $instructor->notify(new \App\Notifications\InstructorSuspended($validated['reason'], $validated['duration_days']));
+            $instructor->notify(new InstructorSuspended($validated['reason'], $validated['duration_days']));
         } catch (\Throwable $e) {
-            \Log::error('Failed to send suspension notification: ' . $e->getMessage());
+            \Log::error('Failed to send suspension notification: '.$e->getMessage());
         }
+
+        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Suspended, $validated['reason']);
 
         return back()->with('success', 'Instructor suspended successfully.');
     }
@@ -244,10 +265,12 @@ class InstructorController extends Controller
         $this->authorize('suspend', $instructor->instructorProfile);
 
         $profile = $instructor->instructorProfile;
-        
-        if (!$profile) {
+
+        if (! $profile) {
             return back()->with('error', 'Instructor profile not found.');
         }
+
+        $oldStatus = $profile->status;
 
         $profile->update([
             'status' => InstructorStatus::Active->value,
@@ -257,12 +280,44 @@ class InstructorController extends Controller
 
         // Send reactivation notification
         try {
-            $instructor->notify(new \App\Notifications\InstructorReactivated());
+            $instructor->notify(new InstructorReactivated);
         } catch (\Exception $e) {
-            \Log::error('Failed to send reactivation notification: ' . $e->getMessage());
+            \Log::error('Failed to send reactivation notification: '.$e->getMessage());
         }
 
+        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Active, 'Reactivated by SISA.');
+
         return back()->with('success', 'Instructor reactivated successfully.');
+    }
+
+    /**
+     * Phase 11 - every status change is broadcast on `instructor.{id}` and
+     * `admin.notifications` so the frontend listeners actually fire. A dead
+     * socket must never fail the admin action that triggered it.
+     */
+    private function broadcastStatusChange(
+        User $instructor,
+        InstructorStatus $oldStatus,
+        InstructorStatus $newStatus,
+        ?string $reason = null
+    ): void {
+        if ($oldStatus === $newStatus) {
+            return;
+        }
+
+        try {
+            broadcast(new InstructorStatusChanged(
+                $instructor,
+                $oldStatus,
+                $newStatus,
+                $reason
+            ))->toOthers();
+        } catch (\Throwable $exception) {
+            \Log::warning('Failed to broadcast instructor status change.', [
+                'instructor_id' => $instructor->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -271,7 +326,7 @@ class InstructorController extends Controller
     public function edit(User $instructor): Response
     {
         $instructor->load('instructorProfile');
-        
+
         return Inertia::render('Admin/Instructors/Edit', [
             'instructor' => $instructor,
         ]);
@@ -284,12 +339,16 @@ class InstructorController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $instructor->id,
+            'email' => 'required|email|unique:users,email,'.$instructor->id,
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
-            'rate_per_hour' => 'required|numeric|min:600',
+            'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
             'status' => 'required|string',
+        ], [
+            'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
+            'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
+            'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
         ]);
 
         // Update user

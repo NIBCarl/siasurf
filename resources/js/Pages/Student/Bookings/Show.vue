@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import LiveInstructorTracker from '@/Components/Organisms/LiveInstructorTracker.vue'
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { 
   CheckCircleIcon, 
@@ -29,8 +30,8 @@ interface Booking {
   student_count: number
   notes: string
   instructor: { id: number; name: string; avatar_path: string; email: string }
-  surf_spot: { name: string; difficulty: string }
-  payment?: { amount: number; payment_method: string; status: string; paid_at: string; notes?: string }
+  surf_spot: { id?: number; name: string; difficulty: string; area?: string | null; latitude?: number | null; longitude?: number | null }
+  payment?: { amount: number; payment_method: string; status: string; paid_at: string; notes?: string; checkout_url?: string | null }
   waiver?: { signed_at: string }
   payment_deadline_at?: string
   student_id: number
@@ -114,15 +115,11 @@ const formatPaymentTimeRemaining = (seconds: number) => {
   return `${m}m ${s}s`
 }
 
-const checkoutUrl = computed(() => {
-  if (!props.booking.payment?.notes) return null
-  try {
-    const parsed = JSON.parse(props.booking.payment.notes)
-    return parsed.checkout_url || null
-  } catch (e) {
-    return null
-  }
-})
+/**
+ * FR 1.4 - the GCash checkout link now lives in its own column instead of being
+ * JSON-packed into the payment notes field.
+ */
+const checkoutUrl = computed(() => props.booking.payment?.checkout_url ?? null)
 
 const steps = computed(() => [
   { name: 'Booked', status: 'completed', icon: CheckCircleIcon },
@@ -244,6 +241,23 @@ const cancelBooking = () => {
                         </div>
                      </div>
                   </div>
+
+                  <!-- Live instructor location on the map -->
+                  <LiveInstructorTracker
+                    :booking-id="booking.id"
+                    :student-id="booking.student_id"
+                    :status="booking.status"
+                    :spot="{
+                      id: booking.surf_spot.id ?? 0,
+                      name: booking.surf_spot.name,
+                      label: booking.surf_spot.area
+                        ? `${booking.surf_spot.name} — ${booking.surf_spot.area}`
+                        : booking.surf_spot.name,
+                      difficulty: booking.surf_spot.difficulty,
+                      latitude: booking.surf_spot.latitude ?? null,
+                      longitude: booking.surf_spot.longitude ?? null,
+                    }"
+                  />
 
                   <!-- Awaiting Payment Banner -->
                   <div v-if="booking.status === 'awaiting_payment'" class="mt-6 p-6 bg-amber-500 rounded-[2.5rem] text-white flex flex-col md:flex-row items-center justify-between shadow-xl shadow-amber-100 gap-4">

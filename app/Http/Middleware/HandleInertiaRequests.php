@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\PricingService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -48,6 +49,12 @@ class HandleInertiaRequests extends Middleware
                 'maxFileMb' => $this->maxUploadFileMb(),
                 'maxRequestMb' => $this->maxPostSizeMb(),
                 'accepted' => ['pdf', 'jpg', 'jpeg', 'png'],
+            ],
+            // Shared so every rate input enforces the same band the server does.
+            'pricing' => [
+                'minRatePerHour' => PricingService::minRatePerHour(),
+                'maxRatePerHour' => PricingService::maxRatePerHour(),
+                'rangeLabel' => PricingService::rateRangeLabel(),
             ],
         ];
     }

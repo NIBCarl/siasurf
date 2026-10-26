@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Availability;
 use App\Enums\DayOfWeek;
 use App\Enums\TimePeriod;
+use App\Services\AvailabilityService;
 use App\Services\SafetyService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +19,7 @@ class AvailabilityController extends Controller
     /**
      * Display instructor's availability
      */
-    public function index(): Response
+    public function index(AvailabilityService $availabilityService): Response
     {
         $user = auth()->user();
 
@@ -41,6 +42,31 @@ class AvailabilityController extends Controller
                 'label' => $period->label(),
             ]),
             'profile' => $user->instructorProfile,
+            // FR 1.9.3 - Instant Book: auto-confirm requests on this calendar.
+            'autoAcceptBookings' => (bool) ($user->instructorProfile?->auto_accept_bookings),
+            // FR 1.8.1 - personal time the instructor can still remove.
+            'manualBlocks' => $availabilityService->getManualBlocks($user->id)
+                ->map(fn(Availability $block) => [
+                    'id' => $block->id,
+                    'date' => $block->specific_date?->format('Y-m-d'),
+                    'date_label' => $block->specific_date?->format('M d, Y'),
+                    'time_period' => $block->time_period?->value,
+                    'time_period_label' => $block->time_period?->label(),
+                ])
+                ->values(),
+            // FR 1.8.3 - slots the system locked because a booking owns them.
+            'bookingBlocks' => $availabilityService->getBookingBlocks($user->id)
+                ->map(fn(Availability $block) => [
+                    'id' => $block->id,
+                    'date' => $block->specific_date?->format('Y-m-d'),
+                    'date_label' => $block->specific_date?->format('M d, Y'),
+                    'time_period_label' => $block->time_period?->label(),
+                    'booking_ref' => $block->blocked_by_booking_id
+                        ? '#SURF-' . str_pad((string) $block->blocked_by_booking_id, 5, '0', STR_PAD_LEFT)
+                        : null,
+                    'student_name' => $block->blockedByBooking?->student?->name,
+                ])
+                ->values(),
         ]);
     }
 
@@ -89,34 +115,34 @@ class AvailabilityController extends Controller
         ]);
 
         foreach ($validated['dates'] as $date) {
-            if ($validated['time_period']) {
-                // Block specific time period
-                Availability::updateOrCreate(
+            // Blocking a whole day covers both periods.
+            $periods = $validated['time_period']
+                ? [$validated['time_period']]
+                : ['morning', 'afternoon'];
+
+            $dayOfWeek = (int) \Carbon\Carbon::parse($date)->format('w');
+
+            foreach ($periods as $period) {
+                // firstOrCreate keeps any existing booking ownership intact, so
+                // blocking a date that a confirmed lesson already holds does not
+                // turn a system lock into a manual one.
+                $block = Availability::firstOrCreate(
                     [
                         'user_id' => $user->id,
                         'specific_date' => $date,
-                        'time_period' => $validated['time_period'],
+                        'time_period' => $period,
                     ],
                     [
-                        'day_of_week' => null,
+                        'day_of_week' => $dayOfWeek,
                         'is_available' => false,
                     ]
                 );
-            } else {
-                // Block entire day (both periods)
-                foreach (['morning', 'afternoon'] as $period) {
-                    Availability::updateOrCreate(
-                        [
-                            'user_id' => $user->id,
-                            'specific_date' => $date,
-                            'time_period' => $period,
-                        ],
-                        [
-                            'day_of_week' => null,
-                            'is_available' => false,
-                        ]
-                    );
+
+                if (!$block->is_available) {
+                    continue;
                 }
+
+                $block->update(['is_available' => false]);
             }
         }
 
@@ -149,7 +175,11 @@ class AvailabilityController extends Controller
     }
 
     /**
-     * Get available slots for a date (API endpoint)
+     * Get available slots for a date (public API).
+     *
+     * Returns a per-period verdict plus the concrete start times a student can
+     * actually pick, and a reason when a period is closed. `available_slots` is
+     * kept for backwards compatibility.
      */
     public function getAvailableSlots(Request $request, $instructorId): JsonResponse
     {
@@ -157,39 +187,21 @@ class AvailabilityController extends Controller
             'date' => 'required|date',
         ]);
 
-        $date = $validated['date'];
-        $dayOfWeek = date('w', strtotime($date));
+        $date = \Carbon\Carbon::parse($validated['date']);
 
-        // Check for specific date blocks first
-        $specificBlocks = Availability::where('user_id', $instructorId)
-            ->where('specific_date', $date)
-            ->where('is_available', false)
-            ->pluck('time_period')
-            ->toArray();
+        $periods = app(AvailabilityService::class)->periodsFor((int) $instructorId, $date);
 
-        // Get recurring availability
-        $recurringAvailabilities = Availability::where('user_id', $instructorId)
-            ->where('day_of_week', $dayOfWeek)
-            ->whereNull('specific_date')
-            ->where('is_available', true)
-            ->pluck('time_period')
-            ->toArray();
-
-        // Calculate available slots
-        $allPeriods = ['morning', 'afternoon'];
         $availableSlots = [];
-
-        foreach ($allPeriods as $period) {
-            // Available if recurring is set AND not specifically blocked
-            $isAvailable = in_array($period, $recurringAvailabilities) 
-                && !in_array($period, $specificBlocks);
-            
-            $availableSlots[$period] = $isAvailable;
+        foreach ($periods as $value => $period) {
+            $availableSlots[$value] = $period['available'];
         }
 
         return response()->json([
-            'date' => $date,
+            'date' => $date->format('Y-m-d'),
+            'day_label' => $date->format('l'),
             'available_slots' => $availableSlots,
+            'periods' => $periods,
+            'has_any_slot' => collect($periods)->contains(fn ($period) => $period['available']),
         ]);
     }
 
@@ -230,5 +242,29 @@ class AvailabilityController extends Controller
         }
 
         return back()->with('success', $message);
+    }
+
+    /**
+     * Instant Book: when enabled, booking requests on this calendar are
+     * auto-confirmed instead of waiting in the 2-hour acceptance queue.
+     */
+    public function toggleInstantBook(): RedirectResponse
+    {
+        $profile = auth()->user()->instructorProfile;
+
+        if (!$profile) {
+            return back()->with('error', 'Complete your instructor onboarding first.');
+        }
+
+        $enabled = !$profile->auto_accept_bookings;
+
+        $profile->update(['auto_accept_bookings' => $enabled]);
+
+        return back()->with(
+            'success',
+            $enabled
+                ? 'Instant Book enabled. New requests will be confirmed automatically.'
+                : 'Instant Book disabled. You will review requests before they are confirmed.'
+        );
     }
 }

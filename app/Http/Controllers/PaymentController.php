@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Services\ReceiptService;
 use App\Contracts\PaymentServiceInterface;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
@@ -93,6 +94,12 @@ class PaymentController extends Controller
             'notes' => 'nullable|string|max:500',
         ]);
 
+        // Guard against resurrecting a cancelled, declined or already-paid
+        // booking through the cash path.
+        if (!$booking->canRecordCashPayment()) {
+            return back()->with('error', 'Cash can only be recorded for a confirmed or live lesson that is still unpaid.');
+        }
+
         // Update payment status
         if ($booking->payment) {
             $booking->payment->update([
@@ -100,12 +107,21 @@ class PaymentController extends Controller
                 'paid_at' => now(),
                 'notes' => $validated['notes'] ?? null,
             ]);
+        } else {
+            // A cash booking may predate its payment row; create one so the
+            // record matches what was actually collected.
+            $booking->payment()->create([
+                'amount' => $booking->total_amount,
+                'payment_method' => \App\Enums\PaymentMethod::Cash,
+                'status' => \App\Enums\PaymentStatus::Completed,
+                'paid_at' => now(),
+                'notes' => $validated['notes'] ?? null,
+            ]);
         }
 
-        // Update booking status
+        // Update booking status - only the payment side, never the lifecycle.
         $booking->update([
-            'status' => 'confirmed',
-            'payment_status' => 'completed',
+            'payment_status' => \App\Enums\PaymentStatus::Completed,
         ]);
 
         // Generate receipt

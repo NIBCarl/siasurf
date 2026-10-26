@@ -161,8 +161,29 @@ class MockPaymentService implements PaymentServiceInterface
         // Update simulated storage
         self::$simulatedPayments[$transactionId]['status'] = 'paid';
 
-        // TODO: Broadcast payment received event (Phase 11)
-        // broadcast(new PaymentReceived($booking));
+        // Phase 11 - tell the student and the admin dashboard in real time.
+        // This was previously a TODO, so the `.payment.received` listeners in
+        // useNotifications.ts never fired.
+        $this->broadcastPaymentReceived($booking);
+    }
+
+    /**
+     * Broadcast payment success without letting a dead socket fail the payment.
+     */
+    private function broadcastPaymentReceived(Booking $booking): void
+    {
+        try {
+            $booking->loadMissing(['student', 'instructor', 'surfSpot']);
+
+            if ($booking->payment) {
+                broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
+            }
+        } catch (\Throwable $exception) {
+            \Log::warning('Failed to broadcast payment received.', [
+                'booking_id' => $booking->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     /**

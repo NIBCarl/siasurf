@@ -15,12 +15,13 @@ Route::middleware(['auth'])->group(function () {
     
     // GCash payment
     Route::post('/payments/{booking}/gcash', [PaymentController::class, 'processGCash'])
-        ->name('payments.gcash');
+        ->name('payments.gcash')
+        ->middleware(['waiver.signed', 'throttle:payments']);
     
     // Cash payment (instructor/admin only)
     Route::post('/payments/{booking}/cash', [PaymentController::class, 'markAsPaid'])
         ->name('payments.cash')
-        ->middleware(['can:update,booking']);
+        ->middleware(['can:update,booking', 'throttle:payments']);
     
     // Receipt download
     Route::get('/payments/{booking}/receipt', [PaymentController::class, 'downloadReceipt'])

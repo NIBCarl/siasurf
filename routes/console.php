@@ -21,3 +21,22 @@ Schedule::command(FetchTideDataCommand::class)
     ->dailyAt('00:05')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/stormglass-tides.log'));
+
+// FR 1.9.3 - safety net sweep for booking requests the instructor never answered
+Schedule::command(\App\Console\Commands\ExpireStaleBookingRequests::class)
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/booking-acceptance.log'));
+
+// A suspension is a timed penalty. Without this sweep an auto-suspended
+// instructor stayed hidden from search forever after the month elapsed.
+Schedule::command(\App\Console\Commands\LiftExpiredSuspensions::class)
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/instructor-suspensions.log'));
+
+// BR-4.6 - legal documents are kept for seven years, then destroyed.
+Schedule::command(\App\Console\Commands\CleanupExpiredWaivers::class)
+    ->monthlyOn(1, '02:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/waiver-retention.log'));

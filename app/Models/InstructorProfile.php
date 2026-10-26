@@ -22,6 +22,7 @@ class InstructorProfile extends Model
         'strike_count',
         'qr_code_path',
         'suspended_until',
+        'auto_accept_bookings',
     ];
 
     protected $casts = [
@@ -30,7 +31,17 @@ class InstructorProfile extends Model
         'rate_per_hour' => 'decimal:2',
         'strike_count' => 'integer',
         'suspended_until' => 'datetime',
+        'auto_accept_bookings' => 'boolean',
     ];
+
+    /**
+     * Instant Book: this instructor's calendar confirms requests immediately, so
+     * the student skips the 2-hour acceptance wait entirely.
+     */
+    public function usesInstantBook(): bool
+    {
+        return $this->auto_accept_bookings === true;
+    }
 
     // Relationships
     public function user(): BelongsTo

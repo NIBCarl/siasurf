@@ -22,6 +22,7 @@ class Availability extends Model
         'end_time',
         'is_available',
         'specific_date',
+        'blocked_by_booking_id',
     ];
 
     protected $casts = [
@@ -37,6 +38,33 @@ class Availability extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function blockedByBooking(): BelongsTo
+    {
+        return $this->belongsTo(Booking::class, 'blocked_by_booking_id');
+    }
+
+    /**
+     * A block the instructor created themselves (holiday, personal time) as
+     * opposed to one the system created because a booking claimed the slot.
+     */
+    public function scopeManualBlock($query)
+    {
+        return $query->where('is_available', false)->whereNull('blocked_by_booking_id');
+    }
+
+    /**
+     * A slot locked automatically because a confirmed booking occupies it.
+     */
+    public function scopeBookingBlock($query)
+    {
+        return $query->whereNotNull('blocked_by_booking_id');
+    }
+
+    public function isBookingBlock(): bool
+    {
+        return $this->blocked_by_booking_id !== null;
     }
 
     // Scopes

@@ -17,6 +17,7 @@ class Payment extends Model
         'amount',
         'payment_method',
         'transaction_id',
+        'checkout_url',
         'status',
         'paid_at',
         'refunded_at',

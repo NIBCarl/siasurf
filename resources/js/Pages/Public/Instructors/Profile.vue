@@ -20,6 +20,12 @@ import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue';
 const props = defineProps<{
     instructor: any;
     totalReviews: number;
+    weeklyAvailability?: Array<{
+        value: number;
+        label: string;
+        short_label: string;
+        periods: string[];
+    }>;
 }>();
 
 const instructorLevelLabel: Record<number, string> = {
@@ -117,6 +123,65 @@ const instructorLevelDescription: Record<number, string> = {
                             "{{ instructor.instructor_profile.bio || 'This instructor is a dedicated member of the Siargao surfing community, certified to provide professional and safe surfing lessons for various skill levels.' }}"
                         </p>
                     </div>
+                </div>
+
+                <!-- Weekly Availability (FR 1.8.2) -->
+                <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+                    <div class="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <h2 class="text-xl font-extrabold text-slate-900 uppercase tracking-widest">Weekly Schedule</h2>
+                        <div class="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
+                            <span class="flex items-center gap-2 text-emerald-600">
+                                <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span> Available
+                            </span>
+                            <span class="flex items-center gap-2 text-slate-400">
+                                <span class="h-2.5 w-2.5 rounded-full bg-slate-200"></span> Not available
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                        <div
+                            v-for="day in weeklyAvailability"
+                            :key="day.value"
+                            :class="[
+                                'rounded-3xl border p-4 text-center transition-all',
+                                day.periods.length > 0
+                                    ? 'border-emerald-100 bg-emerald-50/60'
+                                    : 'border-slate-100 bg-slate-50/60',
+                            ]"
+                        >
+                            <p
+                                :class="[
+                                    'text-[10px] font-black uppercase tracking-widest',
+                                    day.periods.length > 0 ? 'text-slate-900' : 'text-slate-400',
+                                ]"
+                            >
+                                {{ day.label }}
+                            </p>
+
+                            <div class="mt-3 space-y-1.5">
+                                <span
+                                    v-for="period in ['morning', 'afternoon']"
+                                    :key="period"
+                                    :class="[
+                                        'block rounded-xl px-2 py-1 text-[10px] font-black uppercase tracking-wider',
+                                        day.periods.includes(period)
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-white text-slate-300',
+                                    ]"
+                                >
+                                    {{ period === 'morning' ? 'AM' : 'PM' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p v-if="!weeklyAvailability || weeklyAvailability.every(d => d.periods.length === 0)" class="mt-6 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-xs font-bold text-amber-700">
+                        This instructor has not published a weekly schedule yet. Pick a date on the booking form to check specific times.
+                    </p>
+                    <p v-else class="mt-6 text-xs font-medium text-slate-500">
+                        Exact times are confirmed on the booking form, where you can also see any dates already booked.
+                    </p>
                 </div>
 
                 <!-- Certificates -->

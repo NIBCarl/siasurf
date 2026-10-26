@@ -145,9 +145,9 @@
                     <td>
                         Instructor: {{ $booking->instructor->name }}<br>
                         Date: {{ $booking->date->format('F d, Y') }}<br>
-                        Time: {{ ucfirst($booking->time_period) }}<br>
+                        Time: {{ $booking->time_period ? ucfirst($booking->time_period->value) : 'N/A' }}<br>
                         Location: {{ $booking->surfSpot->name }}<br>
-                        Skill Level: {{ ucfirst($booking->skill_level) }}<br>
+                        Skill Level: {{ $booking->skill_level ? ucfirst($booking->skill_level->value) : 'N/A' }}<br>
                         Students: {{ $booking->student_count }}
                     </td>
                     <td style="text-align: right;">₱{{ number_format($booking->total_amount, 2) }}</td>

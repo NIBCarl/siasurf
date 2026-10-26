@@ -1,5 +1,4 @@
-```
-# Compiled and build artifacts
+﻿# Compiled and build artifacts
 *.pyc
 __pycache__/
 *.o
@@ -12,7 +11,19 @@ __pycache__/
 *.out
 
 # Dependencies
-node_modules/
+/node_modules
+/vendor
+/public/build
+/public/hot
+/storage/*.key
+/bootstrap/cache/*.php
+.phpunit.result.cache
+/database/*.sqlite
+test_output*.txt
+test_results*.txt
+test_detailed_results*.txt
+final_test.txt
+booking_test.txt
 venv/
 .venv/
 .env
@@ -67,7 +78,6 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```
 # impeccable-ignore-start
 # Ephemeral output, runtime state, and per-dev overrides.
 .impeccable/config.local.json

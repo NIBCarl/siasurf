@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Head, useForm, Link } from '@inertiajs/vue3'
+import axios from 'axios'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
@@ -60,24 +61,85 @@ const form = useForm({
 })
 
 // Generate available time slots
-const morningHours = [
-  { value: '05:00', label: '5:00 AM' },
-  { value: '06:00', label: '6:00 AM' },
-  { value: '07:00', label: '7:00 AM' },
-  { value: '08:00', label: '8:00 AM' },
-  { value: '09:00', label: '9:00 AM' },
-  { value: '10:00', label: '10:00 AM' },
-  { value: '11:00', label: '11:00 AM' },
-]
+//
+// FR 1.8 - these come from the instructor's own availability (weekly pattern,
+// personal blocks and existing bookings), not a hardcoded list. Fetching on
+// date change means the student sees exactly what they can book.
+interface AvailabilityPeriod {
+  available: boolean
+  reason: string | null
+  slots: string[]
+}
 
-const afternoonHours = [
-  { value: '13:00', label: '1:00 PM' },
-  { value: '14:00', label: '2:00 PM' },
-  { value: '15:00', label: '3:00 PM' },
-  { value: '16:00', label: '4:00 PM' },
-  { value: '17:00', label: '5:00 PM' },
-  { value: '18:00', label: '6:00 PM' },
-]
+interface AvailabilityResponse {
+  date: string
+  day_label: string
+  available_slots: Record<string, boolean>
+  periods: Record<string, AvailabilityPeriod>
+  has_any_slot: boolean
+}
+
+const availability = ref<AvailabilityResponse | null>(null)
+const availabilityLoading = ref(false)
+const availabilityError = ref<string | null>(null)
+
+const fetchAvailability = async (date: string) => {
+  if (!date) {
+    availability.value = null
+    return
+  }
+
+  availabilityLoading.value = true
+  availabilityError.value = null
+
+  try {
+    const { data } = await axios.get(
+      route('api.availability', { instructor: props.instructor.id }),
+      { params: { date } },
+    )
+    availability.value = data
+  } catch (e) {
+    availability.value = null
+    availabilityError.value = 'Could not load availability for that date. Please try again.'
+  } finally {
+    availabilityLoading.value = false
+  }
+}
+
+watch(() => form.date, (date) => {
+  // A previously chosen time may not exist on the new date.
+  form.start_time = ''
+  fetchAvailability(date)
+})
+
+// Only offer times the instructor is genuinely free for.
+const morningHours = computed(() =>
+  (availability.value?.periods?.morning?.slots ?? []).map((value) => ({
+    value,
+    label: formatSlotLabel(value),
+  })),
+)
+
+const afternoonHours = computed(() =>
+  (availability.value?.periods?.afternoon?.slots ?? []).map((value) => ({
+    value,
+    label: formatSlotLabel(value),
+  })),
+)
+
+const totalAvailableSlots = computed(
+  () => morningHours.value.length + afternoonHours.value.length,
+)
+
+const formatSlotLabel = (time: string) => {
+  const [hour, minute] = time.split(':').map(Number)
+  const suffix = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12
+
+  return `${displayHour}:${minute.toString().padStart(2, '0')} ${suffix}`
+}
+
+const hasAnyAvailability = computed(() => availability.value?.has_any_slot === true)
 
 // Watch student_count to ensure it doesn't exceed max
 watch(() => maxStudents.value, (newMax) => {
@@ -195,26 +257,108 @@ const submit = () => {
                     <InputError class="mt-2" :message="form.errors.date" />
                   </div>
 
-                  <!-- Start Time -->
-                  <div>
+<!-- Start Time (driven by the instructor's real availability) -->
+                  <div class="col-span-full">
                     <InputLabel value="Start Time (1-hour sessions)" />
-                    <select 
-                      v-model="form.start_time"
-                      class="mt-1 block w-full border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm"
-                      required
+
+                    <!-- No date chosen yet -->
+                    <div
+                      v-if="!form.date"
+                      class="mt-1 block w-full rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500"
                     >
-                      <option value="" disabled>Select a time slot</option>
-                      <optgroup label="Morning (5AM - 12PM)">
-                        <option v-for="hour in morningHours" :key="hour.value" :value="hour.value">
-                          {{ hour.label }}
-                        </option>
-                      </optgroup>
-                      <optgroup label="Afternoon (1PM - 6PM)">
-                        <option v-for="hour in afternoonHours" :key="hour.value" :value="hour.value">
-                          {{ hour.label }}
-                        </option>
-                      </optgroup>
-                    </select>
+                      Pick a date first to see which times are open.
+                    </div>
+
+                    <!-- Loading -->
+                    <div
+                      v-else-if="availabilityLoading"
+                      class="mt-1 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500"
+                    >
+                      <svg class="h-4 w-4 animate-spin text-ocean-500" viewBox="0 0 24 24" fill="none">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Checking availability...
+                    </div>
+
+                    <!-- Load failure -->
+                    <div
+                      v-else-if="availabilityError"
+                      class="mt-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-700"
+                    >
+                      {{ availabilityError }}
+                    </div>
+
+                    <!-- No slots at all on this date -->
+                    <div
+                      v-else-if="!hasAnyAvailability"
+                      class="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                    >
+                      <p class="text-sm font-bold text-amber-800">
+                        Not available on {{ availability?.day_label || 'this day' }}
+                      </p>
+                      <p
+                        v-for="(period, key) in availability?.periods"
+                        :key="key"
+                        class="mt-1 text-xs text-amber-700"
+                      >
+                        {{ period.reason }}
+                      </p>
+                      <p class="mt-2 text-xs font-medium text-amber-700">
+                        Please choose a different date.
+                      </p>
+                    </div>
+
+                    <!-- Slots available -->
+                    <template v-else>
+                      <select
+                        v-model="form.start_time"
+                        class="mt-1 block w-full border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm"
+                        required
+                      >
+                        <option value="" disabled>Select a time slot</option>
+                        <optgroup v-if="morningHours.length > 0" label="Morning">
+                          <option v-for="hour in morningHours" :key="hour.value" :value="hour.value">
+                            {{ hour.label }}
+                          </option>
+                        </optgroup>
+                        <optgroup v-if="afternoonHours.length > 0" label="Afternoon">
+                          <option v-for="hour in afternoonHours" :key="hour.value" :value="hour.value">
+                            {{ hour.label }}
+                          </option>
+                        </optgroup>
+                      </select>
+
+                      <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <span class="text-xs font-bold text-emerald-700">
+                          {{ totalAvailableSlots }}
+                          {{ totalAvailableSlots === 1 ? 'time' : 'times' }} open
+                        </span>
+                        <span
+                          v-for="(period, key) in availability?.periods"
+                          :key="key"
+                          :class="[
+                            'rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider',
+                            period.available
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-slate-100 text-slate-400',
+                          ]"
+                        >
+                          {{ key }}
+                        </span>
+                      </div>
+
+                      <!-- Explain a closed period rather than silently hiding it -->
+                      <p
+                        v-for="(period, key) in availability?.periods"
+                        v-show="!period.available"
+                        :key="`reason-${key}`"
+                        class="mt-1 text-xs text-slate-500"
+                      >
+                        {{ period.reason }}
+                      </p>
+                    </template>
+
                     <p class="mt-1 text-xs text-slate-500">Sessions are 1 hour long</p>
                     <InputError class="mt-2" :message="form.errors.start_time" />
                   </div>
@@ -428,7 +572,7 @@ const submit = () => {
                     variant="primary" 
                     size="lg"
                     :loading="form.processing"
-                    :disabled="form.processing || !form.date"
+                    :disabled="form.processing || !form.date || !form.start_time"
                   >
                     Continue to Safety Check &rarr;
                   </BaseButton>

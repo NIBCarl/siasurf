@@ -40,7 +40,23 @@ class SafetyIncidentObserver
                 'status' => InstructorStatus::Suspended,
                 'suspended_until' => now()->addMonth(),
             ]);
-            
+
+            // Phase 11 - SISA and the instructor both need to see the strike
+            // outcome immediately; previously this suspension was silent.
+            try {
+                broadcast(new \App\Events\InstructorStatusChanged(
+                    $instructor,
+                    InstructorStatus::Active,
+                    InstructorStatus::Suspended,
+                    "Auto-suspended after reaching {$profile->strike_count} strikes."
+                ))->toOthers();
+            } catch (\Throwable $exception) {
+                \Log::warning('Failed to broadcast auto-suspension.', [
+                    'instructor_id' => $instructor->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
             // Notify admin and instructor
             try {
                 Mail::to(config('app.admin_email'))->send(new InstructorSuspended($instructor));

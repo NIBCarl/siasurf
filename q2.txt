@@ -1,0 +1,20 @@
+﻿=== Does the booking flow check instructor availability? ===
+56: return redirect()->route('instructors.search')->with('error', 'This instructor is currently not available for bookings.');
+66: // Get available surf spots based on skill level
+88: return redirect()->route('instructors.search')->with('error', 'This instructor is currently not available for bookings.');
+151: return back()->with('error', 'This time slot is no longer available. Please choose another time.');
+351: public function cancel(Request $request, Booking $booking, \App\Services\AvailabilityService $availabilityService): RedirectResponse
+360: $date = $availabilityService->dateOf($booking);
+361: $period = $availabilityService->timePeriodOf($booking);
+367: $availabilityService->releaseSlot($instructorId, $date, $period, $booking->id);
+
+=== AvailabilityService used in booking flow? ===
+BookingController.php:351: public function cancel(Request $request, Booking $booking, \App\Services\AvailabilityService $availabilityService): RedirectResponse
+BookingController.php:360: $date = $availabilityService->dateOf($booking);
+BookingController.php:361: $period = $availabilityService->timePeriodOf($booking);
+BookingController.php:367: $availabilityService->releaseSlot($instructorId, $date, $period, $booking->id);
+
+=== Booking/Create.vue: any availability fetch? ===
+62: // Generate available time slots
+206: <option value="" disabled>Select a time slot</option>
+526: Instant confirmation available

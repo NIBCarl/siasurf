@@ -280,7 +280,7 @@ class BookingControllerTest extends TestCase
     }
 
     /** @test */
-    public function expiration_job_cancels_booking_and_releases_availability()
+    public function expiration_job_marks_payment_timeout_and_releases_availability()
     {
         $booking = Booking::factory()->create([
             'student_id' => $this->student->id,
@@ -289,22 +289,28 @@ class BookingControllerTest extends TestCase
             'payment_deadline_at' => now()->subMinutes(1),
         ]);
 
-        // Mock availability as blocked
+        // Lock the slot the way the accept flow does, so the job can hand it back.
+        app(\App\Services\AvailabilityService::class)->blockForBooking($booking);
+
         $bookingDate = $booking->date;
-        $dayOfWeek = (int) $bookingDate->format('w');
-        \App\Models\Availability::create([
+
+        $this->assertDatabaseHas('availabilities', [
             'user_id' => $this->instructor->id,
             'specific_date' => $bookingDate->format('Y-m-d'),
-            'day_of_week' => $dayOfWeek,
-            'time_period' => $booking->time_period,
+            'time_period' => $booking->time_period->value,
             'is_available' => false,
         ]);
 
         // Run job
         $job = new \App\Jobs\ExpirePaymentWindowJob($booking);
-        $job->handle();
+        $job->handle(app(\App\Services\AvailabilityService::class));
 
-        $this->assertEquals(BookingStatus::Cancelled, $booking->fresh()->status);
+        // A payment timeout is its own state, not a deliberate cancellation.
+        $this->assertEquals(BookingStatus::PaymentTimeout, $booking->fresh()->status);
+        $this->assertEquals(
+            \App\Enums\CancellationReason::PaymentTimeout,
+            $booking->fresh()->cancellation_reason
+        );
 
         // Verify availability is released (blocked record is deleted)
         $this->assertDatabaseMissing('availabilities', [
@@ -313,5 +319,21 @@ class BookingControllerTest extends TestCase
             'time_period' => $booking->time_period->value,
             'is_available' => false,
         ]);
+    }
+
+    /** @test */
+    public function expiration_job_leaves_a_paid_booking_alone()
+    {
+        $booking = Booking::factory()->create([
+            'student_id' => $this->student->id,
+            'instructor_id' => $this->instructor->id,
+            'status' => BookingStatus::Confirmed,
+            'payment_deadline_at' => now()->subMinutes(1),
+        ]);
+
+        $job = new \App\Jobs\ExpirePaymentWindowJob($booking);
+        $job->handle(app(\App\Services\AvailabilityService::class));
+
+        $this->assertEquals(BookingStatus::Confirmed, $booking->fresh()->status);
     }
 }

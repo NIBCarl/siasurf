@@ -1,189 +1,213 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import Echo from 'laravel-echo'
 import Pusher from 'pusher-js'
+import axios from 'axios'
 
-// Make Pusher available globally for Laravel Echo
-(window as any).Pusher = Pusher
+// Laravel Echo needs Pusher on the global scope when using the Reverb driver.
+;(window as any).Pusher = Pusher
+
+export interface AppNotification {
+    id: string
+    type: 'success' | 'warning' | 'error' | 'info'
+    title: string
+    message: string
+    data?: any
+    timestamp: Date
+    read: boolean
+}
+
+/**
+ * Echo is shared by every component that renders notifications, so the socket
+ * and its channel subscriptions live at module scope. A per-component instance
+ * would open a second connection and duplicate every event.
+ */
+let echo: Echo<'reverb'> | null = null
+const subscribedChannels: string[] = []
+
+/**
+ * Laravel authorises private channels from the session cookie rather than a
+ * bearer token, so the authorizer posts to /broadcasting/auth through axios,
+ * which already carries the CSRF cookie and the X-Requested-With header.
+ */
+const createEcho = (): Echo<'reverb'> =>
+    new Echo({
+        broadcaster: 'reverb',
+        key: import.meta.env.VITE_REVERB_APP_KEY,
+        wsHost: import.meta.env.VITE_REVERB_HOST,
+        wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 80),
+        wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 443),
+        forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+        enabledTransports: ['ws', 'wss'],
+        authorizer: (channel: any) => ({
+            authorize: (socketId: string, callback: (error: Error | null, data: any) => void) => {
+                axios
+                    .post('/broadcasting/auth', {
+                        socket_id: socketId,
+                        channel_name: channel.name,
+                    })
+                    .then((response) => callback(null, response.data))
+                    .catch((error) => callback(error, null))
+            },
+        }),
+    })
 
 export function useNotifications() {
-    const notifications = ref<Array<{
-        id: string
-        type: string
-        title: string
-        message: string
-        data?: any
-        timestamp: Date
-        read: boolean
-    }>>([])
-    
+    const notifications = ref<AppNotification[]>([])
     const unreadCount = ref(0)
-    let echo: Echo<any> | null = null
 
-    const addNotification = (notification: any) => {
+    const syncUnreadCount = () => {
+        unreadCount.value = notifications.value.filter((n) => !n.read).length
+    }
+
+    const addNotification = (notification: Partial<AppNotification> & { message: string }) => {
         notifications.value.unshift({
-            id: Math.random().toString(36).substr(2, 9),
-            type: notification.type || 'info',
-            title: notification.title || 'Notification',
-            message: notification.message || '',
+            id: Math.random().toString(36).substring(2, 11),
+            type: notification.type ?? 'info',
+            title: notification.title ?? 'Notification',
+            message: notification.message,
             data: notification.data,
             timestamp: new Date(),
             read: false,
         })
-        unreadCount.value++
+
+        // Cap the in-memory feed so a long session cannot grow unbounded.
+        if (notifications.value.length > 50) {
+            notifications.value = notifications.value.slice(0, 50)
+        }
+
+        syncUnreadCount()
     }
 
     const markAsRead = (id: string) => {
-        const notification = notifications.value.find(n => n.id === id)
+        const notification = notifications.value.find((n) => n.id === id)
+
         if (notification && !notification.read) {
             notification.read = true
-            unreadCount.value = Math.max(0, unreadCount.value - 1)
+            syncUnreadCount()
         }
     }
 
     const markAllAsRead = () => {
-        notifications.value.forEach(n => n.read = true)
+        notifications.value.forEach((n) => (n.read = true))
         unreadCount.value = 0
     }
 
     const removeNotification = (id: string) => {
-        const index = notifications.value.findIndex(n => n.id === id)
-        if (index > -1) {
-            if (!notifications.value[index].read) {
-                unreadCount.value = Math.max(0, unreadCount.value - 1)
-            }
-            notifications.value.splice(index, 1)
-        }
+        notifications.value = notifications.value.filter((n) => n.id !== id)
+        syncUnreadCount()
+    }
+
+    const clearAll = () => {
+        notifications.value = []
+        unreadCount.value = 0
+    }
+
+    /**
+     * Map a broadcast payload onto what the dropdown renders. Every SiaSurf
+     * event carries a `message`; some also send a machine-readable `type`.
+     */
+    const toNotification = (event: any, fallbackTitle: string, fallbackType: AppNotification['type']) => {
+        addNotification({
+            title: event?.title ?? fallbackTitle,
+            message: event?.message ?? 'You have a new update.',
+            type: (event?.type as AppNotification['type']) ?? fallbackType,
+            data: event,
+        })
     }
 
     const initializeEcho = (userId: number, userRole: string) => {
         if (echo) return
 
-        echo = new Echo({
-            broadcaster: 'reverb',
-            key: import.meta.env.VITE_REVERB_APP_KEY,
-            wsHost: import.meta.env.VITE_REVERB_HOST,
-            wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
-            wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
-            forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
-            enabledTransports: ['ws', 'wss'],
-            auth: {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            },
-        })
+        echo = createEcho()
 
-        // Listen to user-specific channel
         if (userRole === 'student') {
-            echo.private(`student.${userId}`)
-                .listen('.booking.confirmed', (e: any) => {
-                    addNotification({
-                        type: 'success',
-                        title: 'Booking Confirmed',
-                        message: e.message,
-                        data: e,
-                    })
-                })
-                .listen('.booking.cancelled', (e: any) => {
-                    addNotification({
-                        type: 'warning',
-                        title: 'Booking Cancelled',
-                        message: e.message,
-                        data: e,
-                    })
-                })
-                .listen('.payment.received', (e: any) => {
-                    addNotification({
-                        type: 'success',
-                        title: 'Payment Received',
-                        message: e.message,
-                        data: e,
-                    })
-                })
+            const channel = `student.${userId}`
+            subscribedChannels.push(channel)
+
+            echo.private(channel)
+                .listen('.booking.confirmed', (e: any) =>
+                    toNotification(e, 'Booking Confirmed', 'success'))
+                .listen('.booking.cancelled', (e: any) =>
+                    toNotification(e, 'Booking Cancelled', 'warning'))
+                .listen('.booking.declined', (e: any) =>
+                    toNotification(e, e?.expired ? 'Request Expired' : 'Request Declined', 'warning'))
+                .listen('.booking.change_requested', (e: any) =>
+                    toNotification(e, 'Change Request Filed', 'info'))
+                .listen('.booking.change_resolved', (e: any) =>
+                    toNotification(e, 'Change Request Update', 'info'))
+                .listen('.booking.attendance', (e: any) =>
+                    toNotification(e, 'Attendance Recorded', 'info'))
+                .listen('.payment.received', (e: any) =>
+                    toNotification(e, 'Payment Received', 'success'))
         }
 
         if (userRole === 'instructor') {
-            echo.private(`instructor.${userId}`)
-                .listen('.booking.created', (e: any) => {
-                    addNotification({
-                        type: 'info',
-                        title: 'New Booking Request',
-                        message: `New booking from ${e.student.name} on ${e.booking.date}`,
-                        data: e,
-                    })
-                })
-                .listen('.booking.cancelled', (e: any) => {
-                    addNotification({
-                        type: 'warning',
-                        title: 'Booking Cancelled',
-                        message: e.message,
-                        data: e,
-                    })
-                })
-                .listen('.instructor.status.changed', (e: any) => {
-                    addNotification({
-                        type: e.new_status === 'active' ? 'success' : 'warning',
-                        title: 'Status Update',
-                        message: e.message,
-                        data: e,
-                    })
-                })
+            const channel = `instructor.${userId}`
+            subscribedChannels.push(channel)
+
+            echo.private(channel)
+                // FR 1.9.1 - real-time booking request notification.
+                .listen('.booking.created', (e: any) =>
+                    toNotification(e, 'New Booking Request', 'info'))
+                .listen('.booking.cancelled', (e: any) =>
+                    toNotification(e, 'Booking Cancelled', 'warning'))
+                .listen('.booking.declined', (e: any) =>
+                    toNotification(e, e?.expired ? 'Request Expired' : 'Request Declined', 'warning'))
+                // FR 1.9.4 - outcome of a cancellation or reschedule request.
+                .listen('.booking.change_requested', (e: any) =>
+                    toNotification(e, 'Change Request Filed', 'info'))
+                .listen('.booking.change_resolved', (e: any) =>
+                    toNotification(e, 'Change Request Update', 'info'))
+                .listen('.booking.attendance', (e: any) =>
+                    toNotification(e, 'Attendance Recorded', 'info'))
+                .listen('.payment.received', (e: any) =>
+                    toNotification(e, 'Payment Received', 'success'))
+                .listen('.instructor.status.changed', (e: any) =>
+                    toNotification(e, 'Status Update', e?.new_status === 'active' ? 'success' : 'warning'))
         }
 
         if (userRole === 'admin') {
-            echo.private('admin.notifications')
-                .listen('.booking.created', (e: any) => {
-                    addNotification({
-                        type: 'info',
-                        title: 'New Booking',
-                        message: `New booking: ${e.student.name} → ${e.instructor.name}`,
-                        data: e,
-                    })
-                })
-                .listen('.booking.cancelled', (e: any) => {
-                    addNotification({
-                        type: 'warning',
-                        title: 'Booking Cancelled',
-                        message: e.message,
-                        data: e,
-                    })
-                })
-                .listen('.payment.received', (e: any) => {
-                    addNotification({
-                        type: 'success',
-                        title: 'Payment Received',
-                        message: e.message,
-                        data: e,
-                    })
-                })
-                .listen('.incident.reported', (e: any) => {
-                    addNotification({
-                        type: 'error',
-                        title: `Incident: ${e.incident.severity_label}`,
-                        message: e.message,
-                        data: e,
-                    })
-                })
-                .listen('.instructor.status.changed', (e: any) => {
-                    addNotification({
-                        type: 'info',
-                        title: 'Instructor Status Changed',
-                        message: `${e.instructor.name} is now ${e.new_status_label}`,
-                        data: e,
-                    })
-                })
+            const channel = 'admin.notifications'
+            subscribedChannels.push(channel)
+
+            echo.private(channel)
+                .listen('.booking.created', (e: any) =>
+                    toNotification(e, 'New Booking', 'info'))
+                .listen('.booking.cancelled', (e: any) =>
+                    toNotification(e, 'Booking Cancelled', 'warning'))
+                .listen('.booking.declined', (e: any) =>
+                    toNotification(e, e?.expired ? 'Request Expired' : 'Request Declined', 'warning'))
+                // FR 1.9.4 - a late change needs SISA sign-off.
+                .listen('.booking.change_requested', (e: any) =>
+                    toNotification(e, 'Approval Required', 'warning'))
+                .listen('.booking.change_resolved', (e: any) =>
+                    toNotification(e, 'Change Request Resolved', 'info'))
+                .listen('.booking.attendance', (e: any) =>
+                    toNotification(e, 'Attendance Recorded', 'info'))
+                .listen('.payment.received', (e: any) =>
+                    toNotification(e, 'Payment Received', 'success'))
+                .listen('.incident.reported', (e: any) =>
+                    toNotification(e, 'Safety Incident Reported', 'error'))
+                .listen('.instructor.status.changed', (e: any) =>
+                    toNotification(e, 'Instructor Status Changed', 'info'))
         }
     }
 
     const disconnectEcho = () => {
-        if (echo) {
-            echo.disconnect()
-            echo = null
-        }
+        if (!echo) return
+
+        subscribedChannels.forEach((channel) => echo?.leave(channel))
+        subscribedChannels.length = 0
+
+        echo.disconnect()
+        echo = null
     }
 
     onUnmounted(() => {
-        disconnectEcho()
+        // Only tear the socket down once nothing else is listening.
+        if (subscribedChannels.length === 0) {
+            disconnectEcho()
+        }
     })
 
     return {
@@ -193,6 +217,7 @@ export function useNotifications() {
         markAsRead,
         markAllAsRead,
         removeNotification,
+        clearAll,
         initializeEcho,
         disconnectEcho,
     }

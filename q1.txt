@@ -1,0 +1,14 @@
+﻿=== availability routes ===
+7: use App\Http\Controllers\Instructor\AvailabilityController;
+140: Route::prefix('availability')->name('availability.')->group(function () {
+141: Route::get('/', [AvailabilityController::class, 'index'])->name('index');
+142: Route::post('/weekly', [AvailabilityController::class, 'updateWeekly'])->name('weekly');
+143: Route::post('/block', [AvailabilityController::class, 'blockDates'])->name('block');
+144: Route::delete('/unblock', [AvailabilityController::class, 'unblockDates'])->name('unblock');
+145: Route::post('/toggle-status', [AvailabilityController::class, 'toggleStatus'])->name('toggle-status');
+147: Route::post('/toggle-instant-book', [AvailabilityController::class, 'toggleInstantBook'])->name('toggle-instant-book');
+203: // API routes for availability (public)
+204: Route::get('/api/availability/{instructor}', [AvailabilityController::class, 'getAvailableSlots'])->name('api.availability');
+205: Route::get('/api/availability/{instructor}/booked-slots', [AvailabilityController::class, 'getBookedSlots'])->name('api.availability.booked-slots');
+
+=== who calls getAvailableSlots / booked-slots in UI ===
