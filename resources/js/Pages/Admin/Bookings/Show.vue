@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { 
     ChevronLeftIcon,
@@ -22,16 +23,31 @@ interface Booking {
   id: number
   date: string
   time_period: string
+  start_time?: string | null
+  end_time?: string | null
+  created_at?: string | null
   status: string
   total_amount: number
   skill_level: string
   student_age: number
   student_count: number
   notes: string
+  decline_reason?: string | null
   student: { name: string; email: string; phone: string }
   instructor: { name: string; email: string }
   surf_spot: { name: string }
-  payment?: { amount: number; payment_method: string; status: string; paid_at: string }
+  payment?: {
+    amount: number
+    payment_method: string
+    status: string
+    paid_at: string
+    receipt_path?: string | null
+    receipt_reference?: string | null
+    receipt_uploaded_at?: string | null
+    receipt_verified_at?: string | null
+    receipt_note?: string | null
+    verified_by?: { name: string } | null
+  }
   waiver?: { id: number; signed_at: string; pdf_path: string }
   review?: { id: number; rating: number | null; comment: string; photo_path: string | null; created_at: string }
 }
@@ -40,7 +56,21 @@ interface Props {
   booking: Booking
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+// The receipt is private, so the browser loads it through the authorised
+// payments.receipt.image route rather than a storage URL.
+const receiptUrl = computed(() =>
+  props.booking.payment?.receipt_path
+    ? route('payments.receipt.image', props.booking.id)
+    : null,
+)
+
+const canVerifyReceipt = computed(() => props.booking.payment?.status === 'pending_verification')
+
+const verifyReceipt = () => {
+  router.post(route('payments.receipt.verify', props.booking.id), {}, { preserveScroll: true })
+}
 
 const getStatusVariant = (status: string) => {
   switch (status.toLowerCase()) {
@@ -271,6 +301,51 @@ const getStatusVariant = (status: string) => {
                                 <div class="pt-6 border-t border-white/10">
                                     <p class="text-4xl font-black tracking-tighter">₱{{ booking.total_amount }}</p>
                                     <p v-if="booking.payment.paid_at" class="text-[10px] font-bold opacity-40 mt-1">Processed on {{ new Date(booking.payment.paid_at).toLocaleDateString() }}</p>
+                                </div>
+
+                                <!-- GCash receipt: full image + one-click approval -->
+                                <div v-if="receiptUrl" class="rounded-2xl bg-white/10 p-3">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <p class="text-[10px] font-black uppercase tracking-widest opacity-60">GCash receipt</p>
+                                        <a
+                                            :href="receiptUrl"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="text-[10px] font-bold uppercase tracking-wider underline underline-offset-2"
+                                        >
+                                            Open full image
+                                        </a>
+                                    </div>
+
+                                    <a :href="receiptUrl" target="_blank" rel="noopener" class="mt-2 block">
+                                        <img
+                                            :src="receiptUrl"
+                                            alt="GCash receipt uploaded by the student"
+                                            class="h-48 w-full rounded-xl bg-white object-contain"
+                                        />
+                                    </a>
+
+                                    <p v-if="booking.payment.receipt_reference" class="mt-2 text-xs opacity-80">
+                                        Ref: <span class="font-mono">{{ booking.payment.receipt_reference }}</span>
+                                    </p>
+                                    <p v-if="booking.payment.receipt_uploaded_at" class="mt-1 text-[10px] opacity-60">
+                                        Uploaded {{ new Date(booking.payment.receipt_uploaded_at).toLocaleString() }}
+                                    </p>
+
+                                    <button
+                                        v-if="canVerifyReceipt"
+                                        type="button"
+                                        class="mt-3 w-full rounded-xl bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-ocean-700 transition hover:bg-ocean-50"
+                                        @click="verifyReceipt"
+                                    >
+                                        Approve payment
+                                    </button>
+                                    <p
+                                        v-else-if="booking.payment.status === 'completed'"
+                                        class="mt-2 text-[10px] font-bold uppercase tracking-wider text-emerald-200"
+                                    >
+                                        Receipt verified
+                                    </p>
                                 </div>
                             </div>
                             <div v-else class="flex flex-col items-center justify-center py-8 opacity-40 italic">

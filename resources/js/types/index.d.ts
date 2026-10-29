@@ -5,7 +5,9 @@ export interface User {
     email_verified_at?: string;
     role: 'student' | 'instructor' | 'admin';
     phone?: string;
-    avatar_path?: string;
+    avatar_path?: string | null;
+    avatar_url?: string | null;
+    created_at?: string;
     instructor_profile?: {
         bio: string;
         level: number;

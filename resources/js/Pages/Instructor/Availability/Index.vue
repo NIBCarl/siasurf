@@ -1,29 +1,35 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
-import Badge from '@/Components/Atoms/Badge.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import AppSwitch from '@/Components/UI/AppSwitch.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
 import {
-  CalendarDaysIcon,
-  SunIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  LockClosedIcon,
-  PlusIcon,
-  TrashIcon,
   ArrowPathIcon,
-  SparklesIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
+  CloudIcon,
+  SunIcon,
+  TrashIcon,
 } from '@heroicons/vue/24/outline'
-import { CheckIcon } from '@heroicons/vue/24/solid'
 
 interface Availability {
   id: number
   day_of_week: number
   time_period: string
+  start_time?: string | null
+  end_time?: string | null
+  open_slots?: string[] | null
+  slot_duration_minutes?: number
   is_available: boolean
+}
+
+interface PeriodSetting {
+  open: boolean
+  start_time: string
+  end_time: string
+  slots: Record<string, boolean>
 }
 
 interface BlockSummary {
@@ -48,6 +54,8 @@ interface Props {
   bookingBlocks?: BlockSummary[]
   // FR 1.9.3 - Instant Book toggle state.
   autoAcceptBookings?: boolean
+  // Platform standard lesson length (minutes); 120 = 2 hours.
+  standardSessionMinutes?: number
 }
 
 const props = defineProps<Props>()
@@ -55,25 +63,179 @@ const props = defineProps<Props>()
 // UI-First Reactive State for Weekly Grid
 const gridState = reactive<Record<string, boolean>>({})
 const initialGridState = ref<Record<string, boolean>>({})
+const periodSettings = reactive<Record<string, PeriodSetting>>({})
+const initialPeriodSettings = ref<string>('')
+
+const defaultStart = (period: string) => (period === 'morning' ? '06:00' : '12:00')
+const defaultEnd = (period: string) => (period === 'morning' ? '12:00' : '18:00')
+
+const normalizeTime = (value?: string | null) => {
+  if (!value) return ''
+  const string = String(value)
+  if (string.includes('T')) return string.slice(11, 16)
+  return string.slice(0, 5)
+}
+
+const generateSlots = (start: string, end: string) => {
+  const [startHour, startMinute] = start.split(':').map(Number)
+  const [endHour, endMinute] = end.split(':').map(Number)
+  const startTotal = startHour * 60 + startMinute
+  const endTotal = endHour * 60 + endMinute
+
+  if (!Number.isFinite(startTotal) || !Number.isFinite(endTotal) || startTotal >= endTotal) {
+    return [] as string[]
+  }
+
+  const slots: string[] = []
+  for (let minute = startTotal; minute + 60 <= endTotal; minute += 60) {
+    const hour = Math.floor(minute / 60)
+    const mins = minute % 60
+    slots.push(`${String(hour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`)
+  }
+
+  return slots
+}
+
+const settingKey = (dayValue: number, periodValue: string) => `${dayValue}-${periodValue}`
 
 // Mobile Segmented Tab
 const activeMobileTab = ref<'weekly' | 'exceptions'>('weekly')
 
-// Initialize gridState from props
+// Initialize gridState and custom working-hour settings from props.
 onMounted(() => {
   const snapshot: Record<string, boolean> = {}
+
   props.daysOfWeek.forEach(day => {
     props.timePeriods.forEach(period => {
-      const key = `${day.value}-${period.value}`
+      const key = settingKey(day.value, period.value)
       const dayAvailabilities = props.availabilities[day.value] || []
       const existing = dayAvailabilities.find(a => a.time_period === period.value)
-      const val = existing ? (existing.is_available === true || (existing.is_available as any) === 1) : false
-      gridState[key] = val
-      snapshot[key] = val
+      const isOpen = existing ? (existing.is_available === true || (existing.is_available as any) === 1) : false
+
+      const start = normalizeTime(existing?.start_time) || defaultStart(period.value)
+      const end = normalizeTime(existing?.end_time) || defaultEnd(period.value)
+      const savedSlots = Array.isArray(existing?.open_slots) ? existing?.open_slots : null
+      const slots: Record<string, boolean> = {}
+
+      generateSlots(start, end).forEach(slot => {
+        slots[slot] = savedSlots === null ? true : savedSlots.includes(slot)
+      })
+
+      gridState[key] = isOpen
+      snapshot[key] = isOpen
+      periodSettings[key] = {
+        open: isOpen,
+        start_time: start,
+        end_time: end,
+        slots,
+      }
     })
   })
+
   initialGridState.value = snapshot
+  initialPeriodSettings.value = JSON.stringify(periodSettings)
 })
+
+const syncSlots = (key: string) => {
+  const setting = periodSettings[key]
+  if (!setting) return
+
+  const nextSlots = generateSlots(setting.start_time, setting.end_time)
+  const previous = setting.slots
+  setting.slots = Object.fromEntries(nextSlots.map(slot => [slot, previous[slot] ?? true]))
+}
+
+const toggleSlot = (key: string, slot: string) => {
+  const setting = periodSettings[key]
+  if (!setting) return
+  setting.slots[slot] = !setting.slots[slot]
+}
+
+const setAllSlots = (key: string, open: boolean) => {
+  const setting = periodSettings[key]
+  if (!setting) return
+  Object.keys(setting.slots).forEach(slot => {
+    setting.slots[slot] = open
+  })
+}
+
+const slotsFor = (key: string) => Object.keys(periodSettings[key]?.slots ?? {})
+
+const slotLabel = (slot: string) => {
+  const [hour, minute] = slot.split(':').map(Number)
+  const suffix = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`
+}
+
+const rangeError = (key: string) => {
+  const setting = periodSettings[key]
+  if (!setting) return ''
+  if (!setting.start_time || !setting.end_time) return 'Add a start and end time.'
+  if (setting.start_time >= setting.end_time) return 'End time must be after start time.'
+
+  const period = key.split('-').slice(1).join('-')
+  const lower = period === 'morning' ? '06:00' : '12:00'
+  const upper = period === 'morning' ? '12:00' : '18:00'
+
+  if (setting.start_time < lower || setting.end_time > upper) {
+    return `Keep this ${period} inside ${lower}–${upper}.`
+  }
+
+  return ''
+}
+
+const formatRange = (dayValue: number, periodValue: string) => {
+  const setting = periodSettings[settingKey(dayValue, periodValue)]
+  if (!setting) return defaultStart(periodValue) + '–' + defaultEnd(periodValue)
+  return `${setting.start_time}–${setting.end_time}`
+}
+
+const setPeriodOpen = (dayValue: number, periodValue: string, open: boolean) => {
+  const key = settingKey(dayValue, periodValue)
+  gridState[key] = open
+
+  if (!periodSettings[key]) {
+    const start = defaultStart(periodValue)
+    const end = defaultEnd(periodValue)
+    periodSettings[key] = {
+      open,
+      start_time: start,
+      end_time: end,
+      slots: Object.fromEntries(generateSlots(start, end).map(slot => [slot, true])),
+    }
+    return
+  }
+
+  periodSettings[key].open = open
+
+  if (open && !Object.values(periodSettings[key].slots).some(Boolean)) {
+    syncSlots(key)
+    Object.keys(periodSettings[key].slots).forEach(slot => {
+      periodSettings[key].slots[slot] = true
+    })
+  }
+}
+
+const openPeriods = computed(() =>
+  props.daysOfWeek.flatMap(day =>
+    props.timePeriods
+      .filter(period => gridState[settingKey(day.value, period.value)])
+      .map(period => ({
+        key: settingKey(day.value, period.value),
+        day,
+        period,
+        setting: periodSettings[settingKey(day.value, period.value)],
+      })),
+  ),
+)
+
+const bookableSlotsCount = computed(() =>
+  openPeriods.value.reduce(
+    (total, item) => total + Object.values(item.setting?.slots ?? {}).filter(Boolean).length,
+    0,
+  ),
+)
 
 const weeklyForm = useForm({
   availabilities: [] as any[],
@@ -85,8 +247,8 @@ const blockForm = useForm({
 })
 
 const toggleAvailability = (dayValue: number, periodValue: string) => {
-  const key = `${dayValue}-${periodValue}`
-  gridState[key] = !gridState[key]
+  const key = settingKey(dayValue, periodValue)
+  setPeriodOpen(dayValue, periodValue, !gridState[key])
 }
 
 const isDayFullyAvailable = (dayValue: number) => {
@@ -101,7 +263,7 @@ const isDayPartiallyAvailable = (dayValue: number) => {
 const toggleDay = (dayValue: number) => {
   const allOn = isDayFullyAvailable(dayValue)
   props.timePeriods.forEach(p => {
-    gridState[`${dayValue}-${p.value}`] = !allOn
+    setPeriodOpen(dayValue, p.value, !allOn)
   })
 }
 
@@ -114,22 +276,61 @@ const totalSlotsCount = computed(() => {
 })
 
 const hasUnsavedChanges = computed(() => {
-  return Object.keys(gridState).some(key => gridState[key] !== initialGridState.value[key])
+  const gridChanged = Object.keys(gridState).some(key => gridState[key] !== initialGridState.value[key])
+  const settingsChanged = JSON.stringify(periodSettings) !== initialPeriodSettings.value
+  return gridChanged || settingsChanged
 })
 
 const saveWeekly = () => {
+  // Keep the slot list in sync with the latest start/end inputs before saving.
+  props.daysOfWeek.forEach(day => {
+    props.timePeriods.forEach(period => {
+      const key = settingKey(day.value, period.value)
+      if (gridState[key]) syncSlots(key)
+    })
+  })
+
+  const invalidRange = openPeriods.value.find(item => rangeError(item.key))
+  if (invalidRange) {
+    weeklyForm.setError('availabilities', rangeError(invalidRange.key))
+    return
+  }
+
+  const emptyPeriod = openPeriods.value.find(
+    item => !Object.values(item.setting?.slots ?? {}).some(Boolean),
+  )
+  if (emptyPeriod) {
+    weeklyForm.setError('availabilities', 'Choose at least one open slot for every open period.')
+    return
+  }
+
+  weeklyForm.clearErrors()
+
   weeklyForm.availabilities = props.daysOfWeek.flatMap(day =>
-    props.timePeriods.map(period => ({
-      day_of_week: day.value,
-      time_period: period.value,
-      is_available: gridState[`${day.value}-${period.value}`] ? 1 : 0,
-    })),
+    props.timePeriods.map(period => {
+      const key = settingKey(day.value, period.value)
+      const setting = periodSettings[key]
+      const open = gridState[key] === true
+
+      return {
+        day_of_week: day.value,
+        time_period: period.value,
+        is_available: open ? 1 : 0,
+        start_time: setting?.start_time ?? defaultStart(period.value),
+        end_time: setting?.end_time ?? defaultEnd(period.value),
+        open_slots: setting
+          ? Object.keys(setting.slots).filter(slot => setting.slots[slot])
+          : [],
+        slot_duration_minutes: props.standardSessionMinutes ?? 120,
+      }
+    }),
   )
 
   weeklyForm.post(route('instructor.availability.weekly'), {
     preserveScroll: true,
     onSuccess: () => {
       initialGridState.value = { ...gridState }
+      initialPeriodSettings.value = JSON.stringify(periodSettings)
     },
   })
 }
@@ -138,14 +339,31 @@ const resetToSaved = () => {
   Object.keys(initialGridState.value).forEach(key => {
     gridState[key] = initialGridState.value[key]
   })
+
+  const savedSettings = JSON.parse(initialPeriodSettings.value || '{}') as Record<string, PeriodSetting>
+  Object.keys(savedSettings).forEach(key => {
+    periodSettings[key] = JSON.parse(JSON.stringify(savedSettings[key]))
+  })
 }
 
+const isVacationMode = computed(() => props.profile?.status === 'inactive')
+
+const vacationForm = useForm({})
 const toggleVacationMode = () => {
-  const form = useForm({})
-  form.post(route('instructor.availability.toggle-status'), {
+  vacationForm.post(route('instructor.availability.toggle-status'), {
     preserveScroll: true,
   })
 }
+
+const instantBookForm = useForm({})
+const toggleInstantBook = () => {
+  instantBookForm.post(route('instructor.availability.toggle-instant-book'), {
+    preserveScroll: true,
+  })
+}
+
+const openCount = (dayValue: number) =>
+  props.timePeriods.filter((period) => gridState[`${dayValue}-${period.value}`]).length
 
 const blockDate = ref('')
 const addBlockDate = () => {
@@ -195,22 +413,16 @@ const manualBlockCount = computed(() => props.manualBlocks?.length ?? 0)
  */
 const isInstantBook = computed(() => props.autoAcceptBookings === true)
 
-const toggleInstantBook = () => {
-  const form = useForm({})
-  form.post(route('instructor.availability.toggle-instant-book'), {
-    preserveScroll: true
-  })
-}
 const bookingBlockCount = computed(() => props.bookingBlocks?.length ?? 0)
 
 // Presets & Bulk Actions
 const setAllAvailable = (periodValue?: string) => {
   props.daysOfWeek.forEach(day => {
     if (periodValue) {
-      gridState[`${day.value}-${periodValue}`] = true
+      setPeriodOpen(day.value, periodValue, true)
     } else {
       props.timePeriods.forEach(p => {
-        gridState[`${day.value}-${p.value}`] = true
+        setPeriodOpen(day.value, p.value, true)
       })
     }
   })
@@ -220,7 +432,7 @@ const setWeekdaysOnly = () => {
   props.daysOfWeek.forEach(day => {
     const isWeekday = day.value >= 1 && day.value <= 5
     props.timePeriods.forEach(p => {
-      gridState[`${day.value}-${p.value}`] = isWeekday
+      setPeriodOpen(day.value, p.value, isWeekday)
     })
   })
 }
@@ -229,678 +441,588 @@ const setWeekendsOnly = () => {
   props.daysOfWeek.forEach(day => {
     const isWeekend = day.value === 0 || day.value === 6
     props.timePeriods.forEach(p => {
-      gridState[`${day.value}-${p.value}`] = isWeekend
+      setPeriodOpen(day.value, p.value, isWeekend)
     })
   })
 }
 
 const clearAll = () => {
-  Object.keys(gridState).forEach(key => {
-    gridState[key] = false
+  props.daysOfWeek.forEach(day => {
+    props.timePeriods.forEach(period => {
+      setPeriodOpen(day.value, period.value, false)
+    })
   })
 }
 
-const isVacationMode = computed(() => props.profile?.status === 'inactive')
+const isOpen = (dayValue: number, periodValue: string) =>
+  gridState[`${dayValue}-${periodValue}`] === true
 </script>
 
 <template>
-  <Head title="Weekly Schedule & Availability — SiaSurf" />
+    <Head title="Weekly schedule" />
 
-  <AppLayout>
-    <div class="max-w-7xl mx-auto space-y-6 pb-24">
-      
-      <!-- Top Command Bar: Glanceable Header & Publishing State -->
-      <div class="bg-white rounded-3xl p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-2 flex-wrap">
-            <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Weekly Schedule <span class="text-ocean-600">Builder</span>
-            </h1>
-            <Badge :variant="activeSlotsCount > 0 ? 'ocean' : 'warning'" size="sm">
-              {{ activeSlotsCount }} / {{ totalSlotsCount }} Sessions Open
-            </Badge>
-            <span
-              v-if="isVacationMode"
-              class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200"
-            >
-              Vacation Mode Active
-            </span>
-          </div>
-          <p class="text-xs sm:text-sm font-medium text-slate-500 mt-1 max-w-2xl">
-            Set your recurring morning & afternoon slots. Tourists and walk-ins can only book sessions when your slots are published.
-          </p>
-        </div>
+    <AppLayout>
+        <template #header>Weekly schedule</template>
 
-        <!-- Desktop Action Buttons -->
-        <div class="hidden sm:flex items-center gap-2.5 shrink-0">
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            @click="resetToSaved"
-            :disabled="!hasUnsavedChanges || weeklyForm.processing"
-            class="min-h-[44px] px-4 font-bold rounded-2xl text-xs"
-          >
-            <ArrowPathIcon class="w-4 h-4 mr-1.5 text-slate-500" />
-            Reset
-          </BaseButton>
+        <div class="space-y-6 pb-24">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <SectionHeader
+                    eyebrow="Availability"
+                    title="Weekly schedule builder"
+                    description="Set recurring morning and afternoon windows. Tourists and walk-ins can only book published slots."
+                />
 
-          <BaseButton
-            variant="primary"
-            size="sm"
-            @click="saveWeekly"
-            :loading="weeklyForm.processing"
-            class="min-h-[44px] px-6 font-extrabold rounded-2xl text-xs shadow-md shadow-ocean-500/20"
-          >
-            <CheckIcon class="w-4 h-4 mr-1.5" />
-            {{ hasUnsavedChanges ? 'Publish Changes' : 'Schedule Published' }}
-          </BaseButton>
-        </div>
-      </div>
-
-      <!-- Mobile Tab Switcher: Zero clutter between schedule & date overrides -->
-      <div class="xl:hidden flex items-center p-1.5 bg-slate-100 rounded-2xl gap-1">
-        <button
-          type="button"
-          @click="activeMobileTab = 'weekly'"
-          :class="[
-            'flex-1 py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px] flex items-center justify-center gap-2',
-            activeMobileTab === 'weekly'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-500 hover:text-slate-900'
-          ]"
-        >
-          <CalendarDaysIcon class="w-4 h-4 text-ocean-600" />
-          <span>Weekly Routine</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-ocean-50 text-ocean-700 font-bold">
-            {{ activeSlotsCount }}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          @click="activeMobileTab = 'exceptions'"
-          :class="[
-            'flex-1 py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px] flex items-center justify-center gap-2',
-            activeMobileTab === 'exceptions'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-500 hover:text-slate-900'
-          ]"
-        >
-          <LockClosedIcon class="w-4 h-4 text-amber-600" />
-          <span>Date Blocks & Vacation</span>
-          <span v-if="manualBlockCount > 0" class="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 font-bold">
-            {{ manualBlockCount }}
-          </span>
-        </button>
-      </div>
-
-      <!-- Main Layout: 12 Columns on Desktop (8 Weekly Schedule, 4 Overrides & Vacation) -->
-      <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
-
-        <!-- Weekly Schedule Section (Left 8 Columns) -->
-        <div
-          :class="[
-            'xl:col-span-8 space-y-5',
-            activeMobileTab !== 'weekly' ? 'hidden xl:block' : ''
-          ]"
-        >
-          <!-- Quick Presets Toolbar -->
-          <div class="bg-white rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm">
-            <div class="flex items-center justify-between gap-3 mb-3">
-              <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                1-Tap Quick Presets
-              </span>
-              <button
-                type="button"
-                @click="clearAll"
-                class="text-[10px] font-black uppercase tracking-wider text-rose-600 hover:underline min-h-[32px] px-2 flex items-center"
-              >
-                Clear All Days
-              </button>
-            </div>
-
-            <div class="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                @click="setAllAvailable('morning')"
-                class="px-3.5 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold transition-colors border border-amber-200/70 min-h-[40px] flex items-center gap-1.5"
-              >
-                <span>☀️</span> All Mornings
-              </button>
-
-              <button
-                type="button"
-                @click="setAllAvailable('afternoon')"
-                class="px-3.5 py-2 rounded-2xl bg-sky-50 hover:bg-sky-100 text-sky-900 text-xs font-bold transition-colors border border-sky-200/70 min-h-[40px] flex items-center gap-1.5"
-              >
-                <span>🌊</span> All Afternoons
-              </button>
-
-              <button
-                type="button"
-                @click="setWeekdaysOnly"
-                class="px-3.5 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors border border-slate-200 min-h-[40px] flex items-center gap-1.5"
-              >
-                <span>⚡</span> Mon – Fri Only
-              </button>
-
-              <button
-                type="button"
-                @click="setWeekendsOnly"
-                class="px-3.5 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors border border-slate-200 min-h-[40px] flex items-center gap-1.5"
-              >
-                <span>🏖️</span> Weekends Only
-              </button>
-
-              <button
-                type="button"
-                @click="setAllAvailable()"
-                class="px-3.5 py-2 rounded-2xl bg-ocean-600 hover:bg-ocean-700 text-white text-xs font-black transition-colors shadow-sm shadow-ocean-300 min-h-[40px] flex items-center gap-1.5 ml-auto"
-              >
-                <span>🔥</span> Full Week (All 14)
-              </button>
-            </div>
-          </div>
-
-          <!-- MOBILE / COMPACT VIEW: 7-Row Ledger (Zero Scroll: All 7 days fit on 1 phone screen!) -->
-          <div class="md:hidden bg-white rounded-3xl border border-slate-100 shadow-sm divide-y divide-slate-100 overflow-hidden">
-            <div
-              v-for="day in daysOfWeek"
-              :key="day.value"
-              class="p-3.5 flex items-center justify-between gap-2.5 transition-colors hover:bg-slate-50/70"
-            >
-              <!-- Day info + 1-tap All Day toggle -->
-              <div class="w-24 shrink-0">
-                <button
-                  type="button"
-                  @click="toggleDay(day.value)"
-                  class="text-left group/day focus:outline-none"
-                  :title="'Click to toggle entire ' + day.label"
-                >
-                  <p class="text-xs font-black uppercase tracking-tight text-slate-900 group-hover/day:text-ocean-600 transition-colors flex items-center gap-1">
-                    <span>{{ day.label.slice(0, 3) }}</span>
-                    <span
-                      v-if="isDayFullyAvailable(day.value)"
-                      class="w-1.5 h-1.5 rounded-full bg-emerald-500"
-                    ></span>
-                    <span
-                      v-else-if="isDayPartiallyAvailable(day.value)"
-                      class="w-1.5 h-1.5 rounded-full bg-amber-500"
-                    ></span>
-                  </p>
-                  <p class="text-[10px] font-bold text-slate-400 group-hover/day:text-ocean-500">
-                    {{ isDayFullyAvailable(day.value) ? 'Full Day' : (isDayPartiallyAvailable(day.value) ? 'Half Day' : 'Off Duty') }}
-                  </p>
-                </button>
-              </div>
-
-              <!-- Two Slot Tap Chips (44px touch targets) -->
-              <div class="flex items-center gap-2 flex-1 justify-end">
-                <!-- Morning Slot -->
-                <button
-                  type="button"
-                  @click="toggleAvailability(day.value, 'morning')"
-                  :class="[
-                    'flex-1 py-2.5 px-2 rounded-2xl text-[11px] font-black uppercase tracking-tight transition-all active:scale-95 min-h-[44px] border flex items-center justify-center gap-1.5',
-                    gridState[`${day.value}-morning`]
-                      ? 'bg-ocean-600 border-ocean-600 text-white shadow-sm shadow-ocean-200'
-                      : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:border-slate-300'
-                  ]"
-                >
-                  <span>☀️</span>
-                  <span>Morn <span class="hidden xs:inline">(6A–12P)</span></span>
-                  <span
-                    v-if="gridState[`${day.value}-morning`]"
-                    class="w-1.5 h-1.5 rounded-full bg-white ml-0.5"
-                  ></span>
-                </button>
-
-                <!-- Afternoon Slot -->
-                <button
-                  type="button"
-                  @click="toggleAvailability(day.value, 'afternoon')"
-                  :class="[
-                    'flex-1 py-2.5 px-2 rounded-2xl text-[11px] font-black uppercase tracking-tight transition-all active:scale-95 min-h-[44px] border flex items-center justify-center gap-1.5',
-                    gridState[`${day.value}-afternoon`]
-                      ? 'bg-ocean-600 border-ocean-600 text-white shadow-sm shadow-ocean-200'
-                      : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:border-slate-300'
-                  ]"
-                >
-                  <span>🌊</span>
-                  <span>Aftn <span class="hidden xs:inline">(12P–6P)</span></span>
-                  <span
-                    v-if="gridState[`${day.value}-afternoon`]"
-                    class="w-1.5 h-1.5 rounded-full bg-white ml-0.5"
-                  ></span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- TABLET & DESKTOP VIEW: Sleek 7-Column Visual Board -->
-          <div class="hidden md:grid grid-cols-7 gap-3">
-            <div
-              v-for="day in daysOfWeek"
-              :key="day.value"
-              class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col transition-all hover:border-ocean-200 group"
-            >
-              <!-- Day Header with 1-click All Day toggle -->
-              <div class="p-3 text-center border-b border-slate-50 bg-slate-50/60">
-                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
-                  {{ day.label?.slice(0, 3) }}
-                </span>
-                <p class="text-sm font-black text-slate-900 mt-0.5">{{ day.label }}</p>
-
-                <!-- Quick All-Day toggle chip -->
-                <button
-                  type="button"
-                  @click="toggleDay(day.value)"
-                  class="mt-1.5 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-ocean-50 hover:text-ocean-700 hover:border-ocean-200 cursor-pointer"
-                >
-                  {{ isDayFullyAvailable(day.value) ? 'Set Off' : 'Set All' }}
-                </button>
-              </div>
-
-              <!-- Morning & Afternoon interactive tiles -->
-              <div class="p-2.5 space-y-2 flex-1 flex flex-col justify-between">
-                <div
-                  v-for="period in timePeriods"
-                  :key="period.value"
-                  @click="toggleAvailability(day.value, period.value)"
-                  :class="[
-                    'relative p-3 rounded-2xl cursor-pointer transition-all duration-200 border-2 flex flex-col items-center justify-center gap-1 min-h-[76px] select-none',
-                    gridState[`${day.value}-${period.value}`]
-                      ? 'bg-ocean-600 border-ocean-500 shadow-sm text-white scale-[1.02]'
-                      : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-slate-300 hover:bg-slate-100'
-                  ]"
-                >
-                  <span class="text-lg leading-none">
-                    {{ period.value === 'morning' ? '☀️' : '🌊' }}
-                  </span>
-
-                  <span class="text-[10px] font-black uppercase tracking-tight text-center leading-tight">
-                    {{ period.label }}
-                  </span>
-
-                  <span
-                    :class="[
-                      'text-[9px] font-mono tracking-tighter opacity-80',
-                      gridState[`${day.value}-${period.value}`] ? 'text-ocean-100 font-bold' : 'text-slate-400'
-                    ]"
-                  >
-                    {{ period.value === 'morning' ? '6AM–12PM' : '12PM–6PM' }}
-                  </span>
-
-                  <div
-                    :class="[
-                      'w-1.5 h-1.5 rounded-full mt-0.5 transition-colors',
-                      gridState[`${day.value}-${period.value}`] ? 'bg-white shadow-[0_0_6px_white]' : 'bg-slate-200'
-                    ]"
-                  ></div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <StatusPill :variant="bookableSlotsCount > 0 ? 'verified' : 'pending'">
+                        {{ bookableSlotsCount }} bookable hours
+                    </StatusPill>
+                    <StatusPill v-if="isVacationMode" variant="pending" :dot="false">
+                        Vacation mode
+                    </StatusPill>
+                    <AppButton
+                        variant="secondary"
+                        :disabled="!hasUnsavedChanges || weeklyForm.processing"
+                        @click="resetToSaved"
+                    >
+                        <ArrowPathIcon class="h-4 w-4" aria-hidden="true" />
+                        Reset
+                    </AppButton>
+                    <AppButton :loading="weeklyForm.processing" @click="saveWeekly">
+                        Publish schedule
+                    </AppButton>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Schedule Legend & Notice -->
-          <div class="bg-white rounded-2xl p-4 border border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-            <div class="flex items-center gap-5">
-              <div class="flex items-center gap-2">
-                <div class="w-3.5 h-3.5 rounded-md bg-ocean-600"></div>
-                <span class="font-bold text-slate-700">Open for Bookings</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="w-3.5 h-3.5 rounded-md bg-slate-100 border border-slate-200"></div>
-                <span class="font-bold text-slate-700">Off Duty / Rest</span>
-              </div>
             </div>
 
-            <div class="flex items-center gap-1.5 text-ocean-700 text-xs italic">
-              <InformationCircleIcon class="w-4 h-4 shrink-0 text-ocean-500" />
-              <span>Recurring schedule updates apply immediately to future booking searches.</span>
-            </div>
-          </div>
-        </div>
+            <!-- Presets -->
+            <AppCard padding="md">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="eyebrow">One-tap presets</p>
+                        <p class="mt-1 text-body-sm text-stone-600">
+                            Presets change the grid only. Publish to save them.
+                        </p>
+                    </div>
 
-        <!-- Overrides & Exceptions Sidebar (Right 4 Columns) -->
-        <div
-          :class="[
-            'xl:col-span-4 space-y-5',
-            activeMobileTab !== 'exceptions' ? 'hidden xl:block' : ''
-          ]"
-        >
-          <!-- Vacation Mode Card -->
-          <div
-            :class="[
-              'rounded-3xl p-5 text-white shadow-sm relative overflow-hidden transition-all duration-500 border',
-              isVacationMode
-                ? 'bg-slate-900 border-slate-800'
-                : 'bg-gradient-to-br from-amber-600 to-amber-700 border-amber-500/30'
-            ]"
-          >
-            <div class="relative z-10 flex items-center justify-between gap-4">
-              <div>
-                <span class="text-[10px] font-black uppercase tracking-widest text-amber-200 block">
-                  Quick Availability Switch
-                </span>
-                <h3 class="text-base sm:text-lg font-black uppercase tracking-tight mt-0.5">
-                  Vacation Mode
-                </h3>
-                <p class="text-xs text-white/80 mt-0.5">
-                  {{ isVacationMode ? 'Profile currently hidden from search' : 'Profile is visible and bookable' }}
-                </p>
-              </div>
-
-              <!-- Toggle switch: 44px touch target -->
-              <button
-                type="button"
-                @click="toggleVacationMode"
-                :class="[
-                  'w-16 h-9 rounded-full p-1 relative transition-colors duration-300 min-h-[44px] shrink-0 cursor-pointer flex items-center',
-                  isVacationMode ? 'bg-rose-600' : 'bg-white/20'
-                ]"
-                aria-label="Toggle Vacation Mode"
-              >
-                <div
-                  :class="[
-                    'w-7 h-7 bg-white rounded-full shadow-md transition-transform duration-300',
-                    isVacationMode ? 'translate-x-7' : 'translate-x-0'
-                  ]"
-                ></div>
-              </button>
-            </div>
-          </div>
-
-          <!-- FR 1.9.3 - Instant Book Card -->
-          <div
-            :class="[
-              'rounded-3xl p-5 text-white shadow-sm relative overflow-hidden transition-all duration-500 border',
-              isInstantBook
-                ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 border-emerald-500/30'
-                : 'bg-slate-900 border-slate-800'
-            ]"
-          >
-            <div class="relative z-10 flex items-center justify-between gap-4">
-              <div>
-                <span class="text-[10px] font-black uppercase tracking-widest text-emerald-200 block">
-                  Booking Mode
-                </span>
-                <h3 class="text-base sm:text-lg font-black uppercase tracking-tight mt-0.5">
-                  Instant Book
-                </h3>
-                <p class="text-xs text-white/80 mt-0.5">
-                  {{ isInstantBook
-                    ? 'Requests are confirmed automatically - students pay right away'
-                    : 'You review each request before it is confirmed' }}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                @click="toggleInstantBook"
-                :class="[
-                  'w-16 h-9 rounded-full p-1 relative transition-colors duration-300 min-h-[44px] shrink-0 cursor-pointer flex items-center',
-                  isInstantBook ? 'bg-emerald-500' : 'bg-white/20'
-                ]"
-                aria-label="Toggle Instant Book"
-              >
-                <div
-                  :class="[
-                    'w-7 h-7 bg-white rounded-full shadow-md transition-transform duration-300',
-                    isInstantBook ? 'translate-x-7' : 'translate-x-0'
-                  ]"
-                ></div>
-              </button>
-            </div>
-          </div>
-
-          <!-- Specific Date Blocking Card -->
-          <div class="bg-white rounded-3xl p-5 sm:p-6 border border-slate-100 shadow-sm">
-            <div class="flex items-center gap-3 pb-3 mb-4 border-b border-slate-100">
-              <div class="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
-                <LockClosedIcon class="w-5 h-5" />
-              </div>
-              <div>
-                <h2 class="text-sm font-black text-slate-900 uppercase tracking-tight leading-tight">
-                  Block Specific Dates
-                </h2>
-                <p class="text-[11px] font-medium text-slate-400">
-                  Override recurring slots for personal appointments or storms
-                </p>
-              </div>
-            </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            class="inline-flex h-10 items-center gap-2 rounded-control border border-amber-300 bg-amber-100 px-3 text-body-sm font-semibold text-amber-950 transition-colors hover:border-amber-500"
+                            @click="setAllAvailable('morning')"
+                        >
+                            <SunIcon class="h-4 w-4" aria-hidden="true" />
+                            All mornings
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-10 items-center gap-2 rounded-control border border-lagoon-300 bg-lagoon-100 px-3 text-body-sm font-semibold text-lagoon-900 transition-colors hover:border-lagoon-500"
+                            @click="setAllAvailable('afternoon')"
+                        >
+                            <CloudIcon class="h-4 w-4" aria-hidden="true" />
+                            All afternoons
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-10 items-center gap-2 rounded-control border border-sand-200 bg-white px-3 text-body-sm font-semibold text-stone-700 transition-colors hover:border-lagoon-600"
+                            @click="setWeekdaysOnly"
+                        >
+                            Mon–Fri
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-10 items-center gap-2 rounded-control border border-sand-200 bg-white px-3 text-body-sm font-semibold text-stone-700 transition-colors hover:border-lagoon-600"
+                            @click="setWeekendsOnly"
+                        >
+                            Weekends
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-10 items-center gap-2 rounded-control border border-deep-800 bg-deep-900 px-3 text-body-sm font-semibold text-white transition-colors hover:bg-deep-800"
+                            @click="setAllAvailable()"
+                        >
+                            Full week
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-10 items-center gap-2 rounded-control px-3 text-body-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50"
+                            @click="clearAll"
+                        >
+                            <TrashIcon class="h-4 w-4" aria-hidden="true" />
+                            Clear all
+                        </button>
+                    </div>
+                </div>
+            </AppCard>
 
             <div class="space-y-4">
-              <!-- Quick Select Shortcut Chips -->
-              <div>
-                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
-                  Quick Select
-                </label>
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    @click="quickAddDate(0)"
-                    class="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-[11px] font-bold border border-slate-200"
-                  >
-                    + Today
-                  </button>
-                  <button
-                    type="button"
-                    @click="quickAddDate(1)"
-                    class="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-[11px] font-bold border border-slate-200"
-                  >
-                    + Tomorrow
-                  </button>
-                  <button
-                    type="button"
-                    @click="quickAddDate(2)"
-                    class="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-[11px] font-bold border border-slate-200"
-                  >
-                    + 2 Days Ahead
-                  </button>
+                <div class="space-y-4">
+                    <!-- Legend: state colours are the primary cue -->
+                    <div class="flex flex-wrap items-center gap-4 text-body-sm text-stone-600">
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="h-2.5 w-2.5 rounded-full bg-lagoon-500" aria-hidden="true" />
+                            Open
+                        </span>
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="h-2.5 w-2.5 rounded-full bg-stone-300" aria-hidden="true" />
+                            Off
+                        </span>
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="h-2.5 w-2.5 rounded-full bg-rose-500" aria-hidden="true" />
+                            Personal block
+                        </span>
+                        <span class="inline-flex items-center gap-1.5">
+                            <span class="h-2.5 w-2.5 rounded-full bg-deep-900" aria-hidden="true" />
+                            Locked by a lesson
+                        </span>
+                    </div>
+
+                    <!-- Desktop: seven-day board -->
+                    <div class="hidden gap-3 md:grid md:grid-cols-7">
+                        <AppCard v-for="day in daysOfWeek" :key="day.value" padding="none" class="overflow-hidden">
+                            <div class="border-b border-sand-200 bg-sand-100 px-3 py-3 text-center">
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                    {{ day.label.slice(0, 3) }}
+                                </p>
+                                <p class="mt-0.5 text-body font-semibold text-deep-900">{{ day.label }}</p>
+                                <p class="mt-0.5 text-label text-stone-500">
+                                    {{ openCount(day.value) }} of {{ timePeriods.length }} open
+                                </p>
+                                <button
+                                    type="button"
+                                    class="mt-1.5 text-label font-semibold text-lagoon-700 hover:underline"
+                                    @click="toggleDay(day.value)"
+                                >
+                                    {{ isDayFullyAvailable(day.value) ? 'Set off' : 'Set all' }}
+                                </button>
+                            </div>
+
+                            <div class="space-y-2 p-2.5">
+                                <button
+                                    v-for="period in timePeriods"
+                                    :key="period.value"
+                                    type="button"
+                                    :aria-pressed="isOpen(day.value, period.value)"
+                                    class="flex min-h-[88px] w-full flex-col justify-between rounded-control border p-3 text-left transition-colors"
+                                    :class="
+                                        isOpen(day.value, period.value)
+                                            ? 'border-lagoon-400 bg-lagoon-100 hover:border-lagoon-600'
+                                            : 'border-dashed border-sand-300 bg-sand-100 hover:border-sand-400'
+                                    "
+                                    @click="toggleAvailability(day.value, period.value)"
+                                >
+                                    <span class="flex w-full items-center justify-between">
+                                        <SunIcon
+                                            v-if="period.value === 'morning'"
+                                            class="h-4 w-4"
+                                            :class="isOpen(day.value, period.value) ? 'text-amber-600' : 'text-stone-400'"
+                                            aria-hidden="true"
+                                        />
+                                        <CloudIcon
+                                            v-else
+                                            class="h-4 w-4"
+                                            :class="isOpen(day.value, period.value) ? 'text-lagoon-600' : 'text-stone-400'"
+                                            aria-hidden="true"
+                                        />
+                                        <span
+                                            class="text-label font-semibold uppercase tracking-[0.06em]"
+                                            :class="isOpen(day.value, period.value) ? 'text-lagoon-800' : 'text-stone-500'"
+                                        >
+                                            {{ period.value === 'morning' ? 'Morning' : 'Afternoon' }}
+                                        </span>
+                                    </span>
+                                    <span
+                                        class="mt-2 text-label"
+                                        :class="isOpen(day.value, period.value) ? 'text-lagoon-700' : 'text-stone-500'"
+                                    >
+                                        {{ formatRange(day.value, period.value) }}
+                                    </span>
+                                    <span
+                                        class="mt-1 text-body-sm font-semibold"
+                                        :class="isOpen(day.value, period.value) ? 'text-lagoon-900' : 'text-stone-600'"
+                                    >
+                                        {{ isOpen(day.value, period.value) ? 'Open' : 'Off' }}
+                                    </span>
+                                </button>
+                            </div>
+                        </AppCard>
+                    </div>
+
+                    <!-- Mobile: one compact row per day -->
+                    <div class="space-y-2 md:hidden">
+                        <AppCard v-for="day in daysOfWeek" :key="day.value" padding="sm">
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-body font-semibold text-deep-900">{{ day.label }}</p>
+                                    <p class="text-label text-stone-500">
+                                        {{ openCount(day.value) }} of {{ timePeriods.length }} open
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="text-body-sm font-semibold text-lagoon-700 hover:underline"
+                                    @click="toggleDay(day.value)"
+                                >
+                                    {{ isDayFullyAvailable(day.value) ? 'Set off' : 'Set all' }}
+                                </button>
+                            </div>
+
+                            <div class="mt-2 grid grid-cols-2 gap-2">
+                                <button
+                                    v-for="period in timePeriods"
+                                    :key="period.value"
+                                    type="button"
+                                    :aria-pressed="isOpen(day.value, period.value)"
+                                    class="flex h-12 items-center justify-center gap-2 rounded-control border text-body-sm font-semibold transition-colors"
+                                    :class="
+                                        isOpen(day.value, period.value)
+                                            ? 'border-lagoon-400 bg-lagoon-100 text-lagoon-900'
+                                            : 'border-sand-300 bg-sand-100 text-stone-600'
+                                    "
+                                    @click="toggleAvailability(day.value, period.value)"
+                                >
+                                    <SunIcon v-if="period.value === 'morning'" class="h-4 w-4" aria-hidden="true" />
+                                    <CloudIcon v-else class="h-4 w-4" aria-hidden="true" />
+                                    {{ period.value === 'morning' ? 'Morning' : 'Afternoon' }} · {{ isOpen(day.value, period.value) ? 'Open' : 'Off' }}
+                                </button>
+                            </div>
+                        </AppCard>
+                    </div>
+
+                    <!-- Fine-tune custom hours and individual slots -->
+                    <AppCard padding="md">
+                        <SectionHeader
+                            eyebrow="Working hours"
+                            title="Fine-tune each open period"
+                            description="Set the real start and end of your day, then switch individual one-hour slots on or off."
+                        />
+
+                        <p
+                            v-if="weeklyForm.errors.availabilities"
+                            class="mt-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-body-sm font-semibold text-rose-800"
+                            role="alert"
+                        >
+                            {{ weeklyForm.errors.availabilities }}
+                        </p>
+
+                        <div v-if="openPeriods.length" class="mt-4 space-y-3">
+                            <div
+                                v-for="item in openPeriods"
+                                :key="item.key"
+                                class="rounded-control border border-sand-200 bg-sand-50 p-4"
+                            >
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p class="text-body font-semibold text-deep-900">
+                                            {{ item.day.label }} · {{ item.period.label.split(' (')[0] }}
+                                        </p>
+                                        <p class="mt-0.5 text-label text-stone-500">
+                                            {{ Object.values(item.setting?.slots ?? {}).filter(Boolean).length }}
+                                            of {{ slotsFor(item.key).length }} slots open
+                                        </p>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <label class="sr-only" :for="`start-${item.key}`">Start time</label>
+                                        <input
+                                            :id="`start-${item.key}`"
+                                            v-model="item.setting.start_time"
+                                            type="time"
+                                            step="1800"
+                                            class="h-10 rounded-control border border-sand-300 bg-white px-2 text-body-sm font-semibold text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                                            @change="syncSlots(item.key)"
+                                        />
+                                        <span class="text-label text-stone-500">to</span>
+                                        <label class="sr-only" :for="`end-${item.key}`">End time</label>
+                                        <input
+                                            :id="`end-${item.key}`"
+                                            v-model="item.setting.end_time"
+                                            type="time"
+                                            step="1800"
+                                            class="h-10 rounded-control border border-sand-300 bg-white px-2 text-body-sm font-semibold text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                                            @change="syncSlots(item.key)"
+                                        />
+                                    </div>
+                                </div>
+
+                                <p v-if="rangeError(item.key)" class="mt-2 text-body-sm font-semibold text-rose-700">
+                                    {{ rangeError(item.key) }}
+                                </p>
+                                <div class="mt-3 flex flex-wrap items-center gap-2">
+                                    <button
+                                        v-for="slot in slotsFor(item.key)"
+                                        :key="`${item.key}-${slot}`"
+                                        type="button"
+                                        :aria-pressed="item.setting.slots[slot]"
+                                        class="inline-flex h-9 items-center rounded-full border px-3 text-label font-semibold transition-colors"
+                                        :class="
+                                            item.setting.slots[slot]
+                                                ? 'border-lagoon-600 bg-lagoon-700 text-white'
+                                                : 'border-sand-300 bg-white text-stone-500 hover:border-lagoon-400'
+                                        "
+                                        @click="toggleSlot(item.key, slot)"
+                                    >
+                                        {{ slotLabel(slot) }}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        class="ml-auto text-label font-semibold text-lagoon-700 hover:underline"
+                                        @click="setAllSlots(item.key, true)"
+                                    >
+                                        All slots
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="text-label font-semibold text-stone-500 hover:underline"
+                                        @click="setAllSlots(item.key, false)"
+                                    >
+                                        Clear slots
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p v-else class="mt-4 rounded-control border border-dashed border-sand-300 bg-sand-50 px-3 py-4 text-body-sm text-stone-600">
+                            Switch on a morning or afternoon above to set custom hours and individual slots.
+                        </p>
+                    </AppCard>
+
+                    <!-- Blocks currently in effect -->
+                    <AppCard padding="md">
+                        <SectionHeader
+                            eyebrow="Exceptions"
+                            title="Blocks in effect"
+                            description="Personal blocks override your weekly pattern; lesson locks are created by confirmed bookings."
+                        />
+
+                        <div v-if="manualBlocks?.length" class="mt-4 space-y-2">
+                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                Your date blocks
+                            </p>
+                            <div
+                                v-for="block in manualBlocks"
+                                :key="block.id"
+                                class="flex items-center justify-between gap-3 rounded-control border border-rose-300 bg-rose-100 px-3 py-2.5"
+                            >
+                                <div class="min-w-0">
+                                    <p class="truncate text-body-sm font-semibold text-rose-900">
+                                        {{ block.date_label }}
+                                    </p>
+                                    <p class="text-label text-rose-700">{{ block.time_period_label ?? 'Full day' }}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="text-body-sm font-semibold text-rose-700 hover:underline"
+                                    @click="unblock(block)"
+                                >
+                                    Unblock
+                                </button>
+                            </div>
+                        </div>
+                        <p v-else class="mt-4 text-body-sm text-stone-600">No personal date blocks.</p>
+
+                        <div v-if="bookingBlocks?.length" class="mt-4 space-y-2">
+                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                Locked by confirmed lessons
+                            </p>
+                            <div
+                                v-for="block in bookingBlocks"
+                                :key="block.id"
+                                class="flex items-center justify-between gap-3 rounded-control border border-sand-300 bg-sand-50 px-3 py-2.5"
+                            >
+                                <div class="min-w-0">
+                                    <p class="truncate text-body-sm font-semibold text-deep-900">
+                                        {{ block.date_label }}
+                                    </p>
+                                    <p class="truncate text-label text-stone-500">
+                                        {{ block.time_period_label ?? 'Full day' }}
+                                        <span v-if="block.booking_ref"> · {{ block.booking_ref }}</span>
+                                    </p>
+                                </div>
+                                <StatusPill variant="completed" :dot="false">Locked</StatusPill>
+                            </div>
+                        </div>
+                    </AppCard>
                 </div>
-              </div>
 
-              <!-- Date Input Picker -->
-              <div>
-                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
-                  Choose Custom Date
-                </label>
-                <div class="flex gap-2">
-                  <input
-                    type="date"
-                    v-model="blockDate"
-                    class="flex-1 rounded-2xl border-slate-200 text-xs font-bold text-slate-900 focus:border-ocean-500 focus:ring-ocean-500 min-h-[44px]"
-                    :min="new Date().toISOString().split('T')[0]"
-                  />
-                  <button
-                    type="button"
-                    @click="addBlockDate"
-                    class="px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-sm min-h-[44px] transition-colors cursor-pointer"
-                  >
-                    Add
-                  </button>
+                <div class="grid gap-4 lg:grid-cols-2">
+                    <!-- Booking controls -->
+                    <AppCard padding="md">
+                        <SectionHeader eyebrow="Controls" title="Booking settings" />
+
+                        <div class="mt-3 space-y-2">
+                            <AppSwitch
+                                :model-value="isVacationMode"
+                                label="Vacation mode"
+                                :description="
+                                    isVacationMode
+                                        ? 'Your profile is hidden and bookings are paused.'
+                                        : 'Your profile is visible and bookable.'
+                                "
+                                @update:model-value="toggleVacationMode"
+                            />
+                            <AppSwitch
+                                :model-value="isInstantBook"
+                                label="Instant book"
+                                :description="
+                                    isInstantBook
+                                        ? 'New requests confirm automatically.'
+                                        : 'You review every request before confirming.'
+                                "
+                                @update:model-value="toggleInstantBook"
+                            />
+                        </div>
+
+                        <p class="mt-3 text-label text-stone-500">
+                            {{
+                                isVacationMode
+                                    ? 'Vacation mode overrides the weekly grid.'
+                                    : isInstantBook
+                                      ? 'Auto-confirm is on.'
+                                      : 'Requests wait for your answer.'
+                            }}
+                        </p>
+                    </AppCard>
+
+                    <!-- Date exceptions -->
+                    <AppCard padding="md">
+                        <SectionHeader eyebrow="Exceptions" title="Block specific dates" />
+                        <p class="mt-1 text-body-sm text-stone-600">
+                            Overrides recurring slots for a full day or half-day.
+                        </p>
+
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                class="inline-flex h-9 items-center rounded-control border border-sand-200 bg-white px-3 text-body-sm font-semibold text-stone-700 transition-colors hover:border-lagoon-600"
+                                @click="quickAddDate(0)"
+                            >
+                                + Today
+                            </button>
+                            <button
+                                type="button"
+                                class="inline-flex h-9 items-center rounded-control border border-sand-200 bg-white px-3 text-body-sm font-semibold text-stone-700 transition-colors hover:border-lagoon-600"
+                                @click="quickAddDate(1)"
+                            >
+                                + Tomorrow
+                            </button>
+                            <button
+                                type="button"
+                                class="inline-flex h-9 items-center rounded-control border border-sand-200 bg-white px-3 text-body-sm font-semibold text-stone-700 transition-colors hover:border-lagoon-600"
+                                @click="quickAddDate(2)"
+                            >
+                                + 2 days
+                            </button>
+                        </div>
+
+                        <div class="mt-3">
+                            <label for="block-date" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                Custom date
+                            </label>
+                            <div class="mt-2 flex gap-2">
+                                <input
+                                    id="block-date"
+                                    v-model="blockDate"
+                                    type="date"
+                                    class="w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                                />
+                                <AppButton variant="secondary" :disabled="!blockDate" @click="addBlockDate">
+                                    Add
+                                </AppButton>
+                            </div>
+                        </div>
+
+                        <ul v-if="blockForm.dates.length" class="mt-3 flex flex-wrap gap-2">
+                            <li
+                                v-for="(date, index) in blockForm.dates"
+                                :key="date"
+                                class="inline-flex items-center gap-2 rounded-full bg-sand-100 px-3 py-1 text-label font-semibold text-stone-700"
+                            >
+                                {{ date }}
+                                <button
+                                    type="button"
+                                    class="text-stone-500 hover:text-rose-700"
+                                    :aria-label="`Remove ${date}`"
+                                    @click="removeBlockDate(index)"
+                                >
+                                    ×
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="mt-3">
+                            <label for="block-period" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                Block window
+                            </label>
+                            <select
+                                id="block-period"
+                                v-model="blockForm.time_period"
+                                class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                            >
+                                <option value="">Full day</option>
+                                <option value="morning">Morning only</option>
+                                <option value="afternoon">Afternoon only</option>
+                            </select>
+                        </div>
+
+                        <p v-if="blockForm.errors.dates" class="mt-2 text-body-sm font-semibold text-rose-700">
+                            {{ blockForm.errors.dates }}
+                        </p>
+                        <p v-if="blockForm.errors.time_period" class="mt-2 text-body-sm font-semibold text-rose-700">
+                            {{ blockForm.errors.time_period }}
+                        </p>
+
+                        <AppButton
+                            block
+                            class="mt-3"
+                            :loading="blockForm.processing"
+                            :disabled="!blockForm.dates.length"
+                            @click="submitBlocks"
+                        >
+                            Block selected dates
+                        </AppButton>
+                    </AppCard>
                 </div>
-              </div>
-
-              <!-- Selected Dates Queue -->
-              <div v-if="blockForm.dates.length > 0" class="space-y-2 p-3 bg-slate-50 rounded-2xl border border-slate-200/70 max-h-36 overflow-y-auto custom-scrollbar">
-                <p class="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  Staged for Blocking ({{ blockForm.dates.length }})
-                </p>
-                <div
-                  v-for="(d, index) in blockForm.dates"
-                  :key="d"
-                  class="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-slate-100 text-xs font-bold text-slate-800"
-                >
-                  <span>{{ d }}</span>
-                  <button
-                    type="button"
-                    @click="removeBlockDate(index)"
-                    class="text-rose-500 hover:text-rose-700 p-1 rounded-md"
-                    title="Remove date"
-                  >
-                    <TrashIcon class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <!-- Time Period Selector -->
-              <div>
-                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
-                  Block Window
-                </label>
-                <select
-                  v-model="blockForm.time_period"
-                  class="w-full rounded-2xl border-slate-200 text-xs font-bold text-slate-900 focus:border-ocean-500 focus:ring-ocean-500 min-h-[44px]"
-                >
-                  <option value="">Full Day (Morning & Afternoon)</option>
-                  <option v-for="period in timePeriods" :key="period.value" :value="period.value">
-                    {{ period.label }} Only
-                  </option>
-                </select>
-              </div>
-
-              <BaseButton
-                variant="primary"
-                @click="submitBlocks"
-                :disabled="blockForm.dates.length === 0 || blockForm.processing"
-                :loading="blockForm.processing"
-                class="w-full min-h-[44px] rounded-2xl font-bold text-xs justify-center"
-              >
-                Confirm Block on {{ blockForm.dates.length }} {{ blockForm.dates.length === 1 ? 'Date' : 'Dates' }}
-              </BaseButton>
-            </div>
-          </div>
-
-          <!-- Existing Blocked Slots List -->
-          <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <div>
-                <h3 class="text-sm font-black uppercase tracking-tight text-slate-900">
-                  Blocked Slots
-                </h3>
-                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  {{ manualBlockCount }} personal &bull; {{ bookingBlockCount }} booking-held
-                </p>
-              </div>
-              <Badge variant="ocean" size="sm">Active Overrides</Badge>
             </div>
 
-            <!-- Personal Blocks List -->
-            <div v-if="manualBlocks && manualBlocks.length > 0" class="space-y-2 mb-4">
-              <div
-                v-for="block in manualBlocks"
-                :key="block.id"
-                class="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl"
-              >
-                <div class="min-w-0">
-                  <p class="text-xs font-black text-slate-900 leading-tight">{{ block.date_label }}</p>
-                  <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                    {{ block.time_period_label ?? 'Full Day' }}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  @click="unblock(block)"
-                  class="text-[10px] font-black uppercase tracking-wider text-ocean-600 hover:text-ocean-800 hover:underline px-2 py-1 cursor-pointer"
-                >
-                  Unblock
-                </button>
-              </div>
-            </div>
-
-            <div v-else class="py-4 text-center border-b border-slate-50">
-              <p class="text-xs font-bold text-slate-400">No personal date blocks</p>
-            </div>
-
-            <!-- Booking Locked Slots -->
-            <div v-if="bookingBlocks && bookingBlocks.length > 0" class="pt-3">
-              <p class="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">
-                Locked by Confirmed Lessons
-              </p>
-              <div class="space-y-2">
-                <div
-                  v-for="block in bookingBlocks"
-                  :key="block.id"
-                  class="p-2.5 bg-amber-50/70 border border-amber-100 rounded-xl flex items-center justify-between gap-2"
-                >
-                  <div class="min-w-0">
-                    <p class="text-xs font-black text-amber-950 truncate">{{ block.date_label }}</p>
-                    <p class="text-[10px] text-amber-800 font-bold truncate">
-                      {{ block.time_period_label ?? 'Full Day' }}
-                      <span v-if="block.booking_ref"> &bull; {{ block.booking_ref }}</span>
-                    </p>
-                  </div>
-                  <span class="text-[9px] font-black uppercase tracking-wider text-amber-700 shrink-0">
-                    Locked
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Sticky Floating Action Bar (Essential for Mobile & Easy Desktop Access) -->
-      <div class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-8 sm:w-auto z-40">
-        <div class="bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3 sm:px-5 sm:py-3.5 text-white shadow-2xl flex items-center justify-between gap-4 max-w-md mx-auto sm:max-w-none">
-          <div class="flex items-center gap-3">
+            <!-- Sticky publish bar: only while there is something to publish -->
             <div
-              :class="[
-                'w-2.5 h-2.5 rounded-full shrink-0',
-                hasUnsavedChanges ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
-              ]"
-            ></div>
-            <div>
-              <p class="text-xs font-black tracking-tight leading-none text-white">
-                {{ activeSlotsCount }} of {{ totalSlotsCount }} Sessions Open
-              </p>
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">
-                {{ hasUnsavedChanges ? 'Unsaved schedule changes' : 'Schedule in sync' }}
-              </p>
+                v-if="hasUnsavedChanges"
+                class="fixed inset-x-4 bottom-20 z-40 lg:bottom-6 lg:left-auto lg:right-8 lg:w-[360px]"
+            >
+                <div class="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-card border border-deep-800 bg-deep-950 px-4 py-3 text-white shadow-lift">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <span
+                            class="h-2.5 w-2.5 shrink-0 rounded-full"
+                            :class="hasUnsavedChanges ? 'bg-amber-400' : 'bg-lagoon-400'"
+                            aria-hidden="true"
+                        />
+                        <div class="min-w-0">
+                            <p class="truncate text-body-sm font-semibold">
+                                {{ bookableSlotsCount }} bookable hours · {{ activeSlotsCount }} periods open
+                            </p>
+                            <p class="text-label text-lagoon-200">
+                                {{ hasUnsavedChanges ? 'Unsaved changes' : 'Schedule in sync' }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex shrink-0 items-center gap-2">
+                        <button
+                            v-if="hasUnsavedChanges"
+                            type="button"
+                            class="text-body-sm font-semibold text-lagoon-200 hover:text-white"
+                            @click="resetToSaved"
+                        >
+                            Discard
+                        </button>
+                        <AppButton size="sm" :loading="weeklyForm.processing" @click="saveWeekly">
+                            Publish
+                        </AppButton>
+                    </div>
+                </div>
             </div>
-          </div>
-
-          <div class="flex items-center gap-2 shrink-0">
-            <button
-              v-if="hasUnsavedChanges"
-              type="button"
-              @click="resetToSaved"
-              :disabled="weeklyForm.processing"
-              class="px-3 py-2 text-xs font-bold text-slate-300 hover:text-white rounded-xl min-h-[44px] transition-colors"
-            >
-              Discard
-            </button>
-
-            <BaseButton
-              variant="primary"
-              size="sm"
-              @click="saveWeekly"
-              :loading="weeklyForm.processing"
-              class="px-5 font-black text-xs min-h-[44px] rounded-2xl shadow-lg shadow-ocean-500/30"
-            >
-              Publish
-            </BaseButton>
-          </div>
         </div>
-      </div>
-
-    </div>
-  </AppLayout>
+    </AppLayout>
 </template>
 
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 8px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-}
-</style>
+

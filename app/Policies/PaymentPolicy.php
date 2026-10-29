@@ -76,6 +76,22 @@ class PaymentPolicy
     }
 
     /**
+     * Only the student who owns the booking may upload its GCash receipt.
+     */
+    public function uploadReceipt(User $user, Payment $payment): bool
+    {
+        return $user->id === $payment->booking->student_id;
+    }
+
+    /**
+     * The assigned instructor or an admin verifies a GCash receipt.
+     */
+    public function verify(User $user, Payment $payment): bool
+    {
+        return $user->isAdmin() || $user->id === $payment->booking->instructor_id;
+    }
+
+    /**
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, Payment $payment): bool

@@ -42,12 +42,17 @@ interface Instructor {
     rate_per_hour: number
     strike_count: number
     qr_code_path: string
+    suspension_reason?: string | null
+    suspended_at?: string | null
+    suspended_until?: string | null
   }
   certificates: Certificate[]
 }
 
 interface Props {
   instructor: Instructor
+  qrImageUrl: string | null
+  verificationUrl: string
 }
 
 const props = defineProps<Props>()
@@ -121,6 +126,13 @@ const getStatusVariant = (status: string) => {
     <Head :title="'Instructor Dossier: ' + instructor.name" />
 
     <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
+        <div v-if="instructor.instructor_profile?.status === 'suspended'" class="rounded-3xl border border-rose-200 bg-rose-50 p-6">
+            <p class="text-xs font-black uppercase tracking-[0.2em] text-rose-600">Account Suspended</p>
+            <p class="mt-2 text-sm font-semibold text-rose-900">{{ instructor.instructor_profile?.suspension_reason ?? 'Suspended by SISA.' }}</p>
+            <p class="mt-2 text-xs text-rose-700">
+                Started {{ instructor.instructor_profile?.suspended_at ?? '—' }} · Ends {{ instructor.instructor_profile?.suspended_until ?? '—' }}
+            </p>
+        </div>
         <!-- Dashboard Header -->
         <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-100 pb-8">
             <div>
@@ -357,23 +369,43 @@ const getStatusVariant = (status: string) => {
                         </div>
                         
                         <div class="bg-white p-6 rounded-[3rem] shadow-2xl shadow-ocean-900/30 mb-8 transform group-hover:rotate-2 transition-transform">
-                            <!-- Verification QR Placeholder -->
-                            <div class="w-44 h-44 bg-slate-50 rounded-[2rem] flex items-center justify-center border-4 border-slate-50 shadow-inner">
-                                <svg class="w-32 h-32 text-slate-200" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1zm-4 7a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-3zm2 2v-1h1v1h-1z" clip-rule="evenodd" />
-                                    <path d="M11 4a1 1 0 10-2 0v1a1 1 0 002 0V4zM10 7a1 1 0 011 1v1h2a1 1 0 110 2h-3a1 1 0 01-1-1V8a1 1 0 011-1zM16 9a1 1 0 100-2h-1a1 1 0 100 2h1zM9 13a1 1 0 011-1h1a1 1 0 110 2H10a1 1 0 01-1-1zM7 11a1 1 0 100-2H4a1 1 0 100 2h3zM17 13a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM16 17a1 1 0 100-2h-3a1 1 0 100 2h3z" />
-                                </svg>
+                            <img
+                                v-if="qrImageUrl"
+                                :src="qrImageUrl"
+                                :alt="`Verification QR for ${instructor.name}`"
+                                class="w-44 h-44 rounded-[2rem] border-4 border-slate-50 object-contain"
+                            />
+                            <div v-else class="w-44 h-44 bg-slate-50 rounded-[2rem] flex flex-col items-center justify-center border-4 border-slate-50 shadow-inner px-4 text-center">
+                                <QrCodeIcon class="w-16 h-16 text-slate-300" aria-hidden="true" />
+                                <p class="mt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Generated on verification
+                                </p>
                             </div>
                         </div>
                         
-                        <p class="text-xs font-black leading-relaxed opacity-90 uppercase tracking-widest text-ocean-100 mb-10">
+                        <p class="text-xs font-black leading-relaxed opacity-90 uppercase tracking-widest text-ocean-100 mb-6">
                             SISA SECURED DATA CHANNEL
                         </p>
-                        
-                        <BaseButton class="w-full justify-center rounded-2xl bg-white text-ocean-700 py-4 font-black border-none hover:bg-ocean-50 active:scale-[0.98] transition-all shadow-xl shadow-ocean-800/20">
-                            <ArrowDownTrayIcon class="w-4 h-4 mr-2" />
-                            Archive Digitized I.D.
-                        </BaseButton>
+
+                        <div class="flex w-full flex-col gap-2">
+                            <a
+                                v-if="qrImageUrl"
+                                :href="qrImageUrl"
+                                download
+                                class="inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 text-sm font-black text-ocean-700 shadow-xl shadow-ocean-800/20 transition-all hover:bg-ocean-50 active:scale-[0.98]"
+                            >
+                                <ArrowDownTrayIcon class="w-4 h-4 mr-2" />
+                                Download QR
+                            </a>
+                            <a
+                                :href="verificationUrl"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex w-full items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-white/15 active:scale-[0.98]"
+                            >
+                                Preview live verification
+                            </a>
+                        </div>
                     </div>
                 </div>
 
@@ -478,6 +510,11 @@ const getStatusVariant = (status: string) => {
             <p class="text-sm text-slate-600 mb-4">
                 Please provide a mandatory reason for suspending this instructor. This action will hide them from the public search and prevent them from accepting new bookings.
             </p>
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Duration (days) <span class="text-rose-500">*</span></label>
+                <input type="number" min="1" max="365" v-model="suspendForm.duration_days" class="w-full rounded-xl border-slate-200 shadow-sm focus:ring-rose-500 focus:border-rose-500 sm:text-sm p-4" />
+                <p v-if="suspendForm.errors.duration_days" class="mt-1 text-xs font-bold text-rose-600">{{ suspendForm.errors.duration_days }}</p>
+            </div>
             <div class="mb-6">
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Suspension Reason <span class="text-rose-500">*</span></label>
                 <textarea 

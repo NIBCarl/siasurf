@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
-import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
-import Badge from '@/Components/Atoms/Badge.vue'
+import { Head } from '@inertiajs/vue3'
+import AppLayout from '@/Layouts/AppLayout.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import AppPanel from '@/Components/UI/AppPanel.vue'
+import EmptyState from '@/Components/UI/EmptyState.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
+import { ChatBubbleLeftRightIcon, StarIcon } from '@heroicons/vue/24/outline'
+import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid'
 
 interface Review {
   id: number
-  rating: number
+  rating: number | null
   comment: string
   created_at: string
   instructor: {
@@ -19,7 +26,7 @@ interface BookingToReview {
   date: string
   instructor: {
     name: string
-    avatar_path: string
+    avatar_path: string | null
   }
 }
 
@@ -30,98 +37,161 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   reviews: () => [],
-  pendingReviews: () => []
+  pendingReviews: () => [],
 })
+
+const formatDate = (date: string) =>
+  new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+const initials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+
+const avatarUrl = (path?: string | null) => resolveAvatarUrl(path)
 </script>
 
 <template>
-  <Head title="My Reviews" />
+    <Head title="My reviews" />
 
-  <AppSidebarLayout>
-    <template #header>
-      My Reviews & Feedback
-    </template>
-    <div class="py-6 min-h-screen">
-      <div class="max-w-7xl mx-auto">
-        
-        <div class="mb-12">
-          <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Reviews & Feedback</h1>
-          <p class="text-slate-600 mt-1">Share your experience to help our community stay safe and informed.</p>
-        </div>
+    <AppLayout>
+        <template #header>My reviews</template>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          <!-- Pending Reviews (CTA) -->
-          <div class="lg:col-span-1 space-y-6">
-            <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
-               <h3 class="text-lg font-bold text-slate-900 mb-6 flex items-center">
-                 <svg class="w-5 h-5 text-amber-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                 </svg>
-                 Pending Reviews
-               </h3>
-               
-               <div v-if="pendingReviews.length > 0" class="space-y-4">
-                  <div v-for="booking in pendingReviews" :key="booking.id" class="p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                    <div class="flex items-center mb-3">
-                       <img :src="booking.instructor.avatar_path" class="w-8 h-8 rounded-lg object-cover mr-3">
-                       <div>
-                         <p class="text-xs font-bold text-slate-900">{{ booking.instructor.name }}</p>
-                         <p class="text-[10px] text-slate-500 uppercase">{{ new Date(booking.date).toLocaleDateString() }}</p>
-                       </div>
+        <div class="space-y-6">
+            <SectionHeader
+                eyebrow="Feedback"
+                title="Reviews & concerns"
+                description="Public reviews help other surfers. Private concerns go to SISA and only become strikes after review."
+            />
+
+            <div class="grid gap-6 lg:grid-cols-3">
+                <div class="space-y-4 lg:col-span-1">
+                    <div>
+                        <SectionHeader eyebrow="Action needed" title="Awaiting your feedback" />
+
+                        <div v-if="pendingReviews.length" class="mt-3 space-y-3">
+                            <AppCard
+                                v-for="booking in pendingReviews"
+                                :key="booking.id"
+                                padding="sm"
+                                class="border-amber-200 bg-amber-50"
+                            >
+                                <div class="flex items-center gap-3">
+                                    <img
+                                        v-if="avatarUrl(booking.instructor.avatar_path)"
+                                        :src="avatarUrl(booking.instructor.avatar_path) || undefined"
+                                        alt=""
+                                        class="h-10 w-10 rounded-full object-cover"
+                                    />
+                                    <span
+                                        v-else
+                                        class="flex h-10 w-10 items-center justify-center rounded-full bg-deep-950 text-label font-semibold text-lagoon-200"
+                                    >
+                                        {{ initials(booking.instructor.name) }}
+                                    </span>
+                                    <div class="min-w-0">
+                                        <p class="truncate text-body-sm font-semibold text-amber-950">
+                                            {{ booking.instructor.name }}
+                                        </p>
+                                        <p class="text-label text-amber-800">{{ formatDate(booking.date) }}</p>
+                                    </div>
+                                </div>
+
+                                <AppButton
+                                    :href="route('student.feedback.create', booking.id)"
+                                    size="sm"
+                                    block
+                                    class="mt-3"
+                                >
+                                    Share feedback
+                                </AppButton>
+                            </AppCard>
+                        </div>
+
+                        <AppPanel v-else tone="positive" label="All caught up" class="mt-3">
+                            Every completed lesson has feedback. Thank you for keeping the line-up accountable.
+                        </AppPanel>
                     </div>
-                    <Link :href="route('student.reviews.create', booking.id)">
-                       <BaseButton variant="primary" size="sm" class="w-full justify-center shadow-lg shadow-amber-200">Rate Lesson</BaseButton>
-                    </Link>
-                  </div>
-               </div>
-               <div v-else class="text-center py-8">
-                  <p class="text-sm text-slate-400 italic">No pending reviews. Good job!</p>
-               </div>
-            </div>
 
-            <!-- Review Policy -->
-            <div class="bg-ocean-600 rounded-3xl p-6 text-white shadow-xl">
-               <h4 class="font-bold mb-2">Our Review Policy</h4>
-               <p class="text-xs leading-relaxed opacity-80">
-                 Reviews are permanent and verified. We only allow one review per session. Please be honest and respectful to maintain the quality of our surfing community.
-               </p>
-            </div>
-          </div>
+                    <AppPanel tone="neutral" label="How feedback works">
+                        One public review per completed lesson. A public review never adds a strike by itself.
+                        A private concern is reviewed by SISA first and only then contributes 1, 2 or 3 strikes
+                        depending on the confirmed severity.
+                    </AppPanel>
+                </div>
 
-          <!-- My Past Reviews -->
-          <div class="lg:col-span-2 space-y-6">
-            <h3 class="text-xl font-bold text-slate-900 px-2">History</h3>
-            <div v-if="reviews.length > 0" class="space-y-4">
-               <div v-for="review in reviews" :key="review.id" class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 group transition-all hover:shadow-md">
-                  <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center">
-                       <div class="flex text-amber-400 mr-2">
-                         <svg v-for="i in 5" :key="i" class="w-4 h-4" :fill="i <= review.rating ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
-                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                         </svg>
-                       </div>
-                       <Badge variant="info">{{ review.rating }}.0</Badge>
+                <div class="lg:col-span-2">
+                    <SectionHeader eyebrow="History" title="Your public reviews">
+                        <template #action>
+                            <StatusPill variant="neutral" :dot="false">{{ reviews.length }} total</StatusPill>
+                        </template>
+                    </SectionHeader>
+
+                    <div v-if="reviews.length" class="mt-3 space-y-3">
+                        <article
+                            v-for="review in reviews"
+                            :key="review.id"
+                            class="rounded-card border border-sand-200 bg-white p-5 shadow-card sm:p-6"
+                        >
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span
+                                            v-if="review.rating"
+                                            class="flex items-center gap-0.5"
+                                            :aria-label="`${review.rating} out of 5`"
+                                        >
+                                            <StarIconSolid
+                                                v-for="i in 5"
+                                                :key="i"
+                                                class="h-4 w-4"
+                                                :class="i <= review.rating ? 'text-amber-500' : 'text-stone-300'"
+                                                aria-hidden="true"
+                                            />
+                                        </span>
+                                        <StatusPill v-else variant="neutral" :dot="false">No rating</StatusPill>
+                                    </div>
+                                    <h3 class="mt-2 text-body-lg font-semibold text-deep-900">
+                                        Lesson with {{ review.instructor.name }}
+                                    </h3>
+                                </div>
+                                <span class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                    {{ formatDate(review.created_at) }}
+                                </span>
+                            </div>
+
+                            <p class="mt-3 text-body text-stone-600">"{{ review.comment }}"</p>
+                        </article>
                     </div>
-                    <span class="text-xs text-slate-400">{{ new Date(review.created_at).toLocaleDateString() }}</span>
-                  </div>
-                  <h4 class="font-bold text-slate-900 mb-2">Lesson with {{ review.instructor.name }}</h4>
-                  <p class="text-sm text-slate-600 leading-relaxed">
-                    "{{ review.comment }}"
-                  </p>
-                  <div class="mt-4 flex justify-end">
-                    <button class="text-[10px] font-black uppercase text-slate-300 hover:text-rose-500 transition-colors">Request Removal</button>
-                  </div>
-               </div>
-            </div>
-            <div v-else class="bg-white rounded-3xl p-16 text-center shadow-sm border border-slate-100">
-               <p class="text-slate-400 italic">You haven't left any reviews yet.</p>
-            </div>
-          </div>
 
+                    <div v-else class="mt-3">
+                        <EmptyState
+                            :icon="ChatBubbleLeftRightIcon"
+                            title="No reviews yet"
+                            description="After a completed lesson you can leave a public review and, if needed, a private concern."
+                        >
+                            <AppButton :href="route('student.bookings.index')" variant="secondary">
+                                View my bookings
+                            </AppButton>
+                        </EmptyState>
+                    </div>
+
+                    <AppPanel tone="neutral" class="mt-3">
+                        <span class="flex items-center gap-2">
+                            <StarIcon class="h-4 w-4 text-amber-600" aria-hidden="true" />
+                            Reviews are tied to a completed booking, so every rating is verified.
+                        </span>
+                    </AppPanel>
+                </div>
+            </div>
         </div>
-
-      </div>
-    </div>
-  </AppSidebarLayout>
+    </AppLayout>
 </template>
+

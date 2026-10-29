@@ -32,7 +32,20 @@ class BookingController extends Controller
         $user = auth()->user();
         $status = $request->query('status');
 
-        $bookings = Booking::with(['student', 'surfSpot', 'changeRequests'])
+        $bookings = Booking::with([
+            'student',
+            'surfSpot',
+            'changeRequests',
+            'payment',
+            'waiver',
+            'conversation' => function ($query) use ($user) {
+                $query->withCount([
+                    'messages as unread_count' => fn ($messages) => $messages
+                        ->where('sender_id', '!=', $user->id)
+                        ->whereNull('read_at'),
+                ]);
+            },
+        ])
             ->where('instructor_id', $user->id)
             ->when(
                 $status && $status !== 'all',
@@ -49,17 +62,48 @@ class BookingController extends Controller
             return array_merge($booking->toArray(), [
                 'accept_time_remaining' => $booking->getAcceptTimeRemaining(),
                 'can_be_declined' => $booking->isAwaitingInstructorResponse() && !$booking->acceptDeadlinePassed(),
+                // Accepting has two extra guards on the service layer (window
+                // closed, lesson too close to run). Surface them so the roster
+                // never offers an action the server would refuse.
+                'can_be_accepted' => $booking->status === BookingStatus::Pending
+                    && !$booking->acceptDeadlinePassed()
+                    && !$booking->isTooCloseToStartToAccept(),
+                'accept_block' => match (true) {
+                    $booking->status !== BookingStatus::Pending => null,
+                    $booking->acceptDeadlinePassed() => 'window_closed',
+                    $booking->isTooCloseToStartToAccept() => 'too_close',
+                    default => null,
+                },
                 'requires_admin_approval_for_change' => $booking->changeRequiresAdminApproval(),
                 'has_pending_change_request' => $booking->changeRequests
                     ->where('status', ChangeRequestStatus::Pending)
                     ->isNotEmpty(),
                 'attendance_label' => $booking->attendance_status?->label(),
+                'attendance_status' => $booking->attendance_status?->value,
+                'has_waiver' => $booking->waiver !== null,
+                'payment_method' => $booking->payment?->payment_method?->value,
+                // Only recommend a board when the student actually supplied the
+                // measurements; otherwise the model would fall back to defaults.
+                'board_recommendation' => ($booking->height && $booking->weight)
+                    ? $booking->getRecommendedBoardSize()
+                    : null,
+                'chat_unread_count' => (int) ($booking->conversation?->unread_count ?? 0),
             ]);
         });
+
+        $attendanceDue = Booking::where('instructor_id', $user->id)
+            ->whereNull('attendance_status')
+            ->whereIn('status', [
+                BookingStatus::Confirmed,
+                BookingStatus::InProgress,
+                BookingStatus::Completed,
+            ])
+            ->count();
 
         return Inertia::render('Instructor/Bookings/Index', [
             'bookings' => $bookings,
             'filters' => ['status' => $status ?? 'all'],
+            'attendanceDue' => $attendanceDue,
             'counts' => [
                 'pending' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Pending)->count(),
                 'confirmed' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Confirmed)->count(),
@@ -84,16 +128,43 @@ class BookingController extends Controller
             'surfSpot',
             'payment',
             'waiver',
+            'participants.waivers',
             'review',
             'changeRequests' => fn ($query) => $query->with(['requestedBy', 'reviewedBy'])->latest(),
         ]);
 
         $surfSpots = SurfSpot::where('is_active', true)->orderBy('name')->get(['id', 'name', 'difficulty']);
 
+        // Surface the same board maths the roster and the student flow use, so
+        // the detail page never re-implements the recommendation client side.
+        $booking->setAttribute(
+            'board_recommendation',
+            ($booking->height && $booking->weight) ? $booking->getRecommendedBoardSize() : null,
+        );
+
+        $booking->participants->each(fn ($participant) => $participant->setAttribute(
+            'board_match',
+            $participant->getRecommendedBoardSize(),
+        ));
+
+        // The roster computes this in the controller too; keep the label in one shape.
+        $booking->setAttribute('attendance_label', $booking->attendance_status?->label());
+
         return Inertia::render('Instructor/Bookings/Show', [
             'booking' => $booking,
             'surfSpots' => $surfSpots,
             'acceptTimeRemaining' => $booking->getAcceptTimeRemaining(),
+            // Same guards as the roster: accepting is refused once the window
+            // closes or the lesson is inside the pre-lesson buffer.
+            'canBeAccepted' => $booking->status === BookingStatus::Pending
+                && !$booking->acceptDeadlinePassed()
+                && !$booking->isTooCloseToStartToAccept(),
+            'acceptBlock' => match (true) {
+                $booking->status !== BookingStatus::Pending => null,
+                $booking->acceptDeadlinePassed() => 'window_closed',
+                $booking->isTooCloseToStartToAccept() => 'too_close',
+                default => null,
+            },
             'requiresAdminApprovalForChange' => $booking->changeRequiresAdminApproval(),
             'hoursUntilLesson' => $booking->hoursUntilLesson(),
             'changeApprovalThresholdHours' => Booking::CHANGE_APPROVAL_THRESHOLD_HOURS,
@@ -280,10 +351,14 @@ class BookingController extends Controller
         }
 
         $validated = $request->validate([
-            'reason' => ['nullable', 'string', 'max:500'],
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+        ], [
+            'reason.required' => 'Tell the student why you cannot take this lesson.',
+            'reason.min' => 'Please give a slightly more descriptive reason (at least 3 characters).',
         ]);
 
-        $reason = $validated['reason'] ?? null;
+        // Stored on the booking so the student sees exactly why it was declined.
+        $reason = $validated['reason'];
 
         DB::transaction(function () use ($booking, $reason) {
             $booking->decline($reason);

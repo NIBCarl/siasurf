@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\SkillLevel;
-use App\Services\LocationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,14 +11,40 @@ class SurfSpot extends Model
 {
     use HasFactory;
 
+    /**
+     * Coast sides published by the Siargao surf-spot directory. The island has
+     * no listed West breaks, so a West filter must render an empty state.
+     */
+    public const SIDES = [
+        'north' => 'North',
+        'east' => 'East',
+        'south' => 'South',
+        'west' => 'West',
+    ];
+
+    /**
+     * Break zone: the soft inside of a reef versus the hollow outer line-up.
+     * Both sections can share one line-up but carry different difficulties.
+     */
+    public const SECTIONS = [
+        'inner' => 'Inner',
+        'outer' => 'Outer',
+    ];
+
     protected $fillable = [
         'name',
         'area',
+        'barangay',
+        'side',
+        'section',
         'region',
         'description',
         'difficulty',
         'break_type',
         'best_tide',
+        'best_season',
+        'access',
+        'plus_code',
         'hazard_notes',
         'latitude',
         'longitude',
@@ -65,6 +90,16 @@ class SurfSpot extends Model
         return $query->where('area', $area);
     }
 
+    public function scopeOnSide($query, string $side)
+    {
+        return $query->where('side', $side);
+    }
+
+    public function scopeInSection($query, string $section)
+    {
+        return $query->where('section', $section);
+    }
+
     public function scopeOrdered($query)
     {
         return $query->orderBy('sort_order')->orderBy('name');
@@ -73,11 +108,11 @@ class SurfSpot extends Model
     // Helper methods
     public function isSafeFor(string $skillLevel): bool
     {
-        $difficulties = ['beginner' => 1, 'intermediate' => 2, 'advanced' => 3];
-        $spotLevel = $difficulties[$this->difficulty] ?? 3;
-        $userLevel = $difficulties[$skillLevel] ?? 3;
+        // Single source of truth lives on SkillLevel so the booking form, the
+        // SQL filter and the safety engine can never drift apart.
+        $level = SkillLevel::tryFrom($skillLevel);
 
-        return $userLevel >= $spotLevel;
+        return $level?->canSurfDifficulty($this->difficulty) ?? false;
     }
 
     public function isBeginnerFriendly(): bool
@@ -86,34 +121,26 @@ class SurfSpot extends Model
     }
 
     /**
-     * Human label used across the UI, e.g. "Cloud 9 — General Luna".
+     * Human label used across the UI, e.g. "Cloud 9 (Outer) — General Luna".
      */
     public function displayLabel(): string
     {
         return $this->area ? "{$this->name} — {$this->area}" : $this->name;
     }
 
+    public function sideLabel(): ?string
+    {
+        return self::SIDES[$this->side] ?? null;
+    }
+
+    public function sectionLabel(): ?string
+    {
+        return self::SECTIONS[$this->section] ?? null;
+    }
+
     public function hasCoordinates(): bool
     {
         return $this->latitude !== null && $this->longitude !== null;
-    }
-
-    /**
-     * Great-circle distance in metres between this spot and a point.
-     * Returns null when the spot has no coordinates.
-     */
-    public function distanceFrom(float $latitude, float $longitude): ?float
-    {
-        if (! $this->hasCoordinates()) {
-            return null;
-        }
-
-        return LocationService::haversineMeters(
-            (float) $this->latitude,
-            (float) $this->longitude,
-            $latitude,
-            $longitude
-        );
     }
 
     /**
@@ -125,12 +152,20 @@ class SurfSpot extends Model
             'id' => $this->id,
             'name' => $this->name,
             'area' => $this->area,
+            'barangay' => $this->barangay,
+            'side' => $this->side,
+            'side_label' => $this->sideLabel(),
+            'section' => $this->section,
+            'section_label' => $this->sectionLabel(),
             'region' => $this->region,
             'label' => $this->displayLabel(),
             'description' => $this->description,
             'difficulty' => $this->difficulty,
             'break_type' => $this->break_type,
             'best_tide' => $this->best_tide,
+            'best_season' => $this->best_season,
+            'access' => $this->access,
+            'plus_code' => $this->plus_code,
             'hazard_notes' => $this->hazard_notes,
             'latitude' => $this->latitude !== null ? (float) $this->latitude : null,
             'longitude' => $this->longitude !== null ? (float) $this->longitude : null,

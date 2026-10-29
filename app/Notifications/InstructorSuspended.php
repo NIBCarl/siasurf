@@ -43,8 +43,9 @@ class InstructorSuspended extends Notification
             ->line('Your instructor account has been suspended for ' . $this->duration . ' days.')
             ->line('Reason for suspension: ' . $this->reason)
             ->line('During this period, you will not be able to accept new bookings or be featured in search results.')
-            ->action('View History', url('/instructor/history'))
-            ->line('If you believe this is an error, please contact SISA support.');
+            ->line('You can appeal this suspension from your account page.')
+            ->action('View Suspension & Appeal', route('instructor.suspended'))
+            ->line('If you believe this is an error, submit an appeal from your account page.');
     }
 
     /**

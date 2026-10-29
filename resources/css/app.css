@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -65,7 +63,86 @@
         font-variant-numeric: tabular-nums;
     }
     body {
-        @apply text-slate-900 antialiased;
-        background-color: #f8fafc; /* slate-50 */
+        @apply text-deep-900 antialiased;
+        background-color: #f2eade; /* sand-100 — sunlit sandbar canvas */
+    }
+
+    /* Every focusable control gets a visible, consistent ring */
+    :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+        outline: 2px solid #0d9488;
+        outline-offset: 2px;
+    }
+}
+
+@layer components {
+    /* Three-plane depth system:
+       0 canvas = sand-50 · 1 paper = white · 2 well = sand-50 inset · 3 chrome = deep-900 */
+    .surface {
+        @apply bg-white border border-sand-200 rounded-card shadow-card;
+    }
+
+    .surface-well {
+        @apply bg-sand-50 border border-sand-300 rounded-control;
+    }
+
+    .surface-chrome {
+        @apply bg-deep-900 text-white border border-deep-800 rounded-card;
+    }
+
+    .eyebrow {
+        @apply text-label font-bold uppercase tracking-[0.08em] text-stone-600;
+    }
+
+    /* Inline fact chips: a whole row of metadata in the height of one line */
+    .chip {
+        @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5
+               text-label font-semibold;
+    }
+
+    .chip-neutral {
+        @apply border-sand-300 bg-sand-50 text-stone-700;
+    }
+
+    .chip-positive {
+        @apply border-lagoon-300 bg-lagoon-50 text-lagoon-800;
+    }
+
+    .chip-warning {
+        @apply border-amber-300 bg-amber-50 text-amber-950;
+    }
+
+    .chip-critical {
+        @apply border-rose-300 bg-rose-50 text-rose-900;
+    }
+
+    /* Dropdown rows, so menus inherit the shell instead of Breeze defaults */
+    .menu-item {
+        @apply flex w-full items-center gap-2 px-3 py-2 text-left text-body-sm font-medium
+               text-deep-900 transition-colors hover:bg-sand-100;
+    }
+
+    .menu-item-danger {
+        @apply text-rose-700 hover:bg-rose-50;
+    }
+
+    .metric {
+        @apply font-semibold tabular-nums text-deep-900;
+    }
+
+    .skip-link {
+        @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100]
+               focus:rounded-control focus:bg-white focus:px-4 focus:py-3 focus:text-body
+               focus:font-semibold focus:text-deep-900 focus:shadow-lift;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Review extends Model
 {
@@ -16,6 +17,7 @@ class Review extends Model
         'instructor_id',
         'rating',
         'comment',
+        'feedback_tags',
         'instructor_response',
         'photo_path',
         'edited_at',
@@ -27,6 +29,7 @@ class Review extends Model
 
     protected $casts = [
         'rating' => 'integer',
+        'feedback_tags' => 'array',
         'edited_at' => 'datetime',
         'is_hidden' => 'boolean',
         'moderated_at' => 'datetime',
@@ -46,6 +49,11 @@ class Review extends Model
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'instructor_id');
+    }
+
+    public function safetyIncident(): HasOne
+    {
+        return $this->hasOne(SafetyIncident::class);
     }
 
     // Scopes
@@ -81,7 +89,9 @@ class Review extends Model
 
     public function scopeVisible($query)
     {
-        return $query->where('is_hidden', false)->orWhereNull('is_hidden');
+        return $query->where(function ($q) {
+            $q->where('is_hidden', false)->orWhereNull('is_hidden');
+        });
     }
 
     // Helper methods

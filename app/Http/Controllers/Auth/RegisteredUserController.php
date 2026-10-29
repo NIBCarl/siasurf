@@ -57,10 +57,27 @@ class RegisteredUserController extends Controller
             ]);
         }
 
-        event(new Registered($user));
+        // Sending the verification mail is synchronous. A wrong Gmail app
+        // password must NOT turn a successful registration into a 500, so the
+        // failure is reported and surfaced on the verification screen instead.
+        $mailSent = true;
+
+        try {
+            event(new Registered($user));
+        } catch (\Throwable $exception) {
+            report($exception);
+            $mailSent = false;
+        }
 
         Auth::login($user);
 
-        return redirect(route('dashboard', absolute: false));
+        // Send the user straight to the verification screen rather than the
+        // dashboard: the dashboard would immediately bounce them here anyway,
+        // and that extra hop loses the flash message.
+        $redirect = redirect()->route('verification.notice');
+
+        return $mailSent
+            ? $redirect
+            : $redirect->with('status', 'verification-mail-failed');
     }
 }

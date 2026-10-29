@@ -21,8 +21,14 @@ class EnsureInstructorNotSuspended
             $profile = $user->instructorProfile;
 
             if ($profile && $profile->isSuspended()) {
+                // The suspension page and appeal endpoint must stay reachable,
+                // otherwise a suspended instructor would be redirected forever.
+                if ($request->routeIs('instructor.suspended', 'instructor.suspension.appeal', 'logout')) {
+                    return $next($request);
+                }
+
                 return redirect()->route('instructor.suspended')
-                    ->with('error', 'Your instructor account has been suspended. Please contact SISA admin for more information.');
+                    ->with('error', 'Your instructor account has been suspended. Please review the reason and submit an appeal if appropriate.');
             }
         }
 

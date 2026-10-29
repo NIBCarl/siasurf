@@ -1,38 +1,80 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3'
-import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
-import Badge from '@/Components/Atoms/Badge.vue'
-import LiveInstructorTracker from '@/Components/Organisms/LiveInstructorTracker.vue'
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
-import { 
-  CheckCircleIcon, 
-  ClockIcon, 
-  MapPinIcon, 
-  UserCircleIcon,
-  PhoneIcon,
-  InformationCircleIcon,
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
+import AppLayout from '@/Layouts/AppLayout.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import AppPanel from '@/Components/UI/AppPanel.vue'
+import Countdown from '@/Components/UI/Countdown.vue'
+import Modal from '@/Components/Modal.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
+import ChatBox from '@/Components/Organisms/ChatBox.vue'
+import {
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  ChatBubbleLeftRightIcon,
+  ClockIcon,
+  CreditCardIcon,
+  MapPinIcon,
   ShieldCheckIcon,
-  ArrowsUpDownIcon,
-  ScaleIcon
 } from '@heroicons/vue/24/outline'
 
 interface Booking {
   id: number
   date: string
   time_period: string
+  start_time?: string | null
+  end_time?: string | null
+  created_at?: string | null
   status: string
   total_amount: number
   skill_level: string
   student_age: number
-  height: number
-  weight: number
+  height: number | null
+  weight: number | null
   student_count: number
-  notes: string
-  instructor: { id: number; name: string; avatar_path: string; email: string }
-  surf_spot: { id?: number; name: string; difficulty: string; area?: string | null; latitude?: number | null; longitude?: number | null }
-  payment?: { amount: number; payment_method: string; status: string; paid_at: string; notes?: string; checkout_url?: string | null }
-  waiver?: { signed_at: string }
+  notes: string | null
+  decline_reason?: string | null
+  cancellation_reason?: string | null
+  cancellation_label?: string | null
+  cancellation_note?: string | null
+  cancelled_at?: string | null
+  can_be_cancelled?: boolean
+  has_submitted_payment?: boolean
+  latest_change_request?: {
+    id: number
+    type: string | null
+    status: string | null
+    reason: string | null
+    admin_note: string | null
+    reviewed_at: string | null
+  } | null
+  instructor: { id: number; name: string; avatar_path: string | null; email: string }
+  surf_spot: {
+    id?: number
+    name: string
+    difficulty: string
+    area?: string | null
+    latitude?: number | null
+    longitude?: number | null
+  }
+  payment?: {
+    amount: number
+    payment_method: string
+    status: string
+    paid_at: string | null
+    notes?: string
+    checkout_url?: string | null
+    receipt_path?: string | null
+    receipt_reference?: string | null
+    receipt_uploaded_at?: string | null
+    receipt_verified_at?: string | null
+    receipt_note?: string | null
+    verified_by?: { name: string } | null
+  }
+  waiver?: { signed_at: string } | null
   payment_deadline_at?: string
   student_id: number
 }
@@ -53,14 +95,13 @@ let paymentTimer: ReturnType<typeof setInterval> | null = null
 const calculatePaymentTimeRemaining = () => {
   if (!props.booking.payment_deadline_at) return
   const deadline = new Date(props.booking.payment_deadline_at).getTime()
-  const now = new Date().getTime()
-  paymentTimeRemaining.value = Math.max(0, Math.floor((deadline - now) / 1000))
+  paymentTimeRemaining.value = Math.max(0, Math.floor((deadline - Date.now()) / 1000))
 }
 
 onMounted(() => {
   if (props.booking.status === 'in_progress' && timeRemaining.value > 0) {
     timer = setInterval(() => {
-      timeRemaining.value--
+      timeRemaining.value -= 1
       if (timeRemaining.value <= 0 && timer) clearInterval(timer)
     }, 1000)
   }
@@ -76,18 +117,11 @@ onMounted(() => {
     }, 1000)
   }
 
-  // Real-time listener for WebSocket updates (Phase 11 integration hook)
   if (typeof window !== 'undefined' && (window as any).Echo) {
-    (window as any).Echo.private(`student.${props.booking.student_id}`)
-      .listen('.booking.awaiting_payment', () => {
-        router.reload({ only: ['booking'] })
-      })
-      .listen('.booking.confirmed', () => {
-        router.reload({ only: ['booking'] })
-      })
-      .listen('.booking.cancelled', () => {
-        router.reload({ only: ['booking'] })
-      })
+    ;(window as any).Echo.private(`student.${props.booking.student_id}`)
+      .listen('.booking.awaiting_payment', () => router.reload({ only: ['booking'] }))
+      .listen('.booking.confirmed', () => router.reload({ only: ['booking'] }))
+      .listen('.booking.cancelled', () => router.reload({ only: ['booking'] }))
   }
 })
 
@@ -96,339 +130,665 @@ onBeforeUnmount(() => {
   if (paymentTimer) clearInterval(paymentTimer)
 
   if (typeof window !== 'undefined' && (window as any).Echo) {
-    (window as any).Echo.leave(`student.${props.booking.student_id}`)
+    ;(window as any).Echo.leave(`student.${props.booking.student_id}`)
   }
 })
 
-const formatTimeRemaining = (seconds: number) => {
-  if (seconds <= 0) return 'Session Finishing...'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  return `${h}h ${m}m ${s}s`
-}
-
-const formatPaymentTimeRemaining = (seconds: number) => {
-  if (seconds <= 0) return 'Expired'
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}m ${s}s`
-}
-
-/**
- * FR 1.4 - the GCash checkout link now lives in its own column instead of being
- * JSON-packed into the payment notes field.
- */
 const checkoutUrl = computed(() => props.booking.payment?.checkout_url ?? null)
 
 const steps = computed(() => [
   { name: 'Booked', status: 'completed', icon: CheckCircleIcon },
-  { 
-    name: 'Confirmed', 
-    status: ['pending', 'awaiting_payment'].includes(props.booking.status) ? 'upcoming' : 'completed', 
-    icon: ShieldCheckIcon 
+  {
+    name: 'Confirmed',
+    status: ['pending', 'awaiting_payment'].includes(props.booking.status) ? 'upcoming' : 'completed',
+    icon: ShieldCheckIcon,
   },
-  { 
-    name: 'In Progress', 
-    status: props.booking.status === 'in_progress' ? 'current' : (['completed'].includes(props.booking.status) ? 'completed' : 'upcoming'), 
-    icon: ClockIcon 
+  {
+    name: 'In progress',
+    status:
+      props.booking.status === 'in_progress'
+        ? 'current'
+        : props.booking.status === 'completed'
+          ? 'completed'
+          : 'upcoming',
+    icon: ClockIcon,
   },
-  { name: 'Completed', status: props.booking.status === 'completed' ? 'completed' : 'upcoming', icon: CheckCircleIcon },
+  {
+    name: 'Completed',
+    status: props.booking.status === 'completed' ? 'completed' : 'upcoming',
+    icon: CheckCircleIcon,
+  },
 ])
 
-const getStatusVariant = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'confirmed': return 'success'
-    case 'pending': return 'warning'
-    case 'awaiting_payment': return 'warning'
-    case 'completed': return 'info'
-    case 'cancelled': return 'danger'
-    default: return 'info'
+type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | 'cancelled' | 'critical'
+
+const statusMeta = (status: string): { label: string; variant: PillVariant } => {
+  switch (status) {
+    case 'pending':
+      return { label: 'Awaiting instructor', variant: 'pending' }
+    case 'awaiting_payment':
+      return { label: 'Awaiting payment', variant: 'pending' }
+    case 'confirmed':
+      return { label: 'Confirmed', variant: 'verified' }
+    case 'in_progress':
+      return { label: 'In the water', variant: 'live' }
+    case 'completed':
+      return { label: 'Completed', variant: 'completed' }
+    case 'cancelled':
+    case 'declined':
+    case 'payment_timeout':
+    case 'expired':
+    case 'no_show':
+      return { label: status.replace(/_/g, ' '), variant: 'cancelled' }
+    default:
+      return { label: status.replace(/_/g, ' '), variant: 'neutral' }
   }
 }
 
-const cancelBooking = () => {
-  const reason = window.prompt('Please enter the reason for cancellation:')
-  if (reason === null) return // User cancelled prompt
-  
-  if (!reason.trim()) {
-    alert('Cancellation reason is required.')
-    return
+const paymentLabel = (status?: string) => {
+  if (!status) return 'Not started'
+  const labels: Record<string, string> = {
+    completed: 'Paid',
+    pending: 'Payment pending',
+    pending_cash: 'Cash on hand',
+    pending_verification: 'Receipt awaiting verification',
+    failed: 'Payment failed',
+    refunded: 'Refunded',
   }
+  return labels[status] ?? status.replace(/_/g, ' ')
+}
 
-  router.post(route('student.bookings.cancel', props.booking.id), { reason }, {
+const formatDate = (date: string) =>
+  new Date(date).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
+const formatAmount = (amount?: number) => Number(amount ?? props.booking.total_amount ?? 0).toLocaleString()
+
+const timeLabel = (period: string) => period.charAt(0).toUpperCase() + period.slice(1)
+
+// Bookings store times as "HH:MM" (or an ISO datetime on older rows).
+const clock = (value?: string | null) => {
+  if (!value) return null
+
+  const time = value.includes('T') ? value.split('T')[1] : value
+  const [hour, minute] = time.slice(0, 5).split(':').map(Number)
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null
+
+  const suffix = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12
+
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`
+}
+
+const scheduledSlot = computed(() => {
+  const start = clock(props.booking.start_time)
+  const end = clock(props.booking.end_time)
+
+  if (start && end) return `${start} – ${end}`
+  if (start) return start
+
+  return `${timeLabel(props.booking.time_period)} session`
+})
+
+const bookedOn = computed(() => {
+  if (!props.booking.created_at) return null
+
+  return new Date(props.booking.created_at).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+})
+
+const initials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+
+const avatarUrl = computed(() => resolveAvatarUrl(props.booking.instructor))
+
+const canCancel = computed(
+  () =>
+    props.booking.can_be_cancelled ??
+    ['pending', 'awaiting_payment'].includes(props.booking.status),
+)
+const canFeedback = computed(() => props.booking.status === 'completed')
+
+// The receipt is served through an authorised route, never a public URL.
+const receiptUrl = computed(() =>
+  props.booking.payment?.receipt_path
+    ? route('payments.receipt.image', props.booking.id)
+    : null,
+)
+
+const paymentSubmitted = computed(() => props.booking.has_submitted_payment === true)
+
+const isDeclined = computed(() => props.booking.status === 'declined')
+
+// Terminal states where the lesson was called off: the student must see who
+// cancelled it and the free-text reason the instructor/SISA gave.
+const isCancelled = computed(() =>
+  ['cancelled', 'payment_timeout', 'no_show'].includes(props.booking.status),
+)
+
+const adminChangeNote = computed(
+  () => props.booking.latest_change_request?.admin_note ?? null,
+)
+
+// Cancellation is a real form, not a browser prompt.
+const showCancel = ref(false)
+const showChat = ref(false)
+const cancelForm = useForm({ reason: '' })
+
+const openCancel = () => {
+  showCancel.value = true
+  cancelForm.reset()
+  cancelForm.clearErrors()
+}
+
+const submitCancel = () => {
+  cancelForm.post(route('student.bookings.cancel', props.booking.id), {
+    preserveScroll: true,
     onSuccess: () => {
-      // Success flash message handles notification
-    }
+      showCancel.value = false
+      cancelForm.reset()
+    },
   })
 }
+
+// Chat is provisioned on confirmation and remains readable after completion.
+const canChat = computed(() =>
+  ['confirmed', 'in_progress', 'completed'].includes(props.booking.status),
+)
 </script>
 
 <template>
-  <Head :title="'Booking Details #' + booking.id" />
+    <Head :title="`Booking #${booking.id.toString().padStart(5, '0')}`" />
 
-  <AppSidebarLayout>
-    <template #header>
-      Booking Details #{{ booking.id.toString().padStart(5, '0') }}
-    </template>
-    <div class="py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto space-y-8">
-      
-      <!-- Breadcrumbs / Back -->
-      <div class="flex items-center space-x-2 text-sm text-slate-400">
-         <Link :href="route('student.bookings.index')" class="hover:text-ocean-600 transition-colors">My Bookings</Link>
-         <span>/</span>
-          <span class="text-slate-900 font-bold">#SURF-{{ booking.id.toString().padStart(5, '0') }}</span>
-      </div>
+    <AppLayout>
+        <template #header>
+            Booking #SURF-{{ booking.id.toString().padStart(5, '0') }}
+        </template>
 
-      <!-- Session Lifecycle Timeline -->
-      <div class="bg-white/50 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white shadow-sm overflow-hidden">
-         <div class="flex items-center justify-between mb-8">
-            <h3 class="text-xs font-bold uppercase text-slate-400 tracking-[0.2em]">Session Timeline</h3>
-            <span class="text-[10px] font-bold text-ocean-600 bg-ocean-50 px-3 py-1 rounded-full uppercase">Real-time tracking</span>
-         </div>
-         <div class="relative">
-            <div class="absolute top-5 left-0 w-full h-0.5 bg-slate-100 hidden md:block"></div>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8 relative z-10">
-               <div v-for="(step, idx) in steps" :key="step.name" class="flex flex-col items-center md:items-start text-center md:text-left">
-                  <div :class="[
-                     'w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-lg',
-                     step.status === 'completed' ? 'bg-emerald-500 text-white shadow-emerald-200' : 
-                     step.status === 'current' ? 'bg-ocean-600 text-white shadow-ocean-200 ring-4 ring-ocean-50 animate-pulse' : 
-                     'bg-white text-slate-300 border border-slate-100'
-                  ]">
-                     <component :is="step.icon" class="w-5 h-5" />
-                  </div>
-                  <div class="mt-4">
-                     <p :class="[
-                        'text-[10px] font-black uppercase tracking-widest leading-none mb-1',
-                        step.status === 'upcoming' ? 'text-slate-300' : 'text-ocean-600'
-                     ]">{{ step.name }}</p>
-                     <p v-if="step.status === 'completed'" class="text-[10px] font-bold text-emerald-600">Verified</p>
-                     <p v-else-if="step.status === 'current'" class="text-[10px] font-bold text-ocean-400 uppercase animate-pulse">Live Now</p>
-                     <p v-else class="text-[10px] font-bold text-slate-400 uppercase">Awaiting</p>
-                  </div>
-               </div>
+        <div class="space-y-6">
+            <div>
+                <Link
+                    :href="route('student.bookings.index')"
+                    class="inline-flex items-center gap-2 text-body-sm font-semibold text-stone-600 hover:text-deep-900"
+                >
+                    <ArrowLeftIcon class="h-4 w-4" aria-hidden="true" />
+                    My bookings
+                </Link>
             </div>
-         </div>
-      </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-         
-         <!-- Main Booking Info -->
-         <div class="lg:col-span-2 space-y-8">
-            <div class="bg-white rounded-[3rem] p-8 md:p-12 border border-slate-100 shadow-sm overflow-hidden relative">
-               <div class="absolute top-0 right-0 w-32 h-32 bg-ocean-50/50 rounded-bl-[5rem] -mr-10 -mt-10"></div>
-               
-               <div class="relative z-10">
-                  <Badge :variant="getStatusVariant(booking.status)" class="mb-6">{{ booking.status.toUpperCase() }}</Badge>
-                  <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight leading-none mb-2">Surfing Lesson</h1>
-                  <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest">{{ new Date(booking.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }}</p>
-                  
-                  <!-- Live Timer for In Progress -->
-                  <div v-if="booking.status === 'in_progress'" class="mt-6 p-6 bg-ocean-600 rounded-[2rem] text-white flex items-center justify-between shadow-xl shadow-ocean-200">
-                     <div class="flex items-center space-x-4">
-                        <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center animate-pulse">
-                           <ClockIcon class="w-6 h-6" />
-                        </div>
-                        <div>
-                           <p class="text-[10px] font-black uppercase tracking-widest text-ocean-200 leading-none mb-1">Session Ends In</p>
-                           <p class="text-2xl font-black tracking-tighter">{{ formatTimeRemaining(timeRemaining) }}</p>
-                        </div>
-                     </div>
-                     <div class="hidden md:block">
-                        <div class="px-4 py-2 bg-white/10 rounded-xl border border-white/20 text-[10px] font-black uppercase tracking-widest">
-                           Live Tracker Active
-                        </div>
-                     </div>
-                  </div>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <SectionHeader
+                    eyebrow="Booking detail"
+                    :title="booking.surf_spot.name"
+                    :description="`${formatDate(booking.date)} · ${timeLabel(booking.time_period)} session`"
+                />
+                <StatusPill :variant="statusMeta(booking.status).variant">
+                    {{ statusMeta(booking.status).label }}
+                </StatusPill>
+            </div>
 
-                  <!-- Live instructor location on the map -->
-                  <LiveInstructorTracker
-                    :booking-id="booking.id"
-                    :student-id="booking.student_id"
-                    :status="booking.status"
-                    :spot="{
-                      id: booking.surf_spot.id ?? 0,
-                      name: booking.surf_spot.name,
-                      label: booking.surf_spot.area
-                        ? `${booking.surf_spot.name} — ${booking.surf_spot.area}`
-                        : booking.surf_spot.name,
-                      difficulty: booking.surf_spot.difficulty,
-                      latitude: booking.surf_spot.latitude ?? null,
-                      longitude: booking.surf_spot.longitude ?? null,
-                    }"
-                  />
+            <!-- Why the instructor declined the request -->
+            <div
+                v-if="isDeclined"
+                class="rounded-card border border-rose-200 bg-rose-50 p-4"
+            >
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-rose-700">
+                    Declined by your instructor
+                </p>
+                <p class="mt-1 text-body-sm text-rose-900">
+                    {{ booking.decline_reason || 'No reason was provided. You can book another instructor for this time.' }}
+                </p>
+                <Link
+                    :href="route('instructors.search')"
+                    class="mt-3 inline-flex text-body-sm font-semibold text-rose-800 underline underline-offset-2"
+                >
+                    Find another instructor
+                </Link>
+            </div>
 
-                  <!-- Awaiting Payment Banner -->
-                  <div v-if="booking.status === 'awaiting_payment'" class="mt-6 p-6 bg-amber-500 rounded-[2.5rem] text-white flex flex-col md:flex-row items-center justify-between shadow-xl shadow-amber-100 gap-4">
-                     <div class="flex items-center space-x-4">
-                        <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center animate-pulse">
-                           <ClockIcon class="w-6 h-6" />
-                        </div>
-                        <div>
-                           <p class="text-[10px] font-black uppercase tracking-widest text-amber-100 leading-none mb-1">Payment Window Closes In</p>
-                           <p class="text-2xl font-black tracking-tighter">{{ formatPaymentTimeRemaining(paymentTimeRemaining) }}</p>
-                        </div>
-                     </div>
-                     <div class="flex items-center space-x-3 w-full md:w-auto">
-                        <a 
-                          v-if="paymentTimeRemaining > 0 && checkoutUrl"
-                          :href="checkoutUrl"
-                          class="w-full md:w-auto text-center px-6 py-3 bg-white text-amber-600 rounded-xl font-bold hover:bg-amber-50 transition-colors shadow-md text-sm"
+            <!-- Why the booking was cancelled (instructor or SISA) -->
+            <div
+                v-if="isCancelled"
+                class="rounded-card border border-rose-200 bg-rose-50 p-4"
+            >
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-rose-700">
+                    Cancellation feedback
+                </p>
+                <p class="mt-1 whitespace-pre-line text-body-sm text-rose-900">
+                    {{ booking.cancellation_note || 'No reason was provided.' }}
+                </p>
+                <p v-if="booking.cancellation_label" class="mt-2 text-label font-semibold text-rose-700">
+                    {{ booking.cancellation_label }}
+                </p>
+                <p v-if="adminChangeNote" class="mt-2 rounded-control bg-white/70 px-3 py-2 text-body-sm text-rose-900">
+                    <span class="font-semibold">SISA note:</span> {{ adminChangeNote }}
+                </p>
+                <p v-if="booking.cancelled_at" class="mt-1 text-label text-stone-500">
+                    Cancelled {{ new Date(booking.cancelled_at).toLocaleString('en-US') }}
+                </p>
+            </div>
+
+            <!-- SISA's decision on a change request that did not cancel the lesson -->
+            <div
+                v-else-if="adminChangeNote"
+                class="rounded-card border border-amber-200 bg-amber-50 p-4"
+            >
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-800">
+                    SISA note on your change request
+                </p>
+                <p class="mt-1 text-body-sm text-amber-900">{{ adminChangeNote }}</p>
+            </div>
+
+            <!-- Session timeline -->
+            <AppCard padding="md">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="eyebrow">Session timeline</p>
+                    <span class="text-label text-stone-500">Updates in real time</span>
+                </div>
+
+                <div class="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+                    <div v-for="step in steps" :key="step.name" class="flex items-start gap-3">
+                        <span
+                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control"
+                            :class="
+                                step.status === 'completed'
+                                    ? 'bg-lagoon-600 text-white'
+                                    : step.status === 'current'
+                                      ? 'bg-deep-950 text-white ring-4 ring-lagoon-500/20'
+                                      : 'border border-sand-300 bg-sand-100 text-stone-400'
+                            "
                         >
-                          Pay Now via GCash
-                        </a>
-                        <span 
-                          v-else
-                          class="px-4 py-2 bg-white/10 rounded-xl border border-white/20 text-[10px] font-black uppercase tracking-widest"
-                        >
-                          Expired
+                            <component :is="step.icon" class="h-4 w-4" aria-hidden="true" />
                         </span>
-                     </div>
-                  </div>
-               </div>
+                        <div>
+                            <p
+                                class="text-body-sm font-semibold"
+                                :class="step.status === 'upcoming' ? 'text-stone-500' : 'text-deep-900'"
+                            >
+                                {{ step.name }}
+                            </p>
+                            <p
+                                class="text-label"
+                                :class="
+                                    step.status === 'completed'
+                                        ? 'text-lagoon-700'
+                                        : step.status === 'current'
+                                          ? 'text-deep-700'
+                                          : 'text-stone-500'
+                                "
+                            >
+                                {{
+                                    step.status === 'completed'
+                                        ? 'Done'
+                                        : step.status === 'current'
+                                          ? 'Live now'
+                                          : 'Upcoming'
+                                }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </AppCard>
 
-               <div class="grid grid-cols-1 md:grid-cols-2 gap-12 mt-12">
-                  <div class="space-y-6">
-                     <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest border-b border-slate-50 pb-2">Session Details</h3>
-                     <div class="space-y-4">
-                        <div class="flex justify-between items-center text-sm">
-                           <span class="text-slate-400 font-bold">Spot</span>
-                           <span class="font-black text-slate-900 uppercase tracking-tighter">{{ booking.surf_spot.name }}</span>
-                        </div>
-                        <div class="flex justify-between items-center text-sm">
-                           <span class="text-slate-400 font-bold">Difficulty</span>
-                           <span class="px-2 py-0.5 bg-ocean-50 text-ocean-600 rounded text-[10px] font-black uppercase">{{ booking.surf_spot.difficulty }}</span>
-                        </div>
-                        <div class="flex justify-between items-center text-sm">
-                           <span class="text-slate-400 font-bold">Time Slot</span>
-                           <span class="font-black text-ocean-500 uppercase tracking-tighter">{{ booking.time_period }}</span>
-                        </div>
-                     </div>
-                  </div>
-
-                  <div class="space-y-6">
-                     <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest border-b border-slate-50 pb-2">Your Profile</h3>
-                     <div class="space-y-4">
-                        <div class="flex justify-between items-center text-sm">
-                           <span class="text-slate-400 font-bold">Skill Level</span>
-                           <span class="font-black text-slate-900 uppercase tracking-tighter">{{ booking.skill_level }}</span>
-                        </div>
-                        <div class="flex justify-between items-center text-sm">
-                           <span class="text-slate-400 font-bold">Participants</span>
-                           <span class="font-black text-slate-900 uppercase tracking-tighter">{{ booking.student_count }} People</span>
-                        </div>
-                         <div class="grid grid-cols-2 gap-4 mt-4 p-4 bg-ocean-50/50 rounded-2xl border border-ocean-100/50">
-                            <div class="flex items-center space-x-3 p-2 bg-white rounded-xl shadow-sm border border-ocean-50">
-                               <div class="p-2 bg-ocean-50 rounded-lg text-ocean-600">
-                                  <ArrowsUpDownIcon class="w-4 h-4" />
-                               </div>
-                               <div class="flex flex-col">
-                                  <span class="text-[10px] font-black uppercase text-slate-400 leading-none">Height</span>
-                                  <span class="text-sm font-black text-slate-900 leading-none mt-1">{{ booking.height }} cm</span>
-                               </div>
+            <div class="grid gap-6 lg:grid-cols-12">
+                <div class="space-y-4 lg:col-span-8">
+                    <!-- Live session -->
+                    <AppCard v-if="booking.status === 'in_progress'" variant="chrome" padding="lg">
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                            <div>
+                                <StatusPill variant="live">In the water</StatusPill>
+                                <p class="mt-2 text-title font-semibold text-white">Session in progress</p>
+                                <p class="mt-0.5 text-body-sm text-lagoon-100">
+                                    {{ booking.surf_spot.name }} · {{ timeLabel(booking.time_period) }}
+                                </p>
                             </div>
-                            <div class="flex items-center space-x-3 p-2 bg-white rounded-xl shadow-sm border border-ocean-50">
-                               <div class="p-2 bg-ocean-50 rounded-lg text-ocean-600">
-                                  <ScaleIcon class="w-4 h-4" />
-                               </div>
-                               <div class="flex flex-col">
-                                  <span class="text-[10px] font-black uppercase text-slate-400 leading-none">Weight</span>
-                                  <span class="text-sm font-black text-slate-900 leading-none mt-1">{{ booking.weight }} kg</span>
-                               </div>
+                            <Countdown :seconds="timeRemaining" label="Time left" />
+                        </div>
+                    </AppCard>
+
+                    <!-- Live instructor location -->
+                    <!-- Removed: SiaSurf does not use GPS tracking (see scope limitations). -->
+
+                    <!-- Payment window -->
+                    <AppCard
+                        v-if="booking.status === 'awaiting_payment'"
+                        padding="md"
+                        class="border-amber-300 bg-amber-100"
+                    >
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-900">
+                                    Payment window
+                                </p>
+                                <h2 class="mt-1 text-title font-semibold text-amber-950">
+                                    Complete payment to confirm your lesson
+                                </h2>
+                                <p class="mt-1 text-body-sm text-amber-900">
+                                    Your slot is held only until the countdown ends.
+                                </p>
                             </div>
-                         </div>
-                     </div>
-                  </div>
-               </div>
 
-               <!-- Notes -->
-               <div v-if="booking.notes" class="mt-12 pt-8 border-t border-slate-50">
-                  <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest mb-4">Special Requests</h3>
-                  <p class="text-sm text-slate-600 italic bg-slate-50 p-6 rounded-3xl border border-dashed border-slate-200 whitespace-pre-line">
-                     "{{ booking.notes }}"
-                  </p>
-               </div>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <Countdown :seconds="paymentTimeRemaining" label="Time left" />
+                                <a
+                                    v-if="checkoutUrl"
+                                    :href="checkoutUrl"
+                                    class="inline-flex h-11 items-center rounded-control bg-coral-700 px-4 text-body font-semibold text-white shadow-card transition-colors hover:bg-coral-800"
+                                >
+                                    Complete payment
+                                </a>
+                            </div>
+                        </div>
+                    </AppCard>
+
+                    <!-- Lesson details -->
+                    <AppCard padding="lg">
+                        <SectionHeader eyebrow="Lesson" title="Session details" />
+
+                        <dl class="mt-4 grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Date</dt>
+                                <dd class="mt-1 text-body font-semibold text-deep-900">{{ formatDate(booking.date) }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Scheduled time slot</dt>
+                                <dd class="mt-1 text-body font-semibold text-deep-900">
+                                    {{ scheduledSlot }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Booked on</dt>
+                                <dd class="mt-1 text-body font-semibold text-deep-900">
+                                    {{ bookedOn ?? 'Not recorded' }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Surf spot</dt>
+                                <dd class="mt-1 flex items-center gap-1.5 text-body font-semibold text-deep-900">
+                                    <MapPinIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                                    {{ booking.surf_spot.name }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Difficulty</dt>
+                                <dd class="mt-1 text-body font-semibold capitalize text-deep-900">
+                                    {{ booking.surf_spot.difficulty }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Skill level</dt>
+                                <dd class="mt-1 text-body font-semibold capitalize text-deep-900">{{ booking.skill_level }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Age</dt>
+                                <dd class="mt-1 text-body font-semibold text-deep-900">{{ booking.student_age }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Participants</dt>
+                                <dd class="mt-1 text-body font-semibold text-deep-900">
+                                    {{ booking.student_count }}
+                                    {{ booking.student_count === 1 ? 'person' : 'people' }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Reference</dt>
+                                <dd class="mt-1 font-mono text-body font-semibold text-deep-900">
+                                    #SURF-{{ booking.id.toString().padStart(5, '0') }}
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <div
+                            v-if="booking.height || booking.weight"
+                            class="surface-well mt-4 grid grid-cols-2 gap-3 p-3"
+                        >
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Height</p>
+                                <p class="mt-1 text-body font-semibold text-deep-900">
+                                    {{ booking.height ? `${booking.height} cm` : 'Not provided' }}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Weight</p>
+                                <p class="mt-1 text-body font-semibold text-deep-900">
+                                    {{ booking.weight ? `${booking.weight} kg` : 'Not provided' }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <AppPanel v-if="booking.notes" tone="neutral" label="Special requests" class="mt-4">
+                            <span class="whitespace-pre-line">"{{ booking.notes }}"</span>
+                        </AppPanel>
+                    </AppCard>
+
+                    <!-- Payment & waiver -->
+                    <AppCard padding="lg">
+                        <SectionHeader eyebrow="Payment" title="Payment & waiver" />
+
+                        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Amount</p>
+                                <p class="metric mt-1 text-headline font-semibold text-deep-900">
+                                    ₱{{ formatAmount(booking.payment?.amount) }}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Method</p>
+                                <p class="mt-1 text-body font-semibold capitalize text-deep-900">
+                                    {{ booking.payment?.payment_method?.replace(/_/g, ' ') ?? 'Not started' }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 flex flex-wrap items-center gap-2">
+                            <StatusPill
+                                :variant="
+                                    booking.payment?.status === 'completed'
+                                        ? 'verified'
+                                        : booking.payment?.status === 'failed'
+                                          ? 'critical'
+                                          : 'pending'
+                                "
+                                :dot="false"
+                            >
+                                {{ paymentLabel(booking.payment?.status) }}
+                            </StatusPill>
+
+                            <StatusPill v-if="booking.waiver?.signed_at" variant="verified" :dot="false">
+                                Waiver signed
+                            </StatusPill>
+                            <StatusPill v-else variant="pending" :dot="false">Waiver not signed</StatusPill>
+                        </div>
+
+                        <p v-if="booking.waiver?.signed_at" class="mt-2 text-label text-stone-500">
+                            Signed {{ new Date(booking.waiver.signed_at).toLocaleDateString('en-US') }}
+                        </p>
+
+                        <!-- GCash receipt: private image, served through an authorised route -->
+                        <div v-if="receiptUrl" class="mt-4 rounded-card border border-sand-200 bg-sand-50 p-3">
+                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                GCash receipt
+                            </p>
+                            <a :href="receiptUrl" target="_blank" rel="noopener" class="mt-2 block">
+                                <img
+                                    :src="receiptUrl"
+                                    alt="GCash receipt"
+                                    class="h-40 w-full rounded-control object-contain bg-white ring-1 ring-sand-200"
+                                />
+                            </a>
+                            <p v-if="booking.payment?.receipt_reference" class="mt-2 text-label text-stone-600">
+                                Ref: <span class="font-mono">{{ booking.payment.receipt_reference }}</span>
+                            </p>
+                            <p v-if="booking.payment?.receipt_verified_at" class="mt-1 text-label text-lagoon-700">
+                                Verified {{ new Date(booking.payment.receipt_verified_at).toLocaleString('en-US') }}
+                                <template v-if="booking.payment?.verified_by?.name">
+                                    by {{ booking.payment.verified_by.name }}
+                                </template>
+                            </p>
+                            <p
+                                v-else-if="booking.payment?.status === 'pending_verification'"
+                                class="mt-1 text-label text-amber-700"
+                            >
+                                Waiting for your instructor to verify this receipt.
+                            </p>
+                            <p v-if="booking.payment?.receipt_note" class="mt-1 text-label text-rose-700">
+                                Reviewer note: {{ booking.payment.receipt_note }}
+                            </p>
+                        </div>
+
+                        <a
+                            v-if="booking.status === 'awaiting_payment' && checkoutUrl"
+                            :href="checkoutUrl"
+                            class="mt-4 inline-flex h-11 items-center rounded-control bg-coral-700 px-4 text-body font-semibold text-white shadow-card transition-colors hover:bg-coral-800"
+                        >
+                            <CreditCardIcon class="mr-2 h-4 w-4" aria-hidden="true" />
+                            Complete payment
+                        </a>
+
+                        <a
+                            v-else-if="booking.status === 'awaiting_payment' && !receiptUrl"
+                            :href="route('payments.show', booking.id)"
+                            class="mt-4 inline-flex h-11 items-center rounded-control bg-coral-700 px-4 text-body font-semibold text-white shadow-card transition-colors hover:bg-coral-800"
+                        >
+                            <CreditCardIcon class="mr-2 h-4 w-4" aria-hidden="true" />
+                            Upload GCash receipt
+                        </a>
+
+                        <p v-if="paymentSubmitted" class="mt-3 rounded-control bg-amber-50 px-3 py-2 text-label text-amber-800">
+                            Payment has been submitted, so this booking can no longer be cancelled online.
+                            Contact SISA if you need to change it.
+                        </p>
+                    </AppCard>
+                </div>
+
+                <!-- Sidebar -->
+                <div class="space-y-4 lg:col-span-4">
+                    <AppCard variant="chrome" padding="lg" class="text-center">
+                        <img
+                            v-if="avatarUrl"
+                            :src="avatarUrl"
+                            alt=""
+                            class="mx-auto h-20 w-20 rounded-card object-cover"
+                        />
+                        <span
+                            v-else
+                            class="mx-auto flex h-20 w-20 items-center justify-center rounded-card bg-white/10 text-headline font-semibold text-lagoon-200"
+                        >
+                            {{ initials(booking.instructor.name) }}
+                        </span>
+
+                        <p class="mt-4 text-label font-semibold uppercase tracking-[0.08em] text-lagoon-300">
+                            Your instructor
+                        </p>
+                        <h2 class="mt-1 text-title font-semibold text-white">{{ booking.instructor.name }}</h2>
+                        <p class="mt-0.5 truncate text-body-sm text-lagoon-100">{{ booking.instructor.email }}</p>
+
+                        <AppButton
+                            :href="route('instructors.profile', booking.instructor.id)"
+                            variant="secondary"
+                            block
+                            class="mt-4"
+                        >
+                            View profile
+                        </AppButton>
+                    </AppCard>
+
+                    <AppCard padding="md">
+                        <SectionHeader eyebrow="Manage" title="Booking options" />
+
+                        <div class="mt-3 space-y-2">
+                            <AppButton
+                                v-if="canChat"
+                                variant="secondary"
+                                block
+                                @click="showChat = true"
+                            >
+                                <ChatBubbleLeftRightIcon class="mr-2 h-4 w-4" aria-hidden="true" />
+                                Message instructor
+                            </AppButton>
+                            <AppButton
+                                v-if="canFeedback"
+                                :href="route('student.feedback.create', booking.id)"
+                                block
+                            >
+                                Leave feedback
+                            </AppButton>
+                            <AppButton :href="route('student.bookings.index')" variant="secondary" block>
+                                My bookings
+                            </AppButton>
+                            <AppButton
+                                v-if="canCancel"
+                                variant="ghost"
+                                block
+                                class="text-rose-700 hover:bg-rose-50"
+                                @click="openCancel"
+                            >
+                                Cancel booking
+                            </AppButton>
+                        </div>
+                    </AppCard>
+                </div>
             </div>
+        </div>
 
-            <!-- Payment Info -->
-            <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-               <div class="flex items-center space-x-6">
-                  <div class="w-16 h-16 bg-ocean-50 rounded-2xl flex items-center justify-center text-ocean-600 shadow-inner">
-                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                     </svg>
-                  </div>
-                  <div>
-                     <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Payment via {{ booking.payment?.payment_method.toUpperCase() }}</p>
-                     <h3 class="text-2xl font-bold text-slate-900 tracking-tighter">₱{{ booking.total_amount.toLocaleString() }}</h3>
-                  </div>
-               </div>
-               <div class="flex items-center space-x-4">
-                  <Badge :variant="booking.payment?.status === 'completed' ? 'success' : (booking.status === 'cancelled' ? 'danger' : 'warning')">
-                    {{ booking.payment?.status.toUpperCase() || 'UNPAID' }}
-                  </Badge>
-                  
-                  <a
-                    v-if="booking.status === 'awaiting_payment' && paymentTimeRemaining > 0 && checkoutUrl"
-                    :href="checkoutUrl"
-                    class="px-5 py-2.5 bg-ocean-600 hover:bg-ocean-500 text-white rounded-xl text-xs font-bold transition-all shadow-md"
-                  >
-                    Complete Payment
-                  </a>
-                  
-                  <BaseButton v-if="booking.status === 'pending'" variant="secondary" size="sm" outline>Download Invoice</BaseButton>
-               </div>
+        <Modal :show="showCancel" @close="showCancel = false" maxWidth="md">
+            <div class="p-6">
+                <h2 class="text-title font-semibold text-deep-900">Cancel this booking?</h2>
+                <p class="mt-1 text-body-sm text-stone-600">
+                    {{ booking.surf_spot.name }} with {{ booking.instructor.name }} on {{ formatDate(booking.date) }}.
+                </p>
+
+                <label for="cancel-reason" class="mt-4 block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                    Reason <span class="text-rose-600">*</span>
+                </label>
+                <textarea
+                    id="cancel-reason"
+                    v-model="cancelForm.reason"
+                    rows="3"
+                    maxlength="500"
+                    placeholder="Let the instructor know why you cannot make it."
+                    class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                ></textarea>
+                <p v-if="cancelForm.errors.reason" class="mt-2 text-body-sm font-semibold text-rose-700">
+                    {{ cancelForm.errors.reason }}
+                </p>
+
+                <div class="mt-6 flex justify-end gap-2">
+                    <AppButton variant="secondary" :disabled="cancelForm.processing" @click="showCancel = false">
+                        Keep booking
+                    </AppButton>
+                    <AppButton variant="danger" :loading="cancelForm.processing" @click="submitCancel">
+                        Cancel booking
+                    </AppButton>
+                </div>
             </div>
-         </div>
+        </Modal>
 
-         <!-- Sidebar: Instructor & Actions -->
-         <div class="space-y-8">
-            
-            <!-- Instructor Card -->
-            <div class="bg-slate-900 rounded-[3rem] p-8 text-white shadow-2xl shadow-slate-200 text-center">
-               <img 
-                :src="booking.instructor.avatar_path || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200&h=200'" 
-                class="w-24 h-24 rounded-[2rem] object-cover mx-auto mb-6 border-4 border-slate-800 shadow-lg"
-               >
-               <p class="text-[10px] font-black uppercase text-ocean-400 tracking-widest mb-1">Your Instructor</p>
-               <h3 class="text-xl font-bold mb-1">{{ booking.instructor.name }}</h3>
-               <p class="text-xs text-slate-400 mb-8">{{ booking.instructor.email }}</p>
-               
-               <div class="grid grid-cols-2 gap-3">
-                  <BaseButton variant="primary" class="justify-center py-4 bg-ocean-600 hover:bg-ocean-500 border-none">Chat</BaseButton>
-                  <Link :href="route('instructors.profile', booking.instructor.name)" class="w-full">
-                     <BaseButton variant="secondary" outline class="w-full justify-center py-4 border-slate-700 text-slate-300 hover:bg-slate-800">Profile</BaseButton>
-                  </Link>
-               </div>
+        <Modal :show="showChat" @close="showChat = false" maxWidth="2xl">
+            <div class="p-4 sm:p-6">
+                <ChatBox
+                    v-if="showChat"
+                    :booking-id="booking.id"
+                    :other-party-name="booking.instructor.name"
+                    :other-party-avatar="booking.instructor.avatar_path"
+                />
             </div>
-
-            <!-- Help / Actions -->
-            <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-4">
-               <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Manage Booking</p>
-               
-               <BaseButton 
-                 v-if="['pending', 'awaiting_payment'].includes(booking.status)" 
-                 variant="danger" 
-                 outline 
-                 class="w-full justify-center"
-                 @click="cancelBooking"
-               >
-                 Cancel Booking
-               </BaseButton>
-               
-               <Link v-if="booking.status === 'completed'" :href="route('student.reviews.create', booking.id)" class="w-full">
-                  <BaseButton variant="primary" class="w-full justify-center">Write a Review</BaseButton>
-               </Link>
-               <div class="pt-4 border-t border-slate-50">
-                  <p class="text-[10px] text-slate-400 leading-relaxed text-center">Need help? Contact our support at <span class="font-bold">surf@siargao.gov.ph</span></p>
-               </div>
-            </div>
-
-         </div>
-
-      </div>
-
-    </div>
-  </AppSidebarLayout>
+        </Modal>
+    </AppLayout>
 </template>
+

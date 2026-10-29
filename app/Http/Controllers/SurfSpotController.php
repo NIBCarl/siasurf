@@ -30,12 +30,14 @@ class SurfSpotController extends Controller
         return Inertia::render('Public/SurfSpots/Index', [
             'spots' => $spots,
             'areas' => $this->areas(),
+            'sides' => SurfSpot::SIDES,
+            'sections' => SurfSpot::SECTIONS,
             'mapCenter' => [
-                'latitude' => 9.7950,
-                'longitude' => 126.1550,
-                'zoom' => 11,
+                'latitude' => 9.8850,
+                'longitude' => 126.1150,
+                'zoom' => 10,
             ],
-            'filters' => $request->only(['area', 'difficulty']),
+            'filters' => $request->only(['area', 'difficulty', 'side', 'section']),
         ]);
     }
 
@@ -54,12 +56,22 @@ class SurfSpotController extends Controller
             $query->byDifficulty($request->string('difficulty'));
         }
 
+        if ($request->filled('side')) {
+            $query->onSide($request->string('side'));
+        }
+
+        if ($request->filled('section')) {
+            $query->inSection($request->string('section'));
+        }
+
         return response()->json([
             'spots' => $query->get()
                 ->map(fn (SurfSpot $spot) => $spot->toMapPayload())
                 ->values()
                 ->all(),
             'areas' => $this->areas(),
+            'sides' => SurfSpot::SIDES,
+            'sections' => SurfSpot::SECTIONS,
         ]);
     }
 

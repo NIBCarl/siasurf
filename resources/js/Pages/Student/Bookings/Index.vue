@@ -1,20 +1,36 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3'
-import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
-import Badge from '@/Components/Atoms/Badge.vue'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
+import { computed, ref } from 'vue'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
+import AppLayout from '@/Layouts/AppLayout.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppPanel from '@/Components/UI/AppPanel.vue'
+import EmptyState from '@/Components/UI/EmptyState.vue'
+import Modal from '@/Components/Modal.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
+import { CalendarDaysIcon, ChatBubbleLeftRightIcon, MapPinIcon } from '@heroicons/vue/24/outline'
 
 interface Booking {
   id: number
   date: string
   time_period: string
+  start_time?: string | null
+  end_time?: string | null
+  created_at?: string | null
   status: string
   total_amount: number
   payment_status: string
+  can_be_cancelled?: boolean
+  decline_reason?: string | null
+  cancellation_note?: string | null
+  cancellation_label?: string | null
+  cancelled_at?: string | null
+  chat_unread_count?: number
   instructor: {
     id: number
     name: string
-    avatar_path: string
+    avatar_path: string | null
   }
   surf_spot: {
     id: number
@@ -25,202 +41,404 @@ interface Booking {
 interface Props {
   bookings: {
     data: Booking[]
-    links: any[]
+    links: Array<{ url: string | null; label: string; active: boolean }>
+    total?: number
   }
+  filters?: { status?: string }
+  counts?: Record<string, number>
 }
 
 const props = defineProps<Props>()
 
-const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
+const activeFilter = ref(props.filters?.status ?? 'all')
+
+const tabs = computed(() => [
+  { key: 'all', label: 'All', count: props.counts?.all ?? 0, dot: 'bg-deep-900' },
+  { key: 'upcoming', label: 'Upcoming', count: props.counts?.upcoming ?? 0, dot: 'bg-lagoon-600' },
+  { key: 'completed', label: 'Completed', count: props.counts?.completed ?? 0, dot: 'bg-stone-400' },
+  { key: 'cancelled', label: 'Cancelled', count: props.counts?.cancelled ?? 0, dot: 'bg-rose-500' },
+])
+
+const applyFilter = (status: string) => {
+  activeFilter.value = status
+  router.get(
+    route('student.bookings.index'),
+    status === 'all' ? {} : { status },
+    { preserveState: true, preserveScroll: true, replace: true },
+  )
+}
+
+const formatDate = (date: string) =>
+  new Date(date).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
   })
-}
 
-const getStatusVariant = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'pending': return 'warning'
-    case 'confirmed': return 'success'
-    case 'completed': return 'info'
-    case 'cancelled': return 'danger'
-    default: return 'info'
+const formatAmount = (amount: number) => Number(amount ?? 0).toLocaleString()
+
+const timeLabel = (period: string) => period.charAt(0).toUpperCase() + period.slice(1)
+
+const statusMeta = (status: string): { label: string; variant: 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | 'cancelled' | 'critical'; date: string } => {
+  switch (status) {
+    case 'pending':
+      return { label: 'Awaiting instructor', variant: 'pending', date: 'border-amber-300 bg-amber-100 text-amber-950' }
+    case 'awaiting_payment':
+      return { label: 'Awaiting payment', variant: 'pending', date: 'border-amber-300 bg-amber-100 text-amber-950' }
+    case 'confirmed':
+      return { label: 'Confirmed', variant: 'verified', date: 'border-lagoon-300 bg-lagoon-100 text-lagoon-900' }
+    case 'in_progress':
+      return { label: 'In the water', variant: 'live', date: 'border-deep-800 bg-deep-950 text-white' }
+    case 'completed':
+      return { label: 'Completed', variant: 'completed', date: 'border-sand-300 bg-sand-100 text-stone-700' }
+    case 'cancelled':
+    case 'declined':
+    case 'payment_timeout':
+    case 'expired':
+    case 'no_show':
+      return { label: status.replace(/_/g, ' '), variant: 'cancelled', date: 'border-rose-300 bg-rose-100 text-rose-950' }
+    default:
+      return { label: status.replace(/_/g, ' '), variant: 'neutral', date: 'border-sand-300 bg-sand-50 text-stone-700' }
   }
 }
 
-const getStatusIcon = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'pending': return '⏳'
-    case 'confirmed': return '✅'
-    case 'completed': return '🏄'
-    case 'cancelled': return '❌'
-    default: '📋'
+const paymentLabel = (status?: string) => {
+  if (!status) return 'Payment not started'
+  const labels: Record<string, string> = {
+    completed: 'Paid',
+    pending: 'Payment pending',
+    pending_cash: 'Cash on hand',
+    pending_verification: 'Receipt awaiting verification',
+    failed: 'Payment failed',
+    refunded: 'Refunded',
   }
+  return labels[status] ?? status.replace(/_/g, ' ')
 }
 
-const getTimePeriodIcon = (period: string) => {
-  return period.toLowerCase() === 'morning' ? '🌅' : '🌇'
-}
+const initials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
 
-const cancelBooking = (bookingId: number) => {
-  const reason = window.prompt('Please enter the reason for cancellation:')
-  if (reason === null) return
+// Show the real start–end pair when the booking has one, falling back to the
+// legacy morning/afternoon label for older rows.
+const slotLabel = (booking: Booking) => {
+  const clock = (value?: string | null) => {
+    if (!value) return null
 
-  if (!reason.trim()) {
-    alert('Cancellation reason is required.')
-    return
+    const time = value.includes('T') ? value.split('T')[1] : value
+    const [hour, minute] = time.slice(0, 5).split(':').map(Number)
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return null
+
+    const suffix = hour >= 12 ? 'PM' : 'AM'
+    const displayHour = hour % 12 === 0 ? 12 : hour % 12
+
+    return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`
   }
 
-  router.post(route('student.bookings.cancel', bookingId), { reason })
+  const start = clock(booking.start_time)
+  const end = clock(booking.end_time)
+
+  if (start && end) return `${start} – ${end}`
+  if (start) return start
+
+  return `${timeLabel(booking.time_period)} session`
+}
+
+const avatarUrl = (booking: Booking) => resolveAvatarUrl(booking.instructor)
+
+const canCancel = (booking: Booking) =>
+  booking.can_be_cancelled ?? ['pending', 'awaiting_payment'].includes(booking.status)
+
+const paginationLabel = (label: string) =>
+  label.replace(/&laquo;/g, '').replace(/&raquo;/g, '').replace(/&amp;/g, '&').trim()
+
+// Cancellation is a real form, not a browser prompt.
+const cancelTarget = ref<Booking | null>(null)
+const cancelForm = useForm({ reason: '' })
+
+const openCancel = (booking: Booking) => {
+  cancelTarget.value = booking
+  cancelForm.reset()
+  cancelForm.clearErrors()
+}
+
+const submitCancel = () => {
+  if (!cancelTarget.value) return
+  cancelForm.post(route('student.bookings.cancel', cancelTarget.value.id), {
+    preserveScroll: true,
+    onSuccess: () => {
+      cancelTarget.value = null
+      cancelForm.reset()
+    },
+  })
 }
 </script>
 
 <template>
-  <Head title="My Bookings" />
+    <Head title="My bookings" />
 
-  <AppSidebarLayout>
-    <template #header>
-      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-        <div class="flex flex-col">
-          <h2 class="text-4xl font-extrabold text-white tracking-tight leading-none mb-2">
-            My <span class="text-ocean-400">Bookings</span>
-          </h2>
-          <p class="text-ocean-100/70 text-lg font-medium tracking-tight">
-            Manage your upcoming surfing adventures and lesson history.
-          </p>
-        </div>
-      </div>
-    </template>
+    <AppLayout>
+        <template #header>My bookings</template>
 
-    <div class="space-y-10 pb-20">
-      <!-- Bookings List -->
-      <div v-if="bookings.data.length > 0" class="grid grid-cols-1 gap-6">
-        <div 
-          v-for="booking in bookings.data" 
-          :key="booking.id"
-          class="group bg-white/80 backdrop-blur-xl rounded-[2.5rem] border border-white/20 p-8 flex flex-col xl:flex-row items-center xl:justify-between hover:shadow-2xl hover:shadow-ocean-500/10 hover:border-ocean-500/30 transition-all duration-500"
-        >
-          <!-- Date & Info -->
-          <div class="flex flex-col md:flex-row items-center gap-8 w-full xl:w-auto">
-            <div class="relative flex-shrink-0 group-hover:scale-105 transition-transform duration-500">
-               <div class="w-24 h-24 bg-gradient-to-br from-ocean-600 to-ocean-800 rounded-[2rem] flex flex-col items-center justify-center shadow-xl shadow-ocean-500/20 text-white border-2 border-white/10">
-                 <span class="text-[10px] font-black uppercase tracking-[0.2em] text-ocean-200/60 leading-none mb-1">
-                   {{ new Date(booking.date).toLocaleDateString('en-US', { month: 'short' }) }}
-                 </span>
-                 <span class="text-4xl font-black leading-none">{{ new Date(booking.date).getDate() }}</span>
-                 <span class="text-[10px] font-black uppercase tracking-[0.1em] text-ocean-300 mt-1">
-                   {{ booking.time_period }}
-                 </span>
-               </div>
-               <!-- Pulsing Indicator -->
-               <div v-if="booking.status === 'confirmed'" class="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white animate-pulse"></div>
-            </div>
+        <div class="space-y-6">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <SectionHeader
+                    eyebrow="Student"
+                    title="Your surf schedule"
+                    description="Track requests, confirmed lessons and past sessions in one place."
+                />
 
-            <div class="text-center md:text-left flex-1">
-              <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-3">
-                <div :class="[
-                  'px-4 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border',
-                  booking.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                  booking.status === 'pending' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 
-                  'bg-slate-500/10 text-slate-600 border-slate-500/20'
-                ]">
-                  {{ booking.status }}
+                <div class="hidden flex-wrap items-stretch gap-2 sm:flex">
+                    <AppPanel tone="positive" label="Upcoming" class="min-w-[132px]">
+                        <span class="text-title font-semibold">{{ counts?.upcoming ?? 0 }}</span>
+                    </AppPanel>
+                    <AppPanel tone="neutral" label="Completed" class="min-w-[132px]">
+                        <span class="text-title font-semibold">{{ counts?.completed ?? 0 }}</span>
+                    </AppPanel>
                 </div>
-                <span class="text-xs font-black text-slate-400 tracking-tighter">#SURF-{{ booking.id.toString().padStart(5, '0') }}</span>
-              </div>
-              
-              <h4 class="text-2xl font-bold text-slate-900 tracking-tight mb-1 flex items-center justify-center md:justify-start">
-                <span class="mr-3 p-2 bg-ocean-50 rounded-xl text-lg">🏝️</span>
-                {{ booking.surf_spot.name }}
-              </h4>
-              
-              <p class="text-slate-500 font-medium flex items-center justify-center md:justify-start">
-                <span class="mr-2 opacity-60">{{ getTimePeriodIcon(booking.time_period) }}</span>
-                {{ booking.time_period }} Session • ₱{{ booking.total_amount.toLocaleString() }}
-              </p>
-            </div>
-          </div>
 
-          <!-- Divider for Mobile -->
-          <div class="w-full h-px bg-slate-100 my-6 xl:hidden"></div>
-
-          <!-- Instructor & Actions -->
-          <div class="flex flex-col md:flex-row items-center gap-8 w-full xl:w-auto">
-            <div class="flex items-center bg-slate-50/50 px-6 py-4 rounded-3xl border border-slate-100/50 group-hover:bg-ocean-50/50 transition-colors">
-               <img 
-                :src="booking.instructor.avatar_path || `https://ui-avatars.com/api/?name=${encodeURIComponent(booking.instructor.name)}&background=0284c7&color=fff`" 
-                class="w-14 h-14 rounded-2xl object-cover shadow-md ring-2 ring-white/50"
-               >
-               <div class="ml-4">
-                 <p class="text-[10px] font-black uppercase text-ocean-600 tracking-widest leading-none mb-1">Instructor</p>
-                 <p class="font-black text-slate-900 text-lg leading-none">{{ booking.instructor.name }}</p>
-               </div>
+                <div class="flex flex-wrap items-center gap-2 sm:hidden">
+                    <StatusPill variant="verified">{{ counts?.upcoming ?? 0 }} upcoming</StatusPill>
+                    <StatusPill variant="completed">{{ counts?.completed ?? 0 }} completed</StatusPill>
+                </div>
             </div>
 
-            <div class="flex items-center gap-3 w-full md:w-auto">
-              <Link :href="route('student.bookings.show', booking.id)" class="flex-1 md:flex-none">
-                <BaseButton variant="secondary" size="md" class="w-full rounded-2xl border-slate-200 font-black px-6 hover:bg-slate-900 hover:text-white transition-all">
-                  Details
-                </BaseButton>
-              </Link>
-              <BaseButton 
-                v-if="['pending', 'awaiting_payment'].includes(booking.status)" 
-                variant="danger" 
-                size="md" 
-                outline 
-                class="rounded-2xl font-black px-6"
-                @click="cancelBooking(booking.id)"
-              >
-                Cancel
-              </BaseButton>
+            <div
+                class="flex items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
+                role="tablist"
+                aria-label="Filter bookings"
+            >
+                <button
+                    v-for="tab in tabs"
+                    :key="tab.key"
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeFilter === tab.key"
+                    class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-body-sm font-semibold transition-colors"
+                    :class="
+                        activeFilter === tab.key
+                            ? 'border-deep-900 bg-deep-900 text-white'
+                            : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                    "
+                    @click="applyFilter(tab.key)"
+                >
+                    <span class="h-1.5 w-1.5 rounded-full" :class="tab.dot" aria-hidden="true" />
+                    {{ tab.label }}
+                    <span
+                        class="rounded-full px-1.5 py-0.5 text-label font-semibold"
+                        :class="activeFilter === tab.key ? 'bg-white/15 text-white' : 'bg-sand-100 text-stone-600'"
+                    >
+                        {{ tab.count }}
+                    </span>
+                </button>
             </div>
-          </div>
+
+            <div v-if="bookings.data.length" class="space-y-4">
+                <article
+                    v-for="booking in bookings.data"
+                    :key="booking.id"
+                    class="overflow-hidden rounded-card border border-sand-200 bg-white shadow-card"
+                >
+                    <div class="flex flex-col lg:flex-row">
+                        <div class="flex-1 p-5 sm:p-6">
+                            <div class="flex flex-col gap-4 sm:flex-row">
+                                <div
+                                    class="flex h-20 w-[68px] shrink-0 flex-col items-center justify-center rounded-control border"
+                                    :class="statusMeta(booking.status).date"
+                                >
+                                    <span class="text-label font-semibold uppercase tracking-[0.06em] opacity-80">
+                                        {{ new Date(booking.date).toLocaleDateString('en-US', { month: 'short' }) }}
+                                    </span>
+                                    <span class="text-headline font-semibold leading-none">
+                                        {{ new Date(booking.date).getDate() }}
+                                    </span>
+                                    <span class="mt-1 max-w-full truncate text-label font-semibold capitalize opacity-80">
+                                        {{ booking.time_period }}
+                                    </span>
+                                </div>
+
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <StatusPill :variant="statusMeta(booking.status).variant">
+                                            {{ statusMeta(booking.status).label }}
+                                        </StatusPill>
+                                        <StatusPill v-if="booking.chat_unread_count" variant="pending">
+                                            <ChatBubbleLeftRightIcon class="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                                            {{ booking.chat_unread_count }} new
+                                        </StatusPill>
+                                        <span class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                            #SURF-{{ booking.id.toString().padStart(5, '0') }}
+                                        </span>
+                                    </div>
+
+                                    <h2 class="mt-2 truncate text-body-lg font-semibold text-deep-900">
+                                        {{ booking.surf_spot.name }}
+                                    </h2>
+                                    <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm text-stone-600">
+                                        <CalendarDaysIcon class="h-4 w-4" aria-hidden="true" />
+                                        {{ formatDate(booking.date) }}
+                                        <span aria-hidden="true">·</span>
+                                        <span>{{ slotLabel(booking) }}</span>
+                                    </p>
+
+                                    <p
+                                        v-if="booking.status === 'declined' && booking.decline_reason"
+                                        class="mt-2 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-label text-rose-800"
+                                    >
+                                        Declined: {{ booking.decline_reason }}
+                                    </p>
+
+                                    <p
+                                        v-else-if="['cancelled', 'payment_timeout', 'no_show'].includes(booking.status) && booking.cancellation_note"
+                                        class="mt-2 whitespace-pre-line rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-label text-rose-800"
+                                    >
+                                        <span class="font-semibold">{{ booking.cancellation_label || 'Cancelled' }}:</span>
+                                        {{ booking.cancellation_note }}
+                                    </p>
+
+                                    <div class="mt-3 flex items-center gap-3">
+                                        <img
+                                            v-if="avatarUrl(booking)"
+                                            :src="avatarUrl(booking) || undefined"
+                                            alt=""
+                                            class="h-9 w-9 rounded-full object-cover"
+                                        />
+                                        <span
+                                            v-else
+                                            class="flex h-9 w-9 items-center justify-center rounded-full bg-deep-950 text-label font-semibold text-lagoon-200"
+                                        >
+                                            {{ initials(booking.instructor.name) }}
+                                        </span>
+                                        <div class="min-w-0">
+                                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                                Instructor
+                                            </p>
+                                            <p class="truncate text-body-sm font-semibold text-deep-900">
+                                                {{ booking.instructor.name }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border-t border-sand-200 p-5 sm:p-6 lg:w-64 lg:border-l lg:border-t-0">
+                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                Booking total
+                            </p>
+                            <p class="metric mt-1 text-headline font-semibold text-deep-900">
+                                ₱{{ formatAmount(booking.total_amount) }}
+                            </p>
+                            <StatusPill
+                                class="mt-2"
+                                :variant="
+                                    booking.payment_status === 'completed'
+                                        ? 'verified'
+                                        : booking.payment_status === 'failed'
+                                          ? 'critical'
+                                          : 'pending'
+                                "
+                                :dot="false"
+                            >
+                                {{ paymentLabel(booking.payment_status) }}
+                            </StatusPill>
+
+                            <div class="mt-4 space-y-2">
+                                <AppButton
+                                    :href="route('student.bookings.show', booking.id)"
+                                    variant="secondary"
+                                    block
+                                >
+                                    View booking
+                                </AppButton>
+                                <AppButton
+                                    v-if="canCancel(booking)"
+                                    variant="ghost"
+                                    block
+                                    class="text-rose-700 hover:bg-rose-50"
+                                    @click="openCancel(booking)"
+                                >
+                                    Cancel booking
+                                </AppButton>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <EmptyState
+                v-else
+                :icon="CalendarDaysIcon"
+                title="No bookings in this view"
+                description="Book a lesson with a SISA-verified instructor, or switch back to all bookings."
+            >
+                <AppButton :href="route('instructors.search')">Find an instructor</AppButton>
+                <AppButton variant="secondary" @click="applyFilter('all')">Show all bookings</AppButton>
+            </EmptyState>
+
+            <div v-if="bookings.links.length > 3" class="flex flex-wrap items-center justify-center gap-2 pt-2">
+                <template v-for="link in bookings.links" :key="link.label">
+                    <Link
+                        v-if="link.url"
+                        :href="link.url"
+                        class="inline-flex h-10 items-center rounded-control border px-4 text-body-sm font-semibold transition-colors"
+                        :class="
+                            link.active
+                                ? 'border-deep-900 bg-deep-900 text-white'
+                                : 'border-sand-200 bg-white text-stone-600 hover:border-lagoon-600'
+                        "
+                    >
+                        {{ paginationLabel(link.label) }}
+                    </Link>
+                    <span
+                        v-else
+                        class="inline-flex h-10 items-center rounded-control border border-sand-200 px-4 text-body-sm text-stone-400"
+                    >
+                        {{ paginationLabel(link.label) }}
+                    </span>
+                </template>
+            </div>
         </div>
-      </div>
 
-      <!-- Empty State -->
-      <div v-else class="bg-white/80 backdrop-blur-xl rounded-[2.5rem] p-20 text-center border border-white/20 shadow-2xl overflow-hidden relative">
-        <!-- Background Blur Decorative -->
-        <div class="absolute -top-20 -right-20 w-64 h-64 bg-ocean-500/10 rounded-full blur-3xl"></div>
-        <div class="absolute -bottom-20 -left-20 w-64 h-64 bg-ocean-600/5 rounded-full blur-3xl"></div>
+        <Modal :show="cancelTarget !== null" @close="cancelTarget = null" maxWidth="md">
+            <div class="p-6">
+                <h2 class="text-title font-semibold text-deep-900">Cancel this booking?</h2>
+                <p class="mt-1 text-body-sm text-stone-600">
+                    {{ cancelTarget?.surf_spot.name }} with {{ cancelTarget?.instructor.name }} on
+                    {{ cancelTarget ? formatDate(cancelTarget.date) : '' }}.
+                </p>
 
-        <div class="relative z-10 max-w-lg mx-auto">
-          <div class="w-32 h-32 bg-gradient-to-br from-ocean-600 to-ocean-800 rounded-[2.5rem] flex items-center justify-center mx-auto mb-10 shadow-2xl shadow-ocean-600/20 rotate-12 group hover:rotate-0 transition-transform duration-500 text-white">
-            <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          </div>
-          <h3 class="text-4xl font-bold text-slate-900 tracking-tight mb-4 leading-tight">Ready to Catch <br/><span class="text-ocean-600 underline decoration-ocean-500/20 underline-offset-8">Some Waves?</span></h3>
-          <p class="text-slate-500 text-lg font-medium mb-10 leading-relaxed">Your surfing adventure is just one click away. Book a lesson with our verified instructors.</p>
-          
-          <Link :href="route('instructors.search')">
-             <BaseButton variant="primary" size="lg" class="px-10 h-16 rounded-2xl shadow-2xl shadow-ocean-600/20 transition-all hover:scale-105 active:scale-95">
-               <span class="flex items-center text-xl font-black">
-                 <span class="mr-3">🏄</span>
-                 Find an Instructor
-               </span>
-             </BaseButton>
-          </Link>
+                <label for="cancel-reason" class="mt-4 block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                    Reason <span class="text-rose-600">*</span>
+                </label>
+                <textarea
+                    id="cancel-reason"
+                    v-model="cancelForm.reason"
+                    rows="3"
+                    maxlength="500"
+                    placeholder="Let the instructor know why you cannot make it."
+                    class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                ></textarea>
+                <p v-if="cancelForm.errors.reason" class="mt-2 text-body-sm font-semibold text-rose-700">
+                    {{ cancelForm.errors.reason }}
+                </p>
 
-          <div class="mt-16 flex flex-wrap justify-center gap-8 text-neutral-400">
-            <div class="flex items-center bg-slate-50 px-4 py-2 rounded-xl group/item hover:bg-ocean-50 transition-colors">
-              <span class="w-2 h-2 bg-ocean-500 rounded-full mr-3 animate-pulse"></span>
-              <span class="font-black text-[10px] uppercase tracking-widest text-neutral-500 group-hover/item:text-ocean-600 transition-colors">Verified Pros</span>
+                <div class="mt-6 flex justify-end gap-2">
+                    <AppButton variant="secondary" :disabled="cancelForm.processing" @click="cancelTarget = null">
+                        Keep booking
+                    </AppButton>
+                    <AppButton variant="danger" :loading="cancelForm.processing" @click="submitCancel">
+                        Cancel booking
+                    </AppButton>
+                </div>
             </div>
-            <div class="flex items-center bg-slate-50 px-4 py-2 rounded-xl group/item hover:bg-ocean-50 transition-colors">
-              <span class="w-2 h-2 bg-ocean-500 rounded-full mr-3 animate-pulse" style="animation-delay: 0.2s"></span>
-              <span class="font-black text-[10px] uppercase tracking-widest text-neutral-500 group-hover/item:text-ocean-600 transition-colors">Fast Booking</span>
-            </div>
-            <div class="flex items-center bg-slate-50 px-4 py-2 rounded-xl group/item hover:bg-ocean-50 transition-colors">
-              <span class="w-2 h-2 bg-ocean-500 rounded-full mr-3 animate-pulse" style="animation-delay: 0.4s"></span>
-              <span class="font-black text-[10px] uppercase tracking-widest text-neutral-500 group-hover/item:text-ocean-600 transition-colors">Secure Pay</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </AppSidebarLayout>
+        </Modal>
+    </AppLayout>
 </template>
+

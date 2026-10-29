@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\ConversationService;
 use App\Services\PricingService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -35,6 +36,10 @@ class HandleInertiaRequests extends Middleware
             }]);
         }
 
+        if ($user && $user->role === 'instructor') {
+            $user->load('instructorProfile');
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
@@ -56,6 +61,54 @@ class HandleInertiaRequests extends Middleware
                 'maxRatePerHour' => PricingService::maxRatePerHour(),
                 'rangeLabel' => PricingService::rateRangeLabel(),
             ],
+            // Real counts for the sidebar badges. Nothing is invented: each value
+            // is a direct query against this instructor's own records.
+            'nav' => function () use ($user) {
+                if (! $user) {
+                    return null;
+                }
+
+                if ($user->role === 'student') {
+                    return [
+                        'upcomingBookings' => \App\Models\Booking::query()
+                            ->where('student_id', $user->id)
+                            ->whereIn('status', [
+                                \App\Enums\BookingStatus::Pending,
+                                \App\Enums\BookingStatus::AwaitingPayment,
+                                \App\Enums\BookingStatus::Confirmed,
+                                \App\Enums\BookingStatus::InProgress,
+                            ])
+                            ->whereDate('date', '>=', now()->toDateString())
+                            ->count(),
+                        'pendingFeedback' => \App\Models\Booking::query()
+                            ->where('student_id', $user->id)
+                            ->where('status', \App\Enums\BookingStatus::Completed)
+                            ->whereDoesntHave('review')
+                            ->count(),
+                        'chatUnread' => app(ConversationService::class)->unreadCountForUser($user),
+                    ];
+                }
+
+                if ($user->role !== 'instructor') {
+                    return null;
+                }
+
+                return [
+                    'openSlots' => \App\Models\Availability::query()
+                        ->where('user_id', $user->id)
+                        ->where('is_available', true)
+                        ->whereNull('specific_date')
+                        ->count(),
+                    'totalSlots' => count(\App\Enums\DayOfWeek::cases())
+                        * count(\App\Enums\TimePeriod::cases()),
+                    'pendingRequests' => \App\Models\Booking::query()
+                        ->where('instructor_id', $user->id)
+                        ->where('status', \App\Enums\BookingStatus::Pending)
+                        ->count(),
+                    'status' => $user->instructorProfile?->status?->value,
+                    'chatUnread' => app(ConversationService::class)->unreadCountForUser($user),
+                ];
+            },
         ];
     }
 

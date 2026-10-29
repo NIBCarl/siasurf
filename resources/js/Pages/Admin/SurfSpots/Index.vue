@@ -18,7 +18,16 @@ import { PlusIcon, PencilSquareIcon, TrashIcon, XMarkIcon } from '@heroicons/vue
 
 interface SurfSpotRow extends MapSpot {
   description?: string | null
+  barangay?: string | null
+  side?: string | null
+  side_label?: string | null
+  section?: string | null
+  section_label?: string | null
   break_type?: string | null
+  best_tide?: string | null
+  best_season?: string | null
+  access?: string | null
+  plus_code?: string | null
   is_active: boolean
   sort_order?: number
 }
@@ -31,8 +40,10 @@ interface Paginated {
 
 interface Props {
   spots: Paginated
-  filters: { search?: string; difficulty?: string; status?: string }
+  filters: { search?: string; difficulty?: string; side?: string; section?: string; status?: string }
   areas: string[]
+  sides: Record<string, string>
+  sections: Record<string, string>
   mapSpots: MapSpot[]
 }
 
@@ -41,16 +52,29 @@ const props = defineProps<Props>()
 const showForm = ref(false)
 const editing = ref<SurfSpotRow | null>(null)
 const picked = ref<{ latitude: number; longitude: number } | null>(null)
-const search = ref(props.filters.search ?? '')
+
+const query = ref({
+  search: props.filters.search ?? '',
+  difficulty: props.filters.difficulty ?? '',
+  side: props.filters.side ?? '',
+  section: props.filters.section ?? '',
+  status: props.filters.status ?? '',
+})
 
 const form = useForm({
   name: '',
   area: '',
+  barangay: '',
+  side: '',
+  section: '',
   region: 'Siargao Island',
   description: '',
   difficulty: 'beginner',
   break_type: '',
   best_tide: '',
+  best_season: '',
+  access: '',
+  plus_code: '',
   hazard_notes: '',
   latitude: '' as string | number,
   longitude: '' as string | number,
@@ -88,11 +112,17 @@ const openEdit = (spot: SurfSpotRow) => {
 
   form.name = spot.name
   form.area = spot.area ?? ''
+  form.barangay = spot.barangay ?? ''
+  form.side = spot.side ?? ''
+  form.section = spot.section ?? ''
   form.region = 'Siargao Island'
   form.description = spot.description ?? ''
   form.difficulty = spot.difficulty ?? 'beginner'
   form.break_type = spot.break_type ?? ''
-  form.best_tide = ''
+  form.best_tide = spot.best_tide ?? ''
+  form.best_season = spot.best_season ?? ''
+  form.access = spot.access ?? ''
+  form.plus_code = spot.plus_code ?? ''
   form.hazard_notes = spot.hazard_notes ?? ''
   form.latitude = spot.latitude !== null ? Number(spot.latitude) : ''
   form.longitude = spot.longitude !== null ? Number(spot.longitude) : ''
@@ -118,6 +148,22 @@ const submit = () => {
     },
   }
 
+  // Optional classification fields are nullable in the database: send null
+  // rather than an empty string so `in:` validation is not tripped.
+  form.transform((data) => ({
+    ...data,
+    barangay: data.barangay || null,
+    side: data.side || null,
+    section: data.section || null,
+    best_tide: data.best_tide || null,
+    best_season: data.best_season || null,
+    access: data.access || null,
+    plus_code: data.plus_code || null,
+    break_type: data.break_type || null,
+    description: data.description || null,
+    hazard_notes: data.hazard_notes || null,
+  }))
+
   if (editing.value) {
     form.put(route('admin.surf-spots.update', editing.value.id), options)
     return
@@ -131,12 +177,23 @@ const destroy = (spot: SurfSpotRow) => {
   router.delete(route('admin.surf-spots.destroy', spot.id), { preserveScroll: true })
 }
 
-const applySearch = () => {
+const applyFilters = () => {
   router.get(
     route('admin.surf-spots.index'),
-    { search: search.value || undefined },
+    {
+      search: query.value.search || undefined,
+      difficulty: query.value.difficulty || undefined,
+      side: query.value.side || undefined,
+      section: query.value.section || undefined,
+      status: query.value.status || undefined,
+    },
     { preserveState: true, replace: true },
   )
+}
+
+const resetFilters = () => {
+  query.value = { search: '', difficulty: '', side: '', section: '', status: '' }
+  applyFilters()
 }
 
 const pickerSpots = computed<MapSpot[]>(() =>
@@ -165,9 +222,38 @@ const pickerSpots = computed<MapSpot[]>(() =>
         </BaseButton>
       </header>
 
-      <form class="mb-6 flex gap-2" @submit.prevent="applySearch">
-        <TextInput v-model="search" placeholder="Search name or area…" class="w-64" />
-        <BaseButton variant="secondary" type="submit">Search</BaseButton>
+      <form class="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-6" @submit.prevent="applyFilters">
+        <TextInput v-model="query.search" placeholder="Search name, area or barangay…" class="lg:col-span-2" />
+
+        <select v-model="query.difficulty" class="rounded-xl border-slate-200 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500">
+          <option value="">All levels</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+        </select>
+
+        <select v-model="query.side" class="rounded-xl border-slate-200 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500">
+          <option value="">All coasts</option>
+          <option v-for="(label, value) in sides" :key="value" :value="value">{{ label }}</option>
+        </select>
+
+        <select v-model="query.section" class="rounded-xl border-slate-200 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500">
+          <option value="">All zones</option>
+          <option v-for="(label, value) in sections" :key="value" :value="value">{{ label }}</option>
+        </select>
+
+        <div class="flex gap-2">
+          <select v-model="query.status" class="w-full rounded-xl border-slate-200 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500">
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <BaseButton variant="secondary" type="submit">Filter</BaseButton>
+        </div>
+
+        <button type="button" class="text-left text-xs font-semibold text-slate-500 hover:text-teal-700 sm:col-span-2 lg:col-span-6" @click="resetFilters">
+          Reset filters
+        </button>
       </form>
 
       <div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/5">
@@ -176,6 +262,7 @@ const pickerSpots = computed<MapSpot[]>(() =>
             <tr>
               <th class="px-5 py-3 text-left font-bold">Break</th>
               <th class="px-5 py-3 text-left font-bold">Area</th>
+              <th class="px-5 py-3 text-left font-bold">Coast / zone</th>
               <th class="px-5 py-3 text-left font-bold">Level</th>
               <th class="px-5 py-3 text-left font-bold">Coordinates</th>
               <th class="px-5 py-3 text-left font-bold">Status</th>
@@ -188,7 +275,14 @@ const pickerSpots = computed<MapSpot[]>(() =>
                 <p class="font-semibold text-slate-900">{{ spot.name }}</p>
                 <p v-if="spot.break_type" class="text-xs text-slate-400">{{ spot.break_type }}</p>
               </td>
-              <td class="px-5 py-3 text-slate-600">{{ spot.area ?? '—' }}</td>
+              <td class="px-5 py-3 text-slate-600">
+                <p>{{ spot.area ?? '—' }}</p>
+                <p v-if="spot.barangay" class="text-xs text-slate-400">{{ spot.barangay }}</p>
+              </td>
+              <td class="px-5 py-3 text-slate-600">
+                <p>{{ spot.side_label ?? '—' }}</p>
+                <p v-if="spot.section_label" class="text-xs text-slate-400">{{ spot.section_label }}</p>
+              </td>
               <td class="px-5 py-3">
                 <Badge :variant="difficultyVariant(spot.difficulty)" class="capitalize">
                   {{ spot.difficulty }}
@@ -198,6 +292,16 @@ const pickerSpots = computed<MapSpot[]>(() =>
               <td class="px-5 py-3 font-mono text-xs text-slate-500">
                 <span v-if="spot.latitude !== null">{{ spot.latitude }}, {{ spot.longitude }}</span>
                 <span v-else class="text-rose-500">missing</span>
+                <p v-if="spot.plus_code" class="mt-0.5 text-[10px] text-slate-400">{{ spot.plus_code }}</p>
+                <a
+                  v-if="spot.latitude !== null && spot.longitude !== null"
+                  :href="`https://www.google.com/maps/search/?api=1&query=${spot.latitude},${spot.longitude}`"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="mt-0.5 inline-block text-[10px] font-semibold text-sky-600 hover:text-sky-800"
+                >
+                  Open in Maps
+                </a>
               </td>
               <td class="px-5 py-3">
                 <Badge :variant="spot.is_active ? 'success' : 'default'">
@@ -225,7 +329,7 @@ const pickerSpots = computed<MapSpot[]>(() =>
             </tr>
 
             <tr v-if="spots.data.length === 0">
-              <td colspan="6" class="px-5 py-10 text-center text-slate-500">No surf spots match.</td>
+              <td colspan="7" class="px-5 py-10 text-center text-slate-500">No surf spots match.</td>
             </tr>
           </tbody>
         </table>
@@ -249,7 +353,7 @@ const pickerSpots = computed<MapSpot[]>(() =>
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
               <InputLabel for="name" value="Break name" />
-              <TextInput id="name" v-model="form.name" class="mt-1 w-full" required />
+              <TextInput id="name" v-model="form.name" class="mt-1 w-full" required placeholder="Cloud 9 (Outer)" />
               <InputError :message="form.errors.name" class="mt-1" />
             </div>
             <div>
@@ -259,6 +363,37 @@ const pickerSpots = computed<MapSpot[]>(() =>
                 <option v-for="a in areas" :key="a" :value="a" />
               </datalist>
               <InputError :message="form.errors.area" class="mt-1" />
+            </div>
+            <div>
+              <InputLabel for="barangay" value="Barangay" />
+              <TextInput id="barangay" v-model="form.barangay" class="mt-1 w-full" placeholder="Catangnan" />
+              <InputError :message="form.errors.barangay" class="mt-1" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <InputLabel for="side" value="Coast side" />
+                <select
+                  id="side"
+                  v-model="form.side"
+                  class="mt-1 w-full rounded-md border-slate-300 shadow-sm focus:border-teal-500 focus:ring-teal-500"
+                >
+                  <option value="">Not set</option>
+                  <option v-for="(label, value) in sides" :key="value" :value="value">{{ label }}</option>
+                </select>
+                <InputError :message="form.errors.side" class="mt-1" />
+              </div>
+              <div>
+                <InputLabel for="section" value="Break zone" />
+                <select
+                  id="section"
+                  v-model="form.section"
+                  class="mt-1 w-full rounded-md border-slate-300 shadow-sm focus:border-teal-500 focus:ring-teal-500"
+                >
+                  <option value="">Not set</option>
+                  <option v-for="(label, value) in sections" :key="value" :value="value">{{ label }}</option>
+                </select>
+                <InputError :message="form.errors.section" class="mt-1" />
+              </div>
             </div>
             <div>
               <InputLabel for="difficulty" value="Difficulty" />
@@ -277,6 +412,36 @@ const pickerSpots = computed<MapSpot[]>(() =>
               <InputLabel for="break_type" value="Break type" />
               <TextInput id="break_type" v-model="form.break_type" class="mt-1 w-full" placeholder="Reef break (right)" />
               <InputError :message="form.errors.break_type" class="mt-1" />
+            </div>
+            <div>
+              <InputLabel for="best_tide" value="Best tide" />
+              <TextInput id="best_tide" v-model="form.best_tide" class="mt-1 w-full" placeholder="Mid to high" />
+              <InputError :message="form.errors.best_tide" class="mt-1" />
+            </div>
+            <div>
+              <InputLabel for="best_season" value="Best season" />
+              <TextInput id="best_season" v-model="form.best_season" class="mt-1 w-full" placeholder="October to March" />
+              <InputError :message="form.errors.best_season" class="mt-1" />
+            </div>
+            <div>
+              <InputLabel for="access" value="Access" />
+              <TextInput id="access" v-model="form.access" class="mt-1 w-full" placeholder="Boat only" />
+              <InputError :message="form.errors.access" class="mt-1" />
+            </div>
+            <div>
+              <InputLabel for="plus_code" value="Google Plus Code" />
+              <TextInput id="plus_code" v-model="form.plus_code" class="mt-1 w-full" placeholder="R578+JP, General Luna" />
+              <InputError :message="form.errors.plus_code" class="mt-1" />
+            </div>
+            <div class="sm:col-span-2">
+              <InputLabel for="description" value="Description" />
+              <textarea
+                id="description"
+                v-model="form.description"
+                rows="2"
+                class="mt-1 w-full rounded-md border-slate-300 shadow-sm focus:border-teal-500 focus:ring-teal-500"
+              />
+              <InputError :message="form.errors.description" class="mt-1" />
             </div>
             <div class="sm:col-span-2">
               <InputLabel for="hazard_notes" value="Hazard notes" />

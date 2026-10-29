@@ -44,8 +44,9 @@ class BookingAcceptanceService
                 'accepted_at' => $booking->accepted_at ?? now(),
             ]);
 
-            // FR 1.8.3 - the lesson now owns this slot.
-            $this->availabilityService->blockForBooking($booking);
+            // FR 1.8.3 - the lesson now owns this slot. Level 3 keeps the
+            // calendar open until its fifth student is booked.
+            $this->availabilityService->lockIfSlotIsFull($booking);
 
             $booking->refresh();
 

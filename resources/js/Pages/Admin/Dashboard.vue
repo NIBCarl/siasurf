@@ -1,7 +1,11 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import StatCard from '@/Components/Molecules/StatCard.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatCard from '@/Components/UI/StatCard.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
 import ActivityFeed from '@/Components/Organisms/ActivityFeed.vue'
 import RevenueChart from '@/Components/Organisms/RevenueChart.vue'
 import BookingDistributionChart from '@/Components/Organisms/BookingDistributionChart.vue'
@@ -14,7 +18,11 @@ import {
     ExclamationCircleIcon,
     ChevronRightIcon,
     PlayIcon,
-    UserGroupIcon
+    UserGroupIcon,
+    CalendarDaysIcon,
+    BanknotesIcon,
+    ExclamationTriangleIcon,
+    SignalIcon
 } from '@heroicons/vue/24/outline'
 
 interface Props {
@@ -71,235 +79,237 @@ const quickActions = [
 </script>
 
 <template>
-  <Head title="Admin Dashboard" />
+    <Head title="Admin dashboard" />
 
-  <AppLayout>
-    <template #header>
-        Platform Overview
-    </template>
+    <AppLayout>
+        <template #header>Platform overview</template>
 
-    <div class="space-y-10 pb-12">
-      <!-- Stats Grid (Bento Style) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        <!-- Total Bookings -->
-        <div class="group bg-white rounded-[2rem] p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-ocean-100/50 transition-all duration-500 hover:-translate-y-1">
-          <div class="flex items-center justify-between mb-6">
-            <div class="w-12 h-12 bg-ocean-50 rounded-2xl flex items-center justify-center group-hover:bg-ocean-500 transition-colors duration-300">
-              <svg class="w-6 h-6 text-ocean-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <span class="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-wider rounded-full">+{{ stats.total_bookings.today }} today</span>
-          </div>
-          <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Bookings</p>
-          <p class="text-4xl font-black text-slate-900 tracking-tight">{{ stats.total_bookings.value }}</p>
-        </div>
+        <div class="space-y-6">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <SectionHeader
+                    eyebrow="SISA management"
+                    title="Platform overview"
+                    description="Live operations, revenue and safety across Siargao."
+                />
 
-        <!-- Instructors -->
-        <div class="group bg-white rounded-[2rem] p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-reef-100/50 transition-all duration-500 hover:-translate-y-1">
-          <div class="flex items-center justify-between mb-6">
-            <div class="w-12 h-12 bg-reef-50 rounded-2xl flex items-center justify-center group-hover:bg-reef-500 transition-colors duration-300">
-              <UserGroupIcon class="w-6 h-6 text-reef-600 group-hover:text-white" />
-            </div>
-            <span v-if="stats.active_instructors.pending_verification > 0" class="px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-wider rounded-full">{{ stats.active_instructors.pending_verification }} pending</span>
-          </div>
-          <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Instructors</p>
-          <p class="text-4xl font-black text-slate-900 tracking-tight">{{ stats.active_instructors.value }}</p>
-        </div>
-
-        <!-- Revenue -->
-        <div class="group bg-white rounded-[2rem] p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-sand-100/50 transition-all duration-500 hover:-translate-y-1">
-          <div class="flex items-center justify-between mb-6">
-            <div class="w-12 h-12 bg-sand-50 rounded-2xl flex items-center justify-center group-hover:bg-sand-500 transition-colors duration-300">
-              <svg class="w-6 h-6 text-sand-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-          <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Net Revenue</p>
-          <p class="text-4xl font-black text-slate-900 tracking-tight">{{ stats.revenue.total }}</p>
-          <div class="mt-2 flex items-center text-[10px] font-bold text-sand-600 uppercase tracking-wider">
-            <span>{{ stats.revenue.this_month }}</span>
-            <span class="ml-1 opacity-60 italic">this month</span>
-          </div>
-        </div>
-
-        <!-- Incidents -->
-        <div class="group bg-white rounded-[2rem] p-7 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-100/50 transition-all duration-500 hover:-translate-y-1">
-          <div class="flex items-center justify-between mb-6">
-            <div class="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center group-hover:bg-rose-500 transition-colors duration-300">
-              <ExclamationCircleIcon class="w-6 h-6 text-rose-600 group-hover:text-white" />
-            </div>
-            <span v-if="stats.incidents.critical > 0" class="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-wider rounded-full italic">{{ stats.incidents.critical }} CRITICAL</span>
-          </div>
-          <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Safety Incidents</p>
-          <p class="text-4xl font-black text-slate-900 tracking-tight">{{ stats.incidents.total }}</p>
-        </div>
-
-        <!-- Active Sessions Highlight -->
-        <div class="group bg-gradient-to-br from-ocean-500 to-ocean-700 rounded-[2rem] p-7 shadow-xl shadow-ocean-200 hover:shadow-glow-ocean hover:scale-[1.02] transition-all duration-500">
-          <div class="flex items-center justify-between mb-6">
-            <div class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
-              <PlayIcon class="w-6 h-6 text-white animate-pulse" />
-            </div>
-            <span class="flex h-2.5 w-2.5">
-              <span class="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-white opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
-            </span>
-          </div>
-          <p class="text-ocean-100 text-[10px] font-black uppercase tracking-widest mb-1">Live Sessions</p>
-          <p class="text-4xl font-black text-white tracking-tight">{{ stats.ongoing_sessions.value }}</p>
-          <p class="text-ocean-100 text-[10px] font-bold mt-2 uppercase tracking-wide">Monitoring active</p>
-        </div>
-      </div>
-
-      <!-- Secondary Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Main Chart Section -->
-        <div class="lg:col-span-2 space-y-8">
-            <!-- Revenue Overview -->
-            <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                <div class="flex items-center justify-between mb-10">
-                    <div>
-                        <h3 class="text-xl font-bold text-slate-900 tracking-tight uppercase">Revenue Velocity</h3>
-                        <p class="text-slate-400 text-xs font-medium mt-1 uppercase tracking-widest italic">Performance metric over time</p>
-                    </div>
-                    <div class="bg-slate-50 p-1.5 rounded-xl flex items-center">
-                        <span class="px-4 py-1.5 bg-white rounded-lg text-[10px] font-black text-ocean-600 shadow-sm">MONTHLY</span>
-                        <span class="px-4 py-1.5 text-[10px] font-black text-slate-400">WEEKLY</span>
-                    </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <StatusPill v-if="stats.active_instructors.pending_verification > 0" variant="pending">
+                        {{ stats.active_instructors.pending_verification }} pending verification
+                    </StatusPill>
+                    <StatusPill v-if="stats.incidents.critical > 0" variant="critical">
+                        {{ stats.incidents.critical }} critical incident{{ stats.incidents.critical === 1 ? '' : 's' }}
+                    </StatusPill>
+                    <AppButton :href="route('admin.analytics.index')" variant="secondary">
+                        View analytics
+                    </AppButton>
                 </div>
-                <RevenueChart />
             </div>
 
-            <!-- Top Instructors Table -->
-            <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                <div class="flex items-center justify-between mb-8">
-                    <h3 class="text-xl font-bold text-slate-900 tracking-tight uppercase">Leaderboard</h3>
-                    <Link :href="route('admin.instructors.index')" class="flex items-center text-xs font-black text-ocean-600 uppercase tracking-widest hover:text-ocean-800 transition-colors group">
-                        Full View
-                        <ChevronRightIcon class="w-3 h-3 ml-2 group-hover:translate-x-1 transition-transform" />
-                    </Link>
-                </div>
-                <TopInstructorsTable />
+            <!-- KPI row: calm when zero, tinted when attention is needed -->
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <StatCard
+                    label="Total bookings"
+                    :value="stats.total_bookings.value"
+                    :meta="`${stats.total_bookings.today} booked today`"
+                    :icon="CalendarDaysIcon"
+                />
+                <StatCard
+                    label="Instructors"
+                    :value="stats.active_instructors.value"
+                    :meta="`${stats.active_instructors.pending_verification} awaiting verification`"
+                    :tone="stats.active_instructors.pending_verification > 0 ? 'attention' : 'neutral'"
+                    :icon="UserGroupIcon"
+                />
+                <StatCard
+                    label="Net revenue"
+                    :value="stats.revenue.total"
+                    :meta="`${stats.revenue.this_month} this month`"
+                    tone="positive"
+                    :icon="BanknotesIcon"
+                />
+                <StatCard
+                    label="Safety incidents"
+                    :value="stats.incidents.total"
+                    :meta="`${stats.incidents.critical} critical · ${stats.incidents.this_month} this month`"
+                    :tone="stats.incidents.critical > 0 ? 'critical' : 'neutral'"
+                    :icon="ExclamationTriangleIcon"
+                />
+                <StatCard
+                    label="Live sessions"
+                    :value="stats.ongoing_sessions.value"
+                    meta="Monitoring active"
+                    :icon="SignalIcon"
+                />
             </div>
-        </div>
 
-        <!-- Sidebar Components -->
-        <div class="space-y-8">
-            <!-- Booking Distribution -->
-            <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                <h3 class="text-lg font-bold text-slate-900 tracking-tight uppercase mb-8">Skill Mix</h3>
-                <BookingDistributionChart />
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                <h3 class="text-lg font-bold text-slate-900 tracking-tight uppercase mb-8">Operations</h3>
-                <div class="grid grid-cols-1 gap-4">
-                    <Link
-                        v-for="action in quickActions"
-                        :key="action.label"
-                        :href="route(action.href)"
-                        class="flex items-center p-5 rounded-[1.5rem] transition-all duration-300 group overflow-hidden relative"
-                        :class="{
-                            'bg-ocean-50/50 hover:bg-ocean-50': action.color === 'ocean',
-                            'bg-reef-50/50 hover:bg-reef-50': action.color === 'reef',
-                            'bg-sand-50 hover:bg-sand-100': action.color === 'sand',
-                            'bg-rose-50/50 hover:bg-rose-50': action.color === 'rose'
-                        }"
-                    >
-                        <div 
-                            class="w-10 h-10 rounded-xl flex items-center justify-center mr-4 transition-all duration-300 group-hover:scale-110 shadow-sm"
-                            :class="{
-                                'bg-ocean-500 text-white': action.color === 'ocean',
-                                'bg-reef-500 text-white': action.color === 'reef',
-                                'bg-sand-500 text-white': action.color === 'sand',
-                                'bg-rose-500 text-white': action.color === 'rose'
-                            }"
-                        >
-                            <component :is="action.icon" class="w-5 h-5" />
+            <div class="grid gap-4 lg:grid-cols-3">
+                <div class="space-y-4 lg:col-span-2">
+                    <AppCard padding="lg">
+                        <SectionHeader
+                            eyebrow="Performance"
+                            title="Revenue velocity"
+                            description="Net revenue collected over time."
+                        />
+                        <div class="mt-4">
+                            <RevenueChart />
                         </div>
-                        <span class="text-xs font-black text-slate-900 uppercase tracking-widest">{{ action.label }}</span>
-                    </Link>
+                    </AppCard>
+
+                    <AppCard padding="lg">
+                        <SectionHeader eyebrow="Instructors" title="Leaderboard">
+                            <template #action>
+                                <Link
+                                    :href="route('admin.instructors.index')"
+                                    class="inline-flex items-center gap-1 text-body-sm font-semibold text-lagoon-700 hover:text-lagoon-800"
+                                >
+                                    Full view
+                                    <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                                </Link>
+                            </template>
+                        </SectionHeader>
+                        <div class="mt-4">
+                            <TopInstructorsTable />
+                        </div>
+                    </AppCard>
+                </div>
+
+                <div class="space-y-4">
+                    <AppCard padding="lg">
+                        <SectionHeader eyebrow="Distribution" title="Skill mix" />
+                        <div class="mt-4">
+                            <BookingDistributionChart />
+                        </div>
+                    </AppCard>
+
+                    <AppCard padding="md">
+                        <SectionHeader eyebrow="Shortcuts" title="Operations" />
+                        <div class="mt-3 space-y-2">
+                            <Link
+                                v-for="action in quickActions"
+                                :key="action.label"
+                                :href="route(action.href)"
+                                class="flex items-center gap-3 rounded-control border border-sand-200 bg-white p-3 transition-colors hover:border-lagoon-600"
+                            >
+                                <span
+                                    class="flex h-9 w-9 items-center justify-center rounded-control"
+                                    :class="
+                                        action.color === 'rose'
+                                            ? 'bg-rose-100 text-rose-700'
+                                            : 'bg-lagoon-50 text-lagoon-700'
+                                    "
+                                >
+                                    <component :is="action.icon" class="h-4 w-4" aria-hidden="true" />
+                                </span>
+                                <span class="text-body-sm font-semibold text-deep-900">{{ action.label }}</span>
+                                <ChevronRightIcon class="ml-auto h-4 w-4 text-stone-400" aria-hidden="true" />
+                            </Link>
+                        </div>
+                    </AppCard>
+
+                    <AppCard padding="lg">
+                        <SectionHeader eyebrow="Demand" title="Spot demand" />
+                        <div class="mt-4">
+                            <PopularSpotsChart />
+                        </div>
+                    </AppCard>
                 </div>
             </div>
 
-            <!-- Popular Spots -->
-            <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                <h3 class="text-lg font-bold text-slate-900 tracking-tight uppercase mb-8">Spot Demand</h3>
-                <PopularSpotsChart />
-            </div>
-        </div>
-      </div>
+            <AppCard padding="lg">
+                <SectionHeader eyebrow="Realtime" title="Activity stream">
+                    <template #action>
+                        <StatusPill variant="live">Live</StatusPill>
+                    </template>
+                </SectionHeader>
+                <div class="mt-4">
+                    <ActivityFeed :activities="activity" />
+                </div>
+            </AppCard>
 
-      <!-- Activity Feed (Full Width) -->
-      <div class="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-          <div class="flex items-center justify-between mb-10">
-              <h3 class="text-xl font-bold text-slate-900 tracking-tight uppercase">System Stream</h3>
-              <span class="text-[10px] font-bold text-ocean-600 uppercase tracking-[0.2em] italic">Real-time alerts</span>
-          </div>
-          <ActivityFeed :activities="activity" />
-      </div>
+            <!-- Live session monitor -->
+            <AppCard v-if="ongoingSessions.length" padding="none" class="overflow-hidden">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-deep-800 bg-deep-950 px-5 py-4">
+                    <div class="flex items-center gap-3">
+                        <StatusPill variant="live">Live</StatusPill>
+                        <p class="text-body font-semibold text-white">Active sessions</p>
+                    </div>
+                    <p class="text-label text-lagoon-200">
+                        {{ ongoingSessions.length }} in the water · updates in real time
+                    </p>
+                </div>
 
-      <!-- Ongoing Sessions Monitor -->
-      <div v-if="ongoingSessions.length > 0" class="bg-white rounded-[2.5rem] border border-ocean-200 shadow-xl shadow-ocean-100 overflow-hidden">
-        <div class="px-8 py-7 bg-gradient-to-r from-ocean-600 to-ocean-800 flex items-center justify-between">
-            <h2 class="text-lg font-extrabold text-white flex items-center uppercase tracking-widest">
-                <span class="relative flex h-3 w-3 mr-4">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-                </span>
-                Active Sessions
-            </h2>
-            <span class="text-ocean-100 text-[10px] font-black uppercase tracking-[0.3em]">Surfer Safety Monitor</span>
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[760px] text-left">
+                        <thead class="bg-sand-100">
+                            <tr>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">ID</th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Team</th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Location</th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Time left</th>
+                                <th class="px-5 py-3 text-right text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Access</th>
+                            </tr>
+                        </thead>
+
+                        <tbody class="divide-y divide-sand-200">
+                            <tr
+                                v-for="session in ongoingSessions"
+                                :key="session.id"
+                                class="transition-colors hover:bg-sand-50"
+                            >
+                                <td class="whitespace-nowrap px-5 py-4 font-mono text-label text-stone-500">
+                                    #{{ session.id }}
+                                </td>
+
+                                <td class="whitespace-nowrap px-5 py-4">
+                                    <p class="text-body-sm font-semibold text-deep-900">{{ session.instructor_name }}</p>
+                                    <p class="text-label italic text-stone-500">{{ session.student_name }}</p>
+                                </td>
+
+                                <td class="whitespace-nowrap px-5 py-4">
+                                    <span class="inline-flex items-center rounded-control bg-sand-100 px-2.5 py-1 text-label font-semibold text-stone-700">
+                                        {{ session.spot_name }}
+                                    </span>
+                                </td>
+
+                                <td class="whitespace-nowrap px-5 py-4">
+                                    <div class="flex items-center gap-3">
+                                        <span class="font-mono text-body-sm font-semibold tabular-nums text-deep-900">
+                                            {{ Math.floor(session.time_remaining / 3600) }}:{{
+                                                Math.floor((session.time_remaining % 3600) / 60)
+                                                    .toString()
+                                                    .padStart(2, '0')
+                                            }}
+                                        </span>
+                                        <div class="h-1.5 w-28 overflow-hidden rounded-full bg-sand-200">
+                                            <div
+                                                class="h-full rounded-full bg-lagoon-500 transition-all duration-1000"
+                                                :style="{
+                                                    width:
+                                                        Math.min(
+                                                            100,
+                                                            (session.time_remaining / (session.duration_hours * 3600)) * 100,
+                                                        ) + '%',
+                                                }"
+                                            />
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td class="whitespace-nowrap px-5 py-4 text-right">
+                                    <AppButton
+                                        :href="route('admin.bookings.show', session.id)"
+                                        variant="secondary"
+                                        size="sm"
+                                    >
+                                        Audit
+                                    </AppButton>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </AppCard>
         </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-full">
-                <thead class="bg-slate-50">
-                    <tr>
-                        <th class="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ID</th>
-                        <th class="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Team</th>
-                        <th class="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Location</th>
-                        <th class="px-8 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Time Left</th>
-                        <th class="px-8 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Access</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr v-for="session in ongoingSessions" :key="session.id" class="hover:bg-ocean-50/30 transition-colors group">
-                        <td class="px-8 py-5 whitespace-nowrap text-xs font-mono text-slate-400">#{{ session.id }}</td>
-                        <td class="px-8 py-5 whitespace-nowrap">
-                            <div class="flex flex-col">
-                                <span class="text-xs font-black text-slate-900 uppercase tracking-tight">{{ session.instructor_name }}</span>
-                                <span class="text-[10px] font-bold text-slate-400 uppercase italic leading-tight">{{ session.student_name }}</span>
-                            </div>
-                        </td>
-                        <td class="px-8 py-5 whitespace-nowrap">
-                            <span class="px-3 py-1 bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg uppercase tracking-wider italic">{{ session.spot_name }}</span>
-                        </td>
-                        <td class="px-8 py-5 whitespace-nowrap">
-                            <div class="flex items-center">
-                                <span class="text-xs font-black font-mono text-ocean-600 mr-4">
-                                    {{ Math.floor(session.time_remaining / 3600) }}:{{ Math.floor((session.time_remaining % 3600) / 60).toString().padStart(2, '0') }}
-                                </span>
-                                <div class="w-32 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                    <div 
-                                        class="bg-gradient-to-r from-ocean-500 to-ocean-600 h-full transition-all duration-1000" 
-                                        :style="{ width: Math.min(100, (session.time_remaining / (session.duration_hours * 3600)) * 100) + '%' }"
-                                    ></div>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-8 py-5 whitespace-nowrap text-right">
-                            <Link :href="route('admin.bookings.show', session.id)" class="inline-flex items-center px-4 py-2 bg-ocean-50 text-ocean-700 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-ocean-500 hover:text-white transition-all duration-300">
-                                AUDIT
-                            </Link>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-      </div>
-    </div>
-  </AppLayout>
+    </AppLayout>
 </template>
+

@@ -16,12 +16,18 @@ class InstructorProfile extends Model
     protected $fillable = [
         'user_id',
         'bio',
+        'area',
+        'meeting_point',
+        'latitude',
+        'longitude',
         'level',
         'status',
         'rate_per_hour',
         'strike_count',
         'qr_code_path',
         'suspended_until',
+        'suspension_reason',
+        'suspended_at',
         'auto_accept_bookings',
     ];
 
@@ -29,8 +35,11 @@ class InstructorProfile extends Model
         'level' => InstructorLevel::class,
         'status' => InstructorStatus::class,
         'rate_per_hour' => 'decimal:2',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
         'strike_count' => 'integer',
         'suspended_until' => 'datetime',
+        'suspended_at' => 'datetime',
         'auto_accept_bookings' => 'boolean',
     ];
 
@@ -52,6 +61,23 @@ class InstructorProfile extends Model
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class, 'instructor_id', 'user_id');
+    }
+
+    public function suspensions(): HasMany
+    {
+        return $this->hasMany(InstructorSuspension::class, 'instructor_id', 'user_id');
+    }
+
+    public function strikes(): HasMany
+    {
+        return $this->hasMany(InstructorStrike::class, 'instructor_id', 'user_id');
+    }
+
+    public function activeSuspension()
+    {
+        return $this->hasOne(InstructorSuspension::class, 'instructor_id', 'user_id')
+            ->where('status', \App\Enums\SuspensionStatus::Active->value)
+            ->latestOfMany();
     }
 
     // Scopes
@@ -94,6 +120,11 @@ class InstructorProfile extends Model
     {
         return $this->status === InstructorStatus::Active &&
                ($this->suspended_until === null || $this->suspended_until <= now());
+    }
+
+    public function hasActiveSuspension(): bool
+    {
+        return $this->suspensions()->active()->exists();
     }
 
     public function maxStudents(): int

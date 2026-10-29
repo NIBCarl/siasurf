@@ -8,8 +8,10 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
+use App\Models\Booking;
 use App\Models\User;
 use App\Models\SafetyIncident;
+use App\Observers\BookingObserver;
 use App\Observers\SafetyIncidentObserver;
 use App\Contracts\PaymentServiceInterface;
 use App\Services\MockPaymentService;
@@ -44,6 +46,13 @@ class AppServiceProvider extends ServiceProvider
 
         // Register safety incident observer
         SafetyIncident::observe(SafetyIncidentObserver::class);
+
+        // Every confirmed booking gets exactly one private chat thread.
+        Booking::observe(BookingObserver::class);
+
+        // Explicit registration keeps chat authorization predictable even if
+        // the model/policy naming ever changes.
+        Gate::policy(\App\Models\Conversation::class, \App\Policies\ConversationPolicy::class);
 
         // Define gates for role-based access
         Gate::define('admin', function (User $user) {
@@ -96,10 +105,10 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by($request->user()?->id ?: $request->ip());
         });
 
-        // Live location pings: a GPS watch is expected every ~5s, so allow a
-        // generous ceiling but still block a runaway client.
-        RateLimiter::for('location-pings', function (Request $request) {
-            return Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
+        // Booking-scoped chat: 30 messages per minute per user. This still
+        // feels instant to a person typing on a phone while stopping a loop.
+        RateLimiter::for('chat', function (Request $request) {
+            return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
         });
 
         // Public read-only APIs (availability, surf spots, reviews).

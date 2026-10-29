@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Booking;
+use App\Models\BookingParticipant;
 use App\Models\Waiver;
 use App\Enums\WaiverType;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -13,8 +14,12 @@ class WaiverService
     /**
      * Create a liability waiver for a booking
      */
-    public function createLiabilityWaiver(Booking $booking, string $signedBy, string $signatureData): Waiver
-    {
+    public function createLiabilityWaiver(
+        Booking $booking,
+        string $signedBy,
+        string $signatureData,
+        ?BookingParticipant $participant = null
+    ): Waiver {
         $signedAt = now();
         $retentionUntil = $signedAt->copy()->addYears(7);
 
@@ -23,6 +28,7 @@ class WaiverService
 
         return Waiver::create([
             'booking_id' => $booking->id,
+            'participant_id' => $participant?->id ?? $booking->primaryParticipant?->id,
             'type' => WaiverType::Liability->value,
             'signed_by' => $signedBy,
             'signature_data' => $signatureData,
@@ -41,7 +47,8 @@ class WaiverService
         string $parentSignature,
         string $emergencyContact,
         string $emergencyPhone,
-        ?string $medicalInfo = null
+        ?string $medicalInfo = null,
+        ?BookingParticipant $participant = null
     ): Waiver {
         $signedAt = now();
         $retentionUntil = $signedAt->copy()->addYears(7);
@@ -58,6 +65,7 @@ class WaiverService
 
         return Waiver::create([
             'booking_id' => $booking->id,
+            'participant_id' => $participant?->id ?? $booking->primaryParticipant?->id,
             'type' => WaiverType::ParentalConsent->value,
             'signed_by' => $parentName,
             'signature_data' => $parentSignature,
@@ -72,55 +80,125 @@ class WaiverService
      */
     public function hasRequiredWaivers(Booking $booking): bool
     {
-        // Always need liability waiver
-        $hasLiability = $booking->waiver()
+        $participants = $booking->participants()->get();
+
+        if ($participants->isNotEmpty()) {
+            return $participants->every(fn (BookingParticipant $participant) => $this->participantCovered($participant));
+        }
+
+        // Legacy booking with no participant rows: booking-level check.
+        $hasLiability = $booking->waivers()
             ->where('type', WaiverType::Liability->value)
             ->exists();
 
-        if (!$hasLiability) {
+        if (! $hasLiability) {
             return false;
         }
 
-        // If student is under 18, also need parental consent
         if ($booking->student_age < 18) {
-            $hasParentalConsent = $booking->waiver()
+            return $booking->waivers()
                 ->where('type', WaiverType::ParentalConsent->value)
                 ->exists();
-
-            return $hasParentalConsent;
         }
 
         return true;
     }
 
     /**
-     * Get missing waiver types for a booking
+     * Get missing waiver types for a booking.
      */
     public function getMissingWaiverTypes(Booking $booking): array
     {
+        $participants = $booking->participants()->get();
+
+        if ($participants->isNotEmpty()) {
+            $missing = [];
+
+            if ($participants->contains(fn (BookingParticipant $p) => ! $p->hasSigned(WaiverType::Liability))) {
+                $missing[] = WaiverType::Liability->value;
+            }
+
+            if ($participants->contains(fn (BookingParticipant $p) => $p->isMinor() && ! $p->hasSigned(WaiverType::ParentalConsent))) {
+                $missing[] = WaiverType::ParentalConsent->value;
+            }
+
+            return $missing;
+        }
+
         $missing = [];
 
-        // Check liability waiver
-        $hasLiability = $booking->waiver()
-            ->where('type', WaiverType::Liability->value)
-            ->exists();
-
-        if (!$hasLiability) {
+        if (! $booking->waivers()->where('type', WaiverType::Liability->value)->exists()) {
             $missing[] = WaiverType::Liability->value;
         }
 
-        // Check parental consent for minors
-        if ($booking->student_age < 18) {
-            $hasParentalConsent = $booking->waiver()
-                ->where('type', WaiverType::ParentalConsent->value)
-                ->exists();
-
-            if (!$hasParentalConsent) {
-                $missing[] = WaiverType::ParentalConsent->value;
-            }
+        if ($booking->student_age < 18
+            && ! $booking->waivers()->where('type', WaiverType::ParentalConsent->value)->exists()) {
+            $missing[] = WaiverType::ParentalConsent->value;
         }
 
         return $missing;
+    }
+
+    /**
+     * First participant who still needs to sign the liability waiver.
+     */
+    public function nextParticipantAwaitingLiability(Booking $booking): ?BookingParticipant
+    {
+        return $booking->participants()
+            ->get()
+            ->first(fn (BookingParticipant $p) => ! $p->hasSigned(WaiverType::Liability));
+    }
+
+    /**
+     * First minor who still needs parental consent.
+     */
+    public function nextParticipantAwaitingParentalConsent(Booking $booking): ?BookingParticipant
+    {
+        return $booking->participants()
+            ->get()
+            ->first(fn (BookingParticipant $p) => $p->isMinor() && ! $p->hasSigned(WaiverType::ParentalConsent));
+    }
+
+    public function participantCovered(BookingParticipant $participant): bool
+    {
+        if (! $participant->hasSigned(WaiverType::Liability)) {
+            return false;
+        }
+
+        return ! $participant->isMinor() || $participant->hasSigned(WaiverType::ParentalConsent);
+    }
+
+    /**
+     * Signing progress for the guided waiver flow.
+     *
+     * @return array{participants: int, signed: int, required: int}
+     */
+    public function waiverProgress(Booking $booking): array
+    {
+        $participants = $booking->participants()->get();
+
+        $required = 0;
+        $signed = 0;
+
+        foreach ($participants as $participant) {
+            $required++; // liability
+            if ($participant->hasSigned(WaiverType::Liability)) {
+                $signed++;
+            }
+
+            if ($participant->isMinor()) {
+                $required++; // parental consent
+                if ($participant->hasSigned(WaiverType::ParentalConsent)) {
+                    $signed++;
+                }
+            }
+        }
+
+        return [
+            'participants' => $participants->count(),
+            'signed' => $signed,
+            'required' => $required,
+        ];
     }
 
     /**

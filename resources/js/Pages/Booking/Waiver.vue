@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
@@ -24,10 +24,19 @@ interface Booking {
   }
 }
 
+interface Participant {
+  id: number
+  full_name: string | null
+  age: number | null
+  skill_level: string
+}
+
 interface Props {
   booking: Booking
   waiverType: string
   waiverTypeLabel: string
+  participant?: Participant | null
+  progress?: { participants: number; signed: number; required: number } | null
 }
 
 const props = defineProps<Props>()
@@ -36,10 +45,29 @@ const signaturePadRef = ref<InstanceType<typeof SignaturePad> | null>(null)
 const showAgreement = ref(false)
 
 const form = useForm({
-  signed_by: '',
+  signed_by: props.participant?.full_name ?? '',
   signature: '',
-  agreement: false
+  agreement: false,
+  participant_id: props.participant?.id ?? null,
 })
+
+// The guided flow advances by redirecting to this same page for the next
+// participant. Inertia reuses the component instance across that redirect, so
+// useForm() is not re-run and its state would stay bound to the previous
+// participant. Reset the form (and the pad) whenever the participant changes.
+const resetForParticipant = (participant: Participant | null) => {
+  form.participant_id = participant?.id ?? null
+  form.signed_by = participant?.full_name ?? ''
+  form.signature = ''
+  form.agreement = false
+  form.clearErrors()
+  signaturePadRef.value?.clearSignature()
+}
+
+watch(
+  () => props.participant?.id,
+  () => resetForParticipant(props.participant ?? null)
+)
 
 const submitWaiver = () => {
   if (!signaturePadRef.value || !signaturePadRef.value.hasSignature) {
@@ -47,8 +75,10 @@ const submitWaiver = () => {
     return
   }
 
+  // Always send the participant currently shown, never a stale one.
+  form.participant_id = props.participant?.id ?? null
   form.signature = signaturePadRef.value.getSignatureData()
-  
+
   form.post(route('bookings.store-waiver', props.booking.id), {
     preserveScroll: true,
     onError: () => {
@@ -93,6 +123,28 @@ const goBack = () => {
           <h1 class="text-3xl font-bold text-slate-900">Sign {{ waiverTypeLabel }}</h1>
           <p class="mt-2 text-slate-600">
             Please read and sign the liability waiver for your surfing lesson
+          </p>
+        </div>
+
+        <!-- Who is signing / progress -->
+        <div
+          v-if="participant"
+          class="mb-8 rounded-xl border border-ocean-100 bg-ocean-50/60 px-5 py-4"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-widest text-ocean-600">Signing for</p>
+              <p class="text-base font-bold text-slate-900">{{ participant.full_name || 'Participant' }}</p>
+            </div>
+            <span
+              v-if="progress"
+              class="rounded-full bg-white px-3 py-1 text-xs font-bold text-ocean-700 border border-ocean-100"
+            >
+              {{ progress.signed }} / {{ progress.required }} signatures
+            </span>
+          </div>
+          <p class="mt-2 text-xs text-slate-600">
+            Each participant must sign their own waiver. You'll be guided through the rest of the party next.
           </p>
         </div>
 

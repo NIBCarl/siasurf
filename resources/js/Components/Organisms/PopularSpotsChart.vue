@@ -1,65 +1,66 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 interface Spot {
-  name: string
-  total_bookings: number
+    name: string
+    total_bookings: number
 }
 
 const spots = ref<Spot[]>([])
 const isLoading = ref(true)
+const hasError = ref(false)
 
 onMounted(async () => {
-  try {
-    const response = await fetch('/admin/api/dashboard/popular-spots?limit=5')
-    const result = await response.json()
-    spots.value = result.spots
-  } catch (error) {
-    console.error('Failed to load spots:', error)
-  } finally {
-    isLoading.value = false
-  }
+    try {
+        const response = await fetch('/admin/api/dashboard/popular-spots?limit=5')
+        if (!response.ok) throw new Error('Request failed')
+        const result = await response.json()
+        spots.value = result.spots ?? []
+    } catch {
+        hasError.value = true
+    } finally {
+        isLoading.value = false
+    }
 })
 
-const maxBookings = () => {
-  return Math.max(...spots.value.map(s => s.total_bookings), 1)
-}
+const maxBookings = computed(() => Math.max(...spots.value.map((spot) => Number(spot.total_bookings)), 1))
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-    <h2 class="text-lg font-semibold text-slate-900 mb-4">Popular Surf Spots</h2>
-
-    <div v-if="isLoading" class="h-48 flex items-center justify-center">
-      <p class="text-slate-500">Loading...</p>
-    </div>
-
-    <div v-else-if="spots.length === 0" class="h-48 flex items-center justify-center">
-      <p class="text-slate-500">No data available</p>
-    </div>
-
-    <div v-else class="space-y-3">
-      <div
-        v-for="(spot, index) in spots"
-        :key="spot.name"
-        class="flex items-center"
-      >
-        <span class="text-sm font-medium text-slate-700 w-8">{{ index + 1 }}</span>
-        
-        <div class="flex-1 mx-3">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-sm text-slate-900 truncate">{{ spot.name }}</span>
-            <span class="text-sm text-slate-500">{{ spot.total_bookings }} bookings</span>
-          </div>
-          
-          <div class="w-full bg-slate-200 rounded-full h-2">
-            <div
-              class="bg-ocean-500 h-2 rounded-full transition-all duration-500"
-              :style="{ width: `${(spot.total_bookings / maxBookings()) * 100}%` }"
-            ></div>
-          </div>
+    <div>
+        <div v-if="isLoading" class="flex h-40 items-center justify-center text-body-sm text-stone-500">
+            Loading spots…
         </div>
-      </div>
+
+        <div
+            v-else-if="hasError || spots.length === 0"
+            class="flex h-40 flex-col items-center justify-center gap-1 text-center"
+        >
+            <p class="text-body-sm font-semibold text-deep-900">No spot demand yet</p>
+            <p class="text-label text-stone-500">Bookings will rank surf spots here.</p>
+        </div>
+
+        <div v-else class="space-y-3">
+            <div v-for="(spot, index) in spots" :key="spot.name" class="flex items-start gap-3">
+                <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sand-100 text-label font-semibold text-stone-600">
+                    {{ index + 1 }}
+                </span>
+
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-baseline justify-between gap-2">
+                        <span class="truncate text-body-sm font-semibold text-deep-900">{{ spot.name }}</span>
+                        <span class="shrink-0 text-label text-stone-500">
+                            {{ spot.total_bookings }} booking{{ spot.total_bookings === 1 ? '' : 's' }}
+                        </span>
+                    </div>
+                    <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-sand-200">
+                        <div
+                            class="h-full rounded-full bg-lagoon-500 transition-all duration-500"
+                            :style="{ width: `${(spot.total_bookings / maxBookings) * 100}%` }"
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
 </template>

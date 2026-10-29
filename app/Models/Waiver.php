@@ -13,6 +13,7 @@ class Waiver extends Model
 
     protected $fillable = [
         'booking_id',
+        'participant_id',
         'type',
         'signed_by',
         'signature_data',
@@ -31,6 +32,11 @@ class Waiver extends Model
     public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class);
+    }
+
+    public function participant(): BelongsTo
+    {
+        return $this->belongsTo(BookingParticipant::class, 'participant_id');
     }
 
     // Scopes

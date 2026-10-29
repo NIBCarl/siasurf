@@ -17,7 +17,15 @@ class EmailVerificationNotificationController extends Controller
             return redirect()->intended(route('dashboard', absolute: false));
         }
 
-        $request->user()->sendEmailVerificationNotification();
+        try {
+            $request->user()->sendEmailVerificationNotification();
+        } catch (\Throwable $exception) {
+            // Bad SMTP credentials, blocked port 587, Gmail app-password
+            // revoked... surface it instead of a 500 page.
+            report($exception);
+
+            return back()->with('status', 'verification-mail-failed');
+        }
 
         return back()->with('status', 'verification-link-sent');
     }

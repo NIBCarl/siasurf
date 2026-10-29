@@ -1,182 +1,323 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { computed, ref, watch } from 'vue'
+import { Head, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { 
-    UserGroupIcon,
-    IdentificationIcon,
-    ShieldCheckIcon,
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import EmptyState from '@/Components/UI/EmptyState.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
+import {
+    ChevronRightIcon,
     MagnifyingGlassIcon,
     PlusIcon,
-    EllipsisHorizontalIcon,
-    ChevronRightIcon,
-    StarIcon
+    UserGroupIcon,
 } from '@heroicons/vue/24/outline'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
-import Badge from '@/Components/Atoms/Badge.vue'
+import debounce from 'lodash/debounce'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 interface Instructor {
-  id: number
-  name: string
-  avatar_path: string
-  email: string
-  instructor_profile: {
-    level: number
-    status: string
-    rate_per_hour: number
-  }
+    id: number
+    name: string
+    avatar_path: string | null
+    email: string
+    instructor_profile: {
+        level: number
+        status: string
+        rate_per_hour: number
+    }
 }
 
 interface Props {
-  instructors: {
-    data: Instructor[]
-    links: any[]
-  }
-}
-
-defineProps<Props>()
-
-const getStatusVariant = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'active': return 'ocean'
-    case 'pending_verification': return 'warning'
-    case 'suspended': return 'danger'
-    default: return 'info'
-  }
-}
-
-const getLevelVariant = (level: number) => {
-    switch (level) {
-        case 3: return 'ocean-glow'
-        case 2: return 'wave'
-        default: return 'reef'
+    instructors: {
+        data: Instructor[]
+        links: Array<{ url: string | null; label: string; active: boolean }>
+        total?: number
+    }
+    filters?: {
+        status?: string
+        level?: string
+        search?: string
     }
 }
+
+const props = defineProps<Props>()
+
+const filters = ref({
+    search: props.filters?.search ?? '',
+    status: props.filters?.status ?? '',
+    level: props.filters?.level ?? '',
+})
+
+const applyFilters = debounce(() => {
+    const params = Object.fromEntries(
+        Object.entries(filters.value).filter(([, value]) => value !== '' && value !== null),
+    )
+
+    router.get(route('admin.instructors.index'), params, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    })
+}, 400)
+
+watch(filters, applyFilters, { deep: true })
+
+const hasFilters = computed(() => Object.values(filters.value).some((value) => value !== ''))
+
+const clearFilters = () => {
+    filters.value = { search: '', status: '', level: '' }
+}
+
+type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | 'cancelled' | 'critical'
+
+const statusMeta = (status: string): { label: string; variant: PillVariant } => {
+    switch (status) {
+        case 'active':
+            return { label: 'Active', variant: 'verified' }
+        case 'pending_verification':
+            return { label: 'Pending verification', variant: 'pending' }
+        case 'suspended':
+            return { label: 'Suspended', variant: 'critical' }
+        case 'inactive':
+            return { label: 'Inactive', variant: 'neutral' }
+        default:
+            return { label: status.replace(/_/g, ' '), variant: 'neutral' }
+    }
+}
+
+const levelLabel = (level: number) => {
+    if (level === 1) return 'Level 1 · beginners, max 2'
+    if (level === 2) return 'Level 2 · one-on-one'
+    return 'Level 3 · groups up to 5'
+}
+
+const initials = (name: string) =>
+    name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('')
+
+const avatarUrl = (instructor: Instructor) => resolveAvatarUrl(instructor)
+
+const formatAmount = (amount: number) => Number(amount ?? 0).toLocaleString()
+
+const paginationLabel = (label: string) =>
+    label.replace(/&laquo;/g, '').replace(/&raquo;/g, '').replace(/&amp;/g, '&').trim()
 </script>
 
 <template>
+    <Head title="Instructors" />
+
     <AppLayout>
-    <Head title="Admin: Instructor Guild" />
+        <template #header>Instructors</template>
 
-    <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
-        <!-- Dashboard Header -->
-        <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-                <nav class="flex mb-2" aria-label="Breadcrumb">
-                    <ol class="inline-flex items-center space-x-1 md:space-x-3 text-sm font-medium">
-                        <li class="text-slate-400">Personnel</li>
-                        <div class="flex items-center">
-                            <svg class="w-3 h-3 text-slate-300 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
-                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/>
-                            </svg>
-                            <span class="ml-1 font-bold text-ocean-600 md:ml-2">Instructors</span>
-                        </div>
-                    </ol>
-                </nav>
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-                    Instructor Guild
-                    <Badge variant="ocean" size="sm" class="rounded-full">ACTIVE</Badge>
-                </h1>
-                <p class="text-slate-500 mt-1">Manage, verify, and monitor the elite SiaSurf instructor network.</p>
-            </div>
-            
-            <div class="flex gap-2">
-                <Link :href="route('admin.instructors.create')">
-                    <button class="flex items-center gap-2 px-6 py-2.5 bg-ocean-600 text-white rounded-xl text-sm font-bold hover:bg-ocean-700 transition-all shadow-lg shadow-ocean-600/20">
-                        <PlusIcon class="w-4 h-4" />
-                        Onboard New Member
-                    </button>
-                </Link>
-            </div>
-        </div>
+        <div class="space-y-6">
+            <nav aria-label="Breadcrumb" class="text-body-sm text-stone-500">
+                <ol class="flex items-center gap-2">
+                    <li>Personnel</li>
+                    <li aria-hidden="true">/</li>
+                    <li class="font-semibold text-deep-900">Instructors</li>
+                </ol>
+            </nav>
 
-        <!-- Filter & Search Bar -->
-        <div class="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4">
-            <div class="relative flex-1">
-                <MagnifyingGlassIcon class="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input 
-                    type="text" 
-                    placeholder="Search by name, license number, or location..." 
-                    class="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-ocean-500/20 transition-all placeholder:text-slate-400 font-medium"
-                >
-            </div>
-            <div class="flex gap-2">
-                <select class="bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-600 px-6 py-3 focus:ring-2 focus:ring-ocean-500/20 transition-all">
-                    <option>All Statuses</option>
-                    <option>Active</option>
-                    <option>Pending</option>
-                    <option>Suspended</option>
-                </select>
-                <button class="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-100 transition-colors">
-                    <EllipsisHorizontalIcon class="w-6 h-6" />
-                </button>
-            </div>
-        </div>
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <SectionHeader
+                    eyebrow="Personnel"
+                    title="Instructor roster"
+                    description="Verify credentials, monitor safety standing and manage the SISA instructor network."
+                />
 
-        <!-- Instructor Matrix -->
-        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-slate-50/50">
-                        <th class="pl-10 pr-6 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Personnel Identity</th>
-                        <th class="px-6 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Expertise Level</th>
-                        <th class="px-6 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Verification Status</th>
-                        <th class="px-6 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Service Rate</th>
-                        <th class="pl-6 pr-10 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Dossier</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-50">
-                    <tr v-for="instructor in instructors.data" :key="instructor.id" class="group hover:bg-ocean-50/30 transition-all cursor-default">
-                        <td class="pl-10 pr-6 py-5">
-                            <div class="flex items-center gap-4">
-                                <div class="relative">
-                                    <img :src="instructor.avatar_path" class="w-12 h-12 rounded-2xl object-cover shadow-sm ring-2 ring-white group-hover:ring-ocean-100 transition-all" />
-                                    <div v-if="instructor.instructor_profile.status === 'active'" class="absolute -bottom-1 -right-1 bg-white p-0.5 rounded-full shadow-sm">
-                                        <ShieldCheckIcon class="w-4 h-4 text-emerald-500 fill-emerald-50" />
-                                    </div>
-                                </div>
-                                <div class="flex flex-col">
-                                    <span class="text-sm font-black text-slate-900 group-hover:text-ocean-600 transition-colors">{{ instructor.name }}</span>
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{{ instructor.email }}</span>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-6 py-5 text-center">
-                            <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-lg group-hover:bg-white transition-colors">
-                                <StarIcon v-for="i in instructor.instructor_profile.level" :key="i" class="w-3 h-3 text-amber-400 fill-amber-400" />
-                                <span class="text-[10px] font-black text-slate-600 ml-1">LVL {{ instructor.instructor_profile.level }}</span>
-                            </div>
-                        </td>
-                        <td class="px-6 py-5 text-center">
-                            <Badge :variant="getStatusVariant(instructor.instructor_profile.status)" size="sm">
-                                {{ instructor.instructor_profile.status.replace('_', ' ').toUpperCase() }}
-                            </Badge>
-                        </td>
-                        <td class="px-6 py-5 text-right font-black text-slate-900">
-                            <span class="text-xs text-slate-400 font-bold mr-1 italic">₱</span>{{ instructor.instructor_profile.rate_per_hour }}
-                            <span class="text-[10px] text-slate-400 lowercase ml-1 font-bold">/hr</span>
-                        </td>
-                        <td class="pl-6 pr-10 py-5 text-right">
-                            <div class="flex justify-end gap-2">
-                                <Link :href="route('admin.instructors.show', instructor.id)">
-                                    <button class="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-ocean-600 hover:text-white transition-all flex items-center justify-center shadow-sm">
-                                        <ChevronRightIcon class="w-4 h-4" />
-                                    </button>
-                                </Link>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <!-- Pagination Placeholder -->
-            <div class="p-6 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Showing {{ instructors.data.length }} members of the guild</p>
-                <div class="flex gap-2">
-                    <button class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-400 hover:border-ocean-300 hover:text-ocean-600 transition-all uppercase tracking-widest">Previous</button>
-                    <button class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-400 hover:border-ocean-300 hover:text-ocean-600 transition-all uppercase tracking-widest">Next Page</button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <StatusPill variant="neutral" :dot="false">
+                        {{ instructors.total ?? instructors.data.length }} instructors
+                    </StatusPill>
+                    <AppButton :href="route('admin.instructors.create')">
+                        <PlusIcon class="h-4 w-4" aria-hidden="true" />
+                        Onboard instructor
+                    </AppButton>
                 </div>
             </div>
+
+            <!-- Real filters -->
+            <AppCard padding="md">
+                <div class="grid gap-3 md:grid-cols-[1fr_180px_180px_auto]">
+                    <div class="relative">
+                        <MagnifyingGlassIcon
+                            class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400"
+                            aria-hidden="true"
+                        />
+                        <input
+                            v-model="filters.search"
+                            type="search"
+                            placeholder="Search by name or email"
+                            aria-label="Search instructors"
+                            class="h-11 w-full rounded-control border border-sand-200 bg-white pl-10 pr-3 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                        />
+                    </div>
+
+                    <select
+                        v-model="filters.status"
+                        aria-label="Filter by status"
+                        class="h-11 rounded-control border border-sand-200 bg-white px-3 text-body font-semibold text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                    >
+                        <option value="">All statuses</option>
+                        <option value="active">Active</option>
+                        <option value="pending_verification">Pending verification</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+
+                    <select
+                        v-model="filters.level"
+                        aria-label="Filter by level"
+                        class="h-11 rounded-control border border-sand-200 bg-white px-3 text-body font-semibold text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                    >
+                        <option value="">All levels</option>
+                        <option value="1">Level 1</option>
+                        <option value="2">Level 2</option>
+                        <option value="3">Level 3</option>
+                    </select>
+
+                    <AppButton v-if="hasFilters" variant="secondary" @click="clearFilters">
+                        Clear
+                    </AppButton>
+                </div>
+            </AppCard>
+
+            <!-- Roster -->
+            <AppCard v-if="instructors.data.length" padding="none" class="overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[820px] text-left">
+                        <thead class="bg-sand-100">
+                            <tr>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">
+                                    Instructor
+                                </th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">
+                                    Level
+                                </th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">
+                                    Status
+                                </th>
+                                <th class="px-5 py-3 text-right text-label font-semibold uppercase tracking-[0.06em] text-stone-600">
+                                    Rate
+                                </th>
+                                <th class="px-5 py-3 text-right text-label font-semibold uppercase tracking-[0.06em] text-stone-600">
+                                    Dossier
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody class="divide-y divide-sand-200">
+                            <tr
+                                v-for="instructor in instructors.data"
+                                :key="instructor.id"
+                                class="transition-colors hover:bg-sand-50"
+                            >
+                                <td class="px-5 py-4">
+                                    <div class="flex items-center gap-3">
+                                        <img
+                                            v-if="avatarUrl(instructor)"
+                                            :src="avatarUrl(instructor) || undefined"
+                                            alt=""
+                                            class="h-11 w-11 shrink-0 rounded-control object-cover"
+                                        />
+                                        <span
+                                            v-else
+                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-deep-950 text-body font-semibold text-lagoon-200"
+                                        >
+                                            {{ initials(instructor.name) }}
+                                        </span>
+
+                                        <div class="min-w-0">
+                                            <p class="truncate text-body font-semibold text-deep-900">
+                                                {{ instructor.name }}
+                                            </p>
+                                            <p class="truncate text-label text-stone-500">{{ instructor.email }}</p>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td class="px-5 py-4">
+                                    <StatusPill variant="neutral" :dot="false">
+                                        {{ levelLabel(instructor.instructor_profile.level) }}
+                                    </StatusPill>
+                                </td>
+
+                                <td class="px-5 py-4">
+                                    <StatusPill :variant="statusMeta(instructor.instructor_profile.status).variant">
+                                        {{ statusMeta(instructor.instructor_profile.status).label }}
+                                    </StatusPill>
+                                </td>
+
+                                <td class="px-5 py-4 text-right">
+                                    <p class="metric text-body font-semibold text-deep-900">
+                                        ₱{{ formatAmount(instructor.instructor_profile.rate_per_hour) }}
+                                    </p>
+                                    <p class="text-label text-stone-500">per hour</p>
+                                </td>
+
+                                <td class="px-5 py-4 text-right">
+                                    <AppButton
+                                        :href="route('admin.instructors.show', instructor.id)"
+                                        variant="secondary"
+                                        size="sm"
+                                    >
+                                        Open
+                                        <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                                    </AppButton>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 border-t border-sand-200 bg-sand-50 px-5 py-3">
+                    <p class="text-label text-stone-500">
+                        Showing {{ instructors.data.length }} of {{ instructors.total ?? instructors.data.length }}
+                        instructors
+                    </p>
+
+                    <div v-if="instructors.links.length > 3" class="flex flex-wrap items-center gap-2">
+                        <template v-for="link in instructors.links" :key="link.label">
+                            <Link
+                                v-if="link.url"
+                                :href="link.url"
+                                class="inline-flex h-9 items-center rounded-control border px-3 text-body-sm font-semibold transition-colors"
+                                :class="
+                                    link.active
+                                        ? 'border-deep-900 bg-deep-900 text-white'
+                                        : 'border-sand-300 bg-white text-stone-600 hover:border-lagoon-600'
+                                "
+                            >
+                                {{ paginationLabel(link.label) }}
+                            </Link>
+                            <span
+                                v-else
+                                class="inline-flex h-9 items-center rounded-control border border-sand-200 px-3 text-body-sm text-stone-400"
+                            >
+                                {{ paginationLabel(link.label) }}
+                            </span>
+                        </template>
+                    </div>
+                </div>
+            </AppCard>
+
+            <EmptyState
+                v-else
+                :icon="UserGroupIcon"
+                title="No instructors match these filters"
+                description="Clear the filters or onboard a new instructor to get started."
+            >
+                <AppButton v-if="hasFilters" variant="secondary" @click="clearFilters">
+                    Clear filters
+                </AppButton>
+                <AppButton :href="route('admin.instructors.create')">Onboard instructor</AppButton>
+            </EmptyState>
         </div>
-    </div>
     </AppLayout>
 </template>
+

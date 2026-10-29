@@ -1,200 +1,387 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Head, useForm, usePage, Link } from '@inertiajs/vue3'
+import { computed, ref } from 'vue'
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import ProfilePhotoCard from '@/Components/Molecules/ProfilePhotoCard.vue'
 import TextInput from '@/Components/TextInput.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import {
+  DocumentArrowUpIcon,
+  MapPinIcon,
+  StarIcon,
+  TrophyIcon,
+} from '@heroicons/vue/24/outline'
 
-interface User {
-  name: string
-  email: string
-  instructor_profile: {
-    bio: string
-    level: number
-    rate_per_hour: number
-    status: string
-  }
+interface InstructorProfile {
+  bio: string
+  level: number
+  rate_per_hour: number
+  status: string
+  area?: string | null
+  meeting_point?: string | null
+  latitude?: number | string | null
+  longitude?: number | string | null
 }
 
-const user = usePage().props.auth.user as User
+interface User {
+  id: number
+  name: string
+  email: string
+  created_at?: string
+  instructor_profile: InstructorProfile | null
+}
+
+interface Stats {
+  average_rating: number | null
+  total_reviews: number
+  completed_lessons: number
+}
+
+interface CertificateSummary {
+  id: number
+  type: string
+  type_label: string
+  status: string
+  status_label: string
+  expires_at: string | null
+}
+
+const props = defineProps<{
+  stats: Stats
+  certificates: CertificateSummary[]
+}>()
+
+const page = usePage()
+const user = page.props.auth.user as User
+const pricing = computed(() => (page.props as any).pricing ?? { minRatePerHour: 600, maxRatePerHour: 2500 })
+const flashSuccess = computed(() => (page.props.flash as any)?.success ?? null)
 
 const form = useForm({
   name: user.name,
   bio: user.instructor_profile?.bio || '',
-  rate_per_hour: user.instructor_profile?.rate_per_hour || 600,
+  rate_per_hour: Number(user.instructor_profile?.rate_per_hour) || 600,
+  area: user.instructor_profile?.area || '',
+  meeting_point: user.instructor_profile?.meeting_point || '',
+  latitude: user.instructor_profile?.latitude ?? '',
+  longitude: user.instructor_profile?.longitude ?? '',
 })
 
-const experienceYears = ref(8) // Hardcoded for now until added to DB
-
 const submit = () => {
-  form.patch(route('instructor.profile.update'))
+  form.patch(route('instructor.profile.update'), { preserveScroll: true })
+}
+
+// Additional certificates are submitted to the instructor endpoint, which only
+// appends documents and never touches the verified profile status.
+const certificateInput = ref<HTMLInputElement | null>(null)
+const certificateForm = useForm<{ certificates: File[] }>({ certificates: [] })
+
+const certificateError = computed(() => {
+  const errors = certificateForm.errors as Record<string, string>
+  return errors.certificates ?? errors['certificates.0'] ?? null
+})
+
+const chooseCertificates = () => certificateInput.value?.click()
+
+const onCertificatesChange = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  certificateForm.certificates = Array.from(input.files ?? [])
+}
+
+const uploadCertificates = () => {
+  if (certificateForm.certificates.length === 0) {
+    return
+  }
+
+  certificateForm.post(route('instructor.certificates.store'), {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      certificateForm.reset()
+      if (certificateInput.value) {
+        certificateInput.value.value = ''
+      }
+    },
+  })
+}
+
+const levelLabel = computed(() => {
+  const level = user.instructor_profile?.level
+  if (level === 1) return 'Level 1 - Beginner'
+  if (level === 2) return 'Level 2 - Intermediate'
+  if (level === 3) return 'Level 3 - Advanced'
+
+  return level ? `Level ${level}` : 'Unverified level'
+})
+
+const isActive = computed(() => user.instructor_profile?.status === 'active')
+const memberSince = computed(() => {
+  if (!user.created_at) return null
+  return new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(user.created_at))
+})
+
+type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info'
+const certificateVariant = (status: string): BadgeVariant => {
+  if (status === 'verified') return 'success'
+  if (status === 'pending_verification') return 'warning'
+  if (status === 'rejected') return 'danger'
+  return 'default'
 }
 </script>
 
 <template>
-  <Head title="Edit Profile" />
+  <Head title="Public Profile" />
 
-  <AppLayout :hide-sidebar="user.instructor_profile?.status !== 'active'">
-    <div class="py-12 bg-slate-50 min-h-screen">
-      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        <div class="flex items-center justify-between mb-12">
-          <div>
-            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Public Profile</h1>
-            <p class="text-slate-600 mt-1">Update your professional details and teaching rates.</p>
-          </div>
-          <div class="flex items-center space-x-3">
-             <Badge :variant="user.instructor_profile?.status === 'active' ? 'success' : 'warning'">
-                {{ user.instructor_profile?.status?.toUpperCase() }}
-             </Badge>
-             <Badge variant="info">
-                {{ 
-                  user.instructor_profile?.level === 1 ? 'Level 1 - Beginner' : 
-                  user.instructor_profile?.level === 2 ? 'Level 2 - Intermediate' : 
-                  user.instructor_profile?.level === 3 ? 'Level 3 - Advanced' : 
-                  'Level ' + user.instructor_profile?.level
-                }}
-             </Badge>
-          </div>
+  <AppLayout :hide-sidebar="!isActive">
+    <div class="space-y-6">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p class="eyebrow">Instructor settings</p>
+          <h2 class="mt-1 text-headline font-semibold tracking-tight text-deep-900">Public profile</h2>
+          <p class="mt-1 max-w-2xl text-body-sm text-stone-600">
+            Update your photo, professional details, and teaching rate. Students see this information in the directory.
+          </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-          
-          <!-- Profile Quick Stats -->
-          <div class="space-y-6">
-             <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-center">
-                <div class="relative inline-block mb-4">
-                  <img 
-                    src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200&h=200" 
-                    class="w-24 h-24 rounded-3xl object-cover border-4 border-ocean-50 shadow-lg"
-                  >
-                  <button class="absolute -bottom-2 -right-2 bg-ocean-600 text-white p-2 rounded-xl shadow-lg hover:scale-110 transition-transform">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                </div>
-                <h3 class="font-bold text-slate-900 text-lg">{{ user.name }}</h3>
-                <p class="text-xs text-slate-500">{{ user.email }}</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <Badge :variant="isActive ? 'success' : 'warning'">
+            {{ user.instructor_profile?.status?.toUpperCase() ?? 'NO PROFILE' }}
+          </Badge>
+          <Badge variant="info">{{ levelLabel }}</Badge>
+        </div>
+      </div>
 
-                <div class="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-50">
-                   <div>
-                     <p class="text-[10px] font-black uppercase text-slate-400">Rating</p>
-                     <p class="font-bold text-slate-900">4.9/5</p>
-                   </div>
-                   <div>
-                     <p class="text-[10px] font-black uppercase text-slate-400">Lessons</p>
-                     <p class="font-bold text-slate-900">124</p>
-                   </div>
-                </div>
-             </div>
+      <div
+        v-if="flashSuccess"
+        role="status"
+        class="rounded-card border border-lagoon-200 bg-lagoon-50 p-4 text-body-sm font-medium text-lagoon-800"
+      >
+        {{ flashSuccess }}
+      </div>
 
-             <!-- Preview Link -->
-             <Link :href="route('instructors.profile', 1)" class="block bg-ocean-600 rounded-2xl p-6 text-white text-center shadow-xl shadow-ocean-100 group">
-                <p class="text-xs font-bold uppercase tracking-widest opacity-80 mb-1">Public Profile</p>
-                <h4 class="font-bold">View how students see you</h4>
-                <div class="mt-4 inline-flex items-center text-xs bg-white/20 px-3 py-1.5 rounded-lg group-hover:bg-white/30 transition-colors">
-                  Open Preview &rarr;
-                </div>
-             </Link>
-          </div>
+      <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <!-- Left: photo, real stats, public preview -->
+        <div class="space-y-6">
+          <ProfilePhotoCard />
 
-          <!-- Edit Form -->
-          <div class="md:col-span-2 space-y-6">
-            <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
-              <form @submit.prevent="submit" class="space-y-6">
-                
-                <div>
-                  <InputLabel for="name" value="Display Name" />
+          <AppCard padding="lg">
+            <h3 class="text-title font-semibold tracking-tight text-deep-900">Your record</h3>
+            <p class="mt-1 text-body-sm text-stone-600">Live numbers from your lessons and reviews.</p>
+
+            <dl class="mt-5 space-y-3">
+              <div class="flex items-center justify-between gap-3 rounded-control bg-sand-50 p-3">
+                <dt class="flex items-center gap-2 text-body-sm font-medium text-stone-600">
+                  <StarIcon class="h-4 w-4 text-amber-500" aria-hidden="true" />
+                  Average rating
+                </dt>
+                <dd class="text-title font-semibold text-deep-900">
+                  {{ stats.average_rating !== null ? stats.average_rating.toFixed(1) : '—' }}
+                </dd>
+              </div>
+
+              <div class="flex items-center justify-between gap-3 rounded-control bg-sand-50 p-3">
+                <dt class="text-body-sm font-medium text-stone-600">Reviews</dt>
+                <dd class="text-title font-semibold text-deep-900">{{ stats.total_reviews }}</dd>
+              </div>
+
+              <div class="flex items-center justify-between gap-3 rounded-control bg-sand-50 p-3">
+                <dt class="flex items-center gap-2 text-body-sm font-medium text-stone-600">
+                  <TrophyIcon class="h-4 w-4 text-lagoon-700" aria-hidden="true" />
+                  Completed lessons
+                </dt>
+                <dd class="text-title font-semibold text-deep-900">{{ stats.completed_lessons }}</dd>
+              </div>
+            </dl>
+
+            <p v-if="memberSince" class="mt-4 text-label font-medium text-stone-500">
+              SiaSurf member since {{ memberSince }}
+            </p>
+          </AppCard>
+
+          <AppCard v-if="isActive" padding="lg" class="text-center">
+            <p class="eyebrow">Verified instructor</p>
+            <h3 class="mt-1 text-title font-semibold text-deep-900">See how students see you</h3>
+            <p class="mt-1 text-body-sm text-stone-600">
+              Your public profile is live in the instructor directory.
+            </p>
+            <AppButton :href="route('instructors.profile', user.id)" variant="secondary" block class="mt-4">
+              Open public profile
+            </AppButton>
+          </AppCard>
+        </div>
+
+        <!-- Right: editable profile + certificates -->
+        <div class="space-y-6 md:col-span-2">
+          <AppCard padding="lg">
+            <form @submit.prevent="submit" class="space-y-6">
+              <div>
+                <InputLabel for="name" value="Display name" />
+                <TextInput
+                  id="name"
+                  type="text"
+                  class="mt-1 block w-full"
+                  v-model="form.name"
+                  required
+                />
+                <InputError class="mt-2" :message="form.errors.name" />
+              </div>
+
+              <div>
+                <InputLabel for="bio" value="Professional bio" />
+                <textarea
+                  id="bio"
+                  v-model="form.bio"
+                  class="mt-1 block w-full rounded-control border-sand-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600"
+                  rows="6"
+                  maxlength="1000"
+                  placeholder="Tell students about your experience..."
+                ></textarea>
+                <InputError class="mt-2" :message="form.errors.bio" />
+              </div>
+
+              <div>
+                <InputLabel for="rate" value="Rate per hour" />
+                <div class="relative mt-1">
+                  <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
+                    ₱
+                  </span>
                   <TextInput
-                    id="name"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.name"
+                    id="rate"
+                    type="number"
+                    v-model="form.rate_per_hour"
+                    class="block w-full pl-8"
                     required
+                    :min="pricing.minRatePerHour"
+                    :max="pricing.maxRatePerHour"
+                    step="50"
                   />
-                  <InputError class="mt-2" :message="form.errors.name" />
                 </div>
+                <p class="mt-1 text-label text-stone-500">
+                  Allowed range: {{ pricing.rangeLabel }}.
+                </p>
+                <InputError class="mt-2" :message="form.errors.rate_per_hour" />
+              </div>
 
-                <div>
-                  <InputLabel for="bio" value="Professional Bio" />
-                  <textarea
-                    id="bio"
-                    v-model="form.bio"
-                    class="mt-1 block w-full border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-2xl shadow-sm"
-                    rows="6"
-                    placeholder="Tell students about your experience..."
-                    required
-                  ></textarea>
-                  <InputError class="mt-2" :message="form.errors.bio" />
+              <div class="rounded-control border border-lagoon-100 bg-lagoon-50/40 p-5">
+                <div class="flex items-center gap-2">
+                  <MapPinIcon class="h-5 w-5 text-lagoon-700" aria-hidden="true" />
+                  <p class="text-body-sm font-semibold text-deep-900">Teaching location</p>
                 </div>
+                <p class="mt-1 text-label text-stone-600">
+                  This pin appears in the public instructor directory and on your profile map.
+                </p>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <InputLabel for="rate" value="Rate per Hour" />
-                    <div class="mt-1 relative rounded-2xl shadow-sm">
-                      <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span class="text-slate-500 sm:text-sm">₱</span>
-                      </div>
-                      <TextInput
-                        id="rate"
-                        type="number"
-                        v-model="form.rate_per_hour"
-                        class="pl-8 block w-full"
-                        required
-                        min="600"
-                      />
-                    </div>
-                    <InputError class="mt-2" :message="form.errors.rate_per_hour" />
+                    <InputLabel for="area" value="Area / barangay" />
+                    <TextInput id="area" v-model="form.area" type="text" class="mt-1 block w-full" placeholder="General Luna" />
+                    <InputError class="mt-2" :message="form.errors.area" />
                   </div>
 
                   <div>
-                    <InputLabel value="Years of Experience" />
-                    <TextInput
-                      type="number"
-                      class="mt-1 block w-full"
-                      v-model="experienceYears"
-                      readonly
-                    />
-                    <p class="mt-1 text-[10px] text-slate-400 italic">Contact admin to update experience years</p>
+                    <InputLabel for="meeting_point" value="Meeting point" />
+                    <TextInput id="meeting_point" v-model="form.meeting_point" type="text" class="mt-1 block w-full" placeholder="Cloud 9 tower" />
+                    <InputError class="mt-2" :message="form.errors.meeting_point" />
+                  </div>
+
+                  <div>
+                    <InputLabel for="latitude" value="Latitude" />
+                    <TextInput id="latitude" v-model="form.latitude" type="number" step="0.0000001" class="mt-1 block w-full" placeholder="9.8000000" />
+                    <InputError class="mt-2" :message="form.errors.latitude" />
+                  </div>
+
+                  <div>
+                    <InputLabel for="longitude" value="Longitude" />
+                    <TextInput id="longitude" v-model="form.longitude" type="number" step="0.0000001" class="mt-1 block w-full" placeholder="126.1600000" />
+                    <InputError class="mt-2" :message="form.errors.longitude" />
                   </div>
                 </div>
+              </div>
 
-                <div class="pt-6 border-t border-slate-100 flex justify-end">
-                   <BaseButton type="submit" variant="primary" :loading="form.processing">Save Profile Changes</BaseButton>
+              <div class="flex justify-end border-t border-sand-200 pt-6">
+                <AppButton type="submit" :loading="form.processing">Save profile changes</AppButton>
+              </div>
+            </form>
+          </AppCard>
+
+          <!-- Documents: real certificate records, not a hardcoded list -->
+          <AppCard padding="lg">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-title font-semibold tracking-tight text-deep-900">Certificates</h3>
+                <p class="mt-1 text-body-sm text-stone-600">
+                  SISA reviews every upload before it counts toward your verification.
+                </p>
+              </div>
+              <Badge variant="info">{{ props.certificates.length }} on file</Badge>
+            </div>
+
+            <ul v-if="props.certificates.length > 0" class="mt-5 space-y-3">
+              <li
+                v-for="certificate in props.certificates"
+                :key="certificate.id"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-control border border-sand-200 bg-sand-50 p-4"
+              >
+                <div class="min-w-0">
+                  <p class="truncate text-body-sm font-semibold text-deep-900">{{ certificate.type_label }}</p>
+                  <p class="mt-0.5 text-label text-stone-500">
+                    {{ certificate.expires_at ? `Expires ${certificate.expires_at}` : 'No expiry recorded' }}
+                  </p>
                 </div>
-              </form>
-            </div>
+                <Badge :variant="certificateVariant(certificate.status)">{{ certificate.status_label }}</Badge>
+              </li>
+            </ul>
 
-            <!-- Documents Section -->
-            <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 overflow-hidden">
-               <h3 class="text-xl font-bold text-slate-900 mb-6">Verified Documents</h3>
-               <div class="space-y-3">
-                  <div v-for="cert in ['WASAR Certification', 'BLS Certificate', 'SISA License']" :key="cert" class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div class="flex items-center">
-                       <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center mr-4">
-                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                         </svg>
-                       </div>
-                       <span class="font-bold text-slate-700 text-sm">{{ cert }}</span>
-                    </div>
-                    <button class="text-ocean-600 text-xs font-bold hover:underline">View File</button>
-                  </div>
-                  <div class="pt-4 text-center">
-                    <p class="text-xs text-slate-400 mb-4 italic">Need to update your certifications? Submit new files for review.</p>
-                    <BaseButton variant="secondary" size="sm" outline>Upload New Certificates</BaseButton>
-                  </div>
-               </div>
+            <p v-else class="mt-5 rounded-control border border-dashed border-sand-300 bg-sand-50 p-6 text-center text-body-sm text-stone-600">
+              No certificates on file yet.
+            </p>
+
+            <div class="mt-5 rounded-control border border-sand-200 p-4">
+              <p class="text-body-sm font-semibold text-deep-900">Add a certificate</p>
+              <p class="mt-1 text-label text-stone-500">PDF, JPG, or PNG. Maximum 10 MB per file.</p>
+
+              <input
+                ref="certificateInput"
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+                multiple
+                class="sr-only"
+                @change="onCertificatesChange"
+              />
+
+              <div class="mt-3 flex flex-wrap items-center gap-3">
+                <AppButton type="button" variant="secondary" size="sm" @click="chooseCertificates">
+                  <DocumentArrowUpIcon class="h-4 w-4" aria-hidden="true" />
+                  Choose files
+                </AppButton>
+                <AppButton
+                  v-if="certificateForm.certificates.length > 0"
+                  type="button"
+                  size="sm"
+                  :loading="certificateForm.processing"
+                  @click="uploadCertificates"
+                >
+                  Upload {{ certificateForm.certificates.length }} file{{ certificateForm.certificates.length === 1 ? '' : 's' }}
+                </AppButton>
+                <span v-else class="text-label text-stone-500">No files selected</span>
+              </div>
+
+              <p v-if="certificateError" class="mt-2 text-body-sm font-medium text-rose-700">{{ certificateError }}</p>
             </div>
-          </div>
+          </AppCard>
+
+          <p class="text-center text-label text-stone-500">
+            Need something else changed?
+            <Link :href="route('profile.edit')" class="font-semibold text-lagoon-700 underline underline-offset-4">
+              Open account settings
+            </Link>
+          </p>
         </div>
-
       </div>
     </div>
   </AppLayout>
 </template>
+

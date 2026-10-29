@@ -1,340 +1,543 @@
 <script setup lang="ts">
-import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { ref, onMounted } from 'vue';
-import { 
-    CalendarIcon, 
-    MapPinIcon, 
-    ClockIcon,
-    UserCircleIcon,
-    ChevronRightIcon,
-    StarIcon,
-    CloudIcon,
-    BoltIcon
-} from '@heroicons/vue/24/outline';
-import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { Head, Link, usePage } from '@inertiajs/vue3'
+import AppLayout from '@/Layouts/AppLayout.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import AppPanel from '@/Components/UI/AppPanel.vue'
+import Countdown from '@/Components/UI/Countdown.vue'
+import EmptyState from '@/Components/UI/EmptyState.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
+import {
+  CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
+  ChevronRightIcon,
+  CloudIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
+  SunIcon,
+  UserGroupIcon,
+} from '@heroicons/vue/24/outline'
 
 interface Instructor {
-    id: number;
-    name: string;
-    avatar_path: string;
-    instructor_profile: {
-        level: number;
-        rate_per_hour: number;
-    }
+  id: number
+  name: string
+  avatar_path?: string | null
+  instructor_profile?: {
+    level: number
+    rate_per_hour: number
+  }
 }
 
 interface SurfSpot {
-    id: number;
-    name: string;
-    difficulty: string;
+  id: number
+  name: string
+  difficulty: string
 }
 
 interface Booking {
-    id: number;
-    date: string;
-    time_period: string;
-    status: string;
-    instructor: Instructor;
-    surf_spot: SurfSpot;
-    started_at: string | null;
-    duration_hours?: number;
+  id: number
+  date: string
+  time_period: string
+  start_time?: string | null
+  end_time?: string | null
+  status: string
+  total_amount?: number
+  payment_status?: string
+  instructor: Instructor
+  surf_spot: SurfSpot
+  started_at: string | null
+  duration_hours?: number
 }
 
 interface Props {
-    activeSession: Booking | null;
-    upcomingBookings: Booking[];
-    pastInstructors: Instructor[];
-    surfReport: {
-        spot: string;
-        height: string;
-        condition: string;
-        wind: string;
-        tide: string;
-        temp: string;
-        icon: string;
-    };
+  activeSession: Booking | null
+  upcomingBookings: Booking[]
+  pastInstructors: Instructor[]
+  surfReport: {
+    spot: string
+    height: string
+    condition: string
+    wind: string
+    tide: string
+    temp: string
+    icon: string
+  }
 }
 
-const props = defineProps<Props>();
+const props = defineProps<Props>()
 
-const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        weekday: 'short'
-    });
-};
+const page = usePage()
+const firstName = computed(() => (page.props.auth.user as any)?.name?.split(' ')[0] ?? 'Surfer')
+const chatUnread = computed(() => Number((page.props as any).nav?.chatUnread ?? 0))
 
-const formatTimeRemaining = (seconds: number) => {
-    if (seconds <= 0) return 'Session Finishing...';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m remaining`;
-};
+const formatDate = (dateString: string) =>
+  new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    weekday: 'short',
+  })
 
-// Initial remaining time from props (calculated on server)
-const initialRemaining = props.activeSession?.started_at ? Math.max(0, Math.floor((new Date(new Date(props.activeSession.started_at).getTime() + (props.activeSession.duration_hours || 2) * 3600000).getTime() - new Date().getTime()) / 1000)) : 0;
-const timeRemaining = ref(initialRemaining);
+/**
+ * "9:00 AM – 11:00 AM" for the booking cards, so the time is visible without
+ * opening the detail page. Falls back to the legacy period label.
+ */
+const slotLabel = (booking: Booking) => {
+  const clock = (value?: string | null) => {
+    if (!value) return null
+
+    const time = value.includes('T') ? value.split('T')[1] : value
+    const [hour, minute] = time.slice(0, 5).split(':').map(Number)
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return null
+
+    const suffix = hour >= 12 ? 'PM' : 'AM'
+    const displayHour = hour % 12 === 0 ? 12 : hour % 12
+
+    return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`
+  }
+
+  const start = clock(booking.start_time)
+  const end = clock(booking.end_time)
+
+  if (start && end) return `${start} – ${end}`
+  if (start) return start
+
+  return booking.time_period.charAt(0).toUpperCase() + booking.time_period.slice(1)
+}
+
+const formatMoney = (value?: number) =>
+  typeof value === 'number'
+    ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(value)
+    : null
+
+const initials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+
+const avatarUrl = (instructor: Instructor) => resolveAvatarUrl(instructor)
+
+type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | 'cancelled' | 'critical'
+
+const statusVariant = (status: string): PillVariant => {
+  if (status === 'confirmed') return 'verified'
+  if (status === 'pending') return 'pending'
+  if (status === 'in_progress') return 'live'
+  if (status === 'completed') return 'completed'
+  if (status === 'cancelled') return 'cancelled'
+  return 'neutral'
+}
+
+const statusLabel = (status: string) => {
+  if (status === 'pending') return 'Awaiting instructor'
+  if (status === 'in_progress') return 'In progress'
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+const nextBooking = computed(() => props.upcomingBookings[0] ?? null)
+const remainingUpcoming = computed(() => props.upcomingBookings.slice(1, 4))
+const conditionsUnavailable = computed(() => props.surfReport.condition === 'Data Unavailable')
+
+const initialRemaining = props.activeSession?.started_at
+  ? Math.max(
+      0,
+      Math.floor(
+        (new Date(new Date(props.activeSession.started_at).getTime() + (props.activeSession.duration_hours ?? 2) * 3600000).getTime() -
+          Date.now()) /
+          1000,
+      ),
+    )
+  : 0
+
+const timeRemaining = ref(initialRemaining)
+let timer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
-    if (props.activeSession && timeRemaining.value > 0) {
-        const timer = setInterval(() => {
-            timeRemaining.value--;
-            if (timeRemaining.value <= 0) clearInterval(timer);
-        }, 1000);
-    }
-});
+  if (timeRemaining.value > 0) {
+    timer = setInterval(() => {
+      if (timeRemaining.value > 0) {
+        timeRemaining.value -= 1
+      } else if (timer) {
+        clearInterval(timer)
+      }
+    }, 1000)
+  }
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
 </script>
 
 <template>
     <Head title="Overview" />
 
-    <AppSidebarLayout>
-        <template #header>Student Overview</template>
+    <AppLayout>
+        <template #header>Student overview</template>
 
-        <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <!-- Top Row: Welcome & Weather Hero -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                <!-- Welcome Card -->
-                <div class="lg:col-span-2 relative overflow-hidden bg-gradient-to-br from-ocean-600 to-ocean-800 rounded-[2.5rem] p-10 text-white shadow-2xl shadow-ocean-200">
-                    <div class="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
-                    <div class="absolute -left-10 -bottom-10 w-60 h-60 bg-white/5 rounded-full blur-2xl"></div>
-                    
-                    <div class="relative z-10 flex flex-col h-full justify-between">
-                        <div>
-                            <h1 class="text-4xl font-extrabold tracking-tight mb-2">Welcome Back, {{ $page.props.auth.user.name }}!</h1>
-                            <p class="text-ocean-100 text-lg font-medium opacity-90">Ready for your next Siargao swell?</p>
-                        </div>
+        <div class="space-y-6">
+            <div class="grid gap-6 lg:grid-cols-12">
+                <!-- Hero -->
+                <div class="lg:col-span-7">
+                    <AppCard variant="chrome" padding="lg" class="relative h-full overflow-hidden">
+                        <svg
+                            class="pointer-events-none absolute -bottom-6 -right-6 h-48 w-72 text-white/5"
+                            viewBox="0 0 300 200"
+                            fill="currentColor"
+                            aria-hidden="true"
+                        >
+                            <path d="M0 140 C60 100, 120 180, 180 130 C240 80, 270 150, 300 120 L300 200 L0 200 Z" />
+                            <path
+                                d="M40 165 C100 130, 160 190, 220 150 C260 120, 280 160, 300 145 L300 200 L40 200 Z"
+                                opacity="0.6"
+                            />
+                        </svg>
 
-                        <div class="mt-8 flex flex-wrap items-center gap-4">
-                            <Link 
-                                :href="route('instructors.search')" 
-                                class="bg-white text-ocean-700 px-8 py-4 rounded-2xl font-bold text-sm shadow-lg shadow-ocean-900/20 hover:bg-ocean-50 transition-all"
-                            >
-                                Book a Lesson
-                            </Link>
-                            <Link 
-                                :href="route('student.bookings.index')" 
-                                class="bg-ocean-500/30 text-white border border-ocean-400/50 px-8 py-4 rounded-2xl font-bold text-sm backdrop-blur-md hover:bg-ocean-500/50 transition-all"
-                            >
-                                View History
-                            </Link>
+                        <div class="relative">
+                            <p class="text-label font-semibold uppercase tracking-[0.08em] text-lagoon-300">
+                                Siargao surf booking
+                            </p>
+                            <h1 class="mt-2 text-headline font-semibold tracking-tight text-white sm:text-display">
+                                Welcome back, {{ firstName }}
+                            </h1>
+                            <p class="mt-2 max-w-xl text-body text-lagoon-100">
+                                Find a SISA-verified instructor, follow your next lesson and check the conditions
+                                before you paddle out.
+                            </p>
+
+                            <div class="mt-6 flex flex-wrap items-center gap-3">
+                                <AppButton :href="route('instructors.search')" size="lg">
+                                    Find an instructor
+                                </AppButton>
+                                <AppButton
+                                    :href="route('student.bookings.index')"
+                                    variant="secondary"
+                                    size="lg"
+                                >
+                                    My bookings
+                                </AppButton>
+                            </div>
                         </div>
-                    </div>
+                    </AppCard>
                 </div>
 
-                <!-- Weather Widget -->
-                <div class="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-50 flex flex-col justify-between relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-700">
-                        <CloudIcon class="w-32 h-32" />
-                    </div>
-                    
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <p class="text-[10px] font-black text-ocean-600 uppercase tracking-[0.2em] mb-1">Siargao Live</p>
-                            <h3 class="text-2xl font-bold text-slate-900">{{ surfReport.spot }}</h3>
-                        </div>
-                        <div class="p-3 bg-amber-50 rounded-2xl text-amber-600">
-                            <CloudIcon class="w-6 h-6" />
-                        </div>
-                    </div>
-
-                    <div class="my-6">
-                        <div class="flex items-end space-x-2">
-                            <span class="text-5xl font-black text-slate-900 leading-none">{{ surfReport.temp }}</span>
-                            <span class="text-lg font-bold text-slate-400 mb-1">{{ surfReport.condition }}</span>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 border-t border-slate-50 pt-6">
-                        <div class="flex items-center space-x-3">
-                            <div class="p-2 bg-ocean-50 rounded-lg">
-                                <BoltIcon class="w-4 h-4 text-ocean-600" />
-                            </div>
+                <!-- Conditions -->
+                <div class="lg:col-span-5">
+                    <AppCard padding="lg" class="flex h-full flex-col">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase leading-none">Swell</p>
-                                <p class="text-sm font-black text-slate-900 mt-1">{{ surfReport.height }}</p>
+                                <p class="eyebrow">Conditions</p>
+                                <h2 class="mt-1 text-title font-semibold text-deep-950">{{ surfReport.spot }}</h2>
                             </div>
+                            <span class="flex h-10 w-10 items-center justify-center rounded-control bg-lagoon-50 text-lagoon-700">
+                                <SunIcon v-if="surfReport.icon === 'sun'" class="h-5 w-5" aria-hidden="true" />
+                                <CloudIcon v-else class="h-5 w-5" aria-hidden="true" />
+                            </span>
                         </div>
-                        <div class="flex items-center space-x-3">
-                            <div class="p-2 bg-wave-50 rounded-lg">
-                                <CalendarIcon class="w-4 h-4 text-wave-600" />
+
+                        <template v-if="!conditionsUnavailable">
+                            <div class="mt-4 flex items-end gap-3">
+                                <span class="metric text-hero font-semibold leading-none text-deep-950">
+                                    {{ surfReport.temp }}
+                                </span>
+                                <span class="pb-1 text-body-sm text-stone-600">{{ surfReport.condition }}</span>
                             </div>
-                            <div>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase leading-none">Tide</p>
-                                <p class="text-sm font-black text-slate-900 mt-1">{{ surfReport.tide }}</p>
+
+                            <div class="surface-well mt-4 p-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Waves</p>
+                                        <p class="mt-1 text-body font-semibold text-deep-900">{{ surfReport.height }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Wind</p>
+                                        <p class="mt-1 flex items-center gap-1.5 text-body font-semibold text-deep-900">
+                                            <svg
+                                                class="h-4 w-4 text-stone-500"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="1.5"
+                                                aria-hidden="true"
+                                            >
+                                                <path stroke-linecap="round" d="M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7" />
+                                            </svg>
+                                            {{ surfReport.wind }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="mt-3 border-t border-sand-200 pt-3">
+                                    <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Tide</p>
+                                    <p class="mt-1 text-body font-semibold text-deep-900">{{ surfReport.tide }}</p>
+                                </div>
                             </div>
-                        </div>
-                    </div>
+
+                            <p class="mt-auto pt-3 text-label text-stone-500">
+                                Wave and weather data from Open-Meteo · tide extremes from Stormglass.
+                            </p>
+                        </template>
+
+                        <AppPanel v-else tone="attention" label="Conditions" class="mt-4">
+                            Live conditions are temporarily unavailable. Check the horizon before you paddle out.
+                        </AppPanel>
+                    </AppCard>
                 </div>
             </div>
 
-            <!-- Second Row: Active Session & Upcoming -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
-                <!-- Active Session (Wide if exists, or just a placeholder) -->
-                <div 
-                    :class="[
-                        activeSession ? 'lg:col-span-8' : 'lg:col-span-4'
-                    ]"
-                    class="relative"
-                >
-                    <div v-if="activeSession" class="h-full bg-white rounded-[2.5rem] p-8 shadow-xl border border-ocean-100 overflow-hidden group">
-                        <!-- Background Glow for Active -->
-                        <div class="absolute inset-0 bg-gradient-to-br from-ocean-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        
-                        <div class="relative z-10">
-                            <div class="flex items-center justify-between mb-8">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center animate-pulse">
-                                        <div class="w-4 h-4 bg-white rounded-full"></div>
-                                    </div>
-                                    <h3 class="text-xl font-bold text-slate-900 uppercase tracking-tight">Active Session</h3>
-                                </div>
-                                <div class="px-4 py-1 bg-ocean-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest">
-                                    Live Tracker
-                                </div>
-                            </div>
-
-                            <div class="flex flex-col md:flex-row items-center space-y-6 md:space-y-0 md:space-x-10">
-                                <div class="relative">
-                                    <img 
-                                        :src="activeSession.instructor.avatar_path || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200&h=200'" 
-                                        class="w-32 h-32 rounded-[2rem] object-cover ring-8 ring-ocean-50"
-                                    />
-                                    <div class="absolute -bottom-2 -right-2 bg-white p-2 rounded-xl shadow-lg border border-ocean-50">
-                                        <div class="flex items-center space-x-1">
-                                            <StarIconSolid v-for="i in 5" :key="i" class="w-3 h-3 text-amber-400" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="flex-1">
-                                    <p class="text-sm font-bold text-ocean-600 uppercase tracking-widest mb-1">{{ activeSession.surf_spot.name }}</p>
-                                    <h4 class="text-3xl font-bold text-slate-900 mb-4">{{ activeSession.instructor.name }}</h4>
-                                    
-                                    <div class="flex flex-wrap gap-4">
-                                        <div class="flex items-center text-slate-600 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
-                                            <ClockIcon class="w-5 h-5 mr-3 text-slate-400" />
-                                            <span class="font-bold text-sm">{{ timeRemaining > 0 ? formatTimeRemaining(timeRemaining) : 'Session Started' }}</span>
-                                        </div>
-                                        <Link :href="route('student.bookings.show', activeSession.id)" class="bg-slate-900 text-white px-6 py-2 rounded-xl font-bold text-sm hover:bg-ocean-600 transition-colors">
-                                            Manage Session
-                                        </Link>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- No Active Session View -->
-                    <div v-else class="h-full bg-slate-100/50 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center border-2 border-dashed border-slate-200">
-                        <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-6">
-                            <CalendarIcon class="w-10 h-10 text-slate-300" />
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-400 uppercase tracking-widest">No Active Session</h3>
-                        <p class="text-slate-400 text-sm mt-2 max-w-[200px]">Book a lesson to track your session live here.</p>
-                    </div>
-                </div>
-
-                <!-- Upcoming Lessons (Remaining Grid Space) -->
-                <div 
-                    :class="[
-                        activeSession ? 'lg:col-span-4' : 'lg:col-span-8'
-                    ]"
-                >
-                    <div class="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-50 h-full">
-                        <div class="flex items-center justify-between mb-8">
-                            <h3 class="text-lg font-bold text-slate-900 uppercase tracking-tight">Upcoming</h3>
-                            <Link :href="route('student.bookings.index')" class="text-ocean-600 text-xs font-black uppercase tracking-widest hover:underline">See All</Link>
-                        </div>
-
-                        <div v-if="upcomingBookings.length > 0" class="space-y-4">
-                            <Link 
-                                v-for="booking in upcomingBookings" 
-                                :key="booking.id"
-                                :href="route('student.bookings.show', booking.id)"
-                                class="flex items-center p-5 rounded-[1.5rem] bg-slate-50 border border-slate-100 hover:border-ocean-200 hover:bg-ocean-50/30 transition-all group"
+            <div class="grid gap-6 lg:grid-cols-12">
+                <section class="lg:col-span-7">
+                    <SectionHeader eyebrow="Your next lesson" title="On the schedule">
+                        <template #action>
+                            <Link
+                                :href="route('student.bookings.index')"
+                                class="inline-flex items-center gap-1 text-body-sm font-semibold text-lagoon-700 hover:text-lagoon-800"
                             >
-                                <img 
-                                    :src="booking.instructor.avatar_path || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=80&h=80'" 
-                                    class="w-12 h-12 rounded-xl object-cover"
-                                />
-                                <div class="ml-4 flex-1">
-                                    <h4 class="font-bold text-slate-900 group-hover:text-ocean-700 transition-colors">{{ booking.instructor.name }}</h4>
-                                    <div class="flex items-center mt-1 space-x-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                        <span class="flex items-center"><CalendarIcon class="w-3 h-3 mr-1" /> {{ formatDate(booking.date) }}</span>
-                                        <span class="flex items-center"><ClockIcon class="w-3 h-3 mr-1" /> {{ booking.time_period }}</span>
-                                    </div>
-                                </div>
-                                <div class="ml-2 w-8 h-8 rounded-full bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
-                                    <ChevronRightIcon class="w-4 h-4 text-ocean-600" />
-                                </div>
+                                All bookings
+                                <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
                             </Link>
+                        </template>
+                    </SectionHeader>
+
+                    <!-- Live session -->
+                    <AppCard v-if="activeSession" variant="chrome" padding="lg" class="mt-4">
+                        <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="flex items-center gap-4">
+                                <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-white/10 text-lagoon-300">
+                                    <UserGroupIcon class="h-6 w-6" aria-hidden="true" />
+                                </span>
+                                <div>
+                                    <StatusPill variant="live">In progress</StatusPill>
+                                    <p class="mt-2 text-title font-semibold text-white">
+                                        {{ activeSession.instructor.name }}
+                                    </p>
+                                    <p class="mt-0.5 text-body-sm text-lagoon-100">
+                                        {{ activeSession.surf_spot.name }} · {{ formatDate(activeSession.date) }} ·
+                                        <span>{{ slotLabel(activeSession) }}</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-3">
+                                <Countdown :seconds="timeRemaining" label="Time left" />
+                                <AppButton
+                                    :href="route('student.bookings.show', activeSession.id)"
+                                    variant="secondary"
+                                    size="md"
+                                >
+                                    View session
+                                </AppButton>
+                            </div>
                         </div>
+                    </AppCard>
 
-                        <div v-else class="flex flex-col items-center justify-center h-48 text-center text-slate-300">
-                            <p class="font-bold uppercase tracking-widest text-xs">No upcoming lessons</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Third Row: Quick Re-book -->
-            <div v-if="pastInstructors.length > 0" class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xl font-bold text-slate-900 uppercase tracking-tight">Book Again</h3>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div 
-                        v-for="instructor in pastInstructors" 
-                        :key="instructor.id"
-                        class="bg-white rounded-[2.5rem] p-6 shadow-lg border border-slate-50 flex items-center space-x-6 hover:scale-[1.02] transition-transform duration-300"
+                    <!-- Next booking -->
+                    <Link
+                        v-else-if="nextBooking"
+                        :href="route('student.bookings.show', nextBooking.id)"
+                        class="group mt-4 block rounded-card focus:outline-none focus-visible:ring-2 focus-visible:ring-lagoon-600 focus-visible:ring-offset-2"
                     >
-                        <img 
-                            :src="instructor.avatar_path || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100&h=100'" 
-                            class="w-20 h-20 rounded-3xl object-cover border-4 border-slate-50 shadow-sm"
-                        />
-                        <div class="flex-1">
-                            <h4 class="text-lg font-bold text-slate-900 leading-tight">{{ instructor.name }}</h4>
-                            <p class="text-ocean-600 text-[10px] font-black uppercase tracking-widest mt-1">Level {{ instructor.instructor_profile.level }} Expert</p>
-                            <Link 
-                                :href="route('bookings.create', instructor.id)" 
-                                class="mt-3 block text-center w-full bg-slate-50 border border-slate-200 py-2 rounded-xl text-xs font-black text-slate-900 hover:bg-ocean-600 hover:text-white hover:border-ocean-600 transition-all uppercase tracking-widest shadow-sm"
+                        <AppCard padding="lg" interactive>
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div class="flex items-start gap-4">
+                                    <img
+                                        v-if="avatarUrl(nextBooking.instructor)"
+                                        :src="avatarUrl(nextBooking.instructor) || undefined"
+                                        alt=""
+                                        class="h-12 w-12 shrink-0 rounded-control object-cover"
+                                    />
+                                    <span
+                                        v-else
+                                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-deep-900 text-body font-semibold text-lagoon-200"
+                                    >
+                                        {{ initials(nextBooking.instructor.name) }}
+                                    </span>
+
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="text-body-lg font-semibold text-deep-900">
+                                                {{ nextBooking.instructor.name }}
+                                            </p>
+                                            <StatusPill :variant="statusVariant(nextBooking.status)">
+                                                {{ statusLabel(nextBooking.status) }}
+                                            </StatusPill>
+                                        </div>
+                                        <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm text-stone-600">
+                                            <CalendarDaysIcon class="h-4 w-4" aria-hidden="true" />
+                                            {{ formatDate(nextBooking.date) }}
+                                            <span aria-hidden="true">·</span>
+                                            <span class="font-semibold text-deep-900">{{ slotLabel(nextBooking) }}</span>
+                                        </p>
+                                        <p class="mt-0.5 flex items-center gap-1.5 text-body-sm text-stone-600">
+                                            <MapPinIcon class="h-4 w-4" aria-hidden="true" />
+                                            {{ nextBooking.surf_spot.name }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="text-right">
+                                    <p
+                                        v-if="formatMoney(nextBooking.total_amount)"
+                                        class="metric text-title font-semibold text-deep-900"
+                                    >
+                                        {{ formatMoney(nextBooking.total_amount) }}
+                                    </p>
+                                    <p class="mt-1 flex items-center justify-end gap-1 text-body-sm font-semibold text-lagoon-700">
+                                        View booking
+                                        <ChevronRightIcon
+                                            class="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                                            aria-hidden="true"
+                                        />
+                                    </p>
+                                </div>
+                            </div>
+                        </AppCard>
+                    </Link>
+
+                    <div v-else class="mt-4">
+                        <EmptyState
+                            :icon="CalendarDaysIcon"
+                            title="No lessons booked"
+                            description="Find a SISA-verified instructor and book your next session."
+                        >
+                            <AppButton :href="route('instructors.search')">Find an instructor</AppButton>
+                            <AppButton :href="route('surf-spots.index')" variant="secondary">
+                                Browse surf spots
+                            </AppButton>
+                        </EmptyState>
+                    </div>
+
+                    <ul v-if="remainingUpcoming.length" class="mt-3 space-y-2">
+                        <li v-for="booking in remainingUpcoming" :key="booking.id">
+                            <Link
+                                :href="route('student.bookings.show', booking.id)"
+                                class="flex items-center justify-between gap-3 rounded-control border border-sand-200 bg-white px-4 py-3 transition-colors hover:border-lagoon-600"
                             >
-                                Book
+                                <span class="min-w-0">
+                                    <span class="block truncate text-body-sm font-semibold text-deep-900">
+                                        {{ booking.instructor.name }}
+                                    </span>
+                                    <span class="block truncate text-label text-stone-500">
+                                        {{ formatDate(booking.date) }} · {{ slotLabel(booking) }} ·
+                                        {{ booking.surf_spot.name }}
+                                    </span>
+                                </span>
+                                <StatusPill :variant="statusVariant(booking.status)">
+                                    {{ statusLabel(booking.status) }}
+                                </StatusPill>
+                            </Link>
+                        </li>
+                    </ul>
+                </section>
+
+                <section class="lg:col-span-5">
+                    <SectionHeader eyebrow="Your instructors" title="Book again" />
+
+                    <div v-if="pastInstructors.length" class="mt-4 space-y-3">
+                        <Link
+                            v-for="instructor in pastInstructors"
+                            :key="instructor.id"
+                            :href="route('bookings.create', instructor.id)"
+                            class="group block rounded-card focus:outline-none focus-visible:ring-2 focus-visible:ring-lagoon-600 focus-visible:ring-offset-2"
+                        >
+                            <AppCard padding="md" interactive>
+                                <div class="flex items-center gap-4">
+                                    <img
+                                        v-if="avatarUrl(instructor)"
+                                        :src="avatarUrl(instructor) || undefined"
+                                        alt=""
+                                        class="h-12 w-12 shrink-0 rounded-control object-cover"
+                                    />
+                                    <span
+                                        v-else
+                                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-lagoon-50 text-body font-semibold text-lagoon-700"
+                                    >
+                                        {{ initials(instructor.name) }}
+                                    </span>
+
+                                    <div class="min-w-0 flex-1">
+                                        <p class="truncate text-body font-semibold text-deep-900">
+                                            {{ instructor.name }}
+                                        </p>
+                                        <p class="mt-0.5 text-body-sm text-stone-600">
+                                            Level {{ instructor.instructor_profile?.level }} ·
+                                            ₱{{ instructor.instructor_profile?.rate_per_hour }} per hour
+                                        </p>
+                                    </div>
+
+                                    <ChevronRightIcon
+                                        class="h-4 w-4 shrink-0 text-stone-400 transition-transform group-hover:translate-x-0.5"
+                                        aria-hidden="true"
+                                    />
+                                </div>
+                            </AppCard>
+                        </Link>
+                    </div>
+
+                    <div v-else class="mt-4">
+                        <AppPanel label="Book again">
+                            Instructors you have surfed with will appear here after your first completed lesson.
+                        </AppPanel>
+                    </div>
+
+                    <AppCard padding="md" class="mt-4">
+                        <h3 class="text-body-lg font-semibold text-deep-900">Quick links</h3>
+                        <div class="mt-3 grid grid-cols-2 gap-2">
+                            <Link
+                                :href="route('instructors.search')"
+                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                            >
+                                Find instructor
+                                <MagnifyingGlassIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                            </Link>
+                            <Link
+                                :href="route('surf-spots.index')"
+                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                            >
+                                Surf spots
+                                <MapPinIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                            </Link>
+                            <Link
+                                :href="route('student.bookings.index')"
+                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                            >
+                                My bookings
+                                <CalendarDaysIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                            </Link>
+                            <Link
+                                :href="route('student.reviews.index')"
+                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                            >
+                                My reviews
+                                <ChevronRightIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                            </Link>
+                            <Link
+                                :href="route('student.bookings.index')"
+                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                            >
+                                <span class="flex items-center gap-2">
+                                    Messages
+                                    <span
+                                        v-if="chatUnread > 0"
+                                        class="rounded-full bg-coral-700 px-2 py-0.5 text-label font-bold text-white"
+                                    >
+                                        {{ chatUnread }}
+                                    </span>
+                                </span>
+                                <ChatBubbleLeftRightIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
                             </Link>
                         </div>
-                    </div>
-                </div>
+                    </AppCard>
+                </section>
             </div>
         </div>
-    </AppSidebarLayout>
+    </AppLayout>
 </template>
 
-<style scoped>
-.animate-in {
-    animation-fill-mode: both;
-}
 
-@keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes slide-in-from-bottom-4 {
-    from { transform: translateY(1rem); }
-    to { transform: translateY(0); }
-}
-
-.fade-in {
-    animation-name: fade-in;
-}
-
-.slide-in-from-bottom-4 {
-    animation-name: slide-in-from-bottom-4;
-}
-</style>

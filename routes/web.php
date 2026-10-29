@@ -1,22 +1,34 @@
 <?php
 
-use App\Http\Controllers\Instructor\DashboardController as InstructorDashboardController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\BookingController;
-use App\Http\Controllers\InstructorSearchController;
-use App\Http\Controllers\Instructor\AvailabilityController;
-use App\Http\Controllers\Admin\InstructorController;
-use App\Http\Controllers\Admin\CertificateController;
+use App\Enums\InstructorStatus;
+use App\Http\Controllers\Admin\AppealController;
 use App\Http\Controllers\Admin\BookingController as AdminBookingController;
+use App\Http\Controllers\Admin\CertificateController;
 use App\Http\Controllers\Admin\IncidentController;
-use App\Http\Controllers\WaiverController;
-use App\Http\Controllers\ReviewController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\Instructor\BookingController as InstructorBookingController;
-use App\Http\Controllers\LocationController;
-use App\Http\Controllers\SurfSpotController;
+use App\Http\Controllers\Admin\InstructorController;
+use App\Http\Controllers\Admin\SkillUpgradeController;
+use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SurfSpotController as AdminSurfSpotController;
+use App\Http\Controllers\BookingController;
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Instructor\AvailabilityController;
+use App\Http\Controllers\Instructor\BookingController as InstructorBookingController;
+use App\Http\Controllers\Instructor\DashboardController as InstructorDashboardController;
+use App\Http\Controllers\Instructor\OnboardingController;
+use App\Http\Controllers\Instructor\ProfileController as InstructorProfileController;
+use App\Http\Controllers\Instructor\QrController as InstructorQrController;
+use App\Http\Controllers\Instructor\SuspensionController;
+use App\Http\Controllers\InstructorSearchController;
+use App\Http\Controllers\InstructorVerificationController;
+use App\Http\Controllers\ProfileAvatarController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\QRCodeController;
 use App\Http\Controllers\ReportExportController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\Student\FeedbackController;
+use App\Http\Controllers\SurfSpotController;
+use App\Http\Controllers\WaiverController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -41,40 +53,39 @@ Route::middleware('throttle:public-api')->group(function () {
     Route::get('/api/surf-spots', [SurfSpotController::class, 'json'])->name('api.surf-spots');
 });
 
-// Walk-in QR scan route
-Route::get('/qr/{instructor}', function (\App\Models\User $instructor) {
-    if ($instructor->role !== 'instructor') abort(404);
-    $instructor->load(['instructorProfile', 'reviewsAsInstructor']);
-    return Inertia::render('Public/WalkIn/Scan', ['instructor' => $instructor]);
-})->name('walkin.scan');
+// Walk-in QR scan route. The QR itself is permanent; this page always performs
+// a live status check against the SISA record.
+Route::get('/qr/{instructor}', [InstructorVerificationController::class, 'show'])->name('walkin.scan');
+Route::get('/qr/{instructor}/image', [QRCodeController::class, 'image'])->name('qr.image');
+Route::get('/qr/{instructor}/download', [QRCodeController::class, 'download'])->name('qr.download');
 
 // Dashboard route - accessible to all authenticated users
 Route::get('/dashboard', function () {
     $user = auth()->user();
-    
+
     if ($user->hasRole('admin')) {
         return redirect()->route('admin.dashboard');
     }
-    
+
     if ($user->hasRole('instructor')) {
-        if ($user->instructorProfile && $user->instructorProfile->status === \App\Enums\InstructorStatus::Suspended) {
+        if ($user->instructorProfile && $user->instructorProfile->status === InstructorStatus::Suspended) {
             return redirect()->route('instructor.suspended');
         }
-        
+
         // If no profile or no certificates, they must onboard
         $certificateCount = $user->certificates()->count();
-        if (!$user->instructorProfile || $certificateCount === 0) {
+        if (! $user->instructorProfile || $certificateCount === 0) {
             $message = $user->instructorProfile
                 ? 'Your instructor profile is saved, but no certificate has been uploaded yet. Upload at least one certificate (PDF, JPG, or PNG) to continue verification.'
                 : 'Complete your instructor onboarding to continue.';
 
             return redirect()->route('instructor.onboarding')->with('error', $message);
         }
-        
-        if ($user->instructorProfile->status === \App\Enums\InstructorStatus::PendingVerification) {
+
+        if ($user->instructorProfile->status === InstructorStatus::PendingVerification) {
             return redirect()->route('instructor.pending');
         }
-        
+
         // Verified instructors go to their real dashboard
         return redirect()->route('instructor.dashboard');
     }
@@ -90,7 +101,29 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Dedicated profile photo upload (students + instructors). The public disk
+    // keeps images persistent across sessions and deployments.
+    Route::post('/profile/avatar', [ProfileAvatarController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('profile.avatar.update');
+    Route::delete('/profile/avatar', [ProfileAvatarController::class, 'destroy'])
+        ->middleware('throttle:20,1')
+        ->name('profile.avatar.destroy');
 });
+
+// Booking-scoped chat. The booking policy decides who is a participant, so the
+// same endpoints serve both the student and the instructor.
+Route::middleware(['auth', 'verified'])
+    ->prefix('bookings/{booking}/chat')
+    ->as('chat.')
+    ->group(function () {
+        Route::get('/', [ChatController::class, 'index'])->name('index');
+        Route::post('/', [ChatController::class, 'store'])
+            ->middleware('throttle:chat')
+            ->name('store');
+        Route::post('/read', [ChatController::class, 'read'])->name('read');
+    });
 
 // Student routes
 Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->as('student.')->group(function () {
@@ -99,14 +132,14 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->as('
     Route::get('/bookings/{booking}', [BookingController::class, 'show'])->name('bookings.show');
     Route::post('/bookings/{booking}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
 
-    // Real-time location of the instructor during a live session.
-    Route::get('/bookings/{booking}/location', [LocationController::class, 'show'])
-        ->name('bookings.location');
-    
     // Student reviews
     Route::get('/reviews', [ReviewController::class, 'index'])->name('reviews.index');
     Route::get('/bookings/{booking}/review', [ReviewController::class, 'create'])->name('reviews.create');
     Route::post('/bookings/{booking}/review', [ReviewController::class, 'store'])->name('reviews.store');
+
+    // Session feedback hub: public review + private concern in one place.
+    Route::get('/bookings/{booking}/feedback', [FeedbackController::class, 'create'])->name('feedback.create');
+    Route::post('/bookings/{booking}/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
 });
 
 // Booking creation routes (for students)
@@ -114,15 +147,15 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('bookings')->as(
     // Step 1: Select instructor and enter details
     Route::get('/create/{instructor}', [BookingController::class, 'create'])->name('create');
     Route::post('/create/{instructor}/details', [BookingController::class, 'storeDetails'])->name('store-details');
-    
+
     // Step 4: Sign waiver
     Route::get('/{booking}/waiver', [WaiverController::class, 'showLiability'])->name('waiver');
     Route::post('/{booking}/waiver', [WaiverController::class, 'storeLiability'])->name('store-waiver');
-    
+
     // Step 4b: Parental consent (if needed)
     Route::get('/{booking}/parental-consent', [WaiverController::class, 'showParentalConsent'])->name('parental-consent');
     Route::post('/{booking}/parental-consent', [WaiverController::class, 'storeParentalConsent'])->name('store-parental-consent');
-    
+
     // Step 5: Payment
     // BR-4.4 - a booking cannot reach payment until the liability waiver (and
     // parental consent for minors) is signed. The middleware redirects back to
@@ -131,10 +164,10 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('bookings')->as(
         Route::get('/{booking}/payment', [BookingController::class, 'payment'])->name('payment');
         Route::post('/{booking}/payment', [BookingController::class, 'storePayment'])->name('store-payment');
     });
-    
+
     // Step 6: Confirmation
     Route::get('/{booking}/confirmation', [BookingController::class, 'confirmation'])->name('confirmation');
-    
+
     // Waiver status check
     Route::get('/{booking}/waiver-status', [WaiverController::class, 'status'])->name('waiver-status');
 });
@@ -146,14 +179,16 @@ Route::middleware(['auth'])->prefix('waivers')->as('waivers.')->group(function (
 });
 
 // Instructor routes
-Route::middleware(['auth', 'verified', 'role:instructor'])->prefix('instructor')->as('instructor.')->group(function () {
+Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspended'])->prefix('instructor')->as('instructor.')->group(function () {
     // Instructor Dashboard
     Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');
 
     // Instructor profile management
-    Route::get('/profile', function () {
-        return Inertia::render('Instructor/Profile/Edit');
-    })->name('profile.edit');
+    Route::get('/profile', [InstructorProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [InstructorProfileController::class, 'update'])->name('profile.update');
+
+    // Printable / downloadable beach QR pass.
+    Route::get('/qr', [InstructorQrController::class, 'show'])->name('qr.show');
 
     Route::prefix('availability')->name('availability.')->group(function () {
         Route::get('/', [AvailabilityController::class, 'index'])->name('index');
@@ -172,11 +207,6 @@ Route::middleware(['auth', 'verified', 'role:instructor'])->prefix('instructor')
     Route::post('/bookings/{booking}/start-session', [InstructorBookingController::class, 'startSession'])->name('bookings.start-session');
     Route::post('/bookings/{booking}/complete-session', [InstructorBookingController::class, 'completeSession'])->name('bookings.complete-session');
 
-    // Real-time location: the instructor's browser posts a GPS fix while the
-    // session is in progress. Capped at 120 pings/min per instructor.
-    Route::post('/bookings/{booking}/location', [LocationController::class, 'update'])
-        ->middleware('throttle:location-pings')
-        ->name('bookings.location.update');
     Route::post('/bookings/{booking}/request-upgrade', [InstructorBookingController::class, 'requestUpgrade'])->name('bookings.request-upgrade');
 
     // FR 1.9.3 - accept or decline a booking request within 2 hours
@@ -194,10 +224,10 @@ Route::middleware(['auth', 'verified', 'role:instructor'])->prefix('instructor')
         return Inertia::render('Instructor/Pending');
     })->name('pending');
 
-    // Suspended page
-    Route::get('/suspended', function () {
-        return Inertia::render('Instructor/Suspended');
-    })->name('suspended');
+    // Suspended instructor page and appeal workflow. These must remain
+    // reachable while the account is suspended.
+    Route::get('/suspended', [SuspensionController::class, 'show'])->name('suspended');
+    Route::post('/suspension/appeal', [SuspensionController::class, 'appeal'])->name('suspension.appeal');
 
     // Onboarding page
     Route::get('/onboarding', function () {
@@ -209,14 +239,18 @@ Route::middleware(['auth', 'verified', 'role:instructor'])->prefix('instructor')
                 'bio' => $profile->bio,
                 'level' => $profile->level->value,
                 'rate_per_hour' => (float) $profile->rate_per_hour,
+                'area' => $profile->area,
+                'meeting_point' => $profile->meeting_point,
+                'latitude' => $profile->latitude !== null ? (float) $profile->latitude : null,
+                'longitude' => $profile->longitude !== null ? (float) $profile->longitude : null,
             ] : null,
             'uploadedCertificates' => $user->certificates()->count(),
         ]);
     })->name('onboarding');
-    Route::post('/onboarding', [\App\Http\Controllers\Instructor\OnboardingController::class, 'store'])->name('onboarding.store');
+    Route::post('/onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
 
     // Instructor Certificate Upload
-    Route::post('/certificates', [\App\Http\Controllers\Instructor\CertificateController::class, 'store'])->name('certificates.store');
+    Route::post('/certificates', [App\Http\Controllers\Instructor\CertificateController::class, 'store'])->name('certificates.store');
 });
 
 // Verified instructor only routes
@@ -226,13 +260,14 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'verified.instructor']
 
 // API routes for availability (public)
 Route::get('/api/availability/{instructor}', [AvailabilityController::class, 'getAvailableSlots'])->name('api.availability');
+Route::get('/api/availability/{instructor}/end-times', [AvailabilityController::class, 'getAvailableEndTimes'])->name('api.availability.end-times');
 Route::get('/api/availability/{instructor}/booked-slots', [AvailabilityController::class, 'getBookedSlots'])->name('api.availability.booked-slots');
 
 // Admin routes
 Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admin.')->group(function () {
     // Admin dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    
+
     // Dashboard API endpoints
     Route::get('/api/dashboard/stats', [DashboardController::class, 'stats'])->name('api.dashboard.stats');
     Route::get('/api/dashboard/revenue', [DashboardController::class, 'revenue'])->name('api.dashboard.revenue');
@@ -250,7 +285,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
     Route::get('/instructors/{instructor}', [InstructorController::class, 'show'])->name('instructors.show');
     Route::get('/instructors/{instructor}/edit', [InstructorController::class, 'edit'])->name('instructors.edit');
     Route::put('/instructors/{instructor}', [InstructorController::class, 'update'])->name('instructors.update');
-    
+
     // Instructor verification actions
     Route::post('/instructors/{instructor}/verify', [InstructorController::class, 'verify'])->name('instructors.verify');
     Route::post('/instructors/{instructor}/reject', [InstructorController::class, 'reject'])->name('instructors.reject');
@@ -274,40 +309,34 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
     Route::post('/change-requests/{changeRequest}/reject', [AdminBookingController::class, 'rejectChangeRequest'])->name('change-requests.reject');
 
     // Student Management
-    Route::get('/students', [\App\Http\Controllers\Admin\StudentController::class, 'index'])->name('students.index');
-    Route::get('/students/{user}', [\App\Http\Controllers\Admin\StudentController::class, 'show'])->name('students.show');
-    Route::post('/students/{user}/toggle-status', [\App\Http\Controllers\Admin\StudentController::class, 'toggleStatus'])->name('students.toggle-status');
+    Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+    Route::get('/students/{user}', [StudentController::class, 'show'])->name('students.show');
+    Route::post('/students/{user}/toggle-status', [StudentController::class, 'toggleStatus'])->name('students.toggle-status');
 
-    // Safety incidents
+    // Safety incidents and student reports
     Route::get('/incidents', [IncidentController::class, 'index'])->name('incidents.index');
     Route::get('/incidents/create', [IncidentController::class, 'create'])->name('incidents.create');
+    Route::post('/incidents', [IncidentController::class, 'store'])->name('incidents.store');
     Route::get('/incidents/{incident}', [IncidentController::class, 'show'])->name('incidents.show');
+    Route::get('/incidents/{incident}/evidence', [IncidentController::class, 'evidence'])->name('incidents.evidence');
+    Route::post('/incidents/{incident}/confirm', [IncidentController::class, 'confirm'])->name('incidents.confirm');
+    Route::post('/incidents/{incident}/reject', [IncidentController::class, 'reject'])->name('incidents.reject');
+    Route::post('/incidents/{incident}/revoke', [IncidentController::class, 'revoke'])->name('incidents.revoke');
+
+    // Suspension appeals
+    Route::get('/appeals', [AppealController::class, 'index'])->name('appeals.index');
+    Route::get('/appeals/{appeal}', [AppealController::class, 'show'])->name('appeals.show');
+    Route::get('/appeals/{appeal}/evidence', [AppealController::class, 'evidence'])->name('appeals.evidence');
+    Route::post('/appeals/{appeal}/approve', [AppealController::class, 'approve'])->name('appeals.approve');
+    Route::post('/appeals/{appeal}/reject', [AppealController::class, 'reject'])->name('appeals.reject');
 
     // Skill Upgrade requests
-    Route::get('/skill-upgrades', [\App\Http\Controllers\Admin\SkillUpgradeController::class, 'index'])->name('skill-upgrades.index');
-    Route::post('/skill-upgrades/{skillUpgradeRequest}/approve', [\App\Http\Controllers\Admin\SkillUpgradeController::class, 'approve'])->name('skill-upgrades.approve');
-    Route::post('/skill-upgrades/{skillUpgradeRequest}/reject', [\App\Http\Controllers\Admin\SkillUpgradeController::class, 'reject'])->name('skill-upgrades.reject');
+    Route::get('/skill-upgrades', [SkillUpgradeController::class, 'index'])->name('skill-upgrades.index');
+    Route::post('/skill-upgrades/{skillUpgradeRequest}/approve', [SkillUpgradeController::class, 'approve'])->name('skill-upgrades.approve');
+    Route::post('/skill-upgrades/{skillUpgradeRequest}/reject', [SkillUpgradeController::class, 'reject'])->name('skill-upgrades.reject');
 
     // Analytics
     Route::get('/analytics', [DashboardController::class, 'analytics'])->name('analytics.index');
-
-    // Real-time session map — every lesson running on Siargao right now.
-    Route::get('/live-sessions', function () {
-        $service = app(\App\Services\LocationService::class);
-
-        return Inertia::render('Admin/LiveSessions/Index', [
-            'sessions' => $service->liveSessions(),
-            'meta' => [
-                'generated_at' => now()->toIso8601String(),
-                'on_site_radius_m' => \App\Services\LocationService::ON_SITE_RADIUS_METERS,
-                'stale_after_seconds' => \App\Services\LocationService::STALE_AFTER_SECONDS,
-                'siargao_bounds' => \App\Services\LocationService::SIARGAO_BOUNDS,
-            ],
-        ]);
-    })->name('live-sessions.index');
-
-    Route::get('/api/live-sessions', [LocationController::class, 'liveSessions'])
-        ->name('api.live-sessions');
 
     // Surf-spot registry — SISA keeps the Siargao coordinates accurate.
     Route::get('/surf-spots', [AdminSurfSpotController::class, 'index'])->name('surf-spots.index');
@@ -317,7 +346,7 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
 
     // Review moderation
     Route::post('/reviews/{review}/moderate', [ReviewController::class, 'moderate'])->name('reviews.moderate');
-    
+
     // Report exports
     Route::get('/exports/instructor-performance', [ReportExportController::class, 'instructorPerformance'])->name('exports.instructor-performance');
     Route::get('/exports/revenue', [ReportExportController::class, 'revenue'])->name('exports.revenue');

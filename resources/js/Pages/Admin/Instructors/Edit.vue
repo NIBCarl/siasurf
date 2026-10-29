@@ -18,6 +18,10 @@ interface Instructor {
     level: number
     status: string
     rate_per_hour: number
+    area?: string | null
+    meeting_point?: string | null
+    latitude?: number | string | null
+    longitude?: number | string | null
   }
 }
 
@@ -33,6 +37,10 @@ const form = useForm({
   level: props.instructor.instructor_profile.level,
   rate_per_hour: props.instructor.instructor_profile.rate_per_hour,
   status: props.instructor.instructor_profile.status,
+  area: props.instructor.instructor_profile.area || '',
+  meeting_point: props.instructor.instructor_profile.meeting_point || '',
+  latitude: props.instructor.instructor_profile.latitude ?? '',
+  longitude: props.instructor.instructor_profile.longitude ?? '',
 })
 
 const page = usePage()
@@ -166,6 +174,37 @@ const submit = () => {
                placeholder="Briefly describe the instructor's background and surfing style..."
             ></textarea>
             <InputError :message="form.errors.bio" />
+         </div>
+
+         <!-- Directory location -->
+         <div class="grid grid-cols-1 gap-8 border-t border-slate-50 pt-8 md:grid-cols-2">
+            <div>
+               <InputLabel value="Teaching area" class="mb-2" />
+               <TextInput v-model="form.area" type="text" class="w-full" placeholder="General Luna" />
+               <InputError :message="form.errors.area" />
+            </div>
+
+            <div>
+               <InputLabel value="Meeting point" class="mb-2" />
+               <TextInput v-model="form.meeting_point" type="text" class="w-full" placeholder="Cloud 9 tower" />
+               <InputError :message="form.errors.meeting_point" />
+            </div>
+
+            <div>
+               <InputLabel value="Latitude" class="mb-2" />
+               <TextInput v-model="form.latitude" type="number" step="0.0000001" class="w-full" placeholder="9.8000000" />
+               <InputError :message="form.errors.latitude" />
+            </div>
+
+            <div>
+               <InputLabel value="Longitude" class="mb-2" />
+               <TextInput v-model="form.longitude" type="number" step="0.0000001" class="w-full" placeholder="126.1600000" />
+               <InputError :message="form.errors.longitude" />
+            </div>
+
+            <p class="text-xs text-slate-500 md:col-span-2">
+               Coordinates place the instructor on the public directory map. Leave both blank if they should only appear in the list.
+            </p>
          </div>
 
          <div class="pt-8 flex items-center justify-between">

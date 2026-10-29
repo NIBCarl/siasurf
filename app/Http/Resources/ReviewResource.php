@@ -20,7 +20,7 @@ class ReviewResource extends JsonResource
             'rating' => $this->rating,
             'comment' => $this->comment,
             'instructor_response' => $this->instructor_response,
-            'photo_url' => $this->photo_path ? asset('storage/' . $this->photo_path) : null,
+            'photo_url' => $this->photo_path ? asset('storage/'.$this->photo_path) : null,
             'has_response' => $this->hasResponse(),
             'is_edited' => $this->isEdited(),
             'edited_at' => $this->edited_at,
@@ -29,7 +29,8 @@ class ReviewResource extends JsonResource
             'student' => [
                 'id' => $this->student->id,
                 'name' => $this->student->name,
-                'avatar' => $this->student->avatar,
+                'avatar_path' => $this->student->avatar_path,
+                'avatar_url' => $this->student->avatar_url,
             ],
             'instructor' => [
                 'id' => $this->instructor->id,

@@ -16,6 +16,7 @@ enum CancellationReason: string
     case PaymentTimeout = 'payment_timeout';
     case InstructorNoShow = 'instructor_no_show';
     case StudentNoShow = 'student_no_show';
+    case InstructorSuspended = 'instructor_suspended';
 
     public function label(): string
     {
@@ -27,6 +28,7 @@ enum CancellationReason: string
             self::PaymentTimeout => 'Payment window expired',
             self::InstructorNoShow => 'Instructor did not arrive',
             self::StudentNoShow => 'Student did not arrive',
+            self::InstructorSuspended => 'Instructor account suspended',
         };
     }
 
@@ -36,7 +38,7 @@ enum CancellationReason: string
      */
     public function isRefundable(): bool
     {
-        return in_array($this, [self::Weather, self::InstructorNoShow], true);
+        return in_array($this, [self::Weather, self::InstructorNoShow, self::InstructorSuspended], true);
     }
 
     /**

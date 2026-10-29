@@ -20,6 +20,8 @@ class Availability extends Model
         'time_period',
         'start_time',
         'end_time',
+        'open_slots',
+        'slot_duration_minutes',
         'is_available',
         'specific_date',
         'blocked_by_booking_id',
@@ -30,6 +32,8 @@ class Availability extends Model
         'time_period' => TimePeriod::class,
         'start_time' => 'datetime:H:i',
         'end_time' => 'datetime:H:i',
+        'open_slots' => 'array',
+        'slot_duration_minutes' => 'integer',
         'is_available' => 'boolean',
         'specific_date' => 'date',
     ];

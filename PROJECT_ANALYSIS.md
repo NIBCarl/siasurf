@@ -1,5 +1,7 @@
 # SiaSurf Application — Complete Implementation & Flow Analysis
 
+> **Historical note (October 2026):** The feedback/strike/suspension/appeal workflow has since been implemented. See `FEEDBACK_STRIKE_APPEAL.md` and `prd.md` §2.5.5 for the current behavior.
+
 **Analyzed:** `siasurf-app/` (Laravel 12.54.1 + Vue 3 + Inertia + MySQL + Reverb)
 **Verification:** `php artisan test` → **134 passed (431 assertions), 58.5s** · All 26 migrations `Ran` · Vite build present
 

@@ -79,8 +79,11 @@ Functional Requirements
     • QR scan redirects to registration/login, pre-fills instructor selection from QR data.
 **1.6 Post-Session Feedback**
     • Submit written review (minimum 20 characters) with optional photo upload after session completion.
+    • Optionally submit a private concern report with a predefined surf-session category, details, injury/near-miss flag, and evidence.
+    • “Other” supports a positive comment or an unclassified concern; SISA assigns severity to an unclassified concern.
+    • Public reviews do not add strikes by themselves.
     • Review link sent via email 2 hours after lesson.
-    • One review per booking with a 24-hour edit window.
+    • One review and one concern report per booking with a 24-hour review edit window.
 STI College Surigao 19
 **1.7 Real-Time Notifications**
     • Receive instant booking confirmation, payment status, and session updates via WebSocket and email notifications.
@@ -112,9 +115,14 @@ STI College Surigao 19
     • Status change history logged for complete audit trail.
 **3.2 Safety and Strike Management**
     • Log safety incidents: type (injury, near-miss, rule violation), severity (minor/major/critical), people involved, description, and associated booking.
+    • Review student concern reports and confirm, reject, or revoke them with a written reason.
     • Automated strike counting: minor = 1 strike, major = 2 strikes, critical = 3 strikes (immediate suspension).
+    • Confirmed strikes are recorded in an append-only strike ledger; three active strikes trigger a 30-day suspension.
     • Instructor profile automatically hidden from public view after 3 strikes (1-month suspension).
-    • Email alerts sent for high-severity incidents.
+    • The suspension reason, dates, and active strikes are visible to the instructor.
+    • The instructor may submit one appeal per suspension; SISA approves or rejects it with an audited response.
+    • Admins may suspend manually with a required reason and duration.
+    • Email alerts sent for high-severity incidents and suspension decisions.
 STI College Surigao 20
 **3.3 Session Monitoring Dashboard**
     • View completed lessons, active instructors, real-time activity feed, and booking history.

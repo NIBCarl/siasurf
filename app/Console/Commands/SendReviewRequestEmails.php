@@ -42,9 +42,6 @@ class SendReviewRequestEmails extends Command
             ->where('updated_at', '<=', $targetTime)
             ->where('updated_at', '>=', $targetTime->copy()->subHour())
             ->whereDoesntHave('review')
-            ->whereDoesntHave('notifications', function ($query) {
-                $query->where('type', 'App\\Notifications\\SendReviewRequest');
-            })
             ->with(['student', 'instructor'])
             ->get();
 
@@ -66,9 +63,9 @@ class SendReviewRequestEmails extends Command
 
             try {
                 $booking->student->notify(new SendReviewRequest($booking));
-                $this->line("✓ Sent review request to {$studentName} for lesson with {$instructorName}");
+                $this->line("âœ“ Sent review request to {$studentName} for lesson with {$instructorName}");
             } catch (\Exception $e) {
-                $this->error("✗ Failed to send review request to {$studentName}: {$e->getMessage()}");
+                $this->error("âœ— Failed to send review request to {$studentName}: {$e->getMessage()}");
             }
         }
 
@@ -77,3 +74,4 @@ class SendReviewRequestEmails extends Command
         return self::SUCCESS;
     }
 }
+

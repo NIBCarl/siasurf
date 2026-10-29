@@ -1,10 +1,6 @@
 import { ref, onUnmounted } from 'vue'
-import Echo from 'laravel-echo'
-import Pusher from 'pusher-js'
-import axios from 'axios'
-
-// Laravel Echo needs Pusher on the global scope when using the Reverb driver.
-;(window as any).Pusher = Pusher
+import { router } from '@inertiajs/vue3'
+import { getEcho } from './useEcho'
 
 export interface AppNotification {
     id: string
@@ -17,39 +13,11 @@ export interface AppNotification {
 }
 
 /**
- * Echo is shared by every component that renders notifications, so the socket
- * and its channel subscriptions live at module scope. A per-component instance
- * would open a second connection and duplicate every event.
+ * Channel subscriptions belong to this component; the underlying socket is
+ * shared through useEcho so ChatBox can use the same connection.
  */
-let echo: Echo<'reverb'> | null = null
 const subscribedChannels: string[] = []
-
-/**
- * Laravel authorises private channels from the session cookie rather than a
- * bearer token, so the authorizer posts to /broadcasting/auth through axios,
- * which already carries the CSRF cookie and the X-Requested-With header.
- */
-const createEcho = (): Echo<'reverb'> =>
-    new Echo({
-        broadcaster: 'reverb',
-        key: import.meta.env.VITE_REVERB_APP_KEY,
-        wsHost: import.meta.env.VITE_REVERB_HOST,
-        wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 80),
-        wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 443),
-        forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
-        enabledTransports: ['ws', 'wss'],
-        authorizer: (channel: any) => ({
-            authorize: (socketId: string, callback: (error: Error | null, data: any) => void) => {
-                axios
-                    .post('/broadcasting/auth', {
-                        socket_id: socketId,
-                        channel_name: channel.name,
-                    })
-                    .then((response) => callback(null, response.data))
-                    .catch((error) => callback(error, null))
-            },
-        }),
-    })
+let notificationsInitialized = false
 
 export function useNotifications() {
     const notifications = ref<AppNotification[]>([])
@@ -115,10 +83,24 @@ export function useNotifications() {
         })
     }
 
-    const initializeEcho = (userId: number, userRole: string) => {
-        if (echo) return
+    // A chat message should refresh the shared `nav.chatUnread` value even when
+    // the booking page (and its ChatBox) is not open. Debounce so a burst of
+    // messages does not trigger a reload per message.
+    let lastChatRefreshAt = 0
+    const refreshChatBadge = () => {
+        const now = Date.now()
+        if (now - lastChatRefreshAt < 3000) return
+        lastChatRefreshAt = now
+        router.reload({ only: ['nav'] })
+    }
 
-        echo = createEcho()
+    const initializeEcho = (userId: number, userRole: string) => {
+        if (notificationsInitialized) return
+
+        const echo = getEcho()
+        if (!echo) return
+
+        notificationsInitialized = true
 
         if (userRole === 'student') {
             const channel = `student.${userId}`
@@ -139,6 +121,18 @@ export function useNotifications() {
                     toNotification(e, 'Attendance Recorded', 'info'))
                 .listen('.payment.received', (e: any) =>
                     toNotification(e, 'Payment Received', 'success'))
+                .listen('.chat.message', (e: any) => {
+                    toNotification(
+                        {
+                            title: 'New message',
+                            message: `${e?.message?.sender_name ?? 'SiaSurf'}: ${e?.message?.body ?? 'Open your booking to read it.'}`,
+                            type: 'info',
+                        },
+                        'New message',
+                        'info',
+                    )
+                    refreshChatBadge()
+                })
         }
 
         if (userRole === 'instructor') {
@@ -162,6 +156,18 @@ export function useNotifications() {
                     toNotification(e, 'Attendance Recorded', 'info'))
                 .listen('.payment.received', (e: any) =>
                     toNotification(e, 'Payment Received', 'success'))
+                .listen('.chat.message', (e: any) => {
+                    toNotification(
+                        {
+                            title: 'New message',
+                            message: `${e?.message?.sender_name ?? 'SiaSurf'}: ${e?.message?.body ?? 'Open your booking to read it.'}`,
+                            type: 'info',
+                        },
+                        'New message',
+                        'info',
+                    )
+                    refreshChatBadge()
+                })
                 .listen('.instructor.status.changed', (e: any) =>
                     toNotification(e, 'Status Update', e?.new_status === 'active' ? 'success' : 'warning'))
         }
@@ -194,20 +200,18 @@ export function useNotifications() {
     }
 
     const disconnectEcho = () => {
+        const echo = getEcho()
         if (!echo) return
 
-        subscribedChannels.forEach((channel) => echo?.leave(channel))
+        subscribedChannels.forEach((channel) => echo.leave(channel))
         subscribedChannels.length = 0
-
-        echo.disconnect()
-        echo = null
+        notificationsInitialized = false
     }
 
     onUnmounted(() => {
-        // Only tear the socket down once nothing else is listening.
-        if (subscribedChannels.length === 0) {
-            disconnectEcho()
-        }
+        // Leave only this component's channels. ChatBox may still be using the
+        // shared socket, so the connection itself stays open.
+        disconnectEcho()
     })
 
     return {

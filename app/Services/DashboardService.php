@@ -345,6 +345,9 @@ class DashboardService
                 'student_name' => $booking->student->name,
                 'date' => $booking->date->format('M d, Y'),
                 'time_period' => $booking->time_period->value,
+                // Exact range, so the queue card shows the time immediately.
+                'start_time' => $booking->start_time?->format('H:i'),
+                'end_time' => $booking->end_time?->format('H:i'),
                 'skill_level' => $booking->skill_level->value,
                 'accept_time_remaining' => $booking->getAcceptTimeRemaining(),
             ])
@@ -395,6 +398,8 @@ class DashboardService
                     'student_name' => $b->student->name,
                     'date' => $b->date->format('M d, Y'),
                     'time_period' => $b->time_period->value,
+                    'start_time' => $b->start_time?->format('H:i'),
+                    'end_time' => $b->end_time?->format('H:i'),
                     'spot_name' => $b->surfSpot->name,
                 ])->values()->toArray(),
                 'recent_reviews' => $recentReviews->map(fn($r) => [

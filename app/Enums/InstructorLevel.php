@@ -52,4 +52,39 @@ enum InstructorLevel: int
             self::Level3 => [SkillLevel::Beginner->value, SkillLevel::Intermediate->value, SkillLevel::Advanced->value],
         };
     }
+
+    /**
+     * How many students may share one time slot with this instructor.
+     *
+     * This is the capacity the availability engine sums `student_count`
+     * against. It is the same hard safety ceiling enforced by SafetyService:
+     *
+     *  - Level 1 -> 2 students inside one booking
+     *  - Level 2 -> 1 student (1-on-1 only)
+     *  - Level 3 -> 5 students (may be split across several bookings)
+     */
+    public function slotCapacity(): int
+    {
+        return $this->maxStudents();
+    }
+
+    /**
+     * Level 1 instructors hold the whole slot from the moment a request is
+     * submitted (before the instructor even answers). This prevents a second
+     * student from double-booking the same hour.
+     *
+     * Levels 2 and 3 stay open until the slot's student capacity is reached.
+     */
+    public function holdsSlotWhilePending(): bool
+    {
+        return $this === self::Level1;
+    }
+
+    /**
+     * Whether several bookings may co-exist in the same time slot.
+     */
+    public function allowsParallelBookings(): bool
+    {
+        return $this->slotCapacity() > 1 && ! $this->holdsSlotWhilePending();
+    }
 }

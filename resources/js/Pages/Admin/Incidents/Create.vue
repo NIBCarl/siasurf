@@ -21,6 +21,7 @@ interface Booking {
 interface Props {
   instructors: Instructor[]
   bookings: Booking[]
+  categories: { value: string; label: string; group: string; strikes: number | null }[]
 }
 
 defineProps<Props>()
@@ -28,11 +29,12 @@ defineProps<Props>()
 const form = useForm({
   instructor_id: '',
   booking_id: '',
+  category: '',
   type: 'injury',
   severity: 'minor',
   description: '',
   location: '',
-  reported_at: new Date().toISOString().split('T')[0]
+  instructor_summary: '',
 })
 
 const submit = () => {
@@ -67,6 +69,27 @@ const submit = () => {
                <InputError :message="form.errors.instructor_id" />
             </div>
 
+            <!-- Category -->
+            <div>
+               <InputLabel value="Concern Category (optional)" class="mb-2" />
+               <select v-model="form.category" class="w-full border-slate-200 rounded-2xl focus:ring-rose-500 focus:border-rose-500">
+                  <option value="">Unclassified / admin description only</option>
+                  <optgroup label="Minor â€” 1 strike">
+                     <option v-for="c in categories.filter(x => x.group === 'minor')" :key="c.value" :value="c.value">{{ c.label }}</option>
+                  </optgroup>
+                  <optgroup label="Major â€” 2 strikes">
+                     <option v-for="c in categories.filter(x => x.group === 'major')" :key="c.value" :value="c.value">{{ c.label }}</option>
+                  </optgroup>
+                  <optgroup label="Critical â€” 3 strikes">
+                     <option v-for="c in categories.filter(x => x.group === 'critical')" :key="c.value" :value="c.value">{{ c.label }}</option>
+                  </optgroup>
+                  <optgroup label="Other">
+                     <option v-for="c in categories.filter(x => x.group === 'concern')" :key="c.value" :value="c.value">{{ c.label }}</option>
+                  </optgroup>
+               </select>
+               <InputError :message="form.errors.category" />
+            </div>
+
             <!-- Incident Type -->
             <div>
                <InputLabel value="Type of Incident" class="mb-2" />
@@ -74,7 +97,6 @@ const submit = () => {
                   <option value="injury">Injury / Medical</option>
                   <option value="near_miss">Near Miss</option>
                   <option value="rule_violation">Rule Violation</option>
-                  <option value="equipment_failure">Equipment Failure</option>
                </select>
                <InputError :message="form.errors.type" />
             </div>
@@ -83,17 +105,12 @@ const submit = () => {
             <div>
                <InputLabel value="Severity Level" class="mb-2" />
                <select v-model="form.severity" class="w-full border-slate-200 rounded-2xl focus:ring-rose-500 focus:border-rose-500 font-bold text-rose-600">
-                  <option value="minor">Minor - No impact on certification</option>
+                  <option value="minor">Minor - 1 Strike</option>
                   <option value="major">Major - 2 Strikes</option>
                   <option value="critical">Critical - Immediate Suspension</option>
                </select>
             </div>
 
-            <!-- Date -->
-            <div>
-               <InputLabel value="Date of Occurrence" class="mb-2" />
-               <TextInput type="date" v-model="form.reported_at" class="w-full" />
-            </div>
          </div>
 
          <!-- Description -->
@@ -113,6 +130,17 @@ const submit = () => {
             <TextInput v-model="form.location" placeholder="e.g. Cloud 9 - North Break" class="w-full" />
          </div>
 
+         <!-- Instructor-facing summary -->
+         <div>
+            <InputLabel value="Summary shown to the instructor (optional)" class="mb-2" />
+            <textarea
+               v-model="form.instructor_summary"
+               class="w-full border-slate-200 rounded-3xl focus:ring-rose-500 focus:border-rose-500 h-24"
+               placeholder="Redact the student's identity and sensitive details before this appears on the suspension record."
+            ></textarea>
+            <InputError :message="form.errors.instructor_summary" />
+         </div>
+
          <div class="pt-8 border-t border-slate-50 flex items-center justify-between">
             <div class="flex items-center space-x-2 text-xs text-slate-400 font-bold uppercase tracking-tighter">
                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -128,3 +156,4 @@ const submit = () => {
     </div>
   </AppLayout>
 </template>
+

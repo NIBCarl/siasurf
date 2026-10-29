@@ -9,6 +9,7 @@ use App\Events\BookingCancelled;
 use App\Events\BookingChangeRequested;
 use App\Events\BookingChangeResolved;
 use App\Exceptions\BookingChangeException;
+use App\Exceptions\BookingRequestException;
 use App\Models\Availability;
 use App\Models\Booking;
 use App\Models\BookingChangeRequest;
@@ -26,8 +27,7 @@ use Illuminate\Support\Facades\DB;
 class BookingChangeService
 {
     public function __construct(
-        protected AvailabilityService $availabilityService,
-        protected SafetyService $safetyService
+        protected AvailabilityService $availabilityService
     ) {
     }
 
@@ -63,6 +63,14 @@ class BookingChangeService
     public function requestReschedule(Booking $booking, User $requester, array $newSlot, ?string $reason = null): BookingChangeRequest
     {
         $this->assertChangeable($booking);
+
+        // Keep the lesson length intact: derive the end time from the booking's
+        // own duration instead of trusting whatever the form supplied.
+        $durationHours = $booking->duration_hours ?: Booking::standardHours();
+        $newSlot['end_time'] = Carbon::parse($newSlot['start_time'])
+            ->addHours($durationHours)
+            ->format('H:i');
+
         $this->assertSlotIsFree($booking, $newSlot);
 
         return DB::transaction(function () use ($booking, $requester, $newSlot, $reason) {
@@ -191,21 +199,34 @@ class BookingChangeService
             $oldDate = $this->availabilityService->dateOf($booking);
             $oldPeriod = $this->availabilityService->timePeriodOf($booking);
 
-            $booking->cancel(
-                'Cancelled by instructor: ' . ($changeRequest->reason ?? 'No reason provided.'),
-                \App\Enums\CancellationReason::Instructor
-            );
+            // The student must see the instructor's explanation, plus any note
+            // SISA added when approving the late cancellation.
+            $note = trim((string) $changeRequest->reason);
+
+            if ($changeRequest->admin_note) {
+                $note = trim(
+                    $note
+                    . ($note !== '' ? "\n\n" : '')
+                    . 'SISA note: ' . $changeRequest->admin_note
+                );
+            }
+
+            if ($note === '') {
+                $note = 'The instructor cancelled this lesson without providing a reason.';
+            }
+
+            $booking->cancel($note, \App\Enums\CancellationReason::Instructor);
 
             // FR 1.8.3 - hand the slot back now that the lesson is gone.
             $this->availabilityService->releaseSlot($booking->instructor_id, $oldDate, $oldPeriod, $booking->id);
 
             $booking->refresh();
 
-            broadcast(new BookingCancelled($booking->load(['student', 'instructor', 'surfSpot']), $changeRequest->reason))
+            broadcast(new BookingCancelled($booking->load(['student', 'instructor', 'surfSpot']), $note))
                 ->toOthers();
 
             foreach ([$booking->student, $booking->instructor] as $party) {
-                $party?->notify(new BookingCancelledNotification($booking, $changeRequest->reason));
+                $party?->notify(new BookingCancelledNotification($booking, $note));
             }
         } else {
             $this->applyReschedule($changeRequest, $booking);
@@ -272,16 +293,6 @@ class BookingChangeService
             throw new BookingChangeException('The new lesson date must be today or later.');
         }
 
-        if ($this->safetyService->hasTimeConflict(
-            $booking->instructor_id,
-            $slot['date'],
-            $slot['start_time'],
-            $slot['end_time'],
-            $booking->id
-        )) {
-            throw new BookingChangeException('You already have another lesson that overlaps with the requested time.');
-        }
-
         $manualBlock = Availability::query()
             ->where('user_id', $booking->instructor_id)
             ->whereDate('specific_date', $slot['date'])
@@ -291,6 +302,22 @@ class BookingChangeService
 
         if ($manualBlock) {
             throw new BookingChangeException('You blocked this date as personal time. Unblock it first, then reschedule.');
+        }
+
+        // Capacity-aware: another lesson may share the slot as long as the
+        // instructor's student capacity is not exceeded. The booking being
+        // moved is excluded so it never conflicts with itself.
+        try {
+            $this->availabilityService->assertRangeIsBookable(
+                $booking->instructor_id,
+                $slot['date'],
+                $slot['start_time'],
+                $slot['end_time'],
+                max(1, (int) $booking->student_count),
+                $booking->id
+            );
+        } catch (BookingRequestException $exception) {
+            throw new BookingChangeException($exception->getMessage());
         }
     }
 }

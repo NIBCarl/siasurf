@@ -8,6 +8,7 @@ use App\Http\Resources\ReviewResource;
 use App\Models\Booking;
 use App\Models\Review;
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -21,13 +22,13 @@ class ReviewController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        
+
         // Past reviews given by the student
         $reviews = Review::where('student_id', $user->id)
             ->with(['instructor', 'booking'])
             ->orderBy('created_at', 'desc')
             ->get();
-            
+
         // Bookings that are completed but don't have a review yet
         $pendingReviews = Booking::where('student_id', $user->id)
             ->where('status', 'completed')
@@ -47,6 +48,7 @@ class ReviewController extends Controller
     public function forInstructor(User $instructor, Request $request)
     {
         $query = Review::forInstructor($instructor->id)
+            ->visible()
             ->with(['student', 'booking'])
             ->orderBy('created_at', 'desc');
 
@@ -114,13 +116,11 @@ class ReviewController extends Controller
     /**
      * Show the form for creating a review
      */
-    public function create(Booking $booking): Response
+    public function create(Booking $booking): RedirectResponse
     {
         $this->authorize('createForBooking', [Review::class, $booking]);
 
-        return Inertia::render('Student/Reviews/Create', [
-            'booking' => $booking->load(['instructor', 'surfSpot']),
-        ]);
+        return redirect()->route('student.feedback.create', $booking);
     }
 
     /**
@@ -140,9 +140,10 @@ class ReviewController extends Controller
             'comment' => $validated['comment'],
         ]);
 
-        // Handle photo upload
+        // Handle photo upload. Review photos are rendered publicly in review
+        // cards, so they live on the public disk the /storage URL points to.
         if ($request->hasFile('photo')) {
-            $photoPath = $request->file('photo')->store('reviews', 'local');
+            $photoPath = $request->file('photo')->store('reviews', 'public');
             $review->update(['photo_path' => $photoPath]);
         }
 
@@ -189,10 +190,10 @@ class ReviewController extends Controller
         if ($request->hasFile('photo')) {
             // Delete old photo
             if ($review->photo_path) {
-                Storage::disk('local')->delete($review->photo_path);
+                Storage::disk('public')->delete($review->photo_path);
             }
 
-            $photoPath = $request->file('photo')->store('reviews', 'local');
+            $photoPath = $request->file('photo')->store('reviews', 'public');
             $review->update(['photo_path' => $photoPath]);
         }
 
@@ -225,7 +226,7 @@ class ReviewController extends Controller
         $this->authorize('update', $review);
 
         if ($review->photo_path) {
-            Storage::disk('local')->delete($review->photo_path);
+            Storage::disk('public')->delete($review->photo_path);
             $review->update(['photo_path' => null]);
         }
 
@@ -269,7 +270,7 @@ class ReviewController extends Controller
             case 'delete':
                 // Delete photo if exists
                 if ($review->photo_path) {
-                    Storage::disk('local')->delete($review->photo_path);
+                    Storage::disk('public')->delete($review->photo_path);
                 }
                 $review->delete();
                 $message = 'Review has been deleted.';

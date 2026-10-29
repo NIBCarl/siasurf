@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Booking;
 use App\Models\InstructorProfile;
 
 class PricingService
@@ -14,16 +15,6 @@ class PricingService
         2 => 800.00,  // Level 2: ₱800/hour
         3 => 1500.00, // Level 3: ₱1,500/hour
     ];
-
-    /**
-     * Standard session duration in hours
-     */
-    const STANDARD_HOURS = 1;
-
-    /**
-     * Standard package price (1 hour)
-     */
-    const STANDARD_PACKAGE_PRICE = 800.00;
 
     /**
      * Discount rates
@@ -83,7 +74,8 @@ class PricingService
         InstructorProfile $profile,
         int $studentCount,
         array $addOns = [],
-        ?string $discountType = null
+        ?string $discountType = null,
+        ?int $durationHours = null
     ): array {
         // Validate student count against instructor level limits
         $maxStudents = $profile->maxStudents();
@@ -94,7 +86,8 @@ class PricingService
         }
 
         $baseRate = $profile->rate_per_hour ?? self::BASE_RATES[$profile->level->value] ?? 600.00;
-        $hours = self::STANDARD_HOURS;
+        // Price the actual lesson length; default to the platform standard (2h).
+        $hours = $durationHours ?? Booking::standardHours();
 
         // Calculate base price
         $basePrice = $baseRate * $hours * $studentCount;

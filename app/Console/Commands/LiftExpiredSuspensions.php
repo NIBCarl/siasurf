@@ -2,28 +2,24 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\SuspensionStatus;
+use App\Enums\SuspensionType;
 use App\Enums\InstructorStatus;
 use App\Events\InstructorStatusChanged;
 use App\Models\InstructorProfile;
+use App\Models\InstructorStatusLog;
+use App\Models\InstructorSuspension;
 use App\Notifications\InstructorReactivated;
+use App\Services\SuspensionService;
 use Illuminate\Console\Command;
 
-/**
- * FR 3.x — a suspension is a timed penalty, so it must lift itself.
- *
- * Before this command existed, `suspended_until` was written on auto-suspend and
- * then nothing ever read it back: an instructor hit by the 3-strike rule (or by
- * a manual suspension) stayed invisible to search forever, even after the month
- * had passed. Reactivation is now a scheduled sweep rather than a manual admin
- * chore.
- */
 class LiftExpiredSuspensions extends Command
 {
     protected $signature = 'instructors:lift-expired-suspensions';
 
     protected $description = 'Reactivate instructors whose suspension period has elapsed';
 
-    public function handle(): int
+    public function handle(SuspensionService $suspensionService): int
     {
         $expired = InstructorProfile::query()
             ->with('user')
@@ -34,33 +30,57 @@ class LiftExpiredSuspensions extends Command
 
         if ($expired->isEmpty()) {
             $this->info('No suspensions to lift.');
-
             return self::SUCCESS;
         }
 
         foreach ($expired as $profile) {
-            $oldStatus = $profile->status;
+            $suspension = InstructorSuspension::where('instructor_id', $profile->user_id)
+                ->where('status', SuspensionStatus::Active->value)
+                ->latest()
+                ->first();
 
+            if ($suspension) {
+                $reset = $suspension->type !== SuspensionType::Manual;
+                $suspensionService->lift(
+                    $suspension,
+                    'Suspension period served.',
+                    null,
+                    SuspensionStatus::Completed,
+                    $reset
+                );
+                $this->info("Reactivated instructor #{$profile->user_id} ({$profile->user?->name}).");
+                continue;
+            }
+
+            // Legacy suspension with no suspension record. Preserve current
+            // behaviour: a served suspension clears legacy strikes.
+            $oldStatus = $profile->status;
             $profile->update([
                 'status' => InstructorStatus::Active,
                 'suspended_until' => null,
-                // A served suspension wipes the slate clean; otherwise the very
-                // next incident would immediately re-trigger the 3-strike rule.
+                'suspension_reason' => null,
+                'suspended_at' => null,
                 'strike_count' => 0,
             ]);
 
-            if ($profile->user) {
-                $profile->user->notify(new InstructorReactivated);
+            InstructorStatusLog::create([
+                'instructor_id' => $profile->user_id,
+                'from_status' => $oldStatus?->value,
+                'to_status' => InstructorStatus::Active->value,
+                'reason' => 'Suspension period served (legacy record).',
+            ]);
 
+            if ($profile->user) {
                 try {
+                    $profile->user->notify(new InstructorReactivated);
                     broadcast(new InstructorStatusChanged(
                         $profile->user,
-                        $oldStatus,
+                        InstructorStatus::Suspended,
                         InstructorStatus::Active,
                         'Suspension period served.'
                     ))->toOthers();
                 } catch (\Throwable $exception) {
-                    \Log::warning('Failed to broadcast reactivation.', [
+                    \Log::warning('Failed to reactivate instructor.', [
                         'instructor_id' => $profile->user_id,
                         'error' => $exception->getMessage(),
                     ]);

@@ -1,172 +1,219 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { 
-    ExclamationTriangleIcon,
-    ShieldExclamationIcon,
-    LifebuoyIcon,
-    ChevronRightIcon,
-    PlusIcon,
-    CalendarIcon,
-    UserCircleIcon
-} from '@heroicons/vue/24/outline'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
-import Badge from '@/Components/Atoms/Badge.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import EmptyState from '@/Components/UI/EmptyState.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatCard from '@/Components/UI/StatCard.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
+import { ChevronRightIcon, ExclamationTriangleIcon, PlusIcon } from '@heroicons/vue/24/outline'
 
 interface Incident {
-  id: number
-  type: string
-  severity: string
-  description: string
-  created_at: string
-  instructor: { name: string }
+    id: number
+    type: string
+    status: string
+    source: string
+    category: string | null
+    severity: string | null
+    strike_weight: number
+    description: string
+    created_at: string
+    instructor: { id: number; name: string } | null
+    booking: { id: number; date: string } | null
+    reporter: { id: number; name: string } | null
 }
 
 interface Props {
-  incidents: {
-    data: Incident[]
-  }
+    incidents: {
+        data: Incident[]
+        links: Array<{ url: string | null; label: string; active: boolean }>
+    }
+    filters: { status: string }
+    counts: { pending: number; confirmed: number; rejected: number; revoked: number }
+    instructors: Array<{ id: number; name: string }>
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
-const getSeverityVariant = (severity: string) => {
-  switch (severity.toLowerCase()) {
-    case 'critical': return 'danger'
-    case 'major': return 'warning'
-    case 'minor': return 'info'
-    default: return 'info'
-  }
+type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | 'cancelled' | 'critical'
+
+const statusMeta = (status: string): { label: string; variant: PillVariant } => {
+    switch (status) {
+        case 'pending':
+            return { label: 'Pending review', variant: 'pending' }
+        case 'confirmed':
+            return { label: 'Confirmed', variant: 'critical' }
+        case 'rejected':
+            return { label: 'Rejected', variant: 'verified' }
+        case 'revoked':
+            return { label: 'Revoked', variant: 'cancelled' }
+        default:
+            return { label: status.replace(/_/g, ' '), variant: 'neutral' }
+    }
 }
+
+const severityMeta = (severity: string | null): { label: string; variant: PillVariant } => {
+    if (severity === 'critical') return { label: 'Critical', variant: 'critical' }
+    if (severity === 'major') return { label: 'Major', variant: 'pending' }
+    if (severity === 'minor') return { label: 'Minor', variant: 'neutral' }
+    return { label: 'Unrated', variant: 'neutral' }
+}
+
+const tabs = [
+    { key: 'all', label: 'All', count: null as number | null, dot: 'bg-deep-900' },
+    { key: 'pending', label: 'Pending', count: props.counts.pending, dot: 'bg-amber-500' },
+    { key: 'confirmed', label: 'Confirmed', count: props.counts.confirmed, dot: 'bg-rose-500' },
+    { key: 'rejected', label: 'Rejected', count: props.counts.rejected, dot: 'bg-lagoon-600' },
+    { key: 'revoked', label: 'Revoked', count: props.counts.revoked, dot: 'bg-stone-400' },
+]
+
+const formatDate = (date: string) =>
+    new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+const paginationLabel = (label: string) =>
+    label.replace(/&laquo;/g, '').replace(/&raquo;/g, '').replace(/&amp;/g, '&').trim()
 </script>
 
 <template>
-    <AppLayout>
-    <Head title="Admin: Safety Incidents" />
+    <Head title="Safety incidents" />
 
-    <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
-        <!-- Dashboard Header -->
-        <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-                <nav class="flex mb-2" aria-label="Breadcrumb">
-                    <ol class="inline-flex items-center space-x-1 md:space-x-3 text-sm font-medium">
-                        <li class="text-slate-400">Security</li>
-                        <div class="flex items-center">
-                            <svg class="w-3 h-3 text-slate-300 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
-                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/>
-                            </svg>
-                            <span class="ml-1 font-bold text-rose-600 md:ml-2">Incidents</span>
-                        </div>
-                    </ol>
-                </nav>
-                <div class="flex items-center gap-3">
-                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Safety Monitoring</h1>
-                    <div class="flex h-2 w-2 relative">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                    </div>
-                </div>
-                <p class="text-slate-500 mt-1">Real-time surveillance of aquatic incidents and rule violations.</p>
+    <AppLayout>
+        <template #header>Safety incidents</template>
+
+        <div class="space-y-6">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <SectionHeader
+                    eyebrow="Safety monitoring"
+                    title="Reports & incidents"
+                    description="Review student concerns and log incidents. A pending report has not added a strike yet."
+                />
+
+                <AppButton :href="route('admin.incidents.create')" variant="danger">
+                    <PlusIcon class="h-4 w-4" aria-hidden="true" />
+                    Log incident
+                </AppButton>
             </div>
-            
-            <div class="flex gap-2">
-                <Link :href="route('admin.incidents.create')">
-                    <button class="flex items-center gap-2 px-6 py-2.5 bg-rose-600 text-white rounded-xl text-sm font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20">
-                        <PlusIcon class="w-4 h-4" />
-                        Log Critical Event
-                    </button>
+
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard label="Pending review" :value="counts.pending" tone="attention" meta="No strike applied yet" />
+                <StatCard label="Confirmed" :value="counts.confirmed" tone="critical" meta="Strikes applied" />
+                <StatCard label="Rejected" :value="counts.rejected" meta="No strike applied" />
+                <StatCard label="Revoked" :value="counts.revoked" meta="Strike ledger reversed" />
+            </div>
+
+            <div
+                class="flex items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
+                role="tablist"
+                aria-label="Filter incidents"
+            >
+                <Link
+                    v-for="tab in tabs"
+                    :key="tab.key"
+                    :href="route('admin.incidents.index', { status: tab.key })"
+                    role="tab"
+                    :aria-selected="filters.status === tab.key"
+                    class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-body-sm font-semibold transition-colors"
+                    :class="
+                        filters.status === tab.key
+                            ? 'border-deep-900 bg-deep-900 text-white'
+                            : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                    "
+                >
+                    <span class="h-1.5 w-1.5 rounded-full" :class="tab.dot" aria-hidden="true" />
+                    {{ tab.label }}
+                    <span
+                        v-if="tab.count !== null"
+                        class="rounded-full px-1.5 py-0.5 text-label font-semibold"
+                        :class="filters.status === tab.key ? 'bg-white/15 text-white' : 'bg-sand-100 text-stone-600'"
+                    >
+                        {{ tab.count }}
+                    </span>
                 </Link>
             </div>
-        </div>
 
-        <!-- Quick Stats for Safety -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4">
-                <div class="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center">
-                    <ExclamationTriangleIcon class="w-6 h-6 text-rose-600" />
-                </div>
-                <div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Logs</p>
-                    <p class="text-2xl font-black text-slate-900 leading-none">{{ incidents.data.length }}</p>
-                </div>
-            </div>
-            <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4">
-                <div class="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center">
-                    <ShieldExclamationIcon class="w-6 h-6 text-amber-600" />
-                </div>
-                <div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Active Strikes</p>
-                    <p class="text-2xl font-black text-slate-900 leading-none">12</p>
-                </div>
-            </div>
-            <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 col-span-1 md:col-span-2">
-                <div class="w-12 h-12 bg-ocean-50 rounded-2xl flex items-center justify-center shrink-0">
-                    <LifebuoyIcon class="w-6 h-6 text-ocean-600" />
-                </div>
-                <div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Last Critical Event</p>
-                    <p class="text-sm font-bold text-slate-700 truncate line-clamp-1">Near miss at Cloud 9 peak reported 2h ago</p>
-                </div>
-            </div>
-        </div>
+            <div v-if="incidents.data.length" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <Link
+                    v-for="incident in incidents.data"
+                    :key="incident.id"
+                    :href="route('admin.incidents.show', incident.id)"
+                    class="group block rounded-card focus:outline-none focus-visible:ring-2 focus-visible:ring-lagoon-600 focus-visible:ring-offset-2"
+                >
+                    <AppCard padding="md" interactive class="h-full">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <StatusPill :variant="statusMeta(incident.status).variant">
+                                {{ statusMeta(incident.status).label }}
+                            </StatusPill>
+                            <StatusPill :variant="severityMeta(incident.severity).variant" :dot="false">
+                                {{ severityMeta(incident.severity).label }}
+                            </StatusPill>
+                        </div>
 
-        <!-- Incident Feed -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div v-for="incident in incidents.data" :key="incident.id" 
-                class="group bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all relative overflow-hidden"
+                        <h2 class="mt-3 text-body-lg font-semibold capitalize text-deep-900">
+                            {{ (incident.category ?? incident.type).replace(/_/g, ' ') }}
+                        </h2>
+                        <p class="mt-1 line-clamp-3 text-body-sm text-stone-600">{{ incident.description }}</p>
+
+                        <div class="mt-4 flex items-center justify-between gap-2 border-t border-sand-200 pt-3">
+                            <div class="min-w-0">
+                                <p class="truncate text-body-sm font-semibold text-deep-900">
+                                    {{ incident.instructor?.name ?? 'Unassigned instructor' }}
+                                </p>
+                                <p class="truncate text-label capitalize text-stone-500">
+                                    {{ incident.source.replace(/_/g, ' ') }} ·
+                                    {{ incident.reporter?.name ?? 'System' }}
+                                </p>
+                            </div>
+                            <span class="shrink-0 rounded-full bg-sand-100 px-2.5 py-1 text-label font-semibold text-stone-700">
+                                {{ incident.strike_weight }} strike{{ incident.strike_weight === 1 ? '' : 's' }}
+                            </span>
+                        </div>
+
+                        <div class="mt-3 flex items-center justify-between text-label text-stone-500">
+                            <span>{{ formatDate(incident.created_at) }}</span>
+                            <span class="inline-flex items-center gap-1 font-semibold text-lagoon-700">
+                                Review
+                                <ChevronRightIcon class="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                            </span>
+                        </div>
+                    </AppCard>
+                </Link>
+            </div>
+
+            <EmptyState
+                v-else
+                :icon="ExclamationTriangleIcon"
+                title="No reports in this view"
+                description="Student concerns appear here as soon as they are submitted."
             >
-                <div v-if="incident.severity.toLowerCase() === 'critical'" class="absolute top-0 right-0 w-32 h-32 bg-rose-50 rotate-45 translate-x-16 -translate-y-16 opacity-50"></div>
-                
-                <div class="relative z-10 h-full flex flex-col">
-                    <div class="flex items-center justify-between mb-6">
-                        <Badge :variant="getSeverityVariant(incident.severity)" size="sm">
-                            {{ incident.severity.toUpperCase() }}
-                        </Badge>
-                        <div class="flex items-center gap-1 text-[10px] font-black text-slate-400">
-                            <CalendarIcon class="w-3 h-3" />
-                            {{ new Date(incident.created_at).toLocaleDateString() }}
-                        </div>
-                    </div>
-                    
-                    <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <div class="w-1.5 h-1.5 rounded-full" :class="incident.severity.toLowerCase() === 'critical' ? 'bg-rose-600 animate-pulse' : 'bg-slate-400'"></div>
-                        {{ incident.type.replace('_', ' ') }}
-                    </h3>
-                    
-                    <p class="text-sm text-slate-500 line-clamp-3 mb-8 italic leading-relaxed">
-                        "{{ incident.description }}"
-                    </p>
-                    
-                    <div class="mt-auto pt-6 border-t border-slate-50 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                                <UserCircleIcon class="w-6 h-6 text-slate-400" />
-                            </div>
-                            <div>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none">Instructor</p>
-                                <p class="text-xs font-bold text-slate-900 mt-1">{{ incident.instructor.name }}</p>
-                            </div>
-                        </div>
-                        
-                        <Link :href="route('admin.incidents.show', incident.id)">
-                            <button class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 transition-all shadow-sm
-                                hover:bg-rose-600 hover:text-white">
-                                <ChevronRightIcon class="w-4 h-4" />
-                            </button>
-                        </Link>
-                    </div>
-                </div>
-            </div>
+                <AppButton variant="secondary" :href="route('admin.incidents.index', { status: 'all' })">
+                    Show all reports
+                </AppButton>
+            </EmptyState>
 
-            <!-- Empty State -->
-            <div v-if="incidents.data.length === 0" class="col-span-full border-2 border-dashed border-slate-100 rounded-[3rem] p-24 text-center">
-                <div class="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 shadow-inner">
-                    <LifebuoyIcon class="w-10 h-10" />
-                </div>
-                <h3 class="text-xl font-bold text-slate-900 tracking-tight">System All-Clear</h3>
-                <p class="text-slate-400 mt-2 max-w-sm mx-auto">No safety incidents or rule violations recorded. Siargao waters remain secure.</p>
+            <div v-if="incidents.links.length > 3" class="flex flex-wrap items-center justify-center gap-2 pt-2">
+                <template v-for="link in incidents.links" :key="link.label">
+                    <Link
+                        v-if="link.url"
+                        :href="link.url"
+                        class="inline-flex h-9 items-center rounded-control border px-3 text-body-sm font-semibold transition-colors"
+                        :class="
+                            link.active
+                                ? 'border-deep-900 bg-deep-900 text-white'
+                                : 'border-sand-300 bg-white text-stone-600 hover:border-lagoon-600'
+                        "
+                    >
+                        {{ paginationLabel(link.label) }}
+                    </Link>
+                    <span
+                        v-else
+                        class="inline-flex h-9 items-center rounded-control border border-sand-200 px-3 text-body-sm text-stone-400"
+                    >
+                        {{ paginationLabel(link.label) }}
+                    </span>
+                </template>
             </div>
         </div>
-    </div>
     </AppLayout>
 </template>
+

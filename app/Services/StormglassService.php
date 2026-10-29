@@ -154,7 +154,7 @@ class StormglassService
      * Get a tide warning for a specific date and time period (used by Booking Flow).
      * Returns null if conditions are safe, or a warning string if low tide is dangerous.
      */
-    public function getTideWarning(string $date, string $startTime): ?string
+    public function getTideWarning(string $date, string $startTime, ?int $durationMinutes = null): ?string
     {
         $tides = Cache::get(self::CACHE_PREFIX . $date);
 
@@ -168,9 +168,10 @@ class StormglassService
             return null; // No data — don't block the booking
         }
 
-        // Determine the time window for the session (1-hour slot)
+        // Cover the whole lesson, not a presumed 1-hour slot.
+        $durationMinutes ??= (int) config('siasurf.session.standard_hours', 2) * 60;
         $sessionStart = Carbon::parse("{$date} {$startTime}", 'Asia/Manila');
-        $sessionEnd = $sessionStart->copy()->addHour();
+        $sessionEnd = $sessionStart->copy()->addMinutes($durationMinutes);
 
         // Check if any low tide extreme falls within or near the session window (±30 min buffer)
         $bufferStart = $sessionStart->copy()->subMinutes(30)->timestamp;

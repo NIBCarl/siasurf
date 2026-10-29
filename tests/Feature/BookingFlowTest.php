@@ -233,6 +233,10 @@ class BookingFlowTest extends TestCase
     /** @test */
     public function a_session_cannot_be_started_after_the_window_closes()
     {
+        // Keep this test independent of the wall clock: at 02:00 "six hours
+        // ago" belongs to the previous day once the date and time are combined.
+        $this->travelTo(now()->setTime(12, 0));
+
         $booking = $this->booking([
             'status' => BookingStatus::Confirmed,
             'date' => now()->format('Y-m-d'),
@@ -446,6 +450,10 @@ class BookingFlowTest extends TestCase
         $this->assertSame(BookingStatus::Cancelled, $booking->status);
         $this->assertSame(CancellationReason::Student, $booking->cancellation_reason);
         $this->assertFalse($booking->cancellation_reason->isRefundable());
+
+        // The free-text explanation lives in its own column, not in `notes`
+        // (which belongs to the student's special requests).
+        $this->assertSame('Flight cancelled.', $booking->cancellation_note);
     }
 
     /** @test */

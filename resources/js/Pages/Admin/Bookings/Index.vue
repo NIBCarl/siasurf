@@ -1,198 +1,274 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { ref } from 'vue'
+import { Head, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { 
-    ChevronRightIcon, 
-    MagnifyingGlassIcon, 
-    FunnelIcon,
-    ArrowDownTrayIcon,
-    PlusIcon,
-    CalendarDaysIcon,
-    ClockIcon,
-    MapPinIcon
-} from '@heroicons/vue/24/outline'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
-import Badge from '@/Components/Atoms/Badge.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import EmptyState from '@/Components/UI/EmptyState.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
+import { CalendarDaysIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
 
 interface Booking {
-  id: number
-  date: string
-  time_period: string
-  status: string
-  total_amount: number
-  student: { name: string }
-  instructor: { name: string }
-  surf_spot: { name: string }
+    id: number
+    date: string
+    time_period: string
+    start_time?: string | null
+    end_time?: string | null
+    status: string
+    total_amount: number
+    student: { name: string }
+    instructor: { name: string }
+    surf_spot: { name: string }
 }
 
 interface Props {
-  bookings: {
-    data: Booking[]
-    links: any[]
-  }
+    bookings: {
+        data: Booking[]
+        links: Array<{ url: string | null; label: string; active: boolean }>
+        total?: number
+    }
+    filters?: { status?: string }
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
-const getStatusVariant = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'confirmed': return 'ocean'
-    case 'pending': return 'warning'
-    case 'completed': return 'success'
-    case 'cancelled': return 'danger'
-    default: return 'info'
-  }
+const activeFilter = ref(props.filters?.status ?? '')
+
+const tabs = [
+    { key: '', label: 'All', dot: 'bg-deep-900' },
+    { key: 'pending', label: 'Pending', dot: 'bg-amber-500' },
+    { key: 'confirmed', label: 'Confirmed', dot: 'bg-lagoon-600' },
+    { key: 'completed', label: 'Completed', dot: 'bg-stone-400' },
+    { key: 'cancelled', label: 'Cancelled', dot: 'bg-rose-500' },
+]
+
+const applyFilter = (status: string) => {
+    activeFilter.value = status
+    router.get(
+        route('admin.bookings.index'),
+        status ? { status } : {},
+        { preserveState: true, preserveScroll: true, replace: true },
+    )
 }
+
+type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | 'cancelled' | 'critical'
+
+const statusMeta = (status: string): { label: string; variant: PillVariant } => {
+    switch (status) {
+        case 'confirmed':
+            return { label: 'Confirmed', variant: 'verified' }
+        case 'pending':
+        case 'awaiting_payment':
+            return { label: status.replace(/_/g, ' '), variant: 'pending' }
+        case 'in_progress':
+            return { label: 'In progress', variant: 'live' }
+        case 'completed':
+            return { label: 'Completed', variant: 'completed' }
+        case 'cancelled':
+        case 'declined':
+        case 'payment_timeout':
+        case 'expired':
+        case 'no_show':
+            return { label: status.replace(/_/g, ' '), variant: 'cancelled' }
+        default:
+            return { label: status.replace(/_/g, ' '), variant: 'neutral' }
+    }
+}
+
+const formatDate = (date: string) =>
+    new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+const formatAmount = (amount: number) => Number(amount ?? 0).toLocaleString()
+
+const timeLabel = (period: string) => period.charAt(0).toUpperCase() + period.slice(1)
+
+/** Exact booked range so the list shows the time without opening the booking. */
+const slotLabel = (booking: Booking) => {
+    const clock = (value?: string | null) => {
+        if (!value) return null
+
+        const time = value.includes('T') ? value.split('T')[1] : value
+        const [hour, minute] = time.slice(0, 5).split(':').map(Number)
+
+        if (Number.isNaN(hour) || Number.isNaN(minute)) return null
+
+        const suffix = hour >= 12 ? 'PM' : 'AM'
+        const displayHour = hour % 12 === 0 ? 12 : hour % 12
+
+        return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`
+    }
+
+    const start = clock(booking.start_time)
+    const end = clock(booking.end_time)
+
+    if (start && end) return `${start} – ${end}`
+    if (start) return start
+
+    return timeLabel(booking.time_period)
+}
+
+const paginationLabel = (label: string) =>
+    label.replace(/&laquo;/g, '').replace(/&raquo;/g, '').replace(/&amp;/g, '&').trim()
 </script>
 
 <template>
+    <Head title="Bookings" />
+
     <AppLayout>
-        <Head title="Admin: Bookings" />
+        <template #header>Bookings</template>
 
-        <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <!-- Header Section -->
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <nav class="flex mb-2" aria-label="Breadcrumb">
-                        <ol class="inline-flex items-center space-x-1 md:space-x-3 text-sm font-medium">
-                            <li class="text-slate-400">Bookings</li>
-                            <div class="flex items-center">
-                                <svg class="w-3 h-3 text-slate-300 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
-                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/>
-                                </svg>
-                                <span class="ml-1 font-bold text-ocean-600 md:ml-2">Management</span>
-                            </div>
-                        </ol>
-                    </nav>
-                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Booking Manifest</h1>
-                    <p class="text-slate-500 mt-1">Registry of all surf sessions and student reservations.</p>
-                </div>
-                
-                <div class="flex gap-2">
-                    <button class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
-                        <ArrowDownTrayIcon class="w-4 h-4" />
-                        Export CSV
-                    </button>
-                    <button class="flex items-center gap-2 px-4 py-2 bg-ocean-600 text-white rounded-xl text-sm font-bold hover:bg-ocean-700 transition-all shadow-lg shadow-ocean-600/20">
-                        <PlusIcon class="w-4 h-4" />
-                        Manual Booking
-                    </button>
+        <div class="space-y-6">
+            <nav aria-label="Breadcrumb" class="text-body-sm text-stone-500">
+                <ol class="flex items-center gap-2">
+                    <li>Operations</li>
+                    <li aria-hidden="true">/</li>
+                    <li class="font-semibold text-deep-900">Bookings</li>
+                </ol>
+            </nav>
+
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <SectionHeader
+                    eyebrow="Operations"
+                    title="Booking manifest"
+                    description="Every surf session, its instructor and its payment state."
+                />
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <StatusPill variant="neutral" :dot="false">
+                        {{ bookings.total ?? bookings.data.length }} bookings
+                    </StatusPill>
+                    <AppButton :href="route('admin.analytics.index')" variant="secondary">
+                        Reports
+                    </AppButton>
                 </div>
             </div>
 
-            <!-- Filter & Search Bar -->
-            <div class="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col lg:flex-row gap-4 items-center justify-between">
-                <div class="relative w-full lg:w-96">
-                    <MagnifyingGlassIcon class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Search students or instructors..." 
-                        class="w-full pl-11 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-ocean-500 transition-all"
-                    >
-                </div>
-                
-                <div class="flex items-center gap-3 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0">
-                    <div class="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest px-2">
-                        <FunnelIcon class="w-3 h-3" />
-                        Filters
-                    </div>
-                    <select class="bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-600 py-2 pl-3 pr-8 focus:ring-2 focus:ring-ocean-500">
-                        <option>All Statuses</option>
-                        <option>Confirmed</option>
-                        <option>Pending</option>
-                        <option>Cancelled</option>
-                    </select>
-                    <input 
-                        type="date" 
-                        class="bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-600 py-2 focus:ring-2 focus:ring-ocean-500"
-                    >
-                </div>
+            <div
+                class="flex items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
+                role="tablist"
+                aria-label="Filter bookings"
+            >
+                <button
+                    v-for="tab in tabs"
+                    :key="tab.key || 'all'"
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeFilter === tab.key"
+                    class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-body-sm font-semibold transition-colors"
+                    :class="
+                        activeFilter === tab.key
+                            ? 'border-deep-900 bg-deep-900 text-white'
+                            : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                    "
+                    @click="applyFilter(tab.key)"
+                >
+                    <span class="h-1.5 w-1.5 rounded-full" :class="tab.dot" aria-hidden="true" />
+                    {{ tab.label }}
+                </button>
             </div>
 
-            <!-- Bookings Table Card -->
-            <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden relative group">
-                <table class="w-full text-left">
-                    <thead class="bg-slate-50/50 border-b border-slate-50">
-                        <tr>
-                            <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Reference</th>
-                            <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Participants</th>
-                            <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Session Logic</th>
-                            <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Location</th>
-                            <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Outcome</th>
-                            <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Fee</th>
-                            <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-50">
-                        <tr v-for="booking in bookings.data" :key="booking.id" class="hover:bg-ocean-50/30 transition-all group/row">
-                            <td class="px-8 py-6">
-                                <span class="text-xs font-black text-slate-300 group-hover/row:text-ocean-300">#BK-{{ booking.id }}</span>
-                            </td>
-                            <td class="px-8 py-6">
-                                <div class="flex flex-col">
-                                    <span class="font-bold text-slate-900">{{ booking.student.name }}</span>
-                                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-1 mt-0.5">
-                                        <div class="w-1 h-1 bg-reef-400 rounded-full"></div>
-                                        with {{ booking.instructor.name }}
+            <AppCard v-if="bookings.data.length" padding="none" class="overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[900px] text-left">
+                        <thead class="bg-sand-100">
+                            <tr>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Booking</th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Instructor</th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Schedule</th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Spot</th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Status</th>
+                                <th class="px-5 py-3 text-right text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Amount</th>
+                                <th class="px-5 py-3 text-right text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Dossier</th>
+                            </tr>
+                        </thead>
+
+                        <tbody class="divide-y divide-sand-200">
+                            <tr
+                                v-for="booking in bookings.data"
+                                :key="booking.id"
+                                class="transition-colors hover:bg-sand-50"
+                            >
+                                <td class="px-5 py-4">
+                                    <p class="font-mono text-body-sm font-semibold text-deep-900">
+                                        #SURF-{{ booking.id.toString().padStart(5, '0') }}
+                                    </p>
+                                    <p class="text-label text-stone-500">{{ booking.student.name }}</p>
+                                </td>
+
+                                <td class="px-5 py-4 text-body-sm font-semibold text-deep-900">{{ booking.instructor.name }}</td>
+
+                                <td class="px-5 py-4">
+                                    <p class="text-body-sm font-semibold text-deep-900">{{ formatDate(booking.date) }}</p>
+                                    <p class="text-label text-stone-500">{{ slotLabel(booking) }}</p>
+                                </td>
+
+                                <td class="px-5 py-4 text-body-sm text-stone-700">{{ booking.surf_spot.name }}</td>
+
+                                <td class="px-5 py-4">
+                                    <StatusPill :variant="statusMeta(booking.status).variant">
+                                        {{ statusMeta(booking.status).label }}
+                                    </StatusPill>
+                                </td>
+
+                                <td class="px-5 py-4 text-right">
+                                    <span class="metric text-body font-semibold text-deep-900">
+                                        ₱{{ formatAmount(booking.total_amount) }}
                                     </span>
-                                </div>
-                            </td>
-                            <td class="px-8 py-6">
-                                <div class="flex flex-col">
-                                    <div class="flex items-center gap-1 text-sm font-bold text-slate-700">
-                                        <CalendarDaysIcon class="w-3.5 h-3.5 text-slate-400" />
-                                        {{ booking.date }}
-                                    </div>
-                                    <div class="flex items-center gap-1 text-[10px] font-black uppercase text-wave-600 mt-0.5">
-                                        <ClockIcon class="w-3 h-3" />
-                                        {{ booking.time_period }}
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="px-8 py-6">
-                                <div class="flex items-center gap-2 text-sm font-bold text-slate-600">
-                                    <div class="w-2 h-2 bg-sand-400 rounded-full"></div>
-                                    {{ booking.surf_spot.name }}
-                                </div>
-                            </td>
-                            <td class="px-8 py-6 text-center">
-                                <Badge :variant="getStatusVariant(booking.status)" size="sm">
-                                    {{ booking.status.toUpperCase() }}
-                                </Badge>
-                            </td>
-                            <td class="px-8 py-6 text-right">
-                                <span class="font-black text-slate-900 tracking-tight">₱{{ booking.total_amount }}</span>
-                            </td>
-                            <td class="px-8 py-6 text-right">
-                                <Link :href="route('admin.bookings.show', booking.id)">
-                                    <button class="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-ocean-600 hover:text-white hover:rotate-12 transition-all duration-300">
-                                        <ChevronRightIcon class="w-5 h-5" />
-                                    </button>
-                                </Link>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <!-- Dynamic Background Glow -->
-                <div class="absolute -z-10 top-0 left-0 w-full h-full bg-gradient-to-br from-ocean-50/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
-            </div>
-            
-            <!-- Pagination UI -->
-            <div class="flex items-center justify-center pt-8">
-                <nav class="flex gap-2">
-                    <button v-for="link in bookings.links" 
-                        :key="link.label" 
-                        v-html="link.label"
-                        class="px-4 py-2 rounded-xl text-sm font-bold transition-all"
-                        :class="[
-                            link.active 
-                            ? 'bg-ocean-600 text-white shadow-lg shadow-ocean-600/20' 
-                            : 'bg-white text-slate-500 hover:bg-slate-50'
-                        ]"
-                    ></button>
-                </nav>
-            </div>
+                                </td>
+
+                                <td class="px-5 py-4 text-right">
+                                    <AppButton
+                                        :href="route('admin.bookings.show', booking.id)"
+                                        variant="secondary"
+                                        size="sm"
+                                    >
+                                        Audit
+                                        <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                                    </AppButton>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 border-t border-sand-200 bg-sand-50 px-5 py-3">
+                    <p class="text-label text-stone-500">
+                        Showing {{ bookings.data.length }} of {{ bookings.total ?? bookings.data.length }} bookings
+                    </p>
+
+                    <div v-if="bookings.links.length > 3" class="flex flex-wrap items-center gap-2">
+                        <template v-for="link in bookings.links" :key="link.label">
+                            <Link
+                                v-if="link.url"
+                                :href="link.url"
+                                class="inline-flex h-9 items-center rounded-control border px-3 text-body-sm font-semibold transition-colors"
+                                :class="
+                                    link.active
+                                        ? 'border-deep-900 bg-deep-900 text-white'
+                                        : 'border-sand-300 bg-white text-stone-600 hover:border-lagoon-600'
+                                "
+                            >
+                                {{ paginationLabel(link.label) }}
+                            </Link>
+                            <span
+                                v-else
+                                class="inline-flex h-9 items-center rounded-control border border-sand-200 px-3 text-body-sm text-stone-400"
+                            >
+                                {{ paginationLabel(link.label) }}
+                            </span>
+                        </template>
+                    </div>
+                </div>
+            </AppCard>
+
+            <EmptyState
+                v-else
+                :icon="CalendarDaysIcon"
+                title="No bookings in this view"
+                description="Try a different status filter."
+            />
         </div>
     </AppLayout>
 </template>
+

@@ -45,6 +45,13 @@ class ExpirePaymentWindowJob implements ShouldQueue
             return;
         }
 
+        // A GCash receipt has already been submitted. The money may be sitting
+        // in the instructor's account, so the hold must not auto-release while
+        // a human is reviewing the proof of payment.
+        if ($booking->payment?->hasReceipt()) {
+            return;
+        }
+
         // A late payment may still be landing; respect the deadline itself.
         if ($booking->payment_deadline_at && $booking->payment_deadline_at->isFuture()) {
             return;

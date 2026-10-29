@@ -15,12 +15,12 @@ interface Props {
 const props = defineProps<Props>()
 
 const getIconClass = (icon: string): string => {
-  const classes: Record<string, string> = {
-    calendar: 'text-ocean-500 bg-ocean-100',
-    alert: 'text-rose-500 bg-rose-100',
-    star: 'text-yellow-500 bg-yellow-100',
-  }
-  return classes[icon] || 'text-slate-500 bg-slate-100'
+    const classes: Record<string, string> = {
+        calendar: 'text-lagoon-700 bg-lagoon-100',
+        alert: 'text-rose-700 bg-rose-100',
+        star: 'text-amber-700 bg-amber-100',
+    }
+    return classes[icon] || 'text-stone-600 bg-sand-100'
 }
 
 const getIconPath = (icon: string): string => {
@@ -45,35 +45,28 @@ const formatTime = (time: string): string => {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-    <div class="flex justify-between items-center mb-4">
-      <h2 class="text-lg font-semibold text-slate-900">Recent Activity</h2>
-      <a href="#" class="text-sm text-ocean-600 hover:text-ocean-800">View all</a>
-    </div>
+    <div>
+        <div v-if="activities.length" class="divide-y divide-sand-200">
+            <div
+                v-for="(activity, index) in activities"
+                :key="index"
+                class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+            >
+                <div :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-control', getIconClass(activity.icon)]">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getIconPath(activity.icon)" />
+                    </svg>
+                </div>
 
-    <div class="space-y-4">
-      <div
-        v-for="(activity, index) in activities"
-        :key="index"
-        class="flex items-start space-x-3 pb-4 border-b border-slate-100 last:border-0 last:pb-0"
-      >
-        <div :class="['flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center', getIconClass(activity.icon)]">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getIconPath(activity.icon)" />
-          </svg>
-        </div>
-        
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-slate-900">{{ activity.message }}</p>
-          <p class="text-sm text-slate-500">{{ activity.details }}</p>
-        </div>
-        
-        <span class="text-xs text-slate-400 flex-shrink-0">{{ formatTime(activity.time) }}</span>
-      </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-body-sm font-semibold text-deep-900">{{ activity.message }}</p>
+                    <p class="text-body-sm text-stone-600">{{ activity.details }}</p>
+                </div>
 
-      <div v-if="activities.length === 0" class="text-center py-8 text-slate-500">
-        No recent activity
-      </div>
+                <span class="shrink-0 text-label text-stone-500">{{ formatTime(activity.time) }}</span>
+            </div>
+        </div>
+
+        <p v-else class="py-8 text-center text-body-sm text-stone-500">No recent activity.</p>
     </div>
-  </div>
 </template>

@@ -35,30 +35,36 @@ class IncidentReported implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
+        $category = $this->incident->categoryEnum();
+
         return [
             'incident' => [
                 'id' => $this->incident->id,
-                'type' => $this->incident->type->value,
-                'type_label' => $this->incident->type->label(),
-                'severity' => $this->incident->severity->value,
-                'severity_label' => $this->incident->severity->label(),
+                'type' => $this->incident->type?->value,
+                'type_label' => $this->incident->type?->label(),
+                'status' => $this->incident->status?->value,
+                'category' => $this->incident->category,
+                'category_label' => $category?->label() ?? 'Unclassified concern',
+                'severity' => $this->incident->severity?->value,
+                'severity_label' => $this->incident->severity?->label() ?? 'Pending classification',
+                'strike_weight' => $this->incident->strike_weight,
                 'description' => $this->incident->description,
                 'location' => $this->incident->location,
-                'created_at' => $this->incident->created_at->toIso8601String(),
+                'created_at' => $this->incident->created_at?->toIso8601String(),
             ],
-            'instructor' => [
+            'instructor' => $this->incident->instructor ? [
                 'id' => $this->incident->instructor->id,
                 'name' => $this->incident->instructor->name,
-            ],
+            ] : null,
             'booking' => $this->incident->booking ? [
                 'id' => $this->incident->booking->id,
                 'date' => $this->incident->booking->date->format('Y-m-d'),
             ] : null,
-            'reported_by' => [
-                'id' => $this->incident->reportedBy->id,
-                'name' => $this->incident->reportedBy->name,
-            ],
-            'message' => "New {$this->incident->severity->label()} incident reported",
+            'reported_by' => $this->incident->reporter ? [
+                'id' => $this->incident->reporter->id,
+                'name' => $this->incident->reporter->name,
+            ] : null,
+            'message' => 'New ' . ($category?->label() ?? 'session concern') . ' reported for SISA review.',
             'timestamp' => now()->toIso8601String(),
         ];
     }

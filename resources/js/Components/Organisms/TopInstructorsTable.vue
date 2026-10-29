@@ -1,110 +1,100 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
 
 interface Instructor {
-  id: number
-  name: string
-  level: number
-  completed_bookings: number
-  status: string
+    id: number
+    name: string
+    level: number
+    completed_bookings: number
+    status: string
 }
 
 const instructors = ref<Instructor[]>([])
 const isLoading = ref(true)
+const hasError = ref(false)
 
 onMounted(async () => {
-  try {
-    const response = await fetch('/admin/api/dashboard/top-instructors?limit=10')
-    const result = await response.json()
-    instructors.value = result.instructors
-  } catch (error) {
-    console.error('Failed to load instructors:', error)
-  } finally {
-    isLoading.value = false
-  }
+    try {
+        const response = await fetch('/admin/api/dashboard/top-instructors?limit=10')
+        if (!response.ok) throw new Error('Request failed')
+        const result = await response.json()
+        instructors.value = result.instructors ?? []
+    } catch {
+        hasError.value = true
+    } finally {
+        isLoading.value = false
+    }
 })
 
-const getLevelBadgeColor = (level: number): string => {
-  const colors: Record<number, string> = {
-    1: 'bg-slate-100 text-slate-800',
-    2: 'bg-ocean-100 text-ocean-800',
-    3: 'bg-purple-100 text-purple-800',
-  }
-  return colors[level] || 'bg-slate-100 text-slate-800'
+const initials = (name: string) =>
+    name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('')
+
+const statusVariant = (status: string) => {
+    if (status === 'active') return 'verified' as const
+    if (status === 'pending_verification') return 'pending' as const
+    if (status === 'suspended') return 'critical' as const
+    return 'neutral' as const
 }
 
-const getStatusBadgeColor = (status: string): string => {
-  const colors: Record<string, string> = {
-    active: 'bg-emerald-100 text-emerald-800',
-    suspended: 'bg-rose-100 text-rose-800',
-    pending_verification: 'bg-yellow-100 text-yellow-800',
-    inactive: 'bg-slate-100 text-slate-800',
-  }
-  return colors[status] || 'bg-slate-100 text-slate-800'
-}
-
-const formatStatus = (status: string): string => {
-  return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
-}
+const formatStatus = (status: string) =>
+    status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-    <div class="flex justify-between items-center mb-4">
-      <h2 class="text-lg font-semibold text-slate-900">Top Performing Instructors</h2>
-      <a :href="route('admin.instructors.index')" class="text-sm text-ocean-600 hover:text-ocean-800">View all</a>
-    </div>
+    <div>
+        <div v-if="isLoading" class="flex h-48 items-center justify-center text-body-sm text-stone-500">
+            Loading leaderboard…
+        </div>
 
-    <div v-if="isLoading" class="h-64 flex items-center justify-center">
-      <p class="text-slate-500">Loading...</p>
-    </div>
+        <div
+            v-else-if="hasError || instructors.length === 0"
+            class="flex h-48 flex-col items-center justify-center gap-1 text-center"
+        >
+            <p class="text-body-sm font-semibold text-deep-900">No instructor activity yet</p>
+            <p class="text-label text-stone-500">Completed lessons will rank instructors here.</p>
+        </div>
 
-    <div v-else-if="instructors.length === 0" class="h-64 flex items-center justify-center">
-      <p class="text-slate-500">No instructor data available</p>
-    </div>
+        <div v-else class="overflow-x-auto">
+            <table class="w-full min-w-[560px] text-left">
+                <thead>
+                    <tr class="border-b border-sand-200">
+                        <th class="py-2 pr-4 text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Instructor</th>
+                        <th class="px-4 py-2 text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Level</th>
+                        <th class="px-4 py-2 text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Status</th>
+                        <th class="py-2 pl-4 text-right text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Completed</th>
+                    </tr>
+                </thead>
 
-    <div v-else class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-slate-200">
-        <thead class="bg-slate-50">
-          <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Instructor</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Level</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Completed</th>
-          </tr>
-        </thead>
-        
-        <tbody class="bg-white divide-y divide-slate-200">
-          <tr v-for="instructor in instructors" :key="instructor.id" class="hover:bg-slate-50">
-            <td class="px-4 py-3 whitespace-nowrap">
-              <div class="flex items-center">
-                <div class="h-8 w-8 rounded-full bg-ocean-100 flex items-center justify-center text-ocean-700 font-medium">
-                  {{ instructor.name.charAt(0) }}
-                </div>
-                <div class="ml-3">
-                  <div class="text-sm font-medium text-slate-900">{{ instructor.name }}</div>
-                </div>
-              </div>
-            </td>
-            
-            <td class="px-4 py-3 whitespace-nowrap">
-              <span :class="['px-2 py-1 text-xs font-medium rounded-full', getLevelBadgeColor(instructor.level)]">
-                Level {{ instructor.level }}
-              </span>
-            </td>
-            
-            <td class="px-4 py-3 whitespace-nowrap">
-              <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusBadgeColor(instructor.status)]">
-                {{ formatStatus(instructor.status) }}
-              </span>
-            </td>
-            
-            <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-900">
-              {{ instructor.completed_bookings }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                <tbody class="divide-y divide-sand-200">
+                    <tr v-for="instructor in instructors" :key="instructor.id" class="transition-colors hover:bg-sand-50">
+                        <td class="py-3 pr-4">
+                            <div class="flex items-center gap-3">
+                                <span class="flex h-9 w-9 items-center justify-center rounded-full bg-deep-950 text-label font-semibold text-lagoon-200">
+                                    {{ initials(instructor.name) }}
+                                </span>
+                                <span class="truncate text-body-sm font-semibold text-deep-900">{{ instructor.name }}</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <StatusPill variant="neutral" :dot="false">Level {{ instructor.level }}</StatusPill>
+                        </td>
+                        <td class="px-4 py-3">
+                            <StatusPill :variant="statusVariant(instructor.status)">
+                                {{ formatStatus(instructor.status) }}
+                            </StatusPill>
+                        </td>
+                        <td class="py-3 pl-4 text-right">
+                            <span class="metric text-body font-semibold text-deep-900">{{ instructor.completed_bookings }}</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
-  </div>
 </template>

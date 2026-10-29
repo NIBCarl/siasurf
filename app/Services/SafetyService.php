@@ -34,8 +34,8 @@ class SafetyService
         // Rule 4: Age 5-12 requires 2 instructors
         $this->validateAgeRules($data, $violations);
 
-        // Rule 5: Beginners restricted to safe zones
-        $this->validateBeginnerZoneRules($data, $violations);
+        // Rule 5: The chosen break must not be harder than the surfer's level
+        $this->validateSurfSpotDifficultyRules($data, $violations);
 
         // Rule 6: Certification must match lesson difficulty
         $this->validateCertificationMatchRules($data, $violations);
@@ -44,6 +44,83 @@ class SafetyService
         $this->logValidation($data, $userId, empty($violations), $violations);
 
         // Throw exception if any violations found
+        if (!empty($violations)) {
+            throw new SafetyViolationException(
+                'Safety requirements not met: ' . implode('; ', $violations)
+            );
+        }
+    }
+
+    /**
+     * Validate safety for a group where each participant has their own age
+     * and skill level. The most restrictive participant governs the group:
+     * any minor forces a Level 3 instructor, any beginner restricts the spot
+     * to a beginner break, and a Level 1 instructor requires all beginners.
+     *
+     * @param  array<int, array{age?: int|null, skill_level?: string|\App\Enums\SkillLevel}>  $participants
+     * @throws SafetyViolationException
+     */
+    public function validateParticipants(
+        array $participants,
+        int $instructorLevel,
+        string $surfSpotDifficulty,
+        ?int $userId = null
+    ): void {
+        $violations = [];
+        $count = count($participants);
+        $groupSkill = SkillLevel::mostRestrictive(
+            array_map(fn ($p) => $p['skill_level'] ?? SkillLevel::Beginner, $participants)
+        );
+
+        $max = match ($instructorLevel) {
+            1 => 2,
+            2 => 1,
+            3 => 5,
+            default => 1,
+        };
+
+        if ($count > $max) {
+            $violations[] = "Level {$instructorLevel} instructors can handle maximum {$max} students.";
+        }
+
+        // The whole lesson is planned for the least experienced surfer, so the
+        // hardest break anyone may use is the one their level allows.
+        if (! $groupSkill->canSurfDifficulty($surfSpotDifficulty)) {
+            $violations[] = $groupSkill->label() . ' surfers cannot book '
+                . $surfSpotDifficulty . ' surf spots. '
+                . $groupSkill->surfSpotRuleLabel();
+        }
+
+        foreach ($participants as $participant) {
+            $age = isset($participant['age']) && $participant['age'] !== '' ? (int) $participant['age'] : null;
+            $skill = $participant['skill_level'] ?? SkillLevel::Beginner->value;
+            $skill = $skill instanceof SkillLevel ? $skill->value : $skill;
+
+            if ($age !== null && $age < 5) {
+                $violations[] = 'Students must be at least 5 years old.';
+            }
+
+            if ($age !== null && $age >= 5 && $age <= 12 && $instructorLevel !== 3) {
+                $violations[] = 'For safety, students aged 5-12 must be taught by a Level 3 Instructor (Expert) or a team of 2 instructors. Please choose a Level 3 instructor for this age group.';
+            }
+
+            if ($instructorLevel === 1 && $skill !== SkillLevel::Beginner->value) {
+                $violations[] = 'Level 1 instructors can only teach beginners.';
+            }
+        }
+
+        $violations = array_values(array_unique($violations));
+
+        $this->logValidation([
+            'instructor_level' => $instructorLevel,
+            'student_count' => $count,
+            'participants' => array_map(fn ($p) => [
+                'age' => $p['age'] ?? null,
+                'skill_level' => $p['skill_level'] ?? null,
+            ], $participants),
+            'surf_spot_difficulty' => $surfSpotDifficulty,
+        ], $userId, empty($violations), $violations);
+
         if (!empty($violations)) {
             throw new SafetyViolationException(
                 'Safety requirements not met: ' . implode('; ', $violations)
@@ -131,19 +208,30 @@ class SafetyService
     }
 
     /**
-     * Rule 5: Beginners restricted to safe zones only
+     * Rule 5: the surf spot must not be harder than the surfer's own level.
+     *
+     * Beginner     -> beginner breaks only
+     * Intermediate -> beginner + intermediate breaks (NOT advanced)
+     * Advanced     -> any break
      */
-    private function validateBeginnerZoneRules(array $data, array &$violations): void
+    private function validateSurfSpotDifficultyRules(array $data, array &$violations): void
     {
-        if (!isset($data['skill_level']) || $data['skill_level'] !== SkillLevel::Beginner->value) {
+        if (!isset($data['skill_level'], $data['surf_spot_difficulty'])) {
             return;
         }
 
-        // Check surf spot difficulty
-        if (isset($data['surf_spot_difficulty'])) {
-            if ($data['surf_spot_difficulty'] !== 'beginner') {
-                $violations[] = 'Beginners can only book beginner-friendly surf spots.';
-            }
+        $skill = $data['skill_level'] instanceof SkillLevel
+            ? $data['skill_level']
+            : SkillLevel::tryFrom((string) $data['skill_level']);
+
+        if ($skill === null) {
+            return;
+        }
+
+        if (! $skill->canSurfDifficulty((string) $data['surf_spot_difficulty'])) {
+            $violations[] = $skill->label() . ' surfers cannot book '
+                . $data['surf_spot_difficulty'] . ' surf spots. '
+                . $skill->surfSpotRuleLabel();
         }
     }
 
@@ -179,7 +267,7 @@ class SafetyService
         $this->validateLevel2Rules($data, $violations);
         $this->validateLevel3Rules($data, $violations);
         $this->validateAgeRules($data, $violations);
-        $this->validateBeginnerZoneRules($data, $violations);
+        $this->validateSurfSpotDifficultyRules($data, $violations);
         $this->validateCertificationMatchRules($data, $violations);
 
         return $violations;

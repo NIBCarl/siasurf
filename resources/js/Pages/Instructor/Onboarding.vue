@@ -22,7 +22,15 @@ import {
 import { computed, ref, watch, nextTick } from 'vue'
 
 const props = defineProps<{
-  profile?: { bio: string | null; level: number; rate_per_hour: number } | null
+  profile?: {
+    bio: string | null;
+    level: number;
+    rate_per_hour: number;
+    area?: string | null;
+    meeting_point?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null
   uploadedCertificates?: number
 }>()
 
@@ -40,6 +48,10 @@ const form = useForm({
   bio: props.profile?.bio ?? '',
   level: props.profile?.level ?? 1,
   rate_per_hour: props.profile?.rate_per_hour ?? 600,
+  area: props.profile?.area ?? '',
+  meeting_point: props.profile?.meeting_point ?? '',
+  latitude: props.profile?.latitude ?? '',
+  longitude: props.profile?.longitude ?? '',
   certificates: [] as File[],
 })
 
@@ -368,6 +380,44 @@ const handleFileChange = (e: Event) => {
                     </div>
                     <InputError class="mt-2 text-xs font-bold" :message="form.errors.rate_per_hour" />
                   </div>
+                </div>
+              </div>
+
+              <!-- STEP 2B: TEACHING LOCATION -->
+              <div class="bg-white p-8 border border-slate-200 shadow-sm relative rounded-[2rem]">
+                <div class="flex items-center gap-3 mb-8 pb-4 border-b border-slate-100">
+                  <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-[10px] font-black text-white">2B</span>
+                  <h3 class="text-lg font-bold tracking-tight text-slate-900">Teaching Location</h3>
+                </div>
+
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div class="space-y-2">
+                    <InputLabel for="area" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Area / barangay" />
+                    <TextInput id="area" v-model="form.area" type="text" class="block w-full" placeholder="General Luna" />
+                    <InputError class="text-xs font-bold" :message="form.errors.area" />
+                  </div>
+
+                  <div class="space-y-2">
+                    <InputLabel for="meeting_point" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Meeting point" />
+                    <TextInput id="meeting_point" v-model="form.meeting_point" type="text" class="block w-full" placeholder="Cloud 9 tower" />
+                    <InputError class="text-xs font-bold" :message="form.errors.meeting_point" />
+                  </div>
+
+                  <div class="space-y-2">
+                    <InputLabel for="latitude" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Latitude" />
+                    <TextInput id="latitude" v-model="form.latitude" type="number" step="0.0000001" class="block w-full" placeholder="9.8000000" />
+                    <InputError class="text-xs font-bold" :message="form.errors.latitude" />
+                  </div>
+
+                  <div class="space-y-2">
+                    <InputLabel for="longitude" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Longitude" />
+                    <TextInput id="longitude" v-model="form.longitude" type="number" step="0.0000001" class="block w-full" placeholder="126.1600000" />
+                    <InputError class="text-xs font-bold" :message="form.errors.longitude" />
+                  </div>
+
+                  <p class="text-xs text-slate-500 md:col-span-2">
+                    Optional, but adding coordinates places you on the public instructor directory map. You can update this later from your public profile.
+                  </p>
                 </div>
               </div>
 

@@ -107,13 +107,144 @@ class AvailabilityTest extends TestCase
     }
 
     /** @test */
-    public function the_availability_page_exposes_the_saved_slots()
+    public function custom_working_hours_and_open_slots_drive_the_public_slots(): void
+    {
+        $date = now()->next('Monday')->addWeek();
+        $day = (int) $date->format('w');
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.availability.weekly'), [
+                'availabilities' => [[
+                    'day_of_week' => $day,
+                    'time_period' => 'morning',
+                    'is_available' => 1,
+                    'start_time' => '07:00',
+                    'end_time' => '10:00',
+                    'open_slots' => ['07:00', '09:00'],
+                    'slot_duration_minutes' => 60,
+                ]],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $availability = Availability::where('user_id', $this->instructor->id)
+            ->where('day_of_week', $day)
+            ->where('time_period', 'morning')
+            ->firstOrFail();
+
+        $this->assertSame('07:00', $availability->start_time->format('H:i'));
+        $this->assertSame('10:00', $availability->end_time->format('H:i'));
+        $this->assertSame(['07:00', '09:00'], $availability->open_slots);
+
+        $this->getJson(route('api.availability', [
+            'instructor' => $this->instructor->id,
+            'date' => $date->format('Y-m-d'),
+        ]))
+            ->assertOk()
+            ->assertJsonPath('periods.morning.slots', ['07:00', '09:00']);
+    }
+
+    /** @test */
+    public function custom_working_hours_must_be_inside_the_period_and_in_order(): void
+    {
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.availability.weekly'), [
+                'availabilities' => [[
+                    'day_of_week' => 1,
+                    'time_period' => 'morning',
+                    'is_available' => 1,
+                    'start_time' => '11:00',
+                    'end_time' => '10:00',
+                    'open_slots' => ['11:00'],
+                ]],
+            ])
+            ->assertSessionHasErrors('availabilities.0.end_time');
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.availability.weekly'), [
+                'availabilities' => [[
+                    'day_of_week' => 1,
+                    'time_period' => 'morning',
+                    'is_available' => 1,
+                    'start_time' => '05:00',
+                    'end_time' => '09:00',
+                    'open_slots' => ['05:00'],
+                ]],
+            ])
+            ->assertSessionHasErrors('availabilities.0.start_time');
+    }
+
+    /** @test */
+    public function an_open_period_must_keep_at_least_one_slot_open(): void
+    {
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.availability.weekly'), [
+                'availabilities' => [[
+                    'day_of_week' => 1,
+                    'time_period' => 'morning',
+                    'is_available' => 1,
+                    'start_time' => '07:00',
+                    'end_time' => '10:00',
+                    'open_slots' => [],
+                ]],
+            ])
+            ->assertSessionHasErrors('availabilities.0.open_slots');
+    }
+
+    /** @test */
+    public function a_confirmed_lesson_only_removes_its_overlapping_slot(): void
+    {
+        $date = now()->next('Monday')->addWeek();
+        $day = (int) $date->format('w');
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.availability.weekly'), [
+                'availabilities' => [[
+                    'day_of_week' => $day,
+                    'time_period' => 'morning',
+                    'is_available' => 1,
+                    'start_time' => '07:00',
+                    'end_time' => '11:00',
+                    'open_slots' => ['07:00', '08:00', '09:00', '10:00'],
+                    // Pin a 1-hour lesson so this tests the flexible schedule's
+                    // per-slot behaviour, not the platform 2-hour default.
+                    'slot_duration_minutes' => 60,
+                ]],
+            ])
+            ->assertSessionHasNoErrors();
+
+        Booking::factory()->create([
+            'student_id' => $this->student->id,
+            'instructor_id' => $this->instructor->id,
+            'surf_spot_id' => $this->surfSpot->id,
+            'date' => $date->format('Y-m-d'),
+            'time_period' => 'morning',
+            'start_time' => '07:00',
+            'end_time' => '08:00',
+            'duration_hours' => 1,
+            'status' => BookingStatus::Confirmed,
+        ]);
+
+        $this->getJson(route('api.availability', [
+            'instructor' => $this->instructor->id,
+            'date' => $date->format('Y-m-d'),
+        ]))
+            ->assertOk()
+            ->assertJsonPath('periods.morning.available', true)
+            ->assertJsonPath('periods.morning.slots', ['08:00', '09:00', '10:00']);
+    }
+
+    /** @test */
+    public function the_availability_page_exposes_the_saved_slots(): void
     {
         Availability::create([
             'user_id' => $this->instructor->id,
             'day_of_week' => 2,
             'time_period' => 'morning',
             'is_available' => true,
+            'start_time' => '07:00',
+            'end_time' => '10:00',
+            'open_slots' => ['07:00', '09:00'],
             'specific_date' => null,
         ]);
 

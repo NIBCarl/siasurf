@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { StarIcon, CheckBadgeIcon } from '@heroicons/vue/24/solid';
+import { resolveAvatarUrl } from '@/utils/avatar';
 
 interface Instructor {
     id: number;
@@ -10,14 +12,19 @@ interface Instructor {
         level: number;
         rate_per_hour: number;
         status: string;
-        avatar?: string;
+        area?: string | null;
+        meeting_point?: string | null;
     };
+    avatar_url?: string | null;
+    avatar_path?: string | null;
     total_reviews?: number;
 }
 
-defineProps<{
+const props = defineProps<{
     instructor: Instructor;
 }>();
+
+const avatar = computed(() => resolveAvatarUrl(props.instructor));
 </script>
 
 <template>
@@ -25,10 +32,10 @@ defineProps<{
         <!-- Image Area -->
         <div class="relative h-48 overflow-hidden bg-slate-100">
             <img 
-                v-if="instructor.instructor_profile.avatar" 
-                :src="instructor.instructor_profile.avatar" 
+                v-if="avatar" 
+                :src="avatar" 
                 class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                alt="Instructor"
+                alt=""
             />
             <div v-else class="flex h-full w-full items-center justify-center bg-teal-50 text-teal-600">
                 <svg class="h-16 w-16 opacity-20" fill="currentColor" viewBox="0 0 24 24">
@@ -60,6 +67,14 @@ defineProps<{
                         <span v-else class="inline-flex items-center rounded-md bg-ocean-50 px-2 py-0.5 text-[10px] font-bold text-ocean-700">
                             All Levels
                         </span>
+                    </div>
+                    <div class="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>{{ instructor.instructor_profile.area || 'Siargao Island' }}</span>
+                        <span v-if="instructor.instructor_profile.meeting_point">· {{ instructor.instructor_profile.meeting_point }}</span>
                     </div>
                     <div class="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

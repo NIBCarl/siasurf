@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Models\Certificate;
 use App\Enums\CertificateStatus;
+use App\Http\Controllers\Controller;
+use App\Models\Certificate;
+use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Http\RedirectResponse;
 
 class CertificateController extends Controller
 {
@@ -31,8 +31,8 @@ class CertificateController extends Controller
         $file = $request->file('certificate');
 
         // Generate unique filename
-        $filename = $validated['type'] . '_' . time() . '_' . Str::random(8) . '.pdf';
-        
+        $filename = $validated['type'].'_'.time().'_'.Str::random(8).'.pdf';
+
         // Store file
         $path = $file->storeAs(
             "instructors/{$instructor->id}/certificates",
@@ -58,18 +58,42 @@ class CertificateController extends Controller
     {
         // Check if user can view this certificate
         $user = auth()->user();
-        
-        if ($user->id !== $certificate->user_id && !$user->isAdmin()) {
+
+        if ($user->id !== $certificate->user_id && ! $user->isAdmin()) {
             abort(403, 'Unauthorized access to certificate.');
         }
 
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
-        
-        if (!Storage::disk($disk)->exists($certificate->file_path)) {
+        $disk = $this->resolveDisk($certificate->file_path);
+
+        if ($disk === null) {
             abort(404, 'Certificate file not found.');
         }
 
         return Storage::disk($disk)->response($certificate->file_path);
+    }
+
+    /**
+     * Admin-uploaded certificates live on the private disk while instructor
+     * self-service uploads use the public disk. Resolve whichever disk actually
+     * holds the file instead of assuming one and returning a false 404.
+     */
+    private function resolveDisk(string $path): ?string
+    {
+        $candidates = config('filesystems.default') === 's3'
+            ? ['s3']
+            : ['public', 'local'];
+
+        foreach ($candidates as $disk) {
+            try {
+                if (Storage::disk($disk)->exists($path)) {
+                    return $disk;
+                }
+            } catch (\Throwable) {
+                // A disk that is not configured must not break the lookup.
+            }
+        }
+
+        return null;
     }
 
     /**

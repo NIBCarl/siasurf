@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
@@ -23,8 +23,21 @@ interface Booking {
   }
 }
 
+interface Participant {
+  id: number
+  full_name: string | null
+  age: number | null
+  skill_level: string
+  guardian_name?: string | null
+  emergency_contact_name?: string | null
+  emergency_contact_phone?: string | null
+  medical_info?: string | null
+}
+
 interface Props {
   booking: Booking
+  participant?: Participant | null
+  progress?: { participants: number; signed: number; required: number } | null
 }
 
 const props = defineProps<Props>()
@@ -32,13 +45,34 @@ const props = defineProps<Props>()
 const signaturePadRef = ref<InstanceType<typeof SignaturePad> | null>(null)
 
 const form = useForm({
-  parent_name: '',
+  parent_name: props.participant?.guardian_name ?? '',
   parent_signature: '',
-  emergency_contact_name: '',
-  emergency_contact_phone: '',
-  medical_info: '',
-  agreement: false
+  emergency_contact_name: props.participant?.emergency_contact_name ?? '',
+  emergency_contact_phone: props.participant?.emergency_contact_phone ?? '',
+  medical_info: props.participant?.medical_info ?? '',
+  agreement: false,
+  participant_id: props.participant?.id ?? null,
 })
+
+// When the guided flow advances to the next minor, it redirects to this same
+// component, so Inertia reuses the instance and useForm() is not re-run. Reset
+// the fields and pad so we never submit a stale participant_id.
+const resetForParticipant = (participant: Participant | null) => {
+  form.participant_id = participant?.id ?? null
+  form.parent_name = participant?.guardian_name ?? ''
+  form.emergency_contact_name = participant?.emergency_contact_name ?? ''
+  form.emergency_contact_phone = participant?.emergency_contact_phone ?? ''
+  form.medical_info = participant?.medical_info ?? ''
+  form.parent_signature = ''
+  form.agreement = false
+  form.clearErrors()
+  signaturePadRef.value?.clearSignature()
+}
+
+watch(
+  () => props.participant?.id,
+  () => resetForParticipant(props.participant ?? null)
+)
 
 const submitConsent = () => {
   if (!signaturePadRef.value || !signaturePadRef.value.hasSignature) {
@@ -46,8 +80,10 @@ const submitConsent = () => {
     return
   }
 
+  // Always send the participant currently shown, never a stale one.
+  form.participant_id = props.participant?.id ?? null
   form.parent_signature = signaturePadRef.value.getSignatureData()
-  
+
   form.post(route('bookings.store-parental-consent', props.booking.id), {
     preserveScroll: true,
     onError: () => {
@@ -98,7 +134,13 @@ const goBack = () => {
             <svg class="w-5 h-5 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <span class="text-sm text-ocean-800">Student Age: {{ booking.student_age }} years old</span>
+            <span class="text-sm text-ocean-800">
+              {{ participant?.full_name || 'Student' }}
+              <template v-if="participant?.age"> · {{ participant.age }} years old</template>
+            </span>
+          </div>
+          <div v-if="progress" class="mt-2 text-xs text-slate-500">
+            {{ progress.signed }} / {{ progress.required }} signatures collected
           </div>
         </div>
 

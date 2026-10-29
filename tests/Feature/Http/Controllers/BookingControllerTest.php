@@ -81,6 +81,39 @@ class BookingControllerTest extends TestCase
     }
 
     /** @test */
+    public function a_standard_booking_is_two_hours_and_priced_on_that_duration()
+    {
+        $response = $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $this->instructor->id), [
+                'date' => now()->addDays(2)->format('Y-m-d'),
+                'start_time' => '09:00',
+                'skill_level' => 'beginner',
+                'student_age' => 25,
+                'height' => 170,
+                'weight' => 65,
+                'student_count' => 1,
+                'has_board' => true,
+                'surf_spot_id' => $this->surfSpot->id,
+            ]);
+
+        $response->assertRedirect();
+
+        $booking = Booking::latest('id')->firstOrFail();
+
+        // Methodology: standard session is 2 hours (default 2 hours).
+        $this->assertSame(2, $booking->duration_hours);
+        $this->assertSame('11:00', $booking->end_time->format('H:i'));
+
+        // Price is rate (₱1,000) x 2 hours x 1 student, i.e. exactly what the
+        // booking form estimates. This is the bug that displayed 2h but charged 1h.
+        $this->assertEquals(2000.0, (float) $booking->total_amount);
+
+        // The acceptance clock starts at creation so an abandoned pre-payment
+        // booking can be swept and its slot released.
+        $this->assertNotNull($booking->accept_deadline_at);
+    }
+
+    /** @test */
     public function booking_fails_safety_validation_for_level1_with_group()
     {
         $level1Instructor = User::factory()->create(['role' => 'instructor']);

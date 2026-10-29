@@ -44,6 +44,33 @@ class InstructorOnboardingTest extends TestCase
         $this->get('/instructor/onboarding')->assertOk();
     }
 
+    public function test_instructor_can_add_a_certificate_from_the_profile_page(): void
+    {
+        Storage::fake('public');
+
+        $user = $this->instructor('extra-cert@example.test');
+        $user->instructorProfile()->create([
+            'bio' => 'Active instructor adding a refresher certificate.',
+            'level' => 1,
+            'status' => 'active',
+            'rate_per_hour' => 600,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('instructor.certificates.store'), [
+            'certificates' => [UploadedFile::fake()->create('bls_refresher.pdf', 300, 'application/pdf')],
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('certificates', [
+            'user_id' => $user->id,
+            'type' => 'bls',
+            'status' => 'pending_verification',
+        ]);
+
+        Storage::disk('public')->assertExists($user->certificates()->first()->file_path);
+    }
+
     public function test_onboarding_with_certificate_succeeds(): void
     {
         Storage::fake('public');

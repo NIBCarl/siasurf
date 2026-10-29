@@ -26,7 +26,8 @@ class SurfSpotController extends Controller
             $search = $request->string('search');
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('area', 'like', "%{$search}%");
+                    ->orWhere('area', 'like', "%{$search}%")
+                    ->orWhere('barangay', 'like', "%{$search}%");
             });
         }
 
@@ -34,19 +35,29 @@ class SurfSpotController extends Controller
             $query->byDifficulty($request->string('difficulty'));
         }
 
+        if ($request->filled('side')) {
+            $query->onSide($request->string('side'));
+        }
+
+        if ($request->filled('section')) {
+            $query->inSection($request->string('section'));
+        }
+
         if ($request->filled('status')) {
-            $query->where('is_active', $request->string('status') === 'active');
+            $query->where('is_active', $request->input('status') === 'active');
         }
 
         return Inertia::render('Admin/SurfSpots/Index', [
             'spots' => $query->ordered()->paginate(25)->withQueryString(),
-            'filters' => $request->only(['search', 'difficulty', 'status']),
+            'filters' => $request->only(['search', 'difficulty', 'side', 'section', 'status']),
             'areas' => SurfSpot::query()
                 ->whereNotNull('area')
                 ->distinct()
                 ->orderBy('area')
                 ->pluck('area')
                 ->all(),
+            'sides' => SurfSpot::SIDES,
+            'sections' => SurfSpot::SECTIONS,
             'mapSpots' => SurfSpot::query()
                 ->ordered()
                 ->get()
@@ -97,11 +108,17 @@ class SurfSpotController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'area' => ['required', 'string', 'max:120'],
+            'barangay' => ['nullable', 'string', 'max:120'],
+            'side' => ['nullable', Rule::in(array_keys(SurfSpot::SIDES))],
+            'section' => ['nullable', Rule::in(array_keys(SurfSpot::SECTIONS))],
             'region' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:2000'],
             'difficulty' => ['required', Rule::in(array_column(SkillLevel::cases(), 'value'))],
             'break_type' => ['nullable', 'string', 'max:60'],
             'best_tide' => ['nullable', 'string', 'max:60'],
+            'best_season' => ['nullable', 'string', 'max:120'],
+            'access' => ['nullable', 'string', 'max:120'],
+            'plus_code' => ['nullable', 'string', 'max:32'],
             'hazard_notes' => ['nullable', 'string', 'max:1000'],
             'latitude' => ['required', 'numeric', 'between:9.55,10.15'],
             'longitude' => ['required', 'numeric', 'between:125.90,126.35'],

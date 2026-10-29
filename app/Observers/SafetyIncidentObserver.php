@@ -2,85 +2,33 @@
 
 namespace App\Observers;
 
+use App\Enums\IncidentStatus;
 use App\Models\SafetyIncident;
-use App\Models\InstructorProfile;
-use App\Enums\InstructorStatus;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\InstructorSuspended;
+use App\Services\StrikeService;
 
+/**
+ * Keeps direct SafetyIncident writes in sync with the strike ledger.
+ * Student reports are created as PENDING, so this observer does nothing for them.
+ * Only a confirmed incident reaches StrikeService. The service is idempotent.
+ */
 class SafetyIncidentObserver
 {
-    /**
-     * Handle the SafetyIncident "created" event.
-     */
     public function created(SafetyIncident $incident): void
     {
-        $instructor = $incident->instructor;
-        
-        if (!$instructor || !$instructor->instructorProfile) {
-            return;
-        }
-
-        $profile = $instructor->instructorProfile;
-        
-        // Calculate strikes based on severity
-        $strikes = match($incident->severity->value) {
-            'minor' => 1,
-            'major' => 2,
-            'critical' => 3,
-            default => 1,
-        };
-        
-        // Add strikes
-        $profile->increment('strike_count', $strikes);
-        
-        // Check if should be suspended (3 or more strikes)
-        if ($profile->strike_count >= 3) {
-            $profile->update([
-                'status' => InstructorStatus::Suspended,
-                'suspended_until' => now()->addMonth(),
-            ]);
-
-            // Phase 11 - SISA and the instructor both need to see the strike
-            // outcome immediately; previously this suspension was silent.
-            try {
-                broadcast(new \App\Events\InstructorStatusChanged(
-                    $instructor,
-                    InstructorStatus::Active,
-                    InstructorStatus::Suspended,
-                    "Auto-suspended after reaching {$profile->strike_count} strikes."
-                ))->toOthers();
-            } catch (\Throwable $exception) {
-                \Log::warning('Failed to broadcast auto-suspension.', [
-                    'instructor_id' => $instructor->id,
-                    'error' => $exception->getMessage(),
-                ]);
-            }
-
-            // Notify admin and instructor
-            try {
-                Mail::to(config('app.admin_email'))->send(new InstructorSuspended($instructor));
-                $instructor->notify(new \App\Notifications\SuspensionNotification($incident));
-            } catch (\Exception $e) {
-                // Log error but don't stop execution
-                \Log::error('Failed to send suspension notifications: ' . $e->getMessage());
-            }
+        if ($incident->status === IncidentStatus::Confirmed) {
+            app(StrikeService::class)->applyForIncident($incident);
         }
     }
 
-    /**
-     * Handle the SafetyIncident "updated" event.
-     */
     public function updated(SafetyIncident $incident): void
     {
-        //
+        if ($incident->status === IncidentStatus::Confirmed && $incident->strike_applied_at === null) {
+            app(StrikeService::class)->applyForIncident($incident);
+        }
     }
 
-    /**
-     * Handle the SafetyIncident "deleted" event.
-     */
     public function deleted(SafetyIncident $incident): void
     {
-        // Optionally restore strikes if incident is deleted
+        //
     }
 }

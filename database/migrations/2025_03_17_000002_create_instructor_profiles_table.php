@@ -3,8 +3,6 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use App\Enums\InstructorLevel;
-use App\Enums\InstructorStatus;
 
 return new class extends Migration
 {
@@ -13,7 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('instructor_profiles', function (Blueprint $table) {
+        // FULLTEXT is MySQL/MariaDB-only. Other drivers (SQLite in tests,
+        // PostgreSQL) fall back to LIKE search in InstructorSearchController.
+        $supportsFullText = in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true);
+
+        Schema::create('instructor_profiles', function (Blueprint $table) use ($supportsFullText) {
             $table->id();
             $table->foreignId('user_id')->unique()->constrained()->onDelete('cascade');
             $table->text('bio')->nullable();
@@ -24,12 +26,15 @@ return new class extends Migration
             $table->string('qr_code_path')->nullable();
             $table->timestamp('suspended_until')->nullable();
             $table->timestamps();
-            
+
             // Indexes
             $table->index('level');
             $table->index('status');
             $table->index(['status', 'level']);
-            $table->fullText('bio'); // MySQL full-text search
+
+            if ($supportsFullText) {
+                $table->fullText('bio'); // MySQL full-text search
+            }
         });
     }
 

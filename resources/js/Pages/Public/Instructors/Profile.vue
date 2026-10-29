@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import InstructorDirectoryMap from '@/Components/Organisms/InstructorDirectoryMap.vue';
 import { 
     StarIcon, 
     CheckBadgeIcon, 
@@ -8,14 +10,14 @@ import {
     ShieldCheckIcon,
     AcademicCapIcon,
     BanknotesIcon,
-    ArrowLeftIcon,
-    UserCircleIcon
+    ArrowLeftIcon
 } from '@heroicons/vue/24/solid';
 import { 
     ShieldCheckIcon as ShieldCheckOutline,
     ChatBubbleLeftRightIcon
 } from '@heroicons/vue/24/outline';
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue';
+import { resolveAvatarUrl } from '@/utils/avatar';
 
 const props = defineProps<{
     instructor: any;
@@ -25,8 +27,49 @@ const props = defineProps<{
         label: string;
         short_label: string;
         periods: string[];
+        ranges?: Array<{
+            period: string;
+            period_label: string;
+            start: string;
+            end: string;
+            label: string;
+        }>;
     }>;
+    averageRating?: number;
 }>();
+
+const page = usePage();
+const isAuthenticated = computed(() => Boolean((page.props.auth as any)?.user));
+const instructorAvatar = computed(() => resolveAvatarUrl(props.instructor));
+const instructorInitials = computed(() =>
+    String(props.instructor.name ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? '')
+        .join(''),
+);
+
+const mapInstructors = computed(() => {
+    const profile = props.instructor.instructor_profile;
+    if (!profile?.latitude || !profile?.longitude) return [];
+
+    return [{
+        id: props.instructor.id,
+        name: props.instructor.name,
+        area: profile.area ?? null,
+        meeting_point: profile.meeting_point ?? null,
+        latitude: Number(profile.latitude),
+        longitude: Number(profile.longitude),
+        level: profile.level,
+        level_label: instructorLevelLabel[profile.level] ?? `Level ${profile.level}`,
+        rate_per_hour: Number(profile.rate_per_hour),
+        average_rating: props.averageRating ?? 0,
+        total_reviews: props.totalReviews,
+        profile_url: route('instructors.profile', props.instructor.id),
+        avatar_url: resolveAvatarUrl(props.instructor),
+    }];
+});
 
 const instructorLevelLabel: Record<number, string> = {
     1: 'Level 1 (SISA Certified)',
@@ -77,12 +120,13 @@ const instructorLevelDescription: Record<number, string> = {
                         <div class="relative group">
                             <div class="h-48 w-48 overflow-hidden rounded-[2.5rem] border-8 border-slate-50 bg-sand-50 shadow-2xl transition-transform duration-500 group-hover:scale-105">
                                 <img 
-                                    v-if="instructor.instructor_profile.avatar" 
-                                    :src="instructor.instructor_profile.avatar" 
+                                    v-if="instructorAvatar" 
+                                    :src="instructorAvatar" 
                                     class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                                    alt=""
                                 />
-                                <div v-else class="flex h-full w-full items-center justify-center text-sand-400">
-                                    <UserCircleIcon class="w-32 h-32 opacity-20" />
+                                <div v-else class="flex h-full w-full items-center justify-center bg-lagoon-50 text-display font-bold text-lagoon-700">
+                                    {{ instructorInitials }}
                                 </div>
                             </div>
                             <div class="absolute -bottom-2 -right-2 flex h-14 w-14 items-center justify-center rounded-3xl bg-ocean-600 text-white shadow-2xl shadow-ocean-200 border-4 border-white rotate-12 group-hover:rotate-0 transition-transform">
@@ -159,6 +203,10 @@ const instructorLevelDescription: Record<number, string> = {
                                 {{ day.label }}
                             </p>
 
+                            <p v-if="day.ranges?.length" class="mt-1 text-[9px] font-bold leading-tight text-slate-500">
+                                {{ day.ranges.map((range) => range.label).join(' · ') }}
+                            </p>
+
                             <div class="mt-3 space-y-1.5">
                                 <span
                                     v-for="period in ['morning', 'afternoon']"
@@ -182,6 +230,31 @@ const instructorLevelDescription: Record<number, string> = {
                     <p v-else class="mt-6 text-xs font-medium text-slate-500">
                         Exact times are confirmed on the booking form, where you can also see any dates already booked.
                     </p>
+                </div>
+
+                <!-- Teaching location -->
+                <div v-if="mapInstructors.length" class="rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm">
+                    <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-[0.2em] text-ocean-500">Find your coach</p>
+                            <h2 class="mt-1 text-xl font-extrabold uppercase tracking-widest text-slate-900">Teaching location</h2>
+                            <p class="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-600">
+                                <MapPinIcon class="h-4 w-4 text-ocean-500" />
+                                {{ instructor.instructor_profile.area || 'Siargao Island' }}
+                                <span v-if="instructor.instructor_profile.meeting_point">· {{ instructor.instructor_profile.meeting_point }}</span>
+                            </p>
+                        </div>
+                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                            Live directory pin
+                        </span>
+                    </div>
+
+                    <InstructorDirectoryMap
+                        :instructors="mapInstructors"
+                        :selected-id="instructor.id"
+                        :center="{ latitude: Number(instructor.instructor_profile.latitude), longitude: Number(instructor.instructor_profile.longitude), zoom: 13 }"
+                        height="300px"
+                    />
                 </div>
 
                 <!-- Certificates -->
@@ -277,13 +350,33 @@ const instructorLevelDescription: Record<number, string> = {
                                 </div>
                             </div>
 
-                            <Link 
-                                :href="route('bookings.create', instructor.id)" 
+                            <Link
+                                v-if="isAuthenticated"
+                                :href="route('bookings.create', instructor.id)"
                                 class="flex h-16 w-full items-center justify-center rounded-2xl bg-ocean-500 text-sm font-black text-white shadow-2xl shadow-ocean-900/40 transition-all hover:bg-ocean-400 active:scale-95 group/btn"
                             >
                                 START BOOKING SESSION
                                 <ArrowLeftIcon class="w-4 h-4 ml-3 rotate-180 group-hover/btn:translate-x-1 transition-transform" />
                             </Link>
+
+                            <div v-else class="space-y-3">
+                                <Link
+                                    :href="route('bookings.create', instructor.id)"
+                                    class="flex h-16 w-full items-center justify-center rounded-2xl bg-ocean-500 text-sm font-black text-white shadow-2xl shadow-ocean-900/40 transition-all hover:bg-ocean-400 active:scale-95"
+                                >
+                                    SIGN IN TO BOOK
+                                    <ArrowLeftIcon class="w-4 h-4 ml-3 rotate-180" />
+                                </Link>
+                                <Link
+                                    :href="route('register')"
+                                    class="flex h-12 w-full items-center justify-center rounded-2xl border border-white/15 bg-white/5 text-xs font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10"
+                                >
+                                    Create a free account
+                                </Link>
+                                <p class="text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                    Browsing is free · sign in only when you book
+                                </p>
+                            </div>
 
                             <div class="mt-8 flex items-center justify-center gap-3">
                                 <div class="h-1 w-1 rounded-full bg-slate-700" />

@@ -92,6 +92,10 @@ class InstructorController extends Controller
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
             'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
+            'area' => 'nullable|string|max:100',
+            'meeting_point' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric|between:9.5,10.2',
+            'longitude' => 'nullable|numeric|between:125.8,126.5',
         ], [
             'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
             'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
@@ -114,6 +118,10 @@ class InstructorController extends Controller
             'level' => $validated['level'],
             'status' => InstructorStatus::PendingVerification->value,
             'rate_per_hour' => $validated['rate_per_hour'],
+            'area' => $validated['area'] ?? null,
+            'meeting_point' => $validated['meeting_point'] ?? null,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
         ]);
 
         // Assign role
@@ -131,8 +139,24 @@ class InstructorController extends Controller
     {
         $instructor->load(['instructorProfile', 'certificates', 'availabilities']);
 
+        // Existing active instructors verified before the QR module existed may
+        // not have an image on disk yet. Generate it lazily so the dossier is
+        // always actionable.
+        $profile = $instructor->instructorProfile;
+        if ($profile && $profile->status === InstructorStatus::Active) {
+            $path = $profile->qr_code_path;
+            if (!$path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+                $this->qrCodeService->generateInstructorQR($profile);
+                $instructor->load('instructorProfile');
+            }
+        }
+
         return Inertia::render('Admin/Instructors/Show', [
             'instructor' => $instructor,
+            'qrImageUrl' => $instructor->instructorProfile?->qr_code_path
+                ? route('qr.image', $instructor->id)
+                : null,
+            'verificationUrl' => route('walkin.scan', $instructor->id),
         ]);
     }
 
@@ -228,39 +252,35 @@ class InstructorController extends Controller
     /**
      * Suspend an instructor.
      */
-    public function suspend(Request $request, User $instructor): RedirectResponse
+    public function suspend(Request $request, User $instructor, \App\Services\SuspensionService $suspensionService): RedirectResponse
     {
         $this->authorize('suspend', $instructor->instructorProfile);
 
         $validated = $request->validate([
-            'reason' => 'required|string',
-            'duration_days' => 'required|integer|min:1',
+            'reason' => 'required|string|min:10|max:2000',
+            'duration_days' => 'required|integer|min:1|max:365',
         ]);
 
         $profile = $instructor->instructorProfile;
 
-        $oldStatus = $profile->status;
-
-        $profile->status = InstructorStatus::Suspended;
-        $profile->suspended_until = now()->addDays($validated['duration_days']);
-        $profile->save();
-
-        // Send suspension notification
-        try {
-            $instructor->notify(new InstructorSuspended($validated['reason'], $validated['duration_days']));
-        } catch (\Throwable $e) {
-            \Log::error('Failed to send suspension notification: '.$e->getMessage());
+        if (! $profile) {
+            return back()->with('error', 'Instructor profile not found.');
         }
 
-        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Suspended, $validated['reason']);
+        $suspensionService->suspendManually(
+            $instructor,
+            $validated['reason'],
+            (int) $validated['duration_days'],
+            $request->user()
+        );
 
-        return back()->with('success', 'Instructor suspended successfully.');
+        return back()->with('success', 'Instructor suspended successfully. The reason is visible on their account.');
     }
 
     /**
      * Reactivate a suspended instructor.
      */
-    public function reactivate(User $instructor): RedirectResponse
+    public function reactivate(User $instructor, \App\Services\SuspensionService $suspensionService): RedirectResponse
     {
         $this->authorize('suspend', $instructor->instructorProfile);
 
@@ -270,22 +290,50 @@ class InstructorController extends Controller
             return back()->with('error', 'Instructor profile not found.');
         }
 
-        $oldStatus = $profile->status;
+        $suspension = \App\Models\InstructorSuspension::where('instructor_id', $instructor->id)
+            ->where('status', \App\Enums\SuspensionStatus::Active->value)
+            ->latest()
+            ->first();
 
-        $profile->update([
-            'status' => InstructorStatus::Active->value,
-            'suspended_until' => null,
-            'strike_count' => 0, // Reset strikes on reactivation
-        ]);
+        if ($suspension) {
+            // Automatic/legacy suspensions clear the served strike slate;
+            // a manual suspension does not change the strike ledger.
+            $resetStrikes = $suspension->type !== \App\Enums\SuspensionType::Manual;
 
-        // Send reactivation notification
-        try {
-            $instructor->notify(new InstructorReactivated);
-        } catch (\Exception $e) {
-            \Log::error('Failed to send reactivation notification: '.$e->getMessage());
+            $suspensionService->lift(
+                $suspension,
+                'Reactivated by SISA.',
+                request()->user(),
+                \App\Enums\SuspensionStatus::RevokedByAdmin,
+                $resetStrikes
+            );
+        } else {
+            $oldStatus = $profile->status;
+
+            $profile->update([
+                'status' => InstructorStatus::Active->value,
+                'suspended_until' => null,
+                'suspension_reason' => null,
+                'suspended_at' => null,
+                'strike_count' => 0,
+            ]);
+
+            \App\Models\InstructorStatusLog::create([
+                'instructor_id' => $instructor->id,
+                'from_status' => $oldStatus?->value,
+                'to_status' => InstructorStatus::Active->value,
+                'reason' => 'Reactivated by SISA.',
+                'changed_by' => request()->user()?->id,
+            ]);
+
+            try {
+                $instructor->notify(new InstructorReactivated);
+            } catch (\Throwable $e) {
+                \Log::error('Failed to send reactivation notification: '.$e->getMessage());
+            }
+
+            $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Active, 'Reactivated by SISA.');
         }
-
-        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Active, 'Reactivated by SISA.');
 
         return back()->with('success', 'Instructor reactivated successfully.');
     }
@@ -345,6 +393,10 @@ class InstructorController extends Controller
             'level' => 'required|integer|in:1,2,3',
             'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
             'status' => 'required|string',
+            'area' => 'nullable|string|max:100',
+            'meeting_point' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric|between:9.5,10.2',
+            'longitude' => 'nullable|numeric|between:125.8,126.5',
         ], [
             'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
             'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
@@ -364,6 +416,10 @@ class InstructorController extends Controller
             'level' => $validated['level'],
             'status' => $validated['status'],
             'rate_per_hour' => $validated['rate_per_hour'],
+            'area' => $validated['area'] ?? null,
+            'meeting_point' => $validated['meeting_point'] ?? null,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
         ]);
 
         return redirect()

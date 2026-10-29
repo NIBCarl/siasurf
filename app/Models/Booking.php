@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -53,6 +54,26 @@ class Booking extends Model
      */
     public const MAX_OPEN_REQUESTS_PER_STUDENT = 3;
 
+    /**
+     * The methodology's standard lesson length, in hours. Every place that
+     * needs a default duration (pricing, created end time, the session timer,
+     * the UI estimate) reads this instead of hard-coding 1 or 2.
+     */
+    public static function standardHours(): int
+    {
+        $hours = (int) config('siasurf.session.standard_hours', 2);
+
+        return $hours > 0 ? $hours : 2;
+    }
+
+    /**
+     * The standard lesson length in minutes (for slot grid / fit checks).
+     */
+    public static function standardDurationMinutes(): int
+    {
+        return self::standardHours() * 60;
+    }
+
     protected $fillable = [
         'student_id',
         'instructor_id',
@@ -84,6 +105,7 @@ class Booking extends Model
         'declined_at',
         'decline_reason',
         'cancellation_reason',
+        'cancellation_note',
         'payment_timed_out_at',
     ];
 
@@ -115,6 +137,20 @@ class Booking extends Model
         'payment_timed_out_at' => 'datetime',
     ];
 
+    /**
+     * Human-readable cancellation cause, appended to every serialized booking
+     * so the student list and detail page can show it without duplicating the
+     * enum labels in JavaScript.
+     *
+     * @var list<string>
+     */
+    protected $appends = ['cancellation_label'];
+
+    protected function cancellationLabel(): Attribute
+    {
+        return Attribute::get(fn (): ?string => $this->cancellation_reason?->label());
+    }
+
     // Relationships
     public function student(): BelongsTo
     {
@@ -141,9 +177,37 @@ class Booking extends Model
         return $this->hasOne(Waiver::class);
     }
 
+    /**
+     * Everyone surfing in this booking. The primary participant is the account
+     * holder; companions are declared by the booker.
+     */
+    public function participants(): HasMany
+    {
+        return $this->hasMany(BookingParticipant::class)->orderBy('id');
+    }
+
+    public function primaryParticipant(): HasOne
+    {
+        return $this->hasOne(BookingParticipant::class)
+            ->where('role', BookingParticipant::ROLE_PRIMARY);
+    }
+
+    public function waivers(): HasMany
+    {
+        return $this->hasMany(Waiver::class);
+    }
+
     public function review(): HasOne
     {
         return $this->hasOne(Review::class);
+    }
+
+    /**
+     * Private booking-scoped chat thread (FR 1.7).
+     */
+    public function conversation(): HasOne
+    {
+        return $this->hasOne(Conversation::class);
     }
 
     public function safetyIncident(): HasOne
@@ -151,26 +215,14 @@ class Booking extends Model
         return $this->hasOne(SafetyIncident::class);
     }
 
+    public function safetyIncidents(): HasMany
+    {
+        return $this->hasMany(SafetyIncident::class);
+    }
+
     public function changeRequests(): HasMany
     {
         return $this->hasMany(BookingChangeRequest::class);
-    }
-
-    /**
-     * Every location ping recorded during the live lesson, oldest first.
-     */
-    public function sessionLocations(): HasMany
-    {
-        return $this->hasMany(SessionLocation::class);
-    }
-
-    /**
-     * The most recent ping. `latestOfMany()` keeps this to a single subquery
-     * instead of loading the whole trail.
-     */
-    public function latestSessionLocation(): HasOne
-    {
-        return $this->hasOne(SessionLocation::class)->latestOfMany('recorded_at');
     }
 
     public function attendanceMarkedBy(): BelongsTo
@@ -275,8 +327,33 @@ class Booking extends Model
         return $this->payment_status === PaymentStatus::Completed;
     }
 
+    /**
+     * Whether the student has already handed over money or a GCash proof of
+     * payment. Once that happens the booking can no longer be self-cancelled:
+     * the instructor/SISA has to refund or reject it instead.
+     */
+    public function hasSubmittedPayment(): bool
+    {
+        if ($this->payment_status === PaymentStatus::Completed) {
+            return true;
+        }
+
+        $payment = $this->payment;
+
+        if (! $payment) {
+            return false;
+        }
+
+        return in_array($payment->status, PaymentStatus::submitted(), true)
+            || $payment->receipt_path !== null;
+    }
+
     public function canBeCancelled(): bool
     {
+        if ($this->hasSubmittedPayment()) {
+            return false;
+        }
+
         return $this->isPending() || $this->isConfirmed() || $this->status === BookingStatus::AwaitingPayment;
     }
 
@@ -552,7 +629,9 @@ class Booking extends Model
             'status' => BookingStatus::Cancelled,
             'cancelled_at' => now(),
             'cancellation_reason' => $cancellationReason,
-            'notes' => $reason ? trim($this->notes . "\n\nCancellation reason: " . $reason) : $this->notes,
+            // Kept separate from `notes` (the student's special requests) so the
+            // student can actually read why the lesson was cancelled.
+            'cancellation_note' => $reason ? trim($reason) : null,
         ]);
     }
 
@@ -568,6 +647,8 @@ class Booking extends Model
             'cancelled_at' => now(),
             'payment_timed_out_at' => now(),
             'cancellation_reason' => CancellationReason::PaymentTimeout,
+            'cancellation_note' => $this->cancellation_note
+                ?: 'The payment window expired before the payment was completed, so the slot was released.',
         ]);
     }
 
@@ -634,7 +715,10 @@ class Booking extends Model
             return 0;
         }
 
-        $endTime = $this->started_at->addHours($this->duration_hours);
+        // Copy the Carbon instance: addHours() mutates in place, so calling this
+        // more than once on the same model would keep pushing the end time out.
+        $duration = $this->duration_hours ?: self::standardHours();
+        $endTime = $this->started_at->copy()->addHours($duration);
         $remaining = now()->diffInSeconds($endTime, false);
 
         return max(0, (int) $remaining);

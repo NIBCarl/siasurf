@@ -38,14 +38,14 @@ class SendReviewRequest extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $instructorName = $this->booking->instructor->name;
-        $reviewUrl = route('student.reviews.create', $this->booking->id);
+        $reviewUrl = route('student.feedback.create', $this->booking->id);
 
         return (new MailMessage)
             ->subject('How was your surfing lesson with ' . $instructorName . '?')
             ->greeting('Hello ' . $notifiable->name . '!')
             ->line('We hope you had an amazing time surfing with ' . $instructorName . ' earlier today.')
             ->line('Your feedback helps other students find great instructors and helps us improve our service.')
-            ->action('Write a Review', $reviewUrl)
+            ->action('Leave Feedback', $reviewUrl)
             ->line('It only takes a minute, and your honest opinion means a lot to our community.')
             ->line('Thank you for choosing SiaSurf!')
             ->salutation('Best regards,\nThe SiaSurf Team');
@@ -66,3 +66,6 @@ class SendReviewRequest extends Notification implements ShouldQueue
         ];
     }
 }
+
+
+

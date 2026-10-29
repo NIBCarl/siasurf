@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Instructor;
 
 use App\Http\Controllers\Controller;
 use App\Models\Availability;
+use App\Models\Booking;
 use App\Enums\DayOfWeek;
 use App\Enums\TimePeriod;
 use App\Services\AvailabilityService;
@@ -11,6 +12,7 @@ use App\Services\SafetyService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -44,6 +46,8 @@ class AvailabilityController extends Controller
             'profile' => $user->instructorProfile,
             // FR 1.9.3 - Instant Book: auto-confirm requests on this calendar.
             'autoAcceptBookings' => (bool) ($user->instructorProfile?->auto_accept_bookings),
+            // Default lesson length new availability rows are saved with.
+            'standardSessionMinutes' => Booking::standardDurationMinutes(),
             // FR 1.8.1 - personal time the instructor can still remove.
             'manualBlocks' => $availabilityService->getManualBlocks($user->id)
                 ->map(fn(Availability $block) => [
@@ -82,9 +86,50 @@ class AvailabilityController extends Controller
             'availabilities.*.day_of_week' => 'required|integer|between:0,6',
             'availabilities.*.time_period' => 'required|in:morning,afternoon',
             'availabilities.*.is_available' => 'required|boolean',
+            'availabilities.*.start_time' => 'nullable|date_format:H:i',
+            'availabilities.*.end_time' => 'nullable|date_format:H:i',
+            'availabilities.*.open_slots' => 'nullable|array',
+            'availabilities.*.open_slots.*' => 'date_format:H:i',
+            // 60 = 1-hour lesson, 120 = the standard 2-hour lesson.
+            'availabilities.*.slot_duration_minutes' => 'nullable|integer|in:60,120',
         ]);
 
-        foreach ($validated['availabilities'] as $availability) {
+        foreach ($validated['availabilities'] as $index => $availability) {
+            $period = TimePeriod::from($availability['time_period']);
+            $start = $availability['start_time'] ?? $period->startTime();
+            $end = $availability['end_time'] ?? $period->endTime();
+            $duration = (int) ($availability['slot_duration_minutes'] ?? Booking::standardDurationMinutes());
+            $openSlots = $availability['open_slots'] ?? null;
+
+            if ($start >= $end) {
+                throw ValidationException::withMessages([
+                    "availabilities.{$index}.end_time" => 'The end time must be after the start time.',
+                ]);
+            }
+
+            if ($start < $period->startTime() || $end > $period->endTime()) {
+                throw ValidationException::withMessages([
+                    "availabilities.{$index}.start_time" => 'The selected hours must sit inside the '
+                        . strtolower($period->label()) . ' window.',
+                ]);
+            }
+
+            if ($availability['is_available'] && is_array($openSlots) && count($openSlots) === 0) {
+                throw ValidationException::withMessages([
+                    "availabilities.{$index}.open_slots" => 'Choose at least one open slot, or switch this period off.',
+                ]);
+            }
+
+            if (is_array($openSlots)) {
+                foreach ($openSlots as $slot) {
+                    if ($slot < $start || $slot >= $end) {
+                        throw ValidationException::withMessages([
+                            "availabilities.{$index}.open_slots" => 'Every open slot must be inside the working range.',
+                        ]);
+                    }
+                }
+            }
+
             Availability::updateOrCreate(
                 [
                     'user_id' => $user->id,
@@ -93,6 +138,12 @@ class AvailabilityController extends Controller
                     'specific_date' => null,
                 ],
                 [
+                    'start_time' => $start,
+                    'end_time' => $end,
+                    'open_slots' => is_array($openSlots)
+                        ? array_values(array_unique(array_map(fn ($slot) => substr((string) $slot, 0, 5), $openSlots)))
+                        : null,
+                    'slot_duration_minutes' => $duration,
                     'is_available' => $availability['is_available'],
                 ]
             );
@@ -185,11 +236,16 @@ class AvailabilityController extends Controller
     {
         $validated = $request->validate([
             'date' => 'required|date',
+            // Party size drives the capacity check: a Level 3 slot with 4 of 5
+            // seats taken is bookable for one student but not for two.
+            'students' => 'nullable|integer|min:1|max:10',
         ]);
 
         $date = \Carbon\Carbon::parse($validated['date']);
+        $students = (int) ($validated['students'] ?? 1);
 
-        $periods = app(AvailabilityService::class)->periodsFor((int) $instructorId, $date);
+        $availability = app(AvailabilityService::class);
+        $periods = $availability->periodsFor((int) $instructorId, $date, $students);
 
         $availableSlots = [];
         foreach ($periods as $value => $period) {
@@ -202,6 +258,46 @@ class AvailabilityController extends Controller
             'available_slots' => $availableSlots,
             'periods' => $periods,
             'has_any_slot' => collect($periods)->contains(fn ($period) => $period['available']),
+            'students' => $students,
+            'slot_capacity' => $availability->slotCapacity((int) $instructorId),
+        ]);
+    }
+
+    /**
+     * End times the student may choose for a given start time.
+     *
+     * The booking form shows a start selector and an end selector; this is the
+     * server's answer to "which end times still have room for this party?".
+     */
+    public function getAvailableEndTimes(Request $request, $instructorId): JsonResponse
+    {
+        $validated = $request->validate([
+            'date' => 'required|date',
+            'start_time' => 'required|date_format:H:i',
+            'students' => 'nullable|integer|min:1|max:10',
+        ]);
+
+        $students = (int) ($validated['students'] ?? 1);
+        $availability = app(AvailabilityService::class);
+
+        $endTimes = $availability->bookableEndTimes(
+            (int) $instructorId,
+            $validated['date'],
+            $validated['start_time'],
+            $students,
+        );
+
+        return response()->json([
+            'date' => $validated['date'],
+            'start_time' => $validated['start_time'],
+            'students' => $students,
+            'end_times' => $endTimes,
+            'remaining_capacity' => $availability->remainingCapacity(
+                (int) $instructorId,
+                $validated['date'],
+                $validated['start_time'],
+                $endTimes[0] ?? $validated['start_time'],
+            ),
         ]);
     }
 
