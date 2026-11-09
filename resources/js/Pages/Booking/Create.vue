@@ -92,8 +92,8 @@ const instructorInitials = computed(() =>
 // Compute max students based on instructor level
 const maxStudents = computed(() => {
   const level = props.instructor.instructor_profile.level
-  if (level === 1) return 2
-  if (level === 2) return 1
+  if (level === 1) return 1
+  if (level === 2) return 2
   if (level === 3) return 5
   return 1 // default fallback
 })
@@ -127,6 +127,9 @@ interface AvailabilityPeriod {
   available: boolean
   reason: string | null
   slots: string[]
+  slot_remaining?: Record<string, number>
+  capacity?: number
+  remaining_capacity?: number
   duration_minutes: number
 }
 
@@ -164,6 +167,20 @@ const fetchAvailability = async (date: string) => {
       { params: { date, students: form.student_count || 1 } },
     )
     availability.value = data
+
+    // If the student increased party size beyond the remaining seats of the
+    // currently selected start time, clear the stale selection cleanly.
+    if (form.start_time) {
+      const openSlots = [
+        ...(data?.periods?.morning?.slots ?? []),
+        ...(data?.periods?.afternoon?.slots ?? []),
+      ]
+      if (!openSlots.includes(form.start_time)) {
+        form.start_time = ''
+        form.end_time = ''
+        endTimeOptions.value = []
+      }
+    }
   } catch (e) {
     availability.value = null
     availabilityError.value = 'Could not load availability for that date. Please try again.'
@@ -244,19 +261,41 @@ watch(() => form.start_time, () => {
 })
 
 // Only offer times the instructor is genuinely free for.
+const formatSlotOptionLabel = (time: string, periodKey: 'morning' | 'afternoon') => {
+  const base = formatSlotLabel(time)
+  const period = availability.value?.periods?.[periodKey]
+  const capacity = period?.capacity ?? maxStudents.value
+  const remaining = period?.slot_remaining?.[time]
+
+  if (capacity > 1 && typeof remaining === 'number') {
+    return remaining < capacity
+      ? `${base} (${remaining} of ${capacity} ${remaining === 1 ? 'seat' : 'seats'} left)`
+      : `${base} (${capacity} seats open)`
+  }
+
+  return base
+}
+
 const morningHours = computed(() =>
   (availability.value?.periods?.morning?.slots ?? []).map((value) => ({
     value,
-    label: formatSlotLabel(value),
+    label: formatSlotOptionLabel(value, 'morning'),
   })),
 )
 
 const afternoonHours = computed(() =>
   (availability.value?.periods?.afternoon?.slots ?? []).map((value) => ({
     value,
-    label: formatSlotLabel(value),
+    label: formatSlotOptionLabel(value, 'afternoon'),
   })),
 )
+
+const selectedSlotRemainingSeats = computed<number | null>(() => {
+  if (!form.start_time) return null
+  const period = availability.value?.periods?.[selectedPeriod.value]
+  const remaining = period?.slot_remaining?.[form.start_time]
+  return typeof remaining === 'number' ? remaining : null
+})
 
 const totalAvailableSlots = computed(
   () => morningHours.value.length + afternoonHours.value.length,
@@ -428,7 +467,29 @@ const removeCompanion = (index: number) => {
   form.student_count = Math.max(1, form.companions.length + 1)
 }
 
+const childSafetyViolation = computed(() => {
+  const level = props.instructor.instructor_profile.level
+  const ages = [
+    Number(form.student_age),
+    ...form.companions.map((c) => Number(c.age)).filter((a) => !Number.isNaN(a) && a > 0),
+  ]
+
+  if (ages.some((age) => age > 0 && age < 5)) {
+    return 'Students must be at least 5 years old.'
+  }
+
+  if (level !== 3 && ages.some((age) => age >= 5 && age <= 12)) {
+    return 'For safety (BR-3.4), students aged 5–12 must be taught by a Level 3 Instructor (Expert). Please choose a Level 3 instructor for this age group.'
+  }
+
+  return null
+})
+
 const submit = () => {
+  if (childSafetyViolation.value) {
+    return
+  }
+
   // Send the full party: primary first (account holder), then companions.
   form.transform((data) => ({
     ...data,
@@ -449,6 +510,8 @@ const submit = () => {
 </script>
 
 <template>
+  <Head :title="`Book with ${instructor.name}`" />
+
   <AppSidebarLayout title="Book Your Surf Session">
     <div class="py-12 bg-slate-50 min-h-screen">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -724,7 +787,7 @@ const submit = () => {
                       >+</button>
                     </div>
                     <p class="mt-1 text-xs text-slate-500">
-                      Max {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }} for {{ instructor.instructor_profile.level === 1 ? 'Level 1' : instructor.instructor_profile.level === 2 ? 'Level 2 (1-on-1)' : 'Level 3 (Group)' }} instructors
+                      Max {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }} for {{ instructor.instructor_profile.level === 1 ? 'Level 1 (1-on-1)' : instructor.instructor_profile.level === 2 ? 'Level 2' : 'Level 3 (Group)' }} instructors<span v-if="maxStudents > 1 && selectedSlotRemainingSeats !== null" class="font-semibold text-ocean-700"> · {{ selectedSlotRemainingSeats }} of {{ maxStudents }} {{ selectedSlotRemainingSeats === 1 ? 'seat' : 'seats' }} open at {{ formatSlotLabel(form.start_time) }}</span>
                     </p>
                   </div>
 
@@ -794,7 +857,13 @@ const submit = () => {
                       bringing your own board, you do not need to enter them.
                     </p>
                     
-                    <p v-if="form.student_age < 18" class="col-span-full mt-1 text-xs text-amber-600 font-medium italic flex items-center">
+                    <p v-if="childSafetyViolation" class="col-span-full mt-1 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700 flex items-center">
+                      <svg class="w-4 h-4 mr-1.5 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      {{ childSafetyViolation }}
+                    </p>
+                    <p v-else-if="form.student_age < 18" class="col-span-full mt-1 text-xs text-amber-600 font-medium italic flex items-center">
                       <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
@@ -1008,7 +1077,7 @@ const submit = () => {
                     variant="primary" 
                     size="lg"
                     :loading="form.processing"
-                    :disabled="form.processing || !form.date || !form.start_time"
+                    :disabled="form.processing || !form.date || !form.start_time || Boolean(childSafetyViolation)"
                   >
                     Continue to Safety Check &rarr;
                   </BaseButton>

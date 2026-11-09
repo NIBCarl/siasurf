@@ -66,6 +66,12 @@ class BookingAcceptanceService
             throw new BookingRequestException('This booking request has already been handled.');
         }
 
+        if ($booking->isInStudentCheckout()) {
+            throw new BookingRequestException(
+                'The student is still completing the waiver and payment step for this booking.'
+            );
+        }
+
         if ($booking->acceptDeadlinePassed()) {
             throw new BookingRequestException(
                 'The response window has closed, so this request was released and the slot is open again.'

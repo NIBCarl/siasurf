@@ -20,6 +20,7 @@ interface Student {
         status: string
     }
     bookings_as_student_count: number
+    underpaid_bookings_count?: number
 }
 
 interface Props {
@@ -178,9 +179,17 @@ const paginationLabel = (label: string) =>
                                 </td>
 
                                 <td class="px-5 py-4">
-                                    <StatusPill :variant="statusMeta(student.student_profile?.status).variant">
-                                        {{ statusMeta(student.student_profile?.status).label }}
-                                    </StatusPill>
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                        <StatusPill :variant="statusMeta(student.student_profile?.status).variant">
+                                            {{ statusMeta(student.student_profile?.status).label }}
+                                        </StatusPill>
+                                        <StatusPill
+                                            v-if="(student.underpaid_bookings_count ?? 0) > 0"
+                                            variant="critical"
+                                        >
+                                            {{ student.underpaid_bookings_count }} Underpaid
+                                        </StatusPill>
+                                    </div>
                                 </td>
 
                                 <td class="px-5 py-4 text-right">

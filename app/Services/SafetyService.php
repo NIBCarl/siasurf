@@ -22,10 +22,10 @@ class SafetyService
     {
         $violations = [];
 
-        // Rule 1: Level 1 instructor - max 2 students (beginners only)
+        // Rule 1: Level 1 instructor - 1-on-1 only (beginners only)
         $this->validateLevel1Rules($data, $violations);
 
-        // Rule 2: Level 2 instructor - 1-on-1 only
+        // Rule 2: Level 2 instructor - max 2 students
         $this->validateLevel2Rules($data, $violations);
 
         // Rule 3: Level 3 instructor - max 5 students
@@ -73,14 +73,16 @@ class SafetyService
         );
 
         $max = match ($instructorLevel) {
-            1 => 2,
-            2 => 1,
+            1 => 1,
+            2 => 2,
             3 => 5,
             default => 1,
         };
 
         if ($count > $max) {
-            $violations[] = "Level {$instructorLevel} instructors can handle maximum {$max} students.";
+            $violations[] = $instructorLevel === 1
+                ? 'Level 1 instructors can only do 1-on-1 sessions (maximum 1 student).'
+                : "Level {$instructorLevel} instructors can handle maximum {$max} students.";
         }
 
         // The whole lesson is planned for the least experienced surfer, so the
@@ -129,7 +131,7 @@ class SafetyService
     }
 
     /**
-     * Rule 1: Level 1 instructor - max 2 students, beginners only
+     * Rule 1: Level 1 instructor - 1-on-1 only (max 1 student), beginners only
      */
     private function validateLevel1Rules(array $data, array &$violations): void
     {
@@ -137,9 +139,9 @@ class SafetyService
             return;
         }
 
-        // Max 2 students for Level 1
-        if (isset($data['student_count']) && $data['student_count'] > 2) {
-            $violations[] = 'Level 1 instructors can handle maximum 2 students.';
+        // 1-on-1 only (Max 1 student) for Level 1
+        if (isset($data['student_count']) && $data['student_count'] > 1) {
+            $violations[] = 'Level 1 instructors can only do 1-on-1 sessions (maximum 1 student).';
         }
 
         // Beginners only
@@ -149,7 +151,7 @@ class SafetyService
     }
 
     /**
-     * Rule 2: Level 2 instructor - 1-on-1 sessions only
+     * Rule 2: Level 2 instructor - max 2 students
      */
     private function validateLevel2Rules(array $data, array &$violations): void
     {
@@ -157,9 +159,9 @@ class SafetyService
             return;
         }
 
-        // 1-on-1 only
-        if (isset($data['student_count']) && $data['student_count'] > 1) {
-            $violations[] = 'Level 2 instructors can only do 1-on-1 sessions.';
+        // Max 2 students for Level 2
+        if (isset($data['student_count']) && $data['student_count'] > 2) {
+            $violations[] = 'Level 2 instructors can handle maximum 2 students.';
         }
     }
 
@@ -291,14 +293,14 @@ class SafetyService
         switch ($instructorLevel) {
             case 1:
                 $rules = [
-                    'max_students' => 2,
+                    'max_students' => 1,
                     'allowed_skill_levels' => ['beginner'],
                     'allowed_spots' => ['beginner'],
                 ];
                 break;
             case 2:
                 $rules = [
-                    'max_students' => 1,
+                    'max_students' => 2,
                     'allowed_skill_levels' => ['beginner', 'intermediate', 'advanced'],
                     'allowed_spots' => ['beginner', 'intermediate', 'advanced'],
                 ];
@@ -325,7 +327,7 @@ class SafetyService
             SafetyValidationLog::create([
                 'user_id' => $userId,
                 'booking_id' => $data['booking_id'] ?? null,
-                'rule_violated' => !empty($violations) ? implode(', ', $violations) : null,
+                'rule_violated' => !empty($violations) ? implode(', ', $violations) : 'none',
                 'data_snapshot' => $data,
                 'passed' => $passed,
                 'error_message' => !empty($violations) ? implode('; ', $violations) : null,
@@ -342,8 +344,8 @@ class SafetyService
     public function canHandleGroupSize(int $instructorLevel, int $studentCount): bool
     {
         $maxStudents = match ($instructorLevel) {
-            1 => 2,
-            2 => 1,
+            1 => 1,
+            2 => 2,
             3 => 5,
             default => 1,
         };

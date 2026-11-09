@@ -222,6 +222,7 @@ class AvailabilityTest extends TestCase
             'start_time' => '07:00',
             'end_time' => '08:00',
             'duration_hours' => 1,
+            'student_count' => 2,
             'status' => BookingStatus::Confirmed,
         ]);
 

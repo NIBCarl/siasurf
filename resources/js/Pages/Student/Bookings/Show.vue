@@ -88,14 +88,30 @@ const props = defineProps<Props>()
 
 const timeRemaining = ref(props.sessionTimeRemaining || 0)
 const paymentTimeRemaining = ref(0)
+const payingGCash = ref(false)
 
 let timer: ReturnType<typeof setInterval> | null = null
 let paymentTimer: ReturnType<typeof setInterval> | null = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const calculatePaymentTimeRemaining = () => {
   if (!props.booking.payment_deadline_at) return
   const deadline = new Date(props.booking.payment_deadline_at).getTime()
   paymentTimeRemaining.value = Math.max(0, Math.floor((deadline - Date.now()) / 1000))
+}
+
+const startGCashCheckout = () => {
+  if (payingGCash.value) return
+  payingGCash.value = true
+  router.post(
+    route('payments.gcash', props.booking.id),
+    {},
+    {
+      onFinish: () => {
+        payingGCash.value = false
+      },
+    },
+  )
 }
 
 onMounted(() => {
@@ -106,16 +122,18 @@ onMounted(() => {
     }, 1000)
   }
 
-  if (props.booking.status === 'awaiting_payment' && props.booking.payment_deadline_at) {
-    calculatePaymentTimeRemaining()
-    paymentTimer = setInterval(() => {
+  calculatePaymentTimeRemaining()
+  paymentTimer = setInterval(() => {
+    if (props.booking.status === 'awaiting_payment' && props.booking.payment_deadline_at) {
       calculatePaymentTimeRemaining()
-      if (paymentTimeRemaining.value <= 0 && paymentTimer) {
-        clearInterval(paymentTimer)
-        router.reload({ only: ['booking'] })
-      }
-    }, 1000)
-  }
+    }
+  }, 1000)
+
+  pollTimer = setInterval(() => {
+    if (['pending', 'awaiting_payment'].includes(props.booking.status)) {
+      router.reload({ only: ['booking'] })
+    }
+  }, 4000)
 
   if (typeof window !== 'undefined' && (window as any).Echo) {
     ;(window as any).Echo.private(`student.${props.booking.student_id}`)
@@ -128,6 +146,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer)
   if (paymentTimer) clearInterval(paymentTimer)
+  if (pollTimer) clearInterval(pollTimer)
 
   if (typeof window !== 'undefined' && (window as any).Echo) {
     ;(window as any).Echo.leave(`student.${props.booking.student_id}`)
@@ -187,10 +206,20 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
 
 const paymentLabel = (status?: string) => {
   if (!status) return 'Not started'
+  if (status === 'completed') {
+    return props.booking.payment?.payment_method === 'cash'
+      ? 'Paid in cash (Verified by instructor)'
+      : 'Paid via GCash'
+  }
+  if (status === 'underpaid') {
+    const paid = Number(props.booking.payment?.amount ?? 0)
+    const total = Number(props.booking.total_amount ?? 0)
+    const owed = Math.max(0, total - paid)
+    return `Underpaid · Paid ₱${paid.toLocaleString()} of ₱${total.toLocaleString()} (Owes ₱${owed.toLocaleString()})`
+  }
   const labels: Record<string, string> = {
-    completed: 'Paid',
     pending: 'Payment pending',
-    pending_cash: 'Cash on hand',
+    pending_cash: 'Cash unpaid (Pay at beach)',
     pending_verification: 'Receipt awaiting verification',
     failed: 'Payment failed',
     refunded: 'Refunded',
@@ -464,6 +493,25 @@ const canChat = computed(() =>
                     <!-- Live instructor location -->
                     <!-- Removed: SiaSurf does not use GPS tracking (see scope limitations). -->
 
+                    <!-- Waiting for instructor approval banner -->
+                    <AppCard
+                        v-if="booking.status === 'pending'"
+                        padding="md"
+                        class="border-amber-200 bg-amber-50"
+                    >
+                        <div class="flex items-start gap-3">
+                            <ClockIcon class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-800">
+                                    Waiting for instructor confirmation
+                                </p>
+                                <p class="mt-1 text-body-sm text-amber-900">
+                                    {{ booking.instructor.name }} is reviewing your booking request. Your seat(s) are reserved, and the Pay button will appear right here automatically as soon as they confirm.
+                                </p>
+                            </div>
+                        </div>
+                    </AppCard>
+
                     <!-- Payment window -->
                     <AppCard
                         v-if="booking.status === 'awaiting_payment'"
@@ -473,7 +521,7 @@ const canChat = computed(() =>
                         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-900">
-                                    Payment window
+                                    Instructor Confirmed • Payment Window Open
                                 </p>
                                 <h2 class="mt-1 text-title font-semibold text-amber-950">
                                     Complete payment to confirm your lesson
@@ -485,13 +533,22 @@ const canChat = computed(() =>
 
                             <div class="flex flex-wrap items-center gap-3">
                                 <Countdown :seconds="paymentTimeRemaining" label="Time left" />
-                                <a
-                                    v-if="checkoutUrl"
-                                    :href="checkoutUrl"
-                                    class="inline-flex h-11 items-center rounded-control bg-coral-700 px-4 text-body font-semibold text-white shadow-card transition-colors hover:bg-coral-800"
+                                <button
+                                    v-if="booking.payment?.status !== 'pending_verification'"
+                                    type="button"
+                                    :disabled="payingGCash"
+                                    @click="startGCashCheckout"
+                                    class="inline-flex h-11 items-center rounded-control bg-coral-700 px-4 text-body font-semibold text-white shadow-card transition-colors hover:bg-coral-800 disabled:opacity-50"
                                 >
-                                    Complete payment
-                                </a>
+                                    <CreditCardIcon class="mr-2 h-4 w-4" aria-hidden="true" />
+                                    Pay ₱{{ formatAmount(booking.total_amount) }} with GCash
+                                </button>
+                                <Link
+                                    :href="route('payments.show', booking.id)"
+                                    class="inline-flex h-11 items-center rounded-control border border-amber-400 bg-white px-4 text-body font-semibold text-amber-950 shadow-sm transition-colors hover:bg-amber-50"
+                                >
+                                    {{ booking.payment?.status === 'pending_verification' ? 'View Uploaded Receipt' : 'Upload Receipt' }}
+                                </Link>
                             </div>
                         </div>
                     </AppCard>
@@ -582,9 +639,17 @@ const canChat = computed(() =>
 
                         <div class="mt-4 grid gap-4 sm:grid-cols-2">
                             <div>
-                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Amount</p>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                    {{ booking.payment?.status === 'underpaid' ? 'Paid / Lesson Total' : 'Amount' }}
+                                </p>
                                 <p class="metric mt-1 text-headline font-semibold text-deep-900">
-                                    ₱{{ formatAmount(booking.payment?.amount) }}
+                                    <template v-if="booking.payment?.status === 'underpaid'">
+                                        <span class="text-rose-700">₱{{ formatAmount(booking.payment?.amount) }}</span>
+                                        <span class="text-body text-stone-500"> / ₱{{ formatAmount(booking.total_amount) }}</span>
+                                    </template>
+                                    <template v-else>
+                                        ₱{{ formatAmount(booking.total_amount) }}
+                                    </template>
                                 </p>
                             </div>
                             <div>
@@ -600,7 +665,7 @@ const canChat = computed(() =>
                                 :variant="
                                     booking.payment?.status === 'completed'
                                         ? 'verified'
-                                        : booking.payment?.status === 'failed'
+                                        : booking.payment?.status === 'underpaid' || booking.payment?.status === 'failed'
                                           ? 'critical'
                                           : 'pending'
                                 "
@@ -618,6 +683,60 @@ const canChat = computed(() =>
                         <p v-if="booking.waiver?.signed_at" class="mt-2 text-label text-stone-500">
                             Signed {{ new Date(booking.waiver.signed_at).toLocaleDateString('en-US') }}
                         </p>
+
+                        <!-- Underpaid Violation Alert -->
+                        <div
+                            v-if="booking.payment?.status === 'underpaid'"
+                            class="mt-4 rounded-card border border-rose-300 bg-rose-50 p-3"
+                        >
+                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-rose-800">
+                                Underpaid Balance • Owes ₱{{ formatAmount(Math.max(0, Number(booking.total_amount) - Number(booking.payment?.amount ?? 0))) }}
+                            </p>
+                            <p class="mt-1 text-body-sm text-rose-950">
+                                Your instructor recorded a partial cash payment of
+                                <strong>₱{{ formatAmount(booking.payment?.amount) }}</strong> out of
+                                <strong>₱{{ formatAmount(booking.total_amount) }}</strong>. Unsettled balances are reported to SISA Admin and may result in account suspension. Please settle the remaining balance with
+                                <strong>{{ booking.instructor.name }}</strong>.
+                            </p>
+                        </div>
+
+                        <!-- Cash on Hand Status & Receipt -->
+                        <div
+                            v-else-if="booking.payment?.payment_method === 'cash' && booking.payment?.status !== 'completed'"
+                            class="mt-4 rounded-card border border-amber-200 bg-amber-50 p-3"
+                        >
+                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-800">
+                                Cash on hand • Unpaid
+                            </p>
+                            <p class="mt-1 text-body-sm text-amber-900">
+                                Please pay <strong>₱{{ formatAmount(booking.total_amount) }}</strong> in cash to
+                                <strong>{{ booking.instructor.name }}</strong> at the surf spot. Once your instructor clicks
+                                <em>Confirm Cash Received</em>, this status will change to <strong>Paid in cash</strong> and your receipt will unlock.
+                            </p>
+                        </div>
+
+                        <div
+                            v-else-if="booking.payment?.status === 'completed'"
+                            class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-card border border-lagoon-200 bg-lagoon-50 p-3"
+                        >
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-lagoon-800">
+                                    Payment verified
+                                </p>
+                                <p class="mt-0.5 text-body-sm text-lagoon-900">
+                                    ₱{{ formatAmount(booking.payment?.amount) }} received
+                                    <template v-if="booking.payment?.paid_at">
+                                        on {{ new Date(booking.payment.paid_at).toLocaleString('en-US') }}
+                                    </template>.
+                                </p>
+                            </div>
+                            <a
+                                :href="route('payments.receipt', booking.id)"
+                                class="inline-flex h-9 items-center rounded-control bg-lagoon-600 px-3 text-body-sm font-semibold text-white shadow-sm hover:bg-lagoon-700"
+                            >
+                                Download receipt (PDF)
+                            </a>
+                        </div>
 
                         <!-- GCash receipt: private image, served through an authorised route -->
                         <div v-if="receiptUrl" class="mt-4 rounded-card border border-sand-200 bg-sand-50 p-3">

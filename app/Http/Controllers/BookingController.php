@@ -71,6 +71,11 @@ class BookingController extends Controller
             return redirect()->route('instructors.search')->with('error', 'This instructor is currently not available for bookings.');
         }
 
+        // If the student navigated back from the Waiver/Payment step, release
+        // their unfinished checkout hold immediately so the slot is freed.
+        $this->availabilityService->releaseExpiredCheckoutHolds($instructor->id);
+        $this->availabilityService->releaseStudentCheckoutHolds(auth()->id(), $instructor->id);
+
         // Skill-level matching also applies to the booking form itself: a
         // beginner-only instructor must not be reachable by an advanced
         // student through a direct URL.
@@ -322,6 +327,12 @@ class BookingController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
+        // Clean up any expired 15-minute checkout holds on this instructor and
+        // any unfinished checkout hold belonging to this student before checking
+        // availability or the open-request guard.
+        $this->availabilityService->releaseExpiredCheckoutHolds($instructor->id);
+        $this->availabilityService->releaseStudentCheckoutHolds(auth()->id(), $instructor->id);
+
         // FR 1.8 - the instructor's own availability must be respected, and the
         // exact range must still have room for this party. This replaces the
         // old "any overlap is a conflict" check, which made Level 3 group
@@ -366,8 +377,11 @@ class BookingController extends Controller
             $booking = DB::transaction(function () use ($validated, $instructor, $pricing, $participantsInput) {
                 User::query()->whereKey($instructor->id)->lockForUpdate()->first();
 
+                $this->availabilityService->releaseExpiredCheckoutHolds($instructor->id);
+                $this->availabilityService->releaseStudentCheckoutHolds(auth()->id(), $instructor->id);
+
                 // Re-check under the lock: the first transaction may have taken
-                // the last seat while this request was waiting.
+                // the slot while this request was waiting.
                 $this->availabilityService->assertRangeIsBookable(
                     $instructor->id,
                     $validated['date'],
@@ -383,25 +397,25 @@ class BookingController extends Controller
                 ]);
 
                 $booking = Booking::create([
-                'student_id' => auth()->id(),
-                'instructor_id' => $instructor->id,
-                'surf_spot_id' => $validated['surf_spot_id'],
-                'date' => $validated['date'],
-                'time_period' => $validated['time_period'],
-                'start_time' => $validated['start_time'],
-                'end_time' => $validated['end_time'],
-                'duration_hours' => $validated['duration_hours'],
-                'skill_level' => $validated['skill_level'],
-                'student_age' => $validated['student_age'],
-                'height' => $validated['height'],
-                'weight' => $validated['weight'],
-                'student_count' => $validated['student_count'],
-                'has_board' => $validated['has_board'],
-                'status' => BookingStatus::Pending,
-                'total_amount' => $pricing['total'],
-                'payment_status' => PaymentStatus::Pending,
-                'notes' => $validated['notes'] ?? null,
-            ]);
+                    'student_id' => auth()->id(),
+                    'instructor_id' => $instructor->id,
+                    'surf_spot_id' => $validated['surf_spot_id'],
+                    'date' => $validated['date'],
+                    'time_period' => $validated['time_period'],
+                    'start_time' => $validated['start_time'],
+                    'end_time' => $validated['end_time'],
+                    'duration_hours' => $validated['duration_hours'],
+                    'skill_level' => $validated['skill_level'],
+                    'student_age' => $validated['student_age'],
+                    'height' => $validated['height'],
+                    'weight' => $validated['weight'],
+                    'student_count' => $validated['student_count'],
+                    'has_board' => $validated['has_board'],
+                    'status' => BookingStatus::Pending,
+                    'total_amount' => $pricing['total'],
+                    'payment_status' => PaymentStatus::Pending,
+                    'notes' => $validated['notes'] ?? null,
+                ]);
 
                 foreach ($participantsInput as $index => $participant) {
                     $booking->participants()->create([
@@ -422,17 +436,21 @@ class BookingController extends Controller
                     ]);
                 }
 
-                // Start the acceptance clock now. Without a deadline, a booking
-                // that is abandoned at the waiver/payment-method step sits in
-                // `pending` (which holds the slot) and the stale sweep - which
-                // only looks at rows that HAVE a deadline - can never release it.
-                $booking->update(['accept_deadline_at' => $booking->acceptDeadlineFrom()]);
+                // Start the 15-minute checkout hold clock while the student
+                // signs the waiver and chooses a payment method. The instructor
+                // is only notified after storePayment() completes.
+                $checkoutDeadline = $booking->checkoutDeadlineFrom();
+                $booking->update([
+                    'payment_deadline_at' => $checkoutDeadline,
+                    'accept_deadline_at' => null,
+                ]);
 
-                // Level 1 requests own the hour immediately, even before the
-                // instructor answers, so the same slot cannot be double-booked.
-                // Level 2 is full at one student; Level 3 only locks once its
-                // fifth seat is taken - otherwise it stays open for more.
+                // Lock the slot immediately for all instructor levels so no
+                // other student can overtake this slot during waiver signing.
                 $this->availabilityService->lockIfSlotIsFull($booking);
+
+                ExpireBookingAcceptanceJob::dispatch($booking)
+                    ->delay($checkoutDeadline);
 
                 return $booking;
             });
@@ -457,6 +475,14 @@ class BookingController extends Controller
     {
         Gate::authorize('view', $booking);
 
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            $this->availabilityService->releaseForBooking($booking);
+
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
+
         if ($booking->status === BookingStatus::AwaitingPayment) {
             return redirect()->route('payments.show', $booking)
                 ->with('info', 'Your instructor accepted this booking. Complete the GCash payment from this page before the hold expires.');
@@ -468,8 +494,9 @@ class BookingController extends Controller
         }
 
         return Inertia::render('Booking/Payment', [
-            'booking' => $booking->load(['instructor', 'surfSpot']),
+            'booking' => $booking->load(['instructor.instructorProfile', 'surfSpot']),
             'step' => 5,
+            'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
         ]);
     }
 
@@ -481,6 +508,14 @@ class BookingController extends Controller
         // The student owns the booking; the explicit status guard below prevents
         // this endpoint from regressing an accepted/confirmed booking.
         Gate::authorize('view', $booking);
+
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            $this->availabilityService->releaseForBooking($booking);
+
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
 
         if ($booking->status === BookingStatus::AwaitingPayment) {
             return redirect()->route('payments.show', $booking)
@@ -501,12 +536,14 @@ class BookingController extends Controller
         $instantBook = (bool) $booking->instructor?->instructorProfile?->usesInstantBook();
 
         DB::transaction(function () use ($booking, $validated, $instantBook) {
-            // Update booking status
+            // Update booking status and transition from the 15-minute student
+            // checkout hold to the 2-hour instructor acceptance window.
             $booking->update([
                 'payment_status' => $validated['payment_method'] === 'cash'
                     ? PaymentStatus::PendingCash
                     : PaymentStatus::Pending,
                 'status' => BookingStatus::Pending, // Status remains pending until confirmed or paid
+                'payment_deadline_at' => null,
                 // FR 1.9.3 - the instructor now has 2 hours to accept or decline.
                 'accept_deadline_at' => $booking->acceptDeadlineFrom(),
             ]);
@@ -541,6 +578,29 @@ class BookingController extends Controller
     }
 
     /**
+     * Explicitly abandon an unfinished checkout booking (from the Waiver,
+     * Parental Consent, or Payment Method step) and release the held time slot
+     * immediately so another student can book it.
+     */
+    public function abandon(Request $request, Booking $booking): RedirectResponse
+    {
+        Gate::authorize('view', $booking);
+
+        $instructorId = $booking->instructor_id;
+
+        if ($booking->status === BookingStatus::Pending && ! $booking->hasSubmittedPayment()) {
+            $booking->cancel(
+                'Booking abandoned by student before completing waiver and payment selection.',
+                CancellationReason::Student
+            );
+            $this->availabilityService->releaseForBooking($booking);
+        }
+
+        return redirect()->route('bookings.create', $instructorId)
+            ->with('info', 'Your temporary slot hold has been released. You may update your details or select another time.');
+    }
+
+    /**
      * Instant Book: accept on the instructor's behalf, then send the student to
      * whichever step comes next (payment, or straight to confirmation).
      */
@@ -569,17 +629,19 @@ class BookingController extends Controller
     }
 
     /**
-     * Display booking confirmation (Step 6: Confirmation)
+     * Display booking confirmation (Step 6: Confirmation / Live Request Status)
      */
     public function confirmation(Booking $booking): Response
     {
         Gate::authorize('view', $booking);
 
-        $booking->load(['instructor', 'surfSpot', 'payment']);
+        $booking->load(['instructor', 'surfSpot', 'payment.verifiedBy', 'waiver']);
 
         return Inertia::render('Booking/Confirmation', [
             'booking' => $booking,
             'step' => 6,
+            'acceptRemainingSeconds' => $booking->getAcceptTimeRemaining(),
+            'paymentRemainingSeconds' => $booking->getPaymentTimeRemaining(),
         ]);
     }
 

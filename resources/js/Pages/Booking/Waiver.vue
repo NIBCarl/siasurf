@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
@@ -13,6 +13,7 @@ interface Booking {
   date: string
   time_period: string
   student_age: number
+  student_count?: number
   skill_level: string
   instructor: {
     id: number
@@ -105,7 +106,7 @@ const formatTimePeriod = (period: string): string => {
 }
 
 const goBack = () => {
-  window.history.back()
+  router.post(route('bookings.abandon', props.booking.id))
 }
 </script>
 
@@ -117,6 +118,23 @@ const goBack = () => {
       <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
         <!-- Progress Stepper -->
         <BookingStepper :current="4" class="mt-6" />
+
+        <!-- Exclusive Slot Hold Banner -->
+        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <span class="flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+            <p class="text-xs font-semibold text-emerald-900">
+              Seat(s) reserved for you! Your selected {{ booking.student_count === 1 ? 'seat' : `${booking.student_count} seats` }} and time slot with {{ booking.instructor?.name || 'your instructor' }} are held for 15 minutes while you complete this waiver and payment step.
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="goBack"
+            class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
+          >
+            Change Slot / Release Hold
+          </button>
+        </div>
 
         <!-- Header -->
         <div class="mb-8 text-center">
@@ -312,7 +330,7 @@ const goBack = () => {
                 @click="goBack"
                 variant="secondary"
               >
-                ← Back
+                ← Back &amp; Release Slot
               </BaseButton>
               
               <BaseButton

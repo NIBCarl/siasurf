@@ -23,7 +23,7 @@ class BookingFactory extends Factory
         $level = fake()->randomElement([1, 2, 3]);
         $rates = [1 => 600.00, 2 => 800.00, 3 => 1500.00];
         $hours = 2;
-        $studentCount = fake()->numberBetween(1, $level === 2 ? 1 : ($level === 1 ? 2 : 5));
+        $studentCount = fake()->numberBetween(1, $level === 1 ? 1 : ($level === 2 ? 2 : 5));
         $totalAmount = $rates[$level] * $hours * $studentCount;
 
         return [

@@ -156,6 +156,9 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('bookings')->as(
     Route::get('/{booking}/parental-consent', [WaiverController::class, 'showParentalConsent'])->name('parental-consent');
     Route::post('/{booking}/parental-consent', [WaiverController::class, 'storeParentalConsent'])->name('store-parental-consent');
 
+    // Abandon an unfinished checkout booking (from Waiver / Parental Consent / Payment step) and release the slot immediately
+    Route::post('/{booking}/abandon', [BookingController::class, 'abandon'])->name('abandon');
+
     // Step 5: Payment
     // BR-4.4 - a booking cannot reach payment until the liability waiver (and
     // parental consent for minors) is signed. The middleware redirects back to
@@ -180,44 +183,47 @@ Route::middleware(['auth'])->prefix('waivers')->as('waivers.')->group(function (
 
 // Instructor routes
 Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspended'])->prefix('instructor')->as('instructor.')->group(function () {
-    // Instructor Dashboard
-    Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');
+    // Verified operational instructor routes — require active SISA verification
+    Route::middleware('verified.instructor')->group(function () {
+        // Instructor Dashboard
+        Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');
 
-    // Instructor profile management
-    Route::get('/profile', [InstructorProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [InstructorProfileController::class, 'update'])->name('profile.update');
+        // Instructor profile management
+        Route::get('/profile', [InstructorProfileController::class, 'edit'])->name('profile.edit');
+        Route::patch('/profile', [InstructorProfileController::class, 'update'])->name('profile.update');
 
-    // Printable / downloadable beach QR pass.
-    Route::get('/qr', [InstructorQrController::class, 'show'])->name('qr.show');
+        // Printable / downloadable beach QR pass.
+        Route::get('/qr', [InstructorQrController::class, 'show'])->name('qr.show');
 
-    Route::prefix('availability')->name('availability.')->group(function () {
-        Route::get('/', [AvailabilityController::class, 'index'])->name('index');
-        Route::post('/weekly', [AvailabilityController::class, 'updateWeekly'])->name('weekly');
-        Route::post('/block', [AvailabilityController::class, 'blockDates'])->name('block');
-        Route::delete('/unblock', [AvailabilityController::class, 'unblockDates'])->name('unblock');
-        Route::post('/toggle-status', [AvailabilityController::class, 'toggleStatus'])->name('toggle-status');
-        // FR 1.9.3 - Instant Book auto-confirms requests on this calendar.
-        Route::post('/toggle-instant-book', [AvailabilityController::class, 'toggleInstantBook'])->name('toggle-instant-book');
+        Route::prefix('availability')->name('availability.')->group(function () {
+            Route::get('/', [AvailabilityController::class, 'index'])->name('index');
+            Route::post('/weekly', [AvailabilityController::class, 'updateWeekly'])->name('weekly');
+            Route::post('/block', [AvailabilityController::class, 'blockDates'])->name('block');
+            Route::delete('/unblock', [AvailabilityController::class, 'unblockDates'])->name('unblock');
+            Route::post('/toggle-status', [AvailabilityController::class, 'toggleStatus'])->name('toggle-status');
+            // FR 1.9.3 - Instant Book auto-confirms requests on this calendar.
+            Route::post('/toggle-instant-book', [AvailabilityController::class, 'toggleInstantBook'])->name('toggle-instant-book');
+        });
+
+        // Instructor bookings
+        Route::get('/bookings', [InstructorBookingController::class, 'index'])->name('bookings.index');
+        Route::get('/bookings/{booking}', [InstructorBookingController::class, 'show'])->name('bookings.show');
+        Route::patch('/bookings/{booking}/confirm', [InstructorBookingController::class, 'confirm'])->name('bookings.confirm');
+        Route::post('/bookings/{booking}/start-session', [InstructorBookingController::class, 'startSession'])->name('bookings.start-session');
+        Route::post('/bookings/{booking}/complete-session', [InstructorBookingController::class, 'completeSession'])->name('bookings.complete-session');
+
+        Route::post('/bookings/{booking}/request-upgrade', [InstructorBookingController::class, 'requestUpgrade'])->name('bookings.request-upgrade');
+
+        // FR 1.9.3 - accept or decline a booking request within 2 hours
+        Route::post('/bookings/{booking}/decline', [InstructorBookingController::class, 'decline'])->name('bookings.decline');
+
+        // FR 1.9.4 - cancel or reschedule (admin approval when under 24 hours)
+        Route::post('/bookings/{booking}/change-request', [InstructorBookingController::class, 'requestChange'])->name('bookings.change-request');
+        Route::delete('/bookings/{booking}/change-request', [InstructorBookingController::class, 'cancelChangeRequest'])->name('bookings.change-request.cancel');
+
+        // FR 1.10.1 - mark student attendance
+        Route::post('/bookings/{booking}/attendance', [InstructorBookingController::class, 'markAttendance'])->name('bookings.attendance');
     });
-
-    // Instructor bookings
-    Route::get('/bookings', [InstructorBookingController::class, 'index'])->name('bookings.index');
-    Route::get('/bookings/{booking}', [InstructorBookingController::class, 'show'])->name('bookings.show');
-    Route::patch('/bookings/{booking}/confirm', [InstructorBookingController::class, 'confirm'])->name('bookings.confirm');
-    Route::post('/bookings/{booking}/start-session', [InstructorBookingController::class, 'startSession'])->name('bookings.start-session');
-    Route::post('/bookings/{booking}/complete-session', [InstructorBookingController::class, 'completeSession'])->name('bookings.complete-session');
-
-    Route::post('/bookings/{booking}/request-upgrade', [InstructorBookingController::class, 'requestUpgrade'])->name('bookings.request-upgrade');
-
-    // FR 1.9.3 - accept or decline a booking request within 2 hours
-    Route::post('/bookings/{booking}/decline', [InstructorBookingController::class, 'decline'])->name('bookings.decline');
-
-    // FR 1.9.4 - cancel or reschedule (admin approval when under 24 hours)
-    Route::post('/bookings/{booking}/change-request', [InstructorBookingController::class, 'requestChange'])->name('bookings.change-request');
-    Route::delete('/bookings/{booking}/change-request', [InstructorBookingController::class, 'cancelChangeRequest'])->name('bookings.change-request.cancel');
-
-    // FR 1.10.1 - mark student attendance
-    Route::post('/bookings/{booking}/attendance', [InstructorBookingController::class, 'markAttendance'])->name('bookings.attendance');
 
     // Pending verification page
     Route::get('/pending', function () {
@@ -359,7 +365,7 @@ Route::get('/api/instructors/{instructor}/reviews', [ReviewController::class, 'f
 Route::get('/api/reviews/recent', [ReviewController::class, 'recent'])->name('api.reviews.recent');
 
 // Instructor review responses
-Route::middleware(['auth', 'verified', 'role:instructor'])->prefix('instructor')->as('instructor.')->group(function () {
+Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspended', 'verified.instructor'])->prefix('instructor')->as('instructor.')->group(function () {
     Route::post('/reviews/{review}/respond', [ReviewController::class, 'respond'])->name('reviews.respond');
 });
 

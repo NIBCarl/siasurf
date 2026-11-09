@@ -16,10 +16,16 @@ interface Booking {
     start_time?: string | null
     end_time?: string | null
     status: string
+    payment_status?: string
     total_amount: number
     student: { name: string }
     instructor: { name: string }
     surf_spot: { name: string }
+    payment?: {
+        amount: number
+        status: string
+        payment_method: string
+    } | null
 }
 
 interface Props {
@@ -40,6 +46,7 @@ const tabs = [
     { key: 'pending', label: 'Pending', dot: 'bg-amber-500' },
     { key: 'confirmed', label: 'Confirmed', dot: 'bg-lagoon-600' },
     { key: 'completed', label: 'Completed', dot: 'bg-stone-400' },
+    { key: 'underpaid', label: 'Underpaid Violations', dot: 'bg-rose-600' },
     { key: 'cancelled', label: 'Cancelled', dot: 'bg-rose-500' },
 ]
 
@@ -206,13 +213,29 @@ const paginationLabel = (label: string) =>
                                 <td class="px-5 py-4 text-body-sm text-stone-700">{{ booking.surf_spot.name }}</td>
 
                                 <td class="px-5 py-4">
-                                    <StatusPill :variant="statusMeta(booking.status).variant">
-                                        {{ statusMeta(booking.status).label }}
-                                    </StatusPill>
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                        <StatusPill :variant="statusMeta(booking.status).variant">
+                                            {{ statusMeta(booking.status).label }}
+                                        </StatusPill>
+                                        <StatusPill
+                                            v-if="booking.payment_status === 'underpaid' || booking.payment?.status === 'underpaid'"
+                                            variant="critical"
+                                        >
+                                            Underpaid · Owes ₱{{ formatAmount(Math.max(0, Number(booking.total_amount) - Number(booking.payment?.amount ?? 0))) }}
+                                        </StatusPill>
+                                    </div>
                                 </td>
 
                                 <td class="px-5 py-4 text-right">
-                                    <span class="metric text-body font-semibold text-deep-900">
+                                    <template v-if="booking.payment_status === 'underpaid' || booking.payment?.status === 'underpaid'">
+                                        <span class="metric text-body font-semibold text-rose-700">
+                                            ₱{{ formatAmount(booking.payment?.amount ?? 0) }}
+                                        </span>
+                                        <span class="block text-label text-stone-500">
+                                            of ₱{{ formatAmount(booking.total_amount) }}
+                                        </span>
+                                    </template>
+                                    <span v-else class="metric text-body font-semibold text-deep-900">
                                         ₱{{ formatAmount(booking.total_amount) }}
                                     </span>
                                 </td>

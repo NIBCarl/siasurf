@@ -6,6 +6,7 @@ enum PaymentStatus: string
 {
     case Pending = 'pending';
     case Completed = 'completed';
+    case Underpaid = 'underpaid';
     case Failed = 'failed';
     case Refunded = 'refunded';
     case PendingCash = 'pending_cash';
@@ -22,6 +23,7 @@ enum PaymentStatus: string
         return match($this) {
             self::Pending => 'Pending',
             self::Completed => 'Completed',
+            self::Underpaid => 'Underpaid',
             self::Failed => 'Failed',
             self::Refunded => 'Refunded',
             self::PendingCash => 'Pending Cash Payment',
@@ -34,6 +36,7 @@ enum PaymentStatus: string
         return match($this) {
             self::Pending => 'yellow',
             self::Completed => 'green',
+            self::Underpaid => 'red',
             self::Failed => 'red',
             self::Refunded => 'gray',
             self::PendingCash => 'orange',
@@ -49,6 +52,6 @@ enum PaymentStatus: string
      */
     public static function submitted(): array
     {
-        return [self::PendingVerification, self::Completed];
+        return [self::PendingVerification, self::Underpaid, self::Completed];
     }
 }

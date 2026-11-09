@@ -20,8 +20,8 @@ use Illuminate\Support\Collection;
  * cancellation, reschedule) behaves identically.
  *
  * Slot capacity (this class is also the single source of truth for it):
- *  - Level 1 holds the whole slot as soon as a request is submitted.
- *  - Level 2 holds it once 1 student is booked (1-on-1).
+ *  - Level 1 is 1-on-1 (max 1 student) and holds the whole slot as soon as a request is submitted.
+ *  - Level 2 holds the slot once 2 students are booked.
  *  - Level 3 stays open until 5 students share the slot, summed across
  *    every live booking that overlaps the requested range.
  */
@@ -379,8 +379,8 @@ class AvailabilityService
     /**
      * Maximum number of students that may share one time slot.
      *
-     * The default comes from the certified level (Level 1 = 2, Level 2 = 1
-     * because it is 1-on-1, Level 3 = 5). Operators can widen Level 2/3 in
+     * The default comes from the certified level (Level 1 = 1 because it is
+     * 1-on-1, Level 2 = 2, Level 3 = 5). Operators can widen Level 2/3 in
      * `config/siasurf.php` when SISA changes the policy; SafetyService still
      * enforces the per-booking group ceiling.
      */
@@ -397,10 +397,62 @@ class AvailabilityService
     }
 
     /**
+     * Automatically expire and release any 15-minute student waiver/checkout
+     * holds that have passed their deadline without completing payment selection.
+     */
+    public function releaseExpiredCheckoutHolds(int $instructorId): int
+    {
+        $expiredHolds = Booking::query()
+            ->where('instructor_id', $instructorId)
+            ->inStudentCheckout()
+            ->where('payment_deadline_at', '<', now())
+            ->get();
+
+        $count = 0;
+
+        foreach ($expiredHolds as $booking) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after ' . Booking::CHECKOUT_HOLD_MINUTES . ' minutes.');
+            $this->releaseForBooking($booking);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Release any unfinished waiver/checkout holds for a specific student and
+     * instructor (e.g. when the student clicks Back to change their details).
+     */
+    public function releaseStudentCheckoutHolds(int $studentId, int $instructorId, ?int $exceptBookingId = null): int
+    {
+        $holds = Booking::query()
+            ->where('student_id', $studentId)
+            ->where('instructor_id', $instructorId)
+            ->inStudentCheckout()
+            ->when($exceptBookingId, fn ($q) => $q->where('id', '!=', $exceptBookingId))
+            ->get();
+
+        $count = 0;
+
+        foreach ($holds as $booking) {
+            $booking->cancel(
+                'Booking details updated or abandoned before completing waiver/checkout.',
+                \App\Enums\CancellationReason::Student
+            );
+            $this->releaseForBooking($booking);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
      * Every live booking on a date (the statuses that still hold a slot).
      */
     private function liveBookingsOnDate(int $instructorId, Carbon $day, ?int $exceptBookingId = null): Collection
     {
+        $this->releaseExpiredCheckoutHolds($instructorId);
+
         return Booking::query()
             ->where('instructor_id', $instructorId)
             ->whereDate('date', $day->format('Y-m-d'))
@@ -647,6 +699,15 @@ class AvailabilityService
                 'available' => $reason === null,
                 'reason' => $reason,
                 'slots' => $reason === null ? $slots : [],
+                'slot_remaining' => $reason === null ? collect($slots)->mapWithKeys(fn (string $slotTime) => [
+                    $slotTime => $this->remainingCapacity(
+                        $instructorId,
+                        $day,
+                        $slotTime,
+                        Carbon::createFromFormat('H:i', $slotTime)->addHour()->format('H:i'),
+                        $exceptBookingId,
+                    ),
+                ])->all() : [],
                 // Lesson length the student will actually book by default
                 // (drives the pre-selected end time and the price estimate).
                 'duration_minutes' => $this->sessionMinutesFor($instructorId, $day, $value),

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
@@ -284,9 +284,13 @@ const paymentMethodLabel = computed(() => {
 const paymentStatusLabel = computed(() => {
   switch (props.booking.payment?.status) {
     case 'completed':
-      return 'Paid'
+      return props.booking.payment?.payment_method === 'cash' ? 'Paid in cash (Verified)' : 'Paid'
+    case 'underpaid':
+      return 'Underpaid'
     case 'pending':
       return 'Pending'
+    case 'pending_cash':
+      return 'Cash unpaid (Collect at beach)'
     case 'pending_verification':
       return 'Receipt to verify'
     case 'failed':
@@ -302,14 +306,31 @@ const paymentTone = computed<'positive' | 'warning' | 'critical' | 'neutral'>(()
   switch (props.booking.payment?.status) {
     case 'completed':
       return 'positive'
+    case 'underpaid':
     case 'failed':
       return 'critical'
     case 'pending':
+    case 'pending_cash':
     case 'pending_verification':
       return 'warning'
     default:
       return 'neutral'
   }
+})
+
+const totalAmount = computed(() => Number(props.booking.total_amount ?? 0))
+const paidAmount = computed(() => Number(props.booking.payment?.amount ?? 0))
+const shortfallAmount = computed(() => Math.max(0, Math.round((totalAmount.value - paidAmount.value) * 100) / 100))
+const isUnderpaid = computed(() => props.booking.payment?.status === 'underpaid')
+
+const paymentChipText = computed(() => {
+  if (isUnderpaid.value) {
+    return `Underpaid · Paid ${formatMoney(paidAmount.value)} of ${formatMoney(totalAmount.value)} (Owes ${formatMoney(shortfallAmount.value)})`
+  }
+  if (props.booking.payment?.status === 'completed') {
+    return `${paymentStatusLabel.value} · ${formatMoney(paidAmount.value || totalAmount.value)}`
+  }
+  return `${paymentStatusLabel.value} · ${formatMoney(totalAmount.value)}`
 })
 
 // ---- GCash receipt review ------------------------------------------------
@@ -365,6 +386,7 @@ const showStartModal = ref(false)
 const isStarting = ref(false)
 const showCompleteModal = ref(false)
 const isCompleting = ref(false)
+const cashReceivedOnComplete = ref(true)
 const isRequesting = ref(false)
 
 const startSession = () => {
@@ -382,6 +404,7 @@ const confirmStartSession = () => {
 }
 
 const completeSession = () => {
+  cashReceivedOnComplete.value = canRecordCash.value
   showCompleteModal.value = true
 }
 
@@ -389,7 +412,10 @@ const confirmCompleteSession = () => {
   isCompleting.value = true
   router.post(
     route('instructor.bookings.complete-session', props.booking.id),
-    { upgrade_student: upgradeStudent.value },
+    {
+      upgrade_student: upgradeStudent.value,
+      cash_received: canRecordCash.value && cashReceivedOnComplete.value,
+    },
     {
       onFinish: () => {
         isCompleting.value = false
@@ -500,7 +526,8 @@ const canMarkAttendance = computed(() =>
  */
 const canRecordCash = computed(
   () =>
-    ['confirmed', 'in_progress'].includes(props.booking.status) &&
+    ['confirmed', 'in_progress', 'completed'].includes(props.booking.status) &&
+    (props.booking.payment?.payment_method === 'cash' || !props.booking.payment) &&
     props.booking.payment?.status !== 'completed',
 )
 
@@ -511,6 +538,15 @@ const canChat = computed(() => ['confirmed', 'in_progress', 'completed'].include
 const showCashModal = ref(false)
 const showChat = ref(false)
 const cashForm = useForm({ amount_received: 0, notes: '' })
+
+const modalAmount = computed(() => {
+  const parsed = Number(cashForm.amount_received)
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) / 100 : 0
+})
+const modalShortfall = computed(() => Math.max(0, Math.round((totalAmount.value - modalAmount.value) * 100) / 100))
+const modalChange = computed(() => Math.max(0, Math.round((modalAmount.value - totalAmount.value) * 100) / 100))
+const isModalUnderpaid = computed(() => modalAmount.value < totalAmount.value)
+const isModalOverpaid = computed(() => modalAmount.value > totalAmount.value)
 
 const openCashModal = () => {
   cashForm.reset()
@@ -633,6 +669,16 @@ const showPrimaryAttendance = computed(
             >
               <PlayIcon class="h-4 w-4 fill-current" aria-hidden="true" />
               Start session
+            </AppButton>
+
+            <AppButton
+              v-if="canRecordCash"
+              size="sm"
+              variant="secondary"
+              @click="openCashModal"
+            >
+              <BanknotesIcon class="h-4 w-4" aria-hidden="true" />
+              Confirm cash received ({{ formatMoney(booking.total_amount) }})
             </AppButton>
 
             <AppButton
@@ -1068,8 +1114,62 @@ const showPrimaryAttendance = computed(
                   {{ paymentMethodLabel }}
                 </span>
                 <span class="chip" :class="`chip-${paymentTone}`">
-                  {{ paymentStatusLabel }} · {{ formatMoney(booking.total_amount) }}
+                  {{ paymentChipText }}
                 </span>
+              </div>
+
+              <!-- Underpaid violation card -->
+              <div
+                v-if="isUnderpaid"
+                class="rounded-control border border-rose-300 bg-rose-50 p-3"
+              >
+                <div class="flex items-center gap-1.5 text-label font-semibold uppercase tracking-[0.06em] text-rose-800">
+                  <ExclamationTriangleIcon class="h-4 w-4 shrink-0 text-rose-600" aria-hidden="true" />
+                  Underpaid Violation • Short by {{ formatMoney(shortfallAmount) }}
+                </div>
+                <p class="mt-1 text-body-sm text-rose-950">
+                  <strong>{{ booking.student.name }}</strong> only paid
+                  <strong>{{ formatMoney(paidAmount) }}</strong> of
+                  <strong>{{ formatMoney(totalAmount) }}</strong>
+                  (<strong>{{ formatMoney(shortfallAmount) }}</strong> still owed).
+                  This shortfall is flagged on the student's dossier for SISA Admin review and enforcement.
+                </p>
+                <p v-if="booking.payment?.notes" class="mt-1.5 rounded bg-white/80 px-2.5 py-1.5 text-label text-rose-900">
+                  <strong>Report note:</strong> {{ booking.payment.notes }}
+                </p>
+                <AppButton
+                  v-if="canRecordCash"
+                  variant="secondary"
+                  size="sm"
+                  class="mt-2.5 w-full justify-center"
+                  @click="openCashModal"
+                >
+                  <BanknotesIcon class="h-4 w-4" aria-hidden="true" />
+                  Update / Settle Remaining Balance ({{ formatMoney(shortfallAmount) }} owed)
+                </AppButton>
+              </div>
+
+              <!-- Cash on hand collection card -->
+              <div
+                v-else-if="canRecordCash"
+                class="rounded-control border border-amber-300 bg-amber-50 p-3"
+              >
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-900">
+                  Action Required • Collect Cash at Beach
+                </p>
+                <p class="mt-1 text-body-sm text-amber-950">
+                  Collect <strong>{{ formatMoney(booking.total_amount) }}</strong> in cash from
+                  <strong>{{ booking.student.name }}</strong> and click below to mark it paid and issue their receipt.
+                </p>
+                <AppButton
+                  variant="primary"
+                  size="sm"
+                  class="mt-2.5 w-full justify-center"
+                  @click="openCashModal"
+                >
+                  <BanknotesIcon class="h-4 w-4" aria-hidden="true" />
+                  Confirm Cash Received ({{ formatMoney(booking.total_amount) }})
+                </AppButton>
               </div>
 
               <!-- GCash receipt review: full image + approve/reject -->
@@ -1180,6 +1280,27 @@ const showPrimaryAttendance = computed(
           <p v-if="upgradeStudent" class="mt-2 text-body-sm text-lagoon-800">
             The student's skill level will be promoted on completion.
           </p>
+
+          <!-- Cash collection verification on session completion -->
+          <label
+            v-if="canRecordCash"
+            class="mt-4 flex cursor-pointer items-start gap-3 rounded-control border border-amber-300 bg-amber-50 p-3.5"
+          >
+            <input
+              v-model="cashReceivedOnComplete"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 rounded border-amber-400 text-lagoon-600 focus:ring-lagoon-500"
+            />
+            <span class="text-body-sm text-amber-950">
+              <strong class="block font-semibold">
+                I confirm I received {{ formatMoney(booking.total_amount) }} in cash from {{ booking.student.name }}
+              </strong>
+              <span class="mt-0.5 block text-label text-amber-800">
+                Marks the booking as Paid in Cash and generates the student's official receipt.
+              </span>
+            </span>
+          </label>
+
           <div class="mt-6 flex justify-end gap-2">
             <AppButton variant="secondary" :disabled="isCompleting" @click="showCompleteModal = false">Cancel</AppButton>
             <AppButton :loading="isCompleting" @click="confirmCompleteSession">Complete lesson</AppButton>
@@ -1377,7 +1498,7 @@ const showPrimaryAttendance = computed(
         <div class="p-6">
           <h2 class="text-title font-semibold text-deep-950">Record cash payment</h2>
           <p class="mt-1 text-body-sm text-stone-600">
-            Confirm the cash you collected from {{ booking.student.name }}.
+            Enter the actual cash collected from {{ booking.student.name }}.
           </p>
 
           <label for="cash-amount" class="mt-4 block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
@@ -1396,18 +1517,58 @@ const showPrimaryAttendance = computed(
           </p>
 
           <p class="mt-2 text-body-sm text-stone-600">
-            Booking total: <strong class="text-deep-900">{{ formatMoney(booking.total_amount) }}</strong>
+            Required lesson total: <strong class="text-deep-900">{{ formatMoney(booking.total_amount) }}</strong>
           </p>
 
+          <!-- Live discrepancy callout -->
+          <div
+            v-if="isModalUnderpaid"
+            class="mt-3 rounded-control border border-rose-300 bg-rose-50 p-3 text-body-sm text-rose-950"
+          >
+            <p class="flex items-center gap-1.5 font-semibold text-rose-800">
+              <ExclamationTriangleIcon class="h-4 w-4 shrink-0 text-rose-600" aria-hidden="true" />
+              Underpayment of {{ formatMoney(modalShortfall) }} ({{ formatMoney(modalAmount) }} of {{ formatMoney(totalAmount) }})
+            </p>
+            <p class="mt-1 text-label text-rose-900">
+              This will record <strong>{{ formatMoney(modalAmount) }}</strong> as collected and flag the booking as
+              <strong>UNDERPAID (Owes {{ formatMoney(modalShortfall) }})</strong> so SISA Admin can review the student's unpaid balance and impose a violation or ban.
+            </p>
+          </div>
+
+          <div
+            v-else-if="isModalOverpaid"
+            class="mt-3 rounded-control border border-lagoon-300 bg-lagoon-50 p-3 text-body-sm text-lagoon-950"
+          >
+            <p class="font-semibold text-lagoon-900">
+              Cash tendered: {{ formatMoney(modalAmount) }} · Change to return: {{ formatMoney(modalChange) }}
+            </p>
+            <p class="mt-1 text-label text-lagoon-800">
+              Marks the booking as <strong>Paid in Full ({{ formatMoney(totalAmount) }})</strong> and logs the
+              {{ formatMoney(modalChange) }} change returned to the student.
+            </p>
+          </div>
+
+          <div
+            v-else
+            class="mt-3 rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-label font-semibold text-emerald-900"
+          >
+            Exact amount ({{ formatMoney(totalAmount) }}) — Marks booking as Paid in Full
+          </div>
+
           <label for="cash-notes" class="mt-4 block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-            Note (optional)
+            {{ isModalUnderpaid ? 'Reason for underpayment (Required for SISA Admin)' : 'Note (optional)' }}
           </label>
           <textarea
             id="cash-notes"
             v-model="cashForm.notes"
             rows="2"
             maxlength="500"
-            placeholder="Received in full at the beach."
+            :required="isModalUnderpaid"
+            :placeholder="
+              isModalUnderpaid
+                ? 'Explain why the student did not pay the full amount (e.g. only handed ₱700 and left without paying the remaining ₱100).'
+                : 'Received in full at the beach.'
+            "
             class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
           ></textarea>
           <p v-if="cashForm.errors.notes" class="mt-2 text-body-sm font-semibold text-rose-700">
@@ -1418,7 +1579,21 @@ const showPrimaryAttendance = computed(
             <AppButton variant="secondary" :disabled="cashForm.processing" @click="showCashModal = false">
               Cancel
             </AppButton>
-            <AppButton :loading="cashForm.processing" @click="submitCash">Mark as received</AppButton>
+            <AppButton
+              :variant="isModalUnderpaid ? 'danger' : 'primary'"
+              :loading="cashForm.processing"
+              @click="submitCash"
+            >
+              <template v-if="isModalUnderpaid">
+                Record underpayment ({{ formatMoney(modalAmount) }}) &amp; flag student
+              </template>
+              <template v-else-if="isModalOverpaid">
+                Mark paid ({{ formatMoney(totalAmount) }}) · Return {{ formatMoney(modalChange) }} change
+              </template>
+              <template v-else>
+                Mark as received ({{ formatMoney(totalAmount) }})
+              </template>
+            </AppButton>
           </div>
         </div>
       </Modal>

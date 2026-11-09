@@ -21,11 +21,11 @@ class SafetyServiceTest extends TestCase
     }
 
     /** @test */
-    public function level_1_instructor_can_teach_2_beginners()
+    public function level_1_instructor_can_do_1_on_1_beginner()
     {
         $data = [
             'instructor_level' => 1,
-            'student_count' => 2,
+            'student_count' => 1,
             'skill_level' => SkillLevel::Beginner->value,
             'student_age' => 20,
             'surf_spot_difficulty' => 'beginner',
@@ -35,13 +35,13 @@ class SafetyServiceTest extends TestCase
     }
 
     /** @test */
-    public function level_1_instructor_cannot_teach_3_students()
+    public function level_1_instructor_cannot_teach_2_students()
     {
         $this->expectException(SafetyViolationException::class);
 
         $data = [
             'instructor_level' => 1,
-            'student_count' => 3,
+            'student_count' => 2,
             'skill_level' => SkillLevel::Beginner->value,
             'student_age' => 20,
             'surf_spot_difficulty' => 'beginner',
@@ -67,11 +67,11 @@ class SafetyServiceTest extends TestCase
     }
 
     /** @test */
-    public function level_2_instructor_can_do_1_on_1()
+    public function level_2_instructor_can_handle_2_students()
     {
         $data = [
             'instructor_level' => 2,
-            'student_count' => 1,
+            'student_count' => 2,
             'skill_level' => SkillLevel::Intermediate->value,
             'student_age' => 25,
             'surf_spot_difficulty' => 'intermediate',
@@ -81,13 +81,13 @@ class SafetyServiceTest extends TestCase
     }
 
     /** @test */
-    public function level_2_instructor_cannot_handle_2_students()
+    public function level_2_instructor_cannot_handle_3_students()
     {
         $this->expectException(SafetyViolationException::class);
 
         $data = [
             'instructor_level' => 2,
-            'student_count' => 2,
+            'student_count' => 3,
             'skill_level' => SkillLevel::Beginner->value,
             'student_age' => 20,
             'surf_spot_difficulty' => 'beginner',
@@ -254,7 +254,7 @@ class SafetyServiceTest extends TestCase
     {
         $rules = $this->safetyService->getApplicableRules(1);
 
-        $this->assertEquals(2, $rules['max_students']);
+        $this->assertEquals(1, $rules['max_students']);
         $this->assertEquals(['beginner'], $rules['allowed_skill_levels']);
     }
 
@@ -270,10 +270,10 @@ class SafetyServiceTest extends TestCase
     /** @test */
     public function can_check_if_instructor_can_handle_group_size()
     {
-        $this->assertTrue($this->safetyService->canHandleGroupSize(1, 2));
-        $this->assertFalse($this->safetyService->canHandleGroupSize(1, 3));
-        $this->assertTrue($this->safetyService->canHandleGroupSize(2, 1));
-        $this->assertFalse($this->safetyService->canHandleGroupSize(2, 2));
+        $this->assertTrue($this->safetyService->canHandleGroupSize(1, 1));
+        $this->assertFalse($this->safetyService->canHandleGroupSize(1, 2));
+        $this->assertTrue($this->safetyService->canHandleGroupSize(2, 2));
+        $this->assertFalse($this->safetyService->canHandleGroupSize(2, 3));
         $this->assertTrue($this->safetyService->canHandleGroupSize(3, 5));
         $this->assertFalse($this->safetyService->canHandleGroupSize(3, 6));
     }

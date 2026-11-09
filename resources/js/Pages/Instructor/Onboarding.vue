@@ -127,14 +127,14 @@ const levelInfo = [
   { 
     level: 1, 
     label: 'Beginner', 
-    desc: 'Certified to guide beginner students in safe shallow zones only. Maximum 2 students.',
+    desc: 'Certified to guide beginner students in safe shallow zones only. 1-on-1 sessions (max 1 student).',
     badge: 'Level 1',
     icon: Compass
   },
   { 
     level: 2, 
     label: 'Intermediate', 
-    desc: 'Certified to teach all student skill levels. 1-on-1 personalized sessions only.',
+    desc: 'Certified to teach all student skill levels. Maximum 2 students per session.',
     badge: 'Level 2',
     icon: Waves
   },

@@ -18,14 +18,17 @@ class EnsureInstructorIsVerified
         $user = $request->user();
 
         if ($user && $user->isInstructor()) {
-            // Check if instructor has a profile
             if (!$user->hasInstructorProfile()) {
                 return redirect()->route('instructor.onboarding')
                     ->with('error', 'Please complete your instructor profile setup.');
             }
 
-            // Check if instructor is verified
             if (!$user->isVerifiedInstructor()) {
+                if (!$user->certificates()->exists()) {
+                    return redirect()->route('instructor.onboarding')
+                        ->with('error', 'Please complete your instructor profile setup and upload at least one certificate.');
+                }
+
                 return redirect()->route('instructor.pending')
                     ->with('error', 'Your instructor account is pending verification by SISA admin.');
             }

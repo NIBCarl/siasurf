@@ -314,6 +314,7 @@ class DashboardService
     {
         $profile = $user->instructorProfile;
         $activeBookings = $user->bookingsAsInstructor()
+            ->submittedToInstructor()
             ->whereIn('status', [BookingStatus::Pending, BookingStatus::Confirmed, BookingStatus::InProgress])
             ->get();
 

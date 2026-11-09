@@ -24,7 +24,7 @@ class RevenueExport implements FromCollection, WithHeadings, WithStyles, ShouldA
 
     public function collection()
     {
-        return Payment::with(['booking.instructor'])
+        return Payment::with(['booking.instructor', 'booking.student'])
             ->whereBetween('created_at', [$this->startDate, $this->endDate])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -32,14 +32,22 @@ class RevenueExport implements FromCollection, WithHeadings, WithStyles, ShouldA
 
     public function map($payment): array
     {
+        $method = $payment->payment_method instanceof \App\Enums\PaymentMethod
+            ? $payment->payment_method->label()
+            : (string) ($payment->payment_method ?? 'N/A');
+
+        $status = $payment->status instanceof \App\Enums\PaymentStatus
+            ? $payment->status->label()
+            : (string) ($payment->status ?? 'Pending');
+
         return [
-            $payment->created_at->format('Y-m-d'),
+            $payment->created_at?->format('Y-m-d') ?? 'N/A',
             $payment->id,
-            $payment->booking->instructor->name ?? 'N/A',
-            $payment->booking->student->name ?? 'N/A',
-            '₱' . number_format($payment->amount, 2),
-            $payment->payment_method,
-            $payment->status->label(),
+            $payment->booking?->instructor?->name ?? 'N/A',
+            $payment->booking?->student?->name ?? 'N/A',
+            '₱' . number_format((float) $payment->amount, 2),
+            $method,
+            $status,
             $payment->paid_at ? $payment->paid_at->format('Y-m-d H:i:s') : 'Pending',
         ];
     }

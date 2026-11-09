@@ -54,19 +54,18 @@ return [
     | value decides how many separate bookings may overlap the same hours.
     |
     | Defaults follow the methodology:
-    |   Level 1 -> 2 (beginners only, slot held from the first request)
-    |   Level 2 -> 1 (1-on-1 only)
-    |   Level 3 -> 5 (group sessions)
+    |   Level 1 -> 1 (beginners only, 1-on-1, slot held from the first request)
+    |   Level 2 -> 2 (up to 2 students)
+    |   Level 3 -> 5 (group sessions up to 5 students)
     |
     | Raise Level 2/3 here only if SISA changes the policy. SafetyService still
-    | enforces the per-booking ceiling, so a Level 2 instructor can never run a
-    | multi-student booking even if the slot allows several separate ones.
+    | enforces the per-booking ceiling.
     |
     */
 
     'instructor_capacity' => [
-        1 => (int) env('SIASURF_LEVEL1_CAPACITY', 2),
-        2 => (int) env('SIASURF_LEVEL2_CAPACITY', 1),
+        1 => (int) env('SIASURF_LEVEL1_CAPACITY', 1),
+        2 => (int) env('SIASURF_LEVEL2_CAPACITY', 2),
         3 => (int) env('SIASURF_LEVEL3_CAPACITY', 5),
     ],
 

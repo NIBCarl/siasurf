@@ -29,6 +29,14 @@ const toggleIncident = (id: number) => {
 const approve = () => approveForm.post(route('admin.appeals.approve', props.appeal.id), { preserveScroll: true })
 const reject = () => rejectForm.post(route('admin.appeals.reject', props.appeal.id), { preserveScroll: true })
 const statusVariant = (status: string) => status === 'approved' ? 'success' : (status === 'rejected' ? 'danger' : (status === 'pending' ? 'warning' : 'default'))
+
+const formatDateTime = (value: string | null | undefined) => {
+  if (!value) return '—'
+  const d = new Date(value)
+  return Number.isNaN(d.getTime())
+    ? value
+    : d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+}
 </script>
 
 <template>
@@ -42,7 +50,7 @@ const statusVariant = (status: string) => status === 'approved' ? 'success' : (s
           <Badge :variant="statusVariant(appeal.status)">{{ appeal.status }}</Badge>
           <Badge v-if="appeal.ground" variant="info">{{ appeal.ground.replaceAll('_', ' ') }}</Badge>
         </div>
-        <p class="mt-1 text-sm text-slate-500">Filed {{ new Date(appeal.created_at).toLocaleString() }} by {{ appeal.instructor.name }}.</p>
+        <p class="mt-1 text-sm text-slate-500">Filed {{ formatDateTime(appeal.created_at) }} by {{ appeal.instructor.name }}.</p>
       </div>
 
       <div class="grid gap-6 lg:grid-cols-3">
@@ -57,8 +65,8 @@ const statusVariant = (status: string) => status === 'approved' ? 'success' : (s
             <h2 class="text-lg font-extrabold text-slate-900">Suspension under appeal</h2>
             <p class="mt-2 whitespace-pre-line text-sm text-slate-700">{{ appeal.suspension?.reason ?? 'Suspension record unavailable.' }}</p>
             <div class="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-              <p>Type: <span class="font-bold text-slate-700">{{ appeal.suspension?.type ?? 'â€”' }}</span></p>
-              <p>Ends: <span class="font-bold text-slate-700">{{ appeal.suspension?.ends_at ?? 'â€”' }}</span></p>
+              <p>Type: <span class="font-bold text-slate-700">{{ appeal.suspension?.type ?? '—' }}</span></p>
+              <p>Ends: <span class="font-bold text-slate-700">{{ formatDateTime(appeal.suspension?.ends_at) }}</span></p>
             </div>
           </section>
 
@@ -77,7 +85,7 @@ const statusVariant = (status: string) => status === 'approved' ? 'success' : (s
                 <div class="space-y-2">
                   <label v-for="strike in activeStrikes" :key="strike.id" class="flex items-start gap-3 rounded-2xl border border-slate-100 p-3 text-sm">
                     <input type="checkbox" :checked="approveForm.revoke_incident_ids.includes(strike.incident?.id ?? -1)" @change="toggleIncident(strike.incident?.id ?? -1)" class="mt-0.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
-                    <span><span class="block font-bold text-slate-800">{{ strike.reason_text ?? 'Confirmed concern' }}</span><span class="block text-xs text-slate-500">{{ strike.weight }} strike(s) Â· {{ strike.applied_at ?? 'â€”' }}</span></span>
+                    <span><span class="block font-bold text-slate-800">{{ strike.reason_text ?? 'Confirmed concern' }}</span><span class="block text-xs text-slate-500">{{ strike.weight }} strike(s) · {{ formatDateTime(strike.applied_at) }}</span></span>
                   </label>
                 </div>
                 <InputError :message="approveForm.errors.revoke_incident_ids" />
@@ -98,7 +106,7 @@ const statusVariant = (status: string) => status === 'approved' ? 'success' : (s
           <section v-else-if="appeal.admin_response" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 class="text-lg font-extrabold text-slate-900">Decision</h2>
             <p class="mt-2 text-sm text-slate-700">{{ appeal.admin_response }}</p>
-            <p class="mt-2 text-xs text-slate-400">Reviewed {{ appeal.reviewed_at ?? 'â€”' }} by {{ appeal.reviewed_by?.name ?? 'SISA' }}.</p>
+            <p class="mt-2 text-xs text-slate-400">Reviewed {{ formatDateTime(appeal.reviewed_at) }} by {{ appeal.reviewed_by?.name ?? 'SISA' }}.</p>
           </section>
         </div>
 
@@ -108,7 +116,7 @@ const statusVariant = (status: string) => status === 'approved' ? 'success' : (s
             <ul class="mt-3 space-y-2">
               <li v-for="strike in activeStrikes" :key="strike.id" class="rounded-2xl bg-slate-50 p-3 text-xs">
                 <p class="font-bold text-slate-800">{{ strike.reason_text ?? 'Confirmed concern' }}</p>
-                <p class="mt-1 text-slate-500">{{ strike.weight }} strike(s) Â· {{ strike.applied_at ?? 'â€”' }}</p>
+                <p class="mt-1 text-slate-500">{{ strike.weight }} strike(s) · {{ formatDateTime(strike.applied_at) }}</p>
               </li>
               <li v-if="!activeStrikes.length" class="rounded-2xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">No active strikes.</li>
             </ul>
@@ -124,5 +132,3 @@ const statusVariant = (status: string) => status === 'approved' ? 'success' : (s
     </div>
   </AppLayout>
 </template>
-
-

@@ -307,45 +307,119 @@ class PaymentController extends Controller
             abort(403, 'Only the assigned instructor or admin can mark cash payments.');
         }
 
-        $validated = $request->validate([
-            'amount_received' => 'required|numeric|min:0',
-            'notes' => 'nullable|string|max:500',
-        ]);
+        $totalDue = round((float) $booking->total_amount, 2);
+        $rawAmount = is_numeric($request->input('amount_received'))
+            ? round((float) $request->input('amount_received'), 2)
+            : 0.0;
+        $isUnderpaid = $rawAmount < $totalDue;
+
+        $validated = $request->validate(
+            [
+                'amount_received' => 'required|numeric|min:0',
+                'notes' => $isUnderpaid ? 'required|string|min:5|max:500' : 'nullable|string|max:500',
+            ],
+            [
+                'notes.required' => 'Please provide a brief note explaining why the student underpaid so SISA Admin can review this violation.',
+                'notes.min' => 'Please provide at least 5 characters explaining the underpayment.',
+            ]
+        );
 
         // Guard against resurrecting a cancelled, declined or already-paid
         // booking through the cash path.
         if (!$booking->canRecordCashPayment()) {
-            return back()->with('error', 'Cash can only be recorded for a confirmed or live lesson that is still unpaid.');
+            return back()->with('error', 'Cash can only be recorded for a confirmed or live lesson that is not yet paid in full.');
         }
 
-        // Update payment status
+        $amountReceived = round((float) $validated['amount_received'], 2);
+        $shortfall = max(0.0, round($totalDue - $amountReceived, 2));
+        $changeReturned = max(0.0, round($amountReceived - $totalDue, 2));
+
+        $targetStatus = $isUnderpaid
+            ? \App\Enums\PaymentStatus::Underpaid
+            : \App\Enums\PaymentStatus::Completed;
+
+        // Store the actual collected amount when underpaid (e.g. 700 of 800),
+        // or the lesson total when paid in full / cash tendered with change.
+        $recordedAmount = $isUnderpaid ? $amountReceived : $totalDue;
+
+        $noteParts = [];
+        if (!empty($validated['notes'])) {
+            $noteParts[] = trim($validated['notes']);
+        }
+        if ($isUnderpaid) {
+            $noteParts[] = sprintf(
+                '[UNDERPAID: Collected ₱%s of ₱%s · Shortfall owed: ₱%s]',
+                number_format($amountReceived, 2),
+                number_format($totalDue, 2),
+                number_format($shortfall, 2)
+            );
+        } elseif ($changeReturned > 0) {
+            $noteParts[] = sprintf(
+                '[Cash tendered: ₱%s · Change returned: ₱%s]',
+                number_format($amountReceived, 2),
+                number_format($changeReturned, 2)
+            );
+        }
+        $finalNotes = $noteParts ? implode(' — ', $noteParts) : 'Paid in full in cash.';
+
+        // Update or create payment record
         if ($booking->payment) {
             $booking->payment->update([
-                'status' => 'completed',
+                'amount' => $recordedAmount,
+                'status' => $targetStatus,
                 'paid_at' => now(),
-                'notes' => $validated['notes'] ?? null,
+                'receipt_verified_by' => auth()->id(),
+                'receipt_verified_at' => now(),
+                'notes' => $finalNotes,
             ]);
         } else {
-            // A cash booking may predate its payment row; create one so the
-            // record matches what was actually collected.
             $booking->payment()->create([
-                'amount' => $booking->total_amount,
+                'amount' => $recordedAmount,
                 'payment_method' => \App\Enums\PaymentMethod::Cash,
-                'status' => \App\Enums\PaymentStatus::Completed,
+                'status' => $targetStatus,
                 'paid_at' => now(),
-                'notes' => $validated['notes'] ?? null,
+                'receipt_verified_by' => auth()->id(),
+                'receipt_verified_at' => now(),
+                'notes' => $finalNotes,
             ]);
         }
 
-        // Update booking status - only the payment side, never the lifecycle.
+        // Update booking payment_status - only the payment side, never the lifecycle.
         $booking->update([
-            'payment_status' => \App\Enums\PaymentStatus::Completed,
+            'payment_status' => $targetStatus,
         ]);
 
-        // Generate receipt
-        $this->receiptService->generateReceipt($booking);
+        // Generate receipt reflecting actual amount paid and any balance due
+        try {
+            $this->receiptService->generateReceipt($booking);
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
-        return back()->with('success', 'Payment marked as received. Receipt generated.');
+        if ($isUnderpaid) {
+            return back()->with(
+                'success',
+                sprintf(
+                    'Underpayment recorded: ₱%s received of ₱%s (₱%s unpaid balance flagged for SISA Admin review).',
+                    number_format($amountReceived, 2),
+                    number_format($totalDue, 2),
+                    number_format($shortfall, 2)
+                )
+            );
+        }
+
+        if ($changeReturned > 0) {
+            return back()->with(
+                'success',
+                sprintf(
+                    'Payment marked as received in full (₱%s). Change returned to student: ₱%s.',
+                    number_format($totalDue, 2),
+                    number_format($changeReturned, 2)
+                )
+            );
+        }
+
+        return back()->with('success', 'Payment marked as received in full. Official receipt generated.');
     }
 
     /**
@@ -380,7 +454,7 @@ class PaymentController extends Controller
         }
 
         return redirect()
-            ->route('bookings.show', $booking)
+            ->route('student.bookings.show', $booking)
             ->with('error', 'Payment was cancelled. You can try again.');
     }
 

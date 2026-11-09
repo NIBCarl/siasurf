@@ -33,7 +33,7 @@ interface Booking {
   student_count: number
   notes: string
   decline_reason?: string | null
-  student: { name: string; email: string; phone: string }
+  student: { id: number; name: string; email: string; phone: string; student_profile?: { status: string } | null }
   instructor: { name: string; email: string }
   surf_spot: { name: string }
   payment?: {
@@ -41,6 +41,7 @@ interface Booking {
     payment_method: string
     status: string
     paid_at: string
+    notes?: string | null
     receipt_path?: string | null
     receipt_reference?: string | null
     receipt_uploaded_at?: string | null
@@ -70,6 +71,32 @@ const canVerifyReceipt = computed(() => props.booking.payment?.status === 'pendi
 
 const verifyReceipt = () => {
   router.post(route('payments.receipt.verify', props.booking.id), {}, { preserveScroll: true })
+}
+
+const isUnderpaid = computed(() => props.booking.payment?.status === 'underpaid')
+const paidAmount = computed(() => Number(props.booking.payment?.amount ?? 0))
+const totalAmount = computed(() => Number(props.booking.total_amount ?? 0))
+const shortfallAmount = computed(() => Math.max(0, Math.round((totalAmount.value - paidAmount.value) * 100) / 100))
+
+const settleRemainingBalance = () => {
+  if (confirm(`Mark the full balance of ₱${totalAmount.value.toLocaleString()} as settled in cash for ${props.booking.student.name}?`)) {
+    router.post(
+      route('payments.cash', props.booking.id),
+      {
+        amount_received: totalAmount.value,
+        notes: 'Remaining underpaid balance settled and cleared by SISA Admin.',
+      },
+      { preserveScroll: true },
+    )
+  }
+}
+
+const toggleStudentBan = () => {
+  const isBanned = props.booking.student.student_profile?.status === 'banned'
+  const action = isBanned ? 'unban' : 'ban'
+  if (confirm(`Are you sure you want to ${action} ${props.booking.student.name}?`)) {
+    router.post(route('admin.students.toggle-status', props.booking.student.id), {}, { preserveScroll: true })
+  }
 }
 
 const getStatusVariant = (status: string) => {
@@ -274,14 +301,19 @@ const getStatusVariant = (status: string) => {
                 <!-- Financials & Compliance Row -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <!-- Payment Status -->
-                    <div class="bg-ocean-600 rounded-[2.5rem] p-10 text-white relative overflow-hidden group shadow-xl shadow-ocean-600/20">
+                    <div
+                        class="rounded-[2.5rem] p-10 text-white relative overflow-hidden group shadow-xl"
+                        :class="isUnderpaid ? 'bg-rose-600 shadow-rose-600/20' : 'bg-ocean-600 shadow-ocean-600/20'"
+                    >
                         <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:rotate-12 transition-transform duration-700">
                             <CreditCardIcon class="w-40 h-40" />
                         </div>
                         
                         <div class="relative z-10 h-full flex flex-col">
                             <div class="flex items-center justify-between mb-8">
-                                <h3 class="text-[10px] font-bold uppercase opacity-60 tracking-widest">Payment Settlement</h3>
+                                <h3 class="text-[10px] font-bold uppercase opacity-60 tracking-widest">
+                                    {{ isUnderpaid ? 'Underpaid Violation Alert' : 'Payment Settlement' }}
+                                </h3>
                                 <div class="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
                                     <CreditCardIcon class="w-4 h-4" />
                                 </div>
@@ -295,12 +327,57 @@ const getStatusVariant = (status: string) => {
                                     </div>
                                     <div>
                                         <p class="text-[10px] font-black uppercase opacity-40 mb-1">Status</p>
-                                        <p class="text-xl font-black tracking-tight uppercase">{{ booking.payment.status }}</p>
+                                        <p class="text-xl font-black tracking-tight uppercase">{{ booking.payment.status.replace(/_/g, ' ') }}</p>
                                     </div>
                                 </div>
                                 <div class="pt-6 border-t border-white/10">
-                                    <p class="text-4xl font-black tracking-tighter">₱{{ booking.total_amount }}</p>
-                                    <p v-if="booking.payment.paid_at" class="text-[10px] font-bold opacity-40 mt-1">Processed on {{ new Date(booking.payment.paid_at).toLocaleDateString() }}</p>
+                                    <template v-if="isUnderpaid">
+                                        <p class="text-3xl font-black tracking-tighter">
+                                            ₱{{ paidAmount.toLocaleString() }}
+                                            <span class="text-lg font-bold opacity-75">paid of ₱{{ totalAmount.toLocaleString() }}</span>
+                                        </p>
+                                        <p class="mt-1 inline-block rounded-lg bg-white/20 px-2.5 py-1 text-xs font-black uppercase tracking-wider text-white">
+                                            Shortfall Owed: ₱{{ shortfallAmount.toLocaleString() }}
+                                        </p>
+                                    </template>
+                                    <template v-else>
+                                        <p class="text-4xl font-black tracking-tighter">
+                                            ₱{{ (booking.payment.status === 'completed' ? paidAmount : totalAmount).toLocaleString() }}
+                                        </p>
+                                    </template>
+                                    <p v-if="booking.payment.paid_at" class="text-[10px] font-bold opacity-60 mt-2">
+                                        Processed on {{ new Date(booking.payment.paid_at).toLocaleDateString() }}
+                                    </p>
+                                </div>
+
+                                <!-- Instructor Payment / Underpayment Note -->
+                                <div v-if="booking.payment.notes" class="rounded-2xl bg-white/15 p-3.5 text-xs">
+                                    <p class="text-[10px] font-black uppercase tracking-widest opacity-75">Instructor Payment Note</p>
+                                    <p class="mt-1 font-semibold leading-relaxed">{{ booking.payment.notes }}</p>
+                                </div>
+
+                                <!-- Admin Enforcement Actions for Underpaid Student -->
+                                <div v-if="isUnderpaid" class="space-y-2 pt-2">
+                                    <button
+                                        type="button"
+                                        class="w-full rounded-xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-rose-700 transition hover:bg-rose-50"
+                                        @click="toggleStudentBan"
+                                    >
+                                        {{ booking.student.student_profile?.status === 'banned' ? 'Student Banned (Click to Lift Ban)' : 'Ban Student for Non-Payment' }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-wider text-white transition hover:bg-white/20"
+                                        @click="settleRemainingBalance"
+                                    >
+                                        Mark Remaining ₱{{ shortfallAmount.toLocaleString() }} Settled
+                                    </button>
+                                    <Link
+                                        :href="route('admin.students.show', booking.student.id)"
+                                        class="block w-full text-center text-[11px] font-bold uppercase tracking-wider underline opacity-90 hover:opacity-100 pt-1"
+                                    >
+                                        Open {{ booking.student.name }}'s Student Dossier →
+                                    </Link>
                                 </div>
 
                                 <!-- GCash receipt: full image + one-click approval -->

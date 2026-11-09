@@ -13,7 +13,12 @@ class StudentController extends Controller
     {
         $query = User::students()
             ->with(['studentProfile'])
-            ->withCount(['bookingsAsStudent']);
+            ->withCount([
+                'bookingsAsStudent',
+                'bookingsAsStudent as underpaid_bookings_count' => function ($q) {
+                    $q->where('payment_status', 'underpaid');
+                },
+            ]);
 
         if ($request->has('search')) {
             $search = $request->input('search');

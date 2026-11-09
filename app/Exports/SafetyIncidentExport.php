@@ -25,7 +25,7 @@ class SafetyIncidentExport implements FromCollection, WithHeadings, WithStyles, 
 
     public function collection()
     {
-        $query = SafetyIncident::with(['instructor', 'booking', 'reportedBy'])
+        $query = SafetyIncident::with(['instructor', 'booking', 'reporter'])
             ->orderBy('created_at', 'desc');
 
         if ($this->startDate && $this->endDate) {
@@ -37,17 +37,19 @@ class SafetyIncidentExport implements FromCollection, WithHeadings, WithStyles, 
 
     public function map($incident): array
     {
+        $severityValue = $incident->severity?->value ?? $incident->suggested_severity?->value ?? 'unknown';
+
         return [
             $incident->id,
-            $incident->created_at->format('Y-m-d H:i:s'),
-            $incident->type->label(),
-            $incident->severity->label(),
-            $incident->instructor->name ?? 'N/A',
+            $incident->created_at?->format('Y-m-d H:i:s') ?? 'N/A',
+            $incident->type?->label() ?? 'N/A',
+            $incident->severity?->label() ?? $incident->suggested_severity?->label() ?? 'Unassigned',
+            $incident->instructor?->name ?? 'N/A',
             $incident->booking_id ?? 'N/A',
             $incident->location ?? 'N/A',
             $incident->description,
-            $incident->reportedBy->name ?? 'System',
-            $this->getSeverityColor($incident->severity->value),
+            $incident->reporter?->name ?? 'System',
+            $this->getSeverityColor($severityValue),
         ];
     }
 
@@ -81,7 +83,8 @@ class SafetyIncidentExport implements FromCollection, WithHeadings, WithStyles, 
         // Apply severity color coding
         $row = 2;
         foreach ($this->collection() as $incident) {
-            $color = $this->getSeverityColorCode($incident->severity->value);
+            $severityValue = $incident->severity?->value ?? $incident->suggested_severity?->value ?? 'unknown';
+            $color = $this->getSeverityColorCode($severityValue);
             $sheet->getStyle("A{$row}:J{$row}")->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()

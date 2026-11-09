@@ -18,12 +18,16 @@ class BookingController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = Booking::with(['student', 'instructor', 'surfSpot'])
+        $query = Booking::with(['student', 'instructor', 'surfSpot', 'payment'])
             ->orderByDesc('created_at');
 
         // Simple status filter
         if ($request->has('status')) {
-            $query->where('status', $request->status);
+            if ($request->status === 'underpaid') {
+                $query->where('payment_status', 'underpaid');
+            } else {
+                $query->where('status', $request->status);
+            }
         }
 
         $bookings = $query->paginate(20)->withQueryString();
@@ -40,7 +44,7 @@ class BookingController extends Controller
      */
     public function show(Booking $booking): Response
     {
-        $booking->load(['student', 'instructor', 'surfSpot', 'payment', 'waiver', 'review']);
+        $booking->load(['student.studentProfile', 'instructor', 'surfSpot', 'payment.verifiedBy', 'waiver', 'review']);
 
         return Inertia::render('Admin/Bookings/Show', [
             'booking' => $booking,

@@ -91,9 +91,23 @@
             border-radius: 20px;
             font-weight: bold;
         }
+        .status-underpaid {
+            display: inline-block;
+            background: #E11D48;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
+    @php
+        $totalDue = (float) $booking->total_amount;
+        $paidAmount = (float) ($booking->payment->amount ?? $booking->total_amount);
+        $balanceDue = max(0, round($totalDue - $paidAmount, 2));
+        $isUnderpaid = $balanceDue > 0 || ($booking->payment && $booking->payment->status?->value === 'underpaid');
+    @endphp
     <div class="header">
         <h1>{{ $company_name }}</h1>
         <p>{{ $company_address }}</p>
@@ -111,7 +125,12 @@
                     <strong>Date Issued:</strong> {{ $date_issued }}
                 </div>
                 <div class="info-item">
-                    <strong>Payment Status:</strong> <span class="status-paid">PAID</span>
+                    <strong>Payment Status:</strong>
+                    @if($isUnderpaid)
+                        <span class="status-underpaid">UNDERPAID (BALANCE DUE: ₱{{ number_format($balanceDue, 2) }})</span>
+                    @else
+                        <span class="status-paid">PAID</span>
+                    @endif
                 </div>
             </div>
             <div>
@@ -162,9 +181,19 @@
             </tbody>
             <tfoot>
                 <tr class="total-row">
-                    <td colspan="2" style="text-align: right;">TOTAL PAID:</td>
-                    <td style="text-align: right;">₱{{ number_format($booking->total_amount, 2) }}</td>
+                    <td colspan="2" style="text-align: right;">LESSON TOTAL:</td>
+                    <td style="text-align: right;">₱{{ number_format($totalDue, 2) }}</td>
                 </tr>
+                <tr class="total-row">
+                    <td colspan="2" style="text-align: right;">AMOUNT PAID:</td>
+                    <td style="text-align: right;">₱{{ number_format($paidAmount, 2) }}</td>
+                </tr>
+                @if($isUnderpaid)
+                <tr class="total-row" style="color: #E11D48;">
+                    <td colspan="2" style="text-align: right;">UNPAID BALANCE DUE:</td>
+                    <td style="text-align: right;">₱{{ number_format($balanceDue, 2) }}</td>
+                </tr>
+                @endif
             </tfoot>
         </table>
     </div>

@@ -78,8 +78,8 @@ const instructorLevelLabel: Record<number, string> = {
 };
 
 const instructorLevelDescription: Record<number, string> = {
-    1: 'Certified to teach beginner students only. Maximum 2 students per session.',
-    2: 'Certified to teach all skill levels (beginner, intermediate, advanced). Maximum 1 student per session (1-on-1).',
+    1: 'Certified to teach beginner students only. Maximum 1 student per session (1-on-1).',
+    2: 'Certified to teach all skill levels (beginner, intermediate, advanced). Maximum 2 students per session.',
     3: 'Master instructor certified to teach all skill levels and group sessions. Maximum 5 students.'
 };
 </script>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { 
     ArrowLeftIcon,
@@ -21,9 +22,16 @@ interface Booking {
   date: string
   time_period: string
   status: string
+  payment_status?: string
   total_amount: number
   instructor: { name: string }
   surf_spot: { name: string }
+  payment?: {
+      amount: number
+      status: string
+      payment_method: string
+      notes?: string | null
+  } | null
   waiver: {
       id: number
       pdf_path: string
@@ -59,6 +67,20 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const isBookingUnderpaid = (booking: Booking) =>
+    booking.payment_status === 'underpaid' || booking.payment?.status === 'underpaid'
+
+const bookingShortfall = (booking: Booking) =>
+    Math.max(0, Math.round((Number(booking.total_amount ?? 0) - Number(booking.payment?.amount ?? 0)) * 100) / 100)
+
+const underpaidBookings = computed(() =>
+    props.student.bookings_as_student.filter(isBookingUnderpaid)
+)
+
+const totalUnpaidBalance = computed(() =>
+    underpaidBookings.value.reduce((sum, b) => sum + bookingShortfall(b), 0)
+)
 
 const getStatusVariant = (status?: string) => {
   if (!status) return 'ocean'
@@ -130,6 +152,9 @@ const toggleBanStatus = () => {
                         <Badge v-if="student.student_profile" variant="info" class="text-xs">
                             {{ student.student_profile.skill_level.toUpperCase() }}
                         </Badge>
+                        <Badge v-if="underpaidBookings.length > 0" variant="danger" class="text-xs">
+                            {{ underpaidBookings.length }} UNDERPAID VIOLATION{{ underpaidBookings.length > 1 ? 'S' : '' }} (OWES ₱{{ totalUnpaidBalance.toLocaleString() }})
+                        </Badge>
                     </div>
                 </div>
                 
@@ -146,6 +171,57 @@ const toggleBanStatus = () => {
                         <ShieldExclamationIcon class="w-5 h-5" />
                         {{ student.student_profile?.status === 'banned' ? 'Lift Ban' : 'Ban Student' }}
                     </button>
+                </div>
+            </div>
+
+            <!-- Underpayment Violation Banner -->
+            <div v-if="underpaidBookings.length > 0" class="rounded-3xl border-2 border-rose-200 bg-rose-50 p-6 shadow-sm">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-start gap-4">
+                        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-600 text-white shadow-md shadow-rose-600/20">
+                            <ExclamationTriangleIcon class="h-6 w-6" />
+                        </div>
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-widest text-rose-700">
+                                SISA Payment Violation Alert • Unsettled Cash Balance
+                            </p>
+                            <h2 class="mt-1 text-lg font-extrabold text-rose-950">
+                                {{ student.name }} has {{ underpaidBookings.length }} underpaid session{{ underpaidBookings.length > 1 ? 's' : '' }} totaling ₱{{ totalUnpaidBalance.toLocaleString() }} in unpaid balance
+                            </h2>
+                            <div class="mt-3 space-y-2">
+                                <div
+                                    v-for="ub in underpaidBookings"
+                                    :key="ub.id"
+                                    class="rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs text-slate-700"
+                                >
+                                    <div class="flex flex-wrap items-center gap-2 font-bold text-slate-900">
+                                        <span>Session #SURF-{{ ub.id.toString().padStart(5, '0') }} ({{ ub.date }})</span>
+                                        <span>•</span>
+                                        <span>Instructor: {{ ub.instructor.name }}</span>
+                                        <span>•</span>
+                                        <span class="text-rose-600">
+                                            Paid ₱{{ Number(ub.payment?.amount ?? 0).toLocaleString() }} of ₱{{ Number(ub.total_amount).toLocaleString() }}
+                                            (Owes ₱{{ bookingShortfall(ub).toLocaleString() }})
+                                        </span>
+                                    </div>
+                                    <p v-if="ub.payment?.notes" class="mt-1 text-slate-600 italic">
+                                        "{{ ub.payment.notes }}"
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="student.student_profile?.status !== 'banned'" class="shrink-0">
+                        <button
+                            type="button"
+                            @click="toggleBanStatus"
+                            class="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-rose-600/25 hover:bg-rose-700 transition-all"
+                        >
+                            <ShieldExclamationIcon class="h-4 w-4" />
+                            Ban Student for Non-Payment
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -198,9 +274,15 @@ const toggleBanStatus = () => {
                                 class="flex flex-col md:flex-row items-center justify-between p-5 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-ocean-200 hover:bg-ocean-50/30 transition-all gap-4">
                                 
                                 <div class="flex flex-col w-full md:w-auto">
-                                    <div class="flex items-center gap-3 mb-1">
+                                    <div class="flex flex-wrap items-center gap-2 mb-1">
                                         <Badge :variant="getBookingStatusVariant(booking.status)" size="sm">
                                             {{ booking.status.toUpperCase() }}
+                                        </Badge>
+                                        <Badge v-if="isBookingUnderpaid(booking)" variant="danger" size="sm">
+                                            UNDERPAID • PAID ₱{{ Number(booking.payment?.amount ?? 0).toLocaleString() }} OF ₱{{ Number(booking.total_amount).toLocaleString() }} (OWES ₱{{ bookingShortfall(booking).toLocaleString() }})
+                                        </Badge>
+                                        <Badge v-else-if="booking.payment?.status === 'completed'" variant="success" size="sm">
+                                            PAID • ₱{{ Number(booking.payment.amount).toLocaleString() }}
                                         </Badge>
                                         <span class="text-sm font-black text-slate-900">{{ booking.date }}</span>
                                     </div>
@@ -209,6 +291,9 @@ const toggleBanStatus = () => {
                                         <span class="mx-1">&bull;</span>
                                         Instructor: {{ booking.instructor.name }}
                                     </span>
+                                    <p v-if="isBookingUnderpaid(booking) && booking.payment?.notes" class="mt-1 text-xs font-semibold text-rose-600">
+                                        Note: {{ booking.payment.notes }}
+                                    </p>
                                 </div>
 
                                 <div class="flex items-center gap-3 w-full md:w-auto justify-end">

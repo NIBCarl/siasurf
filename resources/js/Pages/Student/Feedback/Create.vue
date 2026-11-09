@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
@@ -50,7 +50,7 @@ const props = defineProps<Props>()
 const form = useForm({
   submit_review: props.canReview,
   submit_concern: false,
-  rating: null as number | null,
+  rating: 5 as number | null,
   comment: '',
   feedback_tags: [] as string[],
   photo: null as File | null,
@@ -90,7 +90,7 @@ const groupLabels: Record<string, string> = {
 }
 
 const canSubmit = computed(() => {
-  const reviewOk = !form.submit_review || (props.canReview && form.comment.length >= 20)
+  const reviewOk = !form.submit_review || (props.canReview && form.rating !== null && form.comment.length >= 20)
   const concernOk = !form.submit_concern
     || (props.canReport && form.concern_category !== '' && form.concern_details.length >= 30 && form.truth_declaration)
   return (form.submit_review || form.submit_concern) && reviewOk && concernOk

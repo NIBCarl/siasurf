@@ -110,7 +110,7 @@ const formatMoney = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value)
 
-const bookLabel = computed(() => (isAuthenticated.value ? 'Book this session' : 'Log in to book'))
+const bookLabel = computed(() => (isAuthenticated.value ? 'Book Lesson Now' : 'Book Lesson (Sign in)'))
 </script>
 
 <template>
@@ -218,6 +218,13 @@ const bookLabel = computed(() => (isAuthenticated.value ? 'Book this session' : 
               class="flex w-full items-center justify-center rounded-lg bg-teal-600 px-6 py-3 text-lg font-medium text-white shadow-xl shadow-ocean-600/20 transition-colors hover:bg-teal-700"
             >
               {{ bookLabel }} &rarr;
+            </Link>
+            <Link
+              v-if="!isAuthenticated"
+              :href="route('register')"
+              class="block text-center text-xs font-bold uppercase tracking-[0.14em] text-teal-300/80 transition-colors hover:text-teal-200"
+            >
+              New to SiaSurf? Create a tourist account
             </Link>
             <Link
               :href="route('instructors.profile', instructor.id)"

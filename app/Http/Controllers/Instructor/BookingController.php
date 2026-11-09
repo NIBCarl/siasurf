@@ -47,6 +47,7 @@ class BookingController extends Controller
             },
         ])
             ->where('instructor_id', $user->id)
+            ->submittedToInstructor()
             ->when(
                 $status && $status !== 'all',
                 fn ($query) => $query->where('status', $status)
@@ -105,7 +106,7 @@ class BookingController extends Controller
             'filters' => ['status' => $status ?? 'all'],
             'attendanceDue' => $attendanceDue,
             'counts' => [
-                'pending' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Pending)->count(),
+                'pending' => Booking::where('instructor_id', $user->id)->submittedToInstructor()->where('status', BookingStatus::Pending)->count(),
                 'confirmed' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Confirmed)->count(),
                 'in_progress' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::InProgress)->count(),
                 'completed' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Completed)->count(),
@@ -247,6 +248,42 @@ class BookingController extends Controller
         }
 
         $booking->complete();
+
+        // If this is an unpaid Cash on Hand booking and the instructor confirmed
+        // cash collection in the completion modal, record the cash payment and
+        // generate the student's receipt immediately.
+        if ($request->boolean('cash_received') && $booking->canRecordCashPayment()) {
+            if ($booking->payment) {
+                $booking->payment->update([
+                    'amount' => $booking->total_amount,
+                    'status' => \App\Enums\PaymentStatus::Completed,
+                    'paid_at' => now(),
+                    'receipt_verified_by' => auth()->id(),
+                    'receipt_verified_at' => now(),
+                    'notes' => $booking->payment->notes ?: 'Cash collected and verified upon session completion.',
+                ]);
+            } else {
+                $booking->payment()->create([
+                    'amount' => $booking->total_amount,
+                    'payment_method' => \App\Enums\PaymentMethod::Cash,
+                    'status' => \App\Enums\PaymentStatus::Completed,
+                    'paid_at' => now(),
+                    'receipt_verified_by' => auth()->id(),
+                    'receipt_verified_at' => now(),
+                    'notes' => 'Cash collected and verified upon session completion.',
+                ]);
+            }
+
+            $booking->update([
+                'payment_status' => \App\Enums\PaymentStatus::Completed,
+            ]);
+
+            try {
+                app(\App\Services\ReceiptService::class)->generateReceipt($booking);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         // Skill Progression Logic
         if ($request->boolean('upgrade_student') && $booking->student->studentProfile) {
@@ -494,6 +531,93 @@ class BookingController extends Controller
             // A student who never arrived cannot have a session running.
             if ($status === AttendanceStatus::Absent && $booking->status === BookingStatus::InProgress) {
                 $booking->complete();
+
+        // If this is an unpaid Cash on Hand booking and the instructor confirmed
+        // cash collection in the completion modal, record the cash payment and
+        // generate the student's receipt immediately.
+        if ($request->boolean('cash_received') && $booking->canRecordCashPayment()) {
+            if ($booking->payment) {
+                $booking->payment->update([
+                    'amount' => $booking->total_amount,
+                    'status' => \App\Enums\PaymentStatus::Completed,
+                    'paid_at' => now(),
+                    'receipt_verified_by' => auth()->id(),
+                    'receipt_verified_at' => now(),
+                    'notes' => $booking->payment->notes ?: 'Cash collected and verified upon session completion.',
+                ]);
+            } else {
+                $booking->payment()->create([
+                    'amount' => $booking->total_amount,
+                    'payment_method' => \App\Enums\PaymentMethod::Cash,
+                    'status' => \App\Enums\PaymentStatus::Completed,
+                    'paid_at' => now(),
+                    'receipt_verified_by' => auth()->id(),
+                    'receipt_verified_at' => now(),
+                    'notes' => 'Cash collected and verified upon session completion.',
+                ]);
+            }
+
+            $booking->update([
+                'payment_status' => \App\Enums\PaymentStatus::Completed,
+            ]);
+
+            try {
+                app(\App\Services\ReceiptService::class)->generateReceipt($booking);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+            }
+
+            // If the live start window has already closed and the lesson remained
+            // in Confirmed, recording attendance reconciles the booking status so
+            // the student can access post-session feedback (or the booking is marked NoShow).
+            $lessonStart = $booking->lessonStartAt();
+            $windowClosed = $lessonStart !== null
+                && now()->greaterThan($lessonStart->copy()->addHours(Booking::START_TOLERANCE_HOURS));
+
+            if ($booking->status === BookingStatus::Confirmed && $windowClosed) {
+                if ($status->countsAsAttended()) {
+                    $booking->complete();
+
+        // If this is an unpaid Cash on Hand booking and the instructor confirmed
+        // cash collection in the completion modal, record the cash payment and
+        // generate the student's receipt immediately.
+        if ($request->boolean('cash_received') && $booking->canRecordCashPayment()) {
+            if ($booking->payment) {
+                $booking->payment->update([
+                    'amount' => $booking->total_amount,
+                    'status' => \App\Enums\PaymentStatus::Completed,
+                    'paid_at' => now(),
+                    'receipt_verified_by' => auth()->id(),
+                    'receipt_verified_at' => now(),
+                    'notes' => $booking->payment->notes ?: 'Cash collected and verified upon session completion.',
+                ]);
+            } else {
+                $booking->payment()->create([
+                    'amount' => $booking->total_amount,
+                    'payment_method' => \App\Enums\PaymentMethod::Cash,
+                    'status' => \App\Enums\PaymentStatus::Completed,
+                    'paid_at' => now(),
+                    'receipt_verified_by' => auth()->id(),
+                    'receipt_verified_at' => now(),
+                    'notes' => 'Cash collected and verified upon session completion.',
+                ]);
+            }
+
+            $booking->update([
+                'payment_status' => \App\Enums\PaymentStatus::Completed,
+            ]);
+
+            try {
+                app(\App\Services\ReceiptService::class)->generateReceipt($booking);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+                } elseif ($status === AttendanceStatus::Absent) {
+                    $booking->update(['status' => BookingStatus::NoShow]);
+                }
             }
 
             broadcast(new SessionAttendanceMarked(

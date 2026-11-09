@@ -106,9 +106,10 @@ const statusMeta = (status: string): { label: string; variant: 'neutral' | 'veri
 const paymentLabel = (status?: string) => {
   if (!status) return 'Payment not started'
   const labels: Record<string, string> = {
-    completed: 'Paid',
+    completed: 'Paid (Verified)',
+    underpaid: 'Underpaid (Balance owed)',
     pending: 'Payment pending',
-    pending_cash: 'Cash on hand',
+    pending_cash: 'Cash unpaid (Pay at beach)',
     pending_verification: 'Receipt awaiting verification',
     failed: 'Payment failed',
     refunded: 'Refunded',

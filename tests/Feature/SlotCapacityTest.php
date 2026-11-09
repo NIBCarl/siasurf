@@ -16,13 +16,18 @@ use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * Slot capacity is the core of the availability rewrite:
+ * Slot and seat capacity across instructor levels:
  *
- *  - a Level 1 request owns the hour from the moment it is submitted;
- *  - Level 2 is full at one student;
- *  - Level 3 stays open until five students share the slot, and the counter is
- *    the SUM of `student_count`, not the number of bookings;
- *  - declining a request hands the range (or the seats) back immediately.
+ *  - Level 1 (max 1 seat, 1-on-1): 1 student occupies 1/1 seat immediately;
+ *  - Level 2 (max 2 seats): stays open for the 2nd student when only 1 seat is
+ *    occupied, and closes once 2/2 seats are occupied;
+ *  - Level 3 (max 5 seats): stays open for remaining seats until 5/5 students
+ *    share the slot (sum of `student_count`), and closes once all 5 seats are
+ *    occupied;
+ *  - Seats are occupied immediately from the moment a student submits booking
+ *    details and enters the waiver phase (15-minute checkout hold);
+ *  - Abandoning the waiver, expiring after 15 minutes, or declining a request
+ *    frees the held seat(s) immediately.
  */
 class SlotCapacityTest extends TestCase
 {
@@ -77,6 +82,19 @@ class SlotCapacityTest extends TestCase
         ]);
 
         return $instructor;
+    }
+
+    private function anotherStudent(): User
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        $student->assignRole('student');
+        $student->studentProfile()->create([
+            'skill_level' => 'beginner',
+            'is_first_time' => false,
+            'status' => 'active',
+        ]);
+
+        return $student;
     }
 
     private function payload(array $overrides = []): array
@@ -184,91 +202,284 @@ class SlotCapacityTest extends TestCase
     }
 
     /** @test */
-    public function a_level_three_slot_counts_students_and_closes_only_at_capacity(): void
+    public function level_two_tracks_two_seats_during_waiver_and_closes_when_both_seats_are_taken(): void
     {
-        $instructor = $this->instructor(InstructorLevel::Level3);
-        $availability = app(AvailabilityService::class);
+        $instructor = $this->instructor(InstructorLevel::Level2);
+        $studentB = $this->anotherStudent();
+        $studentC = $this->anotherStudent();
 
-        $this->bookingFor($instructor, ['student_count' => 2]);
-
-        // Two of five seats are taken: the slot is still offered.
-        $slots = $this->getJson(route('api.availability', [
-            'instructor' => $instructor->id,
-            'date' => $this->day->format('Y-m-d'),
-            'students' => 1,
-        ]))->assertOk()->json('periods.morning.slots');
-
-        $this->assertContains('07:00', $slots);
-        $this->assertSame(2, $availability->bookedStudentsInRange(
-            $instructor->id,
-            $this->day->format('Y-m-d'),
-            '07:00',
-            '09:00',
-        ));
-        $this->assertSame(3, $availability->remainingCapacity(
-            $instructor->id,
-            $this->day->format('Y-m-d'),
-            '07:00',
-            '09:00',
-        ));
-
-        // A second booking fills the remaining three seats.
-        $this->bookingFor($instructor, ['student_count' => 3]);
-
-        $this->assertSame(5, $availability->bookedStudentsInRange(
-            $instructor->id,
-            $this->day->format('Y-m-d'),
-            '07:00',
-            '09:00',
-        ));
-        $this->assertSame(0, $availability->remainingCapacity(
-            $instructor->id,
-            $this->day->format('Y-m-d'),
-            '07:00',
-            '09:00',
-        ));
-
-        $slots = $this->getJson(route('api.availability', [
-            'instructor' => $instructor->id,
-            'date' => $this->day->format('Y-m-d'),
-            'students' => 1,
-        ]))->assertOk()->json('periods.morning.slots');
-
-        $this->assertNotContains('07:00', $slots);
-        $this->assertNotContains('08:00', $slots);
-    }
-
-    /** @test */
-    public function a_level_three_request_is_rejected_when_the_party_does_not_fit(): void
-    {
-        $instructor = $this->instructor(InstructorLevel::Level3);
-
-        // Four of five seats already booked.
-        $this->bookingFor($instructor, ['student_count' => 4]);
-
+        // Student A books 1 of 2 seats and enters the Waiver page.
         $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 1,
+            ]))
+            ->assertRedirect();
+
+        $bookingA = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+        $this->assertTrue($bookingA->isInStudentCheckout());
+
+        // 1 of 2 seats is now occupied at 07:00:
+        // - Student B looking for 1 seat still sees 07:00 open (with 1 seat remaining).
+        $responseForOne = $this->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 1,
+        ]))->assertOk();
+
+        $this->assertContains('07:00', $responseForOne->json('periods.morning.slots'));
+        $this->assertSame(1, $responseForOne->json('periods.morning.slot_remaining.07:00'));
+
+        // - Student B looking for 2 seats does NOT see 07:00 open, and cannot book 2 seats.
+        $slotsForTwo = $this->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 2,
+        ]))->assertOk()->json('periods.morning.slots');
+
+        $this->assertNotContains('07:00', $slotsForTwo);
+
+        $this->actingAs($studentB)
             ->post(route('bookings.store-details', $instructor->id), $this->payload([
                 'student_count' => 2,
             ]))
             ->assertSessionHas('error');
 
-        $this->assertSame(1, Booking::count());
+        // - Student B CAN book the remaining 2nd seat (student_count = 1).
+        $this->actingAs($studentB)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 1,
+            ]))
+            ->assertRedirect();
+
+        // Now 2/2 seats are occupied at 07:00 -> slot is completely full for Student C.
+        $slotsAfterFull = $this->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 1,
+        ]))->assertOk()->json('periods.morning.slots');
+
+        $this->assertNotContains('07:00', $slotsAfterFull);
+        $this->assertNotContains('08:00', $slotsAfterFull);
+        $this->assertContains('09:00', $slotsAfterFull);
+
+        $this->actingAs($studentC)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 1,
+            ]))
+            ->assertSessionHas('error');
+
+        // And if Student A books all 2 seats upfront on another time (09:00-11:00),
+        // 09:00 closes immediately while Student A is on the waiver page.
+        $instructor2 = $this->instructor(InstructorLevel::Level2);
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor2->id), $this->payload([
+                'student_count' => 2,
+            ]))
+            ->assertRedirect();
+
+        $slotsWhenAllSeatsBooked = $this->getJson(route('api.availability', [
+            'instructor' => $instructor2->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 1,
+        ]))->assertOk()->json('periods.morning.slots');
+
+        $this->assertNotContains('07:00', $slotsWhenAllSeatsBooked);
     }
 
     /** @test */
-    public function a_level_two_instructor_is_one_on_one(): void
+    public function level_three_tracks_five_seats_across_multiple_bookings_and_closes_at_five(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level3);
+        $studentB = $this->anotherStudent();
+        $studentC = $this->anotherStudent();
+
+        // Student A books 2 of 5 seats and enters the Waiver page.
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 2,
+            ]))
+            ->assertRedirect();
+
+        // 3 seats remain at 07:00: open for 3 students, closed for 4 students.
+        $responseForThree = $this->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 3,
+        ]))->assertOk();
+
+        $this->assertContains('07:00', $responseForThree->json('periods.morning.slots'));
+        $this->assertSame(3, $responseForThree->json('periods.morning.slot_remaining.07:00'));
+
+        $slotsForFour = $this->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 4,
+        ]))->assertOk()->json('periods.morning.slots');
+
+        $this->assertNotContains('07:00', $slotsForFour);
+
+        // Student B books the remaining 3 seats -> 5/5 seats are now occupied.
+        $this->actingAs($studentB)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 3,
+            ]))
+            ->assertRedirect();
+
+        // Slot 07:00 is now completely full for Student C.
+        $slotsAfterFive = $this->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 1,
+        ]))->assertOk()->json('periods.morning.slots');
+
+        $this->assertNotContains('07:00', $slotsAfterFive);
+        $this->assertContains('09:00', $slotsAfterFive);
+
+        $this->actingAs($studentC)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 1,
+            ]))
+            ->assertSessionHas('error');
+    }
+
+    /** @test */
+    public function abandoning_waiver_or_going_back_immediately_releases_the_held_seats(): void
     {
         $instructor = $this->instructor(InstructorLevel::Level2);
 
-        $this->bookingFor($instructor, ['student_count' => 1]);
+        // Student A books all 2 seats of a Level 2 instructor and enters the Waiver page.
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 2,
+            ]))
+            ->assertRedirect();
 
-        $slots = $this->getJson(route('api.availability', [
+        $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+
+        // Slot 07:00 is currently full while Student A is on the Waiver page.
+        $slotsWhileHeld = $this->getJson(route('api.availability', [
             'instructor' => $instructor->id,
             'date' => $this->day->format('Y-m-d'),
         ]))->assertOk()->json('periods.morning.slots');
+        $this->assertNotContains('07:00', $slotsWhileHeld);
 
-        $this->assertNotContains('07:00', $slots);
-        $this->assertContains('09:00', $slots);
+        // Student A clicks "Change Slot / Release Hold" on the Waiver page.
+        $this->actingAs($this->student)
+            ->post(route('bookings.abandon', $booking->id))
+            ->assertRedirect(route('bookings.create', $instructor->id));
+
+        $this->assertSame(BookingStatus::Cancelled, $booking->fresh()->status);
+
+        // Both seats at 07:00 are immediately open again.
+        $responseAfterAbandon = $this->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+        ]))->assertOk();
+
+        $this->assertContains('07:00', $responseAfterAbandon->json('periods.morning.slots'));
+        $this->assertSame(2, $responseAfterAbandon->json('periods.morning.slot_remaining.07:00'));
+    }
+
+    /** @test */
+    public function expired_fifteen_minute_waiver_hold_automatically_releases_the_held_seats(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level3);
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 5,
+            ]))
+            ->assertRedirect();
+
+        $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+
+        // Simulate the 15-minute checkout hold expiring while Student A is idle.
+        $booking->update(['payment_deadline_at' => now()->subMinute()]);
+
+        // Next availability lookup automatically expires the stale hold and frees all 5 seats at 07:00.
+        $response = $this->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+        ]))->assertOk();
+
+        $this->assertContains('07:00', $response->json('periods.morning.slots'));
+        $this->assertSame(5, $response->json('periods.morning.slot_remaining.07:00'));
+        $this->assertSame(BookingStatus::Expired, $booking->fresh()->status);
+    }
+
+    /** @test */
+    public function instructor_only_sees_the_booking_after_student_completes_waiver_and_payment_selection(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $instructor = $this->instructor(InstructorLevel::Level2);
+
+        // Step 1: Student A submits details and lands on the Waiver page.
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 2,
+            ]))
+            ->assertRedirect();
+
+        $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+
+        // While Student A is still signing the waiver, the instructor's pending count is 0.
+        $this->actingAs($instructor)
+            ->get(route('instructor.bookings.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('counts.pending', 0));
+
+        // Step 2: Student A signs the waiver and selects a payment method.
+        $participant = $booking->participants()->first();
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-waiver', $booking->id), [
+                'signed_by' => 'Student A',
+                'signature' => 'data:image/png;base64,AAAA',
+                'agreement' => true,
+                'participant_id' => $participant?->id,
+            ]);
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-payment', $booking->id), [
+                'payment_method' => 'cash',
+            ])
+            ->assertRedirect(route('bookings.confirmation', $booking->id));
+
+        // Now the instructor sees the pending booking request.
+        $this->actingAs($instructor)
+            ->get(route('instructor.bookings.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('counts.pending', 1));
+    }
+
+    /** @test */
+    public function per_booking_student_limits_are_enforced_by_instructor_level(): void
+    {
+        $levelOne = $this->instructor(InstructorLevel::Level1);
+        $levelTwo = $this->instructor(InstructorLevel::Level2);
+        $levelThree = $this->instructor(InstructorLevel::Level3);
+
+        // Level 1 allows 1 student (1-on-1), rejects 2 students.
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $levelOne->id), $this->payload(['student_count' => 2]))
+            ->assertSessionHas('error');
+
+        // Level 2 allows 2 students, rejects 3 students.
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $levelTwo->id), $this->payload(['student_count' => 3]))
+            ->assertSessionHas('error');
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $levelTwo->id), $this->payload(['student_count' => 2]))
+            ->assertRedirect();
+
+        // Level 3 allows 5 students, rejects 6 students.
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $levelThree->id), $this->payload(['student_count' => 6]))
+            ->assertSessionHas('error');
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $levelThree->id), $this->payload(['student_count' => 5]))
+            ->assertRedirect();
     }
 
     /** @test */
@@ -340,74 +551,4 @@ class SlotCapacityTest extends TestCase
 
         $this->assertSame(0, Booking::count());
     }
-
-    /** @test */
-    public function a_level_three_instructor_accepts_several_bookings_until_the_slot_is_full(): void
-    {
-        $instructor = $this->instructor(InstructorLevel::Level3);
-        $availability = app(AvailabilityService::class);
-        $date = $this->day->format('Y-m-d');
-
-        // Three separate one-student bookings share the same hours.
-        $this->bookingFor($instructor, ['student_count' => 1]);
-        $this->bookingFor($instructor, ['student_count' => 1]);
-        $this->bookingFor($instructor, ['student_count' => 1]);
-
-        $this->assertSame(3, $availability->bookedStudentsInRange($instructor->id, $date, '07:00', '09:00'));
-        $this->assertSame(2, $availability->remainingCapacity($instructor->id, $date, '07:00', '09:00'));
-
-        $slotsForOne = $this->getJson(route('api.availability', [
-            'instructor' => $instructor->id,
-            'date' => $date,
-            'students' => 1,
-        ]))->assertOk()->json('periods.morning.slots');
-
-        $this->assertContains('07:00', $slotsForOne);
-
-        // A party of two still fits into the two remaining seats...
-        $slotsForTwo = $this->getJson(route('api.availability', [
-            'instructor' => $instructor->id,
-            'date' => $date,
-            'students' => 2,
-        ]))->assertOk()->json('periods.morning.slots');
-
-        $this->assertContains('07:00', $slotsForTwo);
-
-        // ...but a party of three does not.
-        $slotsForThree = $this->getJson(route('api.availability', [
-            'instructor' => $instructor->id,
-            'date' => $date,
-            'students' => 3,
-        ]))->assertOk()->json('periods.morning.slots');
-
-        $this->assertNotContains('07:00', $slotsForThree);
-    }
-
-    /** @test */
-    public function a_level_three_request_can_top_up_an_existing_slot(): void
-    {
-        $instructor = $this->instructor(InstructorLevel::Level3);
-
-        // Three of the five seats are already taken.
-        $this->bookingFor($instructor, ['student_count' => 3]);
-
-        $this->actingAs($this->student)
-            ->post(route('bookings.store-details', $instructor->id), $this->payload([
-                'student_count' => 2,
-            ]))
-            ->assertSessionHasNoErrors()
-            ->assertRedirect();
-
-        $this->assertSame(2, Booking::count());
-        $this->assertSame(
-            5,
-            app(AvailabilityService::class)->bookedStudentsInRange(
-                $instructor->id,
-                $this->day->format('Y-m-d'),
-                '07:00',
-                '09:00',
-            )
-        );
-    }
 }
-

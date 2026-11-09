@@ -457,16 +457,28 @@ const getStatusVariant = (status: string) => {
     <Modal :show="showVerifyModal" @close="showVerifyModal = false">
         <div class="p-6">
             <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                <ShieldCheckIcon class="w-6 h-6 text-emerald-600" />
-                Confirm Verification
+                <ExclamationTriangleIcon class="w-6 h-6 text-amber-600" />
+                Certificate Selection Required
             </h2>
             <p class="text-sm text-slate-600 mb-6">
-                You are about to verify this instructor without approving any of their pending certificates. Are you sure you want to proceed?
+                <template v-if="instructor.certificates.some(c => c.status === 'verified')">
+                    You have not selected any additional pending certificates to approve, though this instructor already has a verified certificate on file. Do you want to proceed with licensing?
+                </template>
+                <template v-else>
+                    An instructor must have at least one verified certificate before they can be licensed by SISA. Please select at least one pending certificate in the Artifact Vault below before clicking Verify &amp; License.
+                </template>
             </p>
             <div class="flex justify-end gap-3">
-                <BaseButton variant="secondary" @click="showVerifyModal = false">Cancel</BaseButton>
-                <BaseButton variant="success" @click="submitVerify" :loading="verifyForm.processing">
-                    Proceed Anyway
+                <BaseButton variant="secondary" @click="showVerifyModal = false">
+                    {{ instructor.certificates.some(c => c.status === 'verified') ? 'Cancel' : 'Got It' }}
+                </BaseButton>
+                <BaseButton
+                    v-if="instructor.certificates.some(c => c.status === 'verified')"
+                    variant="success"
+                    @click="submitVerify"
+                    :loading="verifyForm.processing"
+                >
+                    Proceed with Existing Certificate
                 </BaseButton>
             </div>
         </div>

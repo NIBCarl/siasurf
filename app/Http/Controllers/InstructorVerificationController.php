@@ -20,7 +20,7 @@ class InstructorVerificationController extends Controller
 
         $reviewsQuery = $instructor->reviewsAsInstructor()->visible();
         $reviewsCount = (clone $reviewsQuery)->count();
-        $averageRating = (clone $reviewsQuery)->avg('rating');
+        $averageRating = (clone $reviewsQuery)->whereNotNull('rating')->avg('rating');
         $reviews = (clone $reviewsQuery)
             ->with('student:id,name')
             ->latest()

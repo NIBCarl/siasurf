@@ -87,8 +87,8 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
 }
 
 const levelLabel = (level: number) => {
-    if (level === 1) return 'Level 1 · beginners, max 2'
-    if (level === 2) return 'Level 2 · one-on-one'
+    if (level === 1) return 'Level 1 · beginners, one-on-one'
+    if (level === 2) return 'Level 2 · max 2 students'
     return 'Level 3 · groups up to 5'
 }
 

@@ -111,8 +111,8 @@ const toggleVacationMode = () => {
 }
 
 const levelLabel = computed(() => {
-  if (props.profile.level === 1) return 'Level 1 · beginners only'
-  if (props.profile.level === 2) return 'Level 2 · one-on-one'
+  if (props.profile.level === 1) return 'Level 1 · beginners, one-on-one'
+  if (props.profile.level === 2) return 'Level 2 · max 2 students'
   return 'Level 3 · groups up to five'
 })
 

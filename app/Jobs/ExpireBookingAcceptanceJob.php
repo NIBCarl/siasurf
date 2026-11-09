@@ -41,6 +41,22 @@ class ExpireBookingAcceptanceJob implements ShouldQueue
             return;
         }
 
+        // Case 1: The student abandoned the 15-minute waiver/checkout hold.
+        if ($booking->isInStudentCheckout()) {
+            if (! $booking->checkoutHoldExpired()) {
+                return;
+            }
+
+            DB::transaction(function () use ($booking, $availabilityService) {
+                $booking->expireAcceptance(
+                    'Waiver and checkout hold expired after ' . Booking::CHECKOUT_HOLD_MINUTES . ' minutes.'
+                );
+                $availabilityService->releaseForBooking($booking);
+            });
+
+            return;
+        }
+
         // A late reply may still be beating us to it; respect the deadline itself.
         if (!$booking->acceptDeadlinePassed()) {
             return;

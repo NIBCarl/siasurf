@@ -31,6 +31,12 @@ class Booking extends Model
     public const PAYMENT_HOLD_MINUTES = 15;
 
     /**
+     * The student has 15 minutes to sign the waiver and choose a payment
+     * method while the slot is exclusively held for them.
+     */
+    public const CHECKOUT_HOLD_MINUTES = 15;
+
+    /**
      * FR 1.9.4 - changes made inside this window need admin approval.
      */
     public const CHANGE_APPROVAL_THRESHOLD_HOURS = 24;
@@ -289,6 +295,32 @@ class Booking extends Model
         ]);
     }
 
+    /**
+     * Bookings currently in the student's 15-minute waiver/payment-method
+     * checkout hold (slot is occupied, but not yet sent to the instructor).
+     */
+    public function scopeInStudentCheckout($query)
+    {
+        return $query->where('status', BookingStatus::Pending)
+            ->whereNull('accept_deadline_at')
+            ->whereNotNull('payment_deadline_at')
+            ->whereDoesntHave('payment');
+    }
+
+    /**
+     * Bookings that have completed the student's waiver & payment-method step
+     * and are visible to the instructor.
+     */
+    public function scopeSubmittedToInstructor($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('status', '!=', BookingStatus::Pending)
+                ->orWhereNotNull('accept_deadline_at')
+                ->orWhereNull('payment_deadline_at')
+                ->orWhereHas('payment');
+        });
+    }
+
     public function scopeForSlot($query, int $instructorId, string $date, string $timePeriod)
     {
         return $query->where('instructor_id', $instructorId)
@@ -362,7 +394,36 @@ class Booking extends Model
      */
     public function isAwaitingInstructorResponse(): bool
     {
-        return $this->status === BookingStatus::Pending;
+        return $this->status === BookingStatus::Pending && ! $this->isInStudentCheckout();
+    }
+
+    /**
+     * Whether the booking is still in the student's 15-minute waiver/payment
+     * selection hold before being sent to the instructor.
+     */
+    public function isInStudentCheckout(): bool
+    {
+        if ($this->status !== BookingStatus::Pending) {
+            return false;
+        }
+
+        if ($this->accept_deadline_at !== null || $this->payment_deadline_at === null) {
+            return false;
+        }
+
+        return $this->relationLoaded('payment')
+            ? $this->payment === null
+            : ! $this->payment()->exists();
+    }
+
+    /**
+     * Whether the 15-minute student waiver/checkout hold has expired.
+     */
+    public function checkoutHoldExpired(): bool
+    {
+        return $this->isInStudentCheckout()
+            && $this->payment_deadline_at !== null
+            && $this->payment_deadline_at->isPast();
     }
 
     public function isDeclined(): bool
@@ -418,14 +479,15 @@ class Booking extends Model
     }
 
     /**
-     * A cash lesson can only be settled while the lesson is still live or about
-     * to be run.
+     * A cash lesson can be settled by the instructor or admin once confirmed,
+     * while in progress, or after session completion.
      */
     public function canRecordCashPayment(): bool
     {
         return in_array($this->status, [
             BookingStatus::Confirmed,
             BookingStatus::InProgress,
+            BookingStatus::Completed,
         ], true) && $this->payment_status !== PaymentStatus::Completed;
     }
 
@@ -584,6 +646,17 @@ class Booking extends Model
     public function paymentDeadlineFrom(?\DateTimeInterface $from = null): \Carbon\Carbon
     {
         $deadline = \Carbon\Carbon::instance($from ?? now())->addMinutes(self::PAYMENT_HOLD_MINUTES);
+
+        return $this->clampToLessonStart($deadline);
+    }
+
+    /**
+     * Deadline for the student to complete the waiver and payment-method step
+     * while the slot is held for them (15 minutes).
+     */
+    public function checkoutDeadlineFrom(?\DateTimeInterface $from = null): \Carbon\Carbon
+    {
+        $deadline = \Carbon\Carbon::instance($from ?? now())->addMinutes(self::CHECKOUT_HOLD_MINUTES);
 
         return $this->clampToLessonStart($deadline);
     }

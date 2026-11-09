@@ -3,6 +3,8 @@
 > **Scope:** the booking lifecycle as implemented in this repository today: discovery, request creation, waivers, acceptance, GCash/cash payment, receipt verification, session execution, cancellation/reschedule, feedback, suspension and the SISA touchpoints that can change a booking.
 >
 > **Source of truth:** the code paths listed in section 14. If behaviour changes, update this file in the same pull request.
+>
+> **Approved target changes:** `BOOKING_CHECKOUT_HOLD_SPEC.md` records the checkout-hold decisions and the corrected capacity table (L1 = 1, L2 = 2, L3 = 5). The code has not been updated yet; where this document and the spec differ, the spec is the target.
 
 ---
 
@@ -79,9 +81,9 @@ Defined on `App\Models\Booking` unless noted.
 | `MAX_OPEN_REQUESTS_PER_STUDENT` | **3** | A student cannot hold more than 3 pending/awaiting-payment requests. |
 | `standardHours()` | **2 h** (`config/siasurf.php` -> `session.standard_hours`) | Default lesson length when the instructor has no slot duration. |
 | Slot duration | **60 or 120 min** (`availabilities.slot_duration_minutes`) | Drives the default end time and price estimate. |
-| Slot capacity | **L1 = 2, L2 = 1, L3 = 5** (`config/siasurf.php` -> `instructor_capacity`; env `SIASURF_LEVEL{1,2,3}_CAPACITY`) | Students who may share one time slot. |
+| Slot capacity | **L1 = 1, L2 = 2, L3 = 5** (`config/siasurf.php` -> `instructor_capacity`; env `SIASURF_LEVEL{1,2,3}_CAPACITY`) | Students who may share one time slot. |
 
-> **Level 2 policy:** every project document defines Level 2 as 1-on-1, so its capacity defaults to **1**. If SISA changes that policy, set `SIASURF_LEVEL2_CAPACITY`; no code change is required. Each individual booking is still capped at 1 student by `SafetyService`.
+> **Capacity policy (current):** Level 1 is 1-on-1 (1 seat), Level 2 is 2 seats, Level 3 is 5 seats. Level 1 fills its slot with one booking because its capacity is 1; Level 2 and Level 3 are seats-only and may take several bookings at the same spot/time until capacity is reached. The code and safety rules must be updated from the previous L1=2/L2=1 table.
 
 ---
 
@@ -119,8 +121,8 @@ The form only lists allowed breaks; `SafetyService` rejects a crafted request.
 
 | Rule | Enforcement |
 |---|---|
-| Level 1: max **2** students, beginners only | `SafetyService::validateLevel1Rules` |
-| Level 2: **1-on-1** only | `validateLevel2Rules` |
+| Level 1: max **1** student, beginners only | `SafetyService::validateLevel1Rules` |
+| Level 2: max **2** students | `validateLevel2Rules` |
 | Level 3: max **5** students | `validateLevel3Rules` |
 | Age 5-12 requires a Level 3 instructor (or two instructors) | `validateAgeRules` |
 | Beginner -> beginner break only; intermediate -> no advanced break | `validateSurfSpotDifficultyRules` |
@@ -158,9 +160,9 @@ Capacity is **students sharing one time range**, summed from `bookings.student_c
 
 | Level | Default capacity | Behaviour |
 |---|---|---|
-| 1 | 2 students, but **exclusive** | A pending request immediately makes the exact hours unavailable (no second booking at all). The 2-student cap applies inside that one booking. |
-| 2 | 1 student | 1-on-1: the slot closes after one booking. Raise `SIASURF_LEVEL2_CAPACITY` to allow several separate bookings. |
-| 3 | 5 students | Stays open for more bookings until 5 students overlap the range; then it locks. |
+| 1 | 1 student | 1-on-1: the first live booking fills the slot; a second booking is blocked by capacity. |
+| 2 | 2 students | Seats-only: two separate 1-student bookings (or one 2-student booking) can share the slot at the same spot. |
+| 3 | 5 students | Seats-only: stays open for more bookings at the same spot until 5 students overlap the range; then it locks. |
 
 ### 5.3 What the booking form receives
 
@@ -780,9 +782,9 @@ sequenceDiagram
 | Receipt uploaded while the hold is expiring | Expiry job sees `receipt_path` and returns without releasing. |
 | Receipt rejected | Payment **failed**, booking stays `awaiting_payment`, deadline reset to +15 min (clamped), note shown. |
 | Student tries to cancel after uploading a receipt or paying | `BookingPolicy::cancel` denies it (403); the button is hidden and the page explains why. |
-| Second student wants the same Level 1 slot | Blocked immediately while the first request is only **pending**. |
+| Second student wants the same Level 1 slot | Blocked: Level 1 capacity is 1, so the first live request fills the slot. |
 | Second/third/fourth/fifth student for Level 3 | Allowed while overlap is at most 5 students; the sixth is rejected. |
-| Level 2 second booking | Blocked by default (1-on-1). Enable via `SIASURF_LEVEL2_CAPACITY`. |
+| Level 2 second booking | Allowed until 2 students are used, at the same spot/time. |
 | Two requests hit the last seat simultaneously | Instructor row is locked, capacity re-checked inside the transaction; the loser gets a validation error. |
 | Party includes a beginner but an advanced spot is chosen | Rejected by `mostRestrictive`; the form only offered allowed breaks. |
 | Minor (5-12) with a Level 1/2 instructor | Rejected; the message points to a Level 3 instructor. |
@@ -830,7 +832,7 @@ sequenceDiagram
 
 - `BookingStatus::NoShow` exists but is not assigned anywhere; absence is captured by `attendance_status`.
 - Students cannot reschedule; they can cancel only.
-- Level 2 is 1-on-1 by policy; multi-booking requires the `SIASURF_LEVEL2_CAPACITY` policy change.
+- Capacity is L1 = 1 (1-on-1), L2 = 2, L3 = 5. L2 and L3 are seats-only. The code, safety rules, config defaults and tests still encode the previous L1 = 2 / L2 = 1 table and must be updated.
 - The instructor review response is not locked after the first reply (the policy allows updating it).
 - Student review edits are limited to one edit (`edited_at`), not a 24-hour clock.
 

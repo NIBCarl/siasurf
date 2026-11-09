@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm, Link } from '@inertiajs/vue3'
+import { Head, router, useForm, Link } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
@@ -42,7 +42,7 @@ const formatDate = (date: string) => {
 }
 
 const goBack = () => {
-  window.history.back()
+  router.post(route('bookings.abandon', props.booking.id))
 }
 </script>
 
@@ -56,12 +56,32 @@ const goBack = () => {
         <!-- Progress Stepper -->
         <BookingStepper :current="step" />
 
+        <!-- Exclusive Slot Hold Banner -->
+        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <span class="flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+            <p class="text-xs font-semibold text-emerald-900">
+              Time slot reserved for you! Complete payment selection below to send your booking request to {{ booking.instructor?.name || 'your instructor' }}.
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="goBack"
+            class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
+          >
+            Cancel &amp; Release Hold
+          </button>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-5 gap-8">
           
           <!-- Left: Payment Options -->
           <div class="md:col-span-3 space-y-6">
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-              <h2 class="text-2xl font-bold text-slate-900 mb-6">Choose Payment Method</h2>
+              <h2 class="text-2xl font-bold text-slate-900 mb-2">Choose Payment Method</h2>
+              <p class="text-sm text-slate-500 mb-6">
+                Select how you want to pay once {{ booking.instructor?.name || 'your instructor' }} confirms your booking request.
+              </p>
               
               <div class="space-y-4">
                 <!-- GCash Option -->
@@ -78,9 +98,9 @@ const goBack = () => {
                   <div class="flex-1">
                     <div class="flex items-center justify-between">
                       <span class="text-lg font-bold text-slate-900">GCash</span>
-                      <Badge variant="info">Fastest</Badge>
+                      <Badge variant="info">Recommended</Badge>
                     </div>
-                    <p class="text-sm text-slate-500 mt-1">Instant confirmation via PayMongo</p>
+                    <p class="text-sm text-slate-500 mt-1">Pay online via GCash as soon as your instructor confirms</p>
                   </div>
                   <div v-if="form.payment_method === 'gcash'" class="text-ocean-600">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
@@ -106,7 +126,7 @@ const goBack = () => {
                     <div class="flex items-center justify-between">
                       <span class="text-lg font-bold text-slate-900">Cash on Hand</span>
                     </div>
-                    <p class="text-sm text-slate-500 mt-1">Pay at the surf spot on the day</p>
+                    <p class="text-sm text-slate-500 mt-1">Pay at the surf spot on the day after instructor confirmation</p>
                   </div>
                    <div v-if="form.payment_method === 'cash'" class="text-amber-500">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
@@ -116,38 +136,57 @@ const goBack = () => {
                 </label>
               </div>
 
-              <div class="mt-12 flex gap-4">
-                 <BaseButton 
-                  type="button"
-                  @click="goBack"
-                  variant="secondary" 
-                  size="lg" 
-                  class="w-1/3 justify-center"
-                >
-                  &larr; Back
-                 </BaseButton>
-                 <BaseButton 
-                  @click="submit"
-                  variant="primary" 
-                  size="lg" 
-                  class="w-2/3 justify-center group"
-                  :loading="form.processing"
-                >
-                  <span v-if="form.payment_method === 'gcash'">Proceed to GCash Checkout &rarr;</span>
-                  <span v-else>Confirm Booking &rarr;</span>
-                </BaseButton>
-                <p class="text-center text-xs text-slate-500 mt-4">
-                  By completing this payment, you agree to our 
-                  <a href="#" class="text-ocean-600 underline">Terms of Service</a> and 
-                  <a href="#" class="text-ocean-600 underline">Refund Policy</a>.
-                </p>
+              <div class="mt-8 rounded-xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-600 leading-relaxed">
+                <template v-if="form.payment_method === 'gcash'">
+                  <strong class="text-slate-900">How GCash payment works:</strong> Clicking below sends your request to {{ booking.instructor?.name || 'your instructor' }}. You won't be charged yet — as soon as they confirm your request, the <strong>Pay with GCash</strong> button will unlock automatically on the next screen.
+                </template>
+                <template v-else>
+                  <strong class="text-slate-900">How Cash on Hand works:</strong> Clicking below sends your request to {{ booking.instructor?.name || 'your instructor' }}. Once they confirm, your session is locked in and you'll pay in cash at the beach.
+                </template>
+              </div>
+
+              <div class="mt-8 flex flex-col gap-3">
+                 <div class="flex gap-4">
+                   <BaseButton 
+                    type="button"
+                    @click="goBack"
+                    variant="secondary" 
+                    size="lg" 
+                    class="w-1/3 justify-center"
+                  >
+                    &larr; Release Slot
+                   </BaseButton>
+                   <BaseButton 
+                    @click="submit"
+                    variant="primary" 
+                    size="lg" 
+                    class="w-2/3 justify-center group"
+                    :loading="form.processing"
+                  >
+                    <span v-if="form.payment_method === 'gcash'">Send Request (GCash) &rarr;</span>
+                    <span v-else>Send Request (Cash on Hand) &rarr;</span>
+                  </BaseButton>
+                 </div>
+                 <p class="text-center text-xs text-slate-500 mt-1">
+                   By submitting this booking request, you agree to our 
+                   <a href="#" class="text-ocean-600 underline">Terms of Service</a> and 
+                   <a href="#" class="text-ocean-600 underline">Refund Policy</a>.
+                 </p>
               </div>
             </div>
 
             <!-- Security Badge -->
-            <div class="flex items-center justify-center space-x-8 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/PCI_DSS_logo.svg" class="h-8" alt="PCI DSS">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" class="h-6" alt="Secure Payment">
+            <div class="flex items-center justify-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-400">
+              <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 shadow-sm">
+                <svg class="h-4 w-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                PCI-DSS Compliant
+              </span>
+              <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 shadow-sm">
+                <span class="inline-block h-2 w-2 rounded-full bg-ocean-500"></span>
+                Secured by PayMongo &amp; GCash
+              </span>
             </div>
           </div>
 

@@ -2,9 +2,11 @@
 
 > **Supersedes:** the first `SPOT_BASED_BOOKING_PROPOSAL.md`.
 >
-> **What changed in this revision:** the business rule is now explicit - **capacity belongs to the instructor, not the spot**. There is no maximum number of students or instructors per surf spot. Each instructor has a limited number of seats (L1 = 2, L2 = 1, L3 = 5, configurable), and an instructor's overlapping time window is pinned to **one** surf spot.
+> **What changed in this revision:** the business rule is now explicit - **capacity belongs to the instructor, not the spot**. There is no maximum number of students or instructors per surf spot. Each instructor has a limited number of seats (L1 = 1, L2 = 2, L3 = 5, configurable), and an instructor's overlapping time window is pinned to **one** surf spot.
 >
 > **Status:** analysis and proposal. No code has been changed.
+>
+> **Related decision:** `BOOKING_CHECKOUT_HOLD_SPEC.md` records the approved checkout-hold and seat-capacity rules that accompany this flow.
 
 ---
 
@@ -32,7 +34,7 @@
 
 | Rule | Decision |
 |---|---|
-| **Seat capacity** | Per **instructor**, by level: L1 = 2, L2 = 1, L3 = 5. Configurable via `SIASURF_LEVEL{1,2,3}_CAPACITY`. |
+| **Seat capacity** | Per **instructor**, by level: L1 = 1 (1-on-1), L2 = 2, L3 = 5. Configurable via `SIASURF_LEVEL{1,2,3}_CAPACITY`. |
 | **Spot capacity** | **None.** No maximum students and no maximum instructors per surf spot. |
 | **Spot closures** | SISA may still close a spot for safety, events or access (`is_bookable = false`). That is a closure, not a capacity limit. |
 | **One instructor, one spot** | An instructor's overlapping time window must be pinned to exactly one `surf_spot_id`. |
@@ -54,7 +56,7 @@ Consequences:
 
 - A Level 3 instructor with 5 seats can accept Student A at 06:00-08:00 for Cloud 9 and Student B at 06:00-08:00 for Jacking Horse. Used seats = 2 of 5, so both pass.
 - The instructor is expected at two breaks at the same time.
-- Raising `SIASURF_LEVEL2_CAPACITY` would reproduce the same bug for Level 2.
+- Level 2 already has 2 seats, so the same bug can occur there today with two separate bookings at different spots.
 - The current `lockForUpdate` protects the instructor row from capacity races, but not from spot races.
 
 The fix is not "add a spot capacity". It is: **make the spot an invariant of the instructor's time window.**
@@ -368,7 +370,7 @@ No silent spot changes.
 
 ```
 capacity(instructor) = InstructorLevel::slotCapacity()
-                      (config: L1=2, L2=1, L3=5)
+                      (config: L1=1, L2=2, L3=5)
 
 used(instructor, date, start, end) =
   sum(student_count) of live bookings
@@ -455,14 +457,16 @@ The existing code already locks the instructor row and re-checks capacity; the p
 - Student A cancels. Pin stays (B and C remain); used = 3.
 - B and C also cancel. Pin releases.
 
-**Example 2 - Level 2, 1 seat**
+**Example 2 - Level 2, 2 seats**
 
-- Student A books 06:00-08:00 at Cloud 9. Used = 1 = capacity.
-- Student B cannot book any spot at that time: capacity is full. The spot dimension does not add seats.
+- Student A books 06:00-08:00 at Cloud 9 (1 student). Used = 1 of 2.
+- Student B books the same time and spot (1 student). Used = 2 of 2.
+- Student C is rejected: capacity is full. A third student cannot be added by choosing another spot; the slot is pinned and capacity is exhausted.
 
-**Example 3 - Level 1, 2 seats, exclusive**
+**Example 3 - Level 1, 1 seat**
 
-- Student A requests 06:00-08:00 at Jacking Horse (2 students). The slot is exclusive; no second booking at any spot.
+- Student A requests 06:00-08:00 at Jacking Horse (1 student). Used = 1 = capacity; the slot is full.
+- A second student cannot book that instructor/time at any spot.
 - If A cancels, the pin releases.
 
 **Example 4 - Manual assignment**
@@ -724,9 +728,9 @@ This means:
 
 `SafetyService` still enforces:
 
-- L1: max 2 students, beginners only.
-- L2: 1-on-1.
-- L3: max 5.
+- L1: 1-on-1 (max 1 student), beginners only.
+- L2: max 2 students.
+- L3: max 5 students.
 - Age 5-12 requires a Level 3 instructor.
 - Beginner safe zones.
 - Certification match.

@@ -112,8 +112,8 @@ const submit = () => {
             <div>
                <InputLabel value="Teaching Level" class="mb-2" />
                <select v-model="form.level" class="w-full border-slate-100 rounded-2xl focus:ring-ocean-500 focus:border-ocean-500 font-bold">
-                  <option :value="1">Level 1 - Beginner (Groups max 2)</option>
-                  <option :value="2">Level 2 - Specialized (1-on-1)</option>
+                  <option :value="1">Level 1 - Beginner (1-on-1)</option>
+                  <option :value="2">Level 2 - Intermediate (Max 2 students)</option>
                   <option :value="3">Level 3 - Expert (Groups max 5)</option>
                </select>
                <InputError :message="form.errors.level" />

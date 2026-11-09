@@ -19,7 +19,7 @@ class StoreFeedbackRequest extends FormRequest
         return [
             'submit_review' => ['boolean'],
             'submit_concern' => ['boolean'],
-            'rating' => ['nullable', 'integer', 'between:1,5'],
+            'rating' => ['nullable', 'required_if:submit_review,true', 'integer', 'between:1,5'],
             'comment' => ['nullable', 'required_if:submit_review,true', 'string', 'min:20', 'max:1000'],
             'feedback_tags' => ['nullable', 'array'],
             'feedback_tags.*' => ['string', Rule::enum(FeedbackCategory::class)],

@@ -23,8 +23,16 @@ class ExpireStaleBookingRequests extends Command
 
         Booking::query()
             ->where('status', BookingStatus::Pending)
-            ->whereNotNull('accept_deadline_at')
-            ->where('accept_deadline_at', '<', now())
+            ->where(function ($query) {
+                $query->where(function ($q) {
+                    $q->whereNotNull('accept_deadline_at')
+                        ->where('accept_deadline_at', '<', now());
+                })->orWhere(function ($q) {
+                    $q->whereNull('accept_deadline_at')
+                        ->whereNotNull('payment_deadline_at')
+                        ->where('payment_deadline_at', '<', now());
+                });
+            })
             ->orderBy('id')
             ->chunkById((int) $this->option('chunk'), function ($bookings) use (&$expired) {
                 foreach ($bookings as $booking) {

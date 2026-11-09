@@ -31,6 +31,14 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
+
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
+
         $booking->load(['instructor', 'surfSpot', 'participants']);
 
         if ($booking->participants->isNotEmpty()) {
@@ -46,6 +54,7 @@ class WaiverController extends Controller
                 'progress' => $this->waiverService->waiverProgress($booking),
                 'waiverType' => WaiverType::Liability->value,
                 'waiverTypeLabel' => WaiverType::Liability->label(),
+                'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
             ]);
         }
 
@@ -64,6 +73,7 @@ class WaiverController extends Controller
             'progress' => null,
             'waiverType' => WaiverType::Liability->value,
             'waiverTypeLabel' => WaiverType::Liability->label(),
+            'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
         ]);
     }
 
@@ -73,6 +83,14 @@ class WaiverController extends Controller
     public function storeLiability(Request $request, Booking $booking): RedirectResponse
     {
         $this->authorize('view', $booking);
+
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
+
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
 
         $validated = $request->validate([
             'signed_by' => 'required|string|max:255',
@@ -122,6 +140,14 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
+
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
+
         $booking->load(['instructor', 'surfSpot', 'participants']);
 
         if ($booking->participants->isNotEmpty()) {
@@ -140,6 +166,7 @@ class WaiverController extends Controller
                 'booking' => $booking,
                 'participant' => $participant,
                 'progress' => $this->waiverService->waiverProgress($booking),
+                'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
             ]);
         }
 
@@ -161,6 +188,7 @@ class WaiverController extends Controller
             'booking' => $booking,
             'participant' => null,
             'progress' => null,
+            'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
         ]);
     }
 
@@ -170,6 +198,14 @@ class WaiverController extends Controller
     public function storeParentalConsent(Request $request, Booking $booking): RedirectResponse
     {
         $this->authorize('view', $booking);
+
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
+
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
 
         $validated = $request->validate([
             'parent_name' => 'required|string|max:255',

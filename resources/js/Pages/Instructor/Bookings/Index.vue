@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
@@ -194,9 +194,10 @@ const statusMeta = (status: string): { label: string; variant: PillVariant; date
 const paymentLabel = (status?: string): string => {
   if (!status) return 'Not recorded'
   const labels: Record<string, string> = {
-    completed: 'Paid',
+    completed: 'Paid (Verified)',
+    underpaid: 'Underpaid (Violation flagged)',
     pending: 'Payment pending',
-    pending_cash: 'Cash on hand',
+    pending_cash: 'Cash unpaid (Collect at beach)',
     failed: 'Payment failed',
     refunded: 'Refunded',
   }
@@ -255,7 +256,7 @@ type ChipTone = 'neutral' | 'positive' | 'warning' | 'critical'
 
 const paymentTone = (status?: string): ChipTone => {
   if (status === 'completed') return 'positive'
-  if (status === 'failed') return 'critical'
+  if (status === 'underpaid' || status === 'failed') return 'critical'
   if (status === 'pending' || status === 'pending_cash') return 'warning'
   return 'neutral'
 }
