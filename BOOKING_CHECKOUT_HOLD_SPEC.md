@@ -341,7 +341,7 @@ If the checkout hold already expired before the student chose a payment method, 
 | `resources/js/Pages/Instructor/Dashboard.vue` | Level 2 label "up to 2 students". |
 | `database/factories/BookingFactory.php` | Random student counts respect 1/2/5. |
 | Tests | `SafetyServiceTest`, `SkillLevelMatchingTest`, `SlotCapacityTest`, `BookingControllerTest`, `BookingFlowTest`, `InstructorDirectoryTest`. |
-| Project docs | `AGENTS.md`, `prd.md`, `masterplandevelopment.md`, `siargao-surfinfo`, `IMPLEMENTATION_CORRECTIONS.md`. |
+| Project docs | `AGENTS.md`, `prd.md`. |
 
 ### 8.2 Checkout hold
 
