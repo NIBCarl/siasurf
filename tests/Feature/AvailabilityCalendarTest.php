@@ -178,4 +178,85 @@ class AvailabilityCalendarTest extends TestCase
             'days' => 500,
         ]))->assertStatus(422);
     }
+
+    /** @test */
+    public function a_date_inside_the_horizon_is_bookable()
+    {
+        $date = now()->addDays(10)->format('Y-m-d');
+
+        $reason = $this->service()->rangeBookabilityReason(
+            $this->instructor->id,
+            $date,
+            '07:00',
+            '09:00',
+        );
+
+        $this->assertNull($reason, "Expected {$date} to be bookable, got: {$reason}");
+    }
+
+    /** @test */
+    public function a_date_past_the_horizon_is_rejected_by_the_service()
+    {
+        $date = now()->addDays(200)->format('Y-m-d');
+
+        $reason = $this->service()->rangeBookabilityReason(
+            $this->instructor->id,
+            $date,
+            '07:00',
+            '09:00',
+        );
+
+        $this->assertNotNull($reason);
+        $this->assertStringContainsString('60 days ahead', $reason);
+    }
+
+    /** @test */
+    public function the_single_slot_assertion_also_enforces_the_horizon()
+    {
+        $reason = $this->service()->bookabilityReason(
+            $this->instructor->id,
+            now()->addDays(200)->format('Y-m-d'),
+            'morning',
+            '07:00',
+        );
+
+        $this->assertNotNull($reason);
+        $this->assertStringContainsString('days ahead', $reason);
+    }
+
+    /** @test */
+    public function the_horizon_is_read_from_config()
+    {
+        config(['siasurf.booking.horizon_days' => 14]);
+
+        $service = $this->service();
+        $this->assertSame(14, $service->bookingHorizonDays());
+
+        // 20 days out is now beyond the horizon.
+        $reason = $service->rangeBookabilityReason(
+            $this->instructor->id,
+            now()->addDays(20)->format('Y-m-d'),
+            '07:00',
+            '09:00',
+        );
+
+        $this->assertNotNull($reason);
+        $this->assertStringContainsString('14 days ahead', $reason);
+    }
+
+    /** @test */
+    public function the_horizon_check_does_not_mutate_the_callers_date()
+    {
+        $date = now()->addDays(200)->setTime(15, 30, 0);
+
+        $this->service()->rangeBookabilityReason(
+            $this->instructor->id,
+            $date,
+            '07:00',
+            '09:00',
+        );
+
+        // The guard must not have truncated the caller's Carbon to midnight.
+        $this->assertSame('15:30', $date->format('H:i'));
+    }
 }

@@ -280,9 +280,11 @@ class AvailabilityController extends Controller
 
         $students = (int) ($validated['students'] ?? 1);
 
-        // The booking horizon is capped by config so a student cannot browse
-        // indefinitely into the future against a weekly pattern.
-        $horizon = (int) config('siasurf.booking.horizon_days', 60);
+        $availability = app(AvailabilityService::class);
+
+        // The booking horizon is owned by the service so the calendar, the form
+        // and the server-side assertion cannot drift apart.
+        $horizon = $availability->bookingHorizonDays();
         $days = min((int) ($validated['days'] ?? $horizon), $horizon);
 
         $start = isset($validated['start'])
@@ -294,8 +296,6 @@ class AvailabilityController extends Controller
             $days = max(0, $days - (int) now()->startOfDay()->diffInDays($start));
             $start = now()->startOfDay();
         }
-
-        $availability = app(AvailabilityService::class);
 
         $days = max(1, $days);
 

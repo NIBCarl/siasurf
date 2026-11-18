@@ -1204,6 +1204,46 @@ class AvailabilityService
     }
 
     /**
+     * How far ahead a student may book, in days. Mirrors the value the booking
+     * calendar uses so the UI and the server cannot disagree.
+     */
+    public function bookingHorizonDays(): int
+    {
+        return max(1, (int) config('siasurf.booking.horizon_days', 60));
+    }
+
+    /**
+     * The last date that may be booked.
+     */
+    public function lastBookableDate(): Carbon
+    {
+        return today()->addDays($this->bookingHorizonDays());
+    }
+
+    /**
+     * Non-null when the date sits past the booking horizon.
+     *
+     * The calendar already refuses to render these days, but the form is not the
+     * authority - a hand-crafted POST would otherwise sail through with a date
+     * months into the future, against a weekly pattern that means nothing that
+     * far out. Checked here so every entry point shares the same rule.
+     */
+    private function beyondHorizonReason(Carbon $day): ?string
+    {
+        $last = $this->lastBookableDate();
+
+        // copy() matters: Carbon objects are handles, so mutating $day here
+        // would also truncate the caller's date to midnight.
+        if ($day->copy()->startOfDay()->greaterThan($last)) {
+            return 'Bookings open at most ' . $this->bookingHorizonDays()
+                . ' days ahead. The latest date you can book is '
+                . $last->format('j M Y') . '.';
+        }
+
+        return null;
+    }
+
+    /**
      * Whether the instructor has ever published a weekly schedule. Used to tell
      * "has not set this up yet" apart from "deliberately unavailable".
      */
@@ -1230,6 +1270,10 @@ class AvailabilityService
 
         if ($day->isBefore(today())) {
             return 'That date is in the past.';
+        }
+
+        if (($beyondHorizon = $this->beyondHorizonReason($day)) !== null) {
+            return $beyondHorizon;
         }
 
         $periods = $this->periodsFor($instructorId, $day, $students);
@@ -1272,6 +1316,10 @@ class AvailabilityService
 
         if ($day->isBefore(today())) {
             return 'That date is in the past.';
+        }
+
+        if (($beyondHorizon = $this->beyondHorizonReason($day)) !== null) {
+            return $beyondHorizon;
         }
 
         $start = $this->timeString($startTime);
