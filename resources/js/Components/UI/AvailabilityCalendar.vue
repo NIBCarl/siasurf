@@ -269,17 +269,22 @@ function shiftMonth(delta: number) {
             </div>
 
             <div v-for="(date, index) in cells" :key="index" role="gridcell">
-                <button
-                    v-if="date"
-                    type="button"
-                    :class="cellClasses(date)"
-                    :disabled="stateFor(date) === 'past' || stateFor(date) === 'unknown'"
-                    :aria-label="`${toKey(date)}${titleFor(date) ? ' — ' + titleFor(date) : ''}`"
-                    :aria-pressed="isSelected(date)"
-                    :title="titleFor(date)"
-                    @click="select(date)"
-                >
-                    {{ date.getDate() }}
+                <!--
+                    The title lives on the wrapper because a disabled <button>
+                    does not reliably fire hover events in all browsers, so a
+                    title on the button itself would hide the reason for exactly
+                    the days that need explaining.
+                -->
+                <span v-if="date" :title="titleFor(date)" class="block">
+                    <button
+                        type="button"
+                        :class="cellClasses(date)"
+                        :disabled="stateFor(date) !== 'available' && stateFor(date) !== 'partial'"
+                        :aria-label="`${toKey(date)}${titleFor(date) ? ' — ' + titleFor(date) : ''}`"
+                        :aria-pressed="isSelected(date)"
+                        @click="select(date)"
+                    >
+                        {{ date.getDate() }}
 
                     <!-- One dot per open period, so a half-free day is obvious. -->
                     <span
@@ -296,7 +301,8 @@ function shiftMonth(delta: number) {
                                 : 'bg-stone-300'"
                         />
                     </span>
-                </button>
+                    </button>
+                </span>
             </div>
         </div>
 
