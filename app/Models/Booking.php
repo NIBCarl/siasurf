@@ -103,6 +103,7 @@ class Booking extends Model
         'attendance_marked_by',
         'cancelled_at',
         'completed_at',
+        'completed_by',
         'height',
         'weight',
         'payment_deadline_at',
@@ -678,11 +679,18 @@ class Booking extends Model
         );
     }
 
-    public function complete(): void
+    /**
+     * Complete the lesson, recording WHO closed the session alongside when.
+     *
+     * `completed_by` mirrors `attendance_marked_by` so the finished-session
+     * record shows the same actor trail for both instructor actions.
+     */
+    public function complete(?int $completedBy = null): void
     {
         $this->update([
             'status' => BookingStatus::Completed,
             'completed_at' => now(),
+            'completed_by' => $completedBy,
         ]);
 
         // Dispatch review request job to be sent after 2 hours
@@ -780,21 +788,6 @@ class Booking extends Model
             'status' => BookingStatus::InProgress,
             'started_at' => now(),
         ]);
-    }
-
-    public function getSessionTimeRemaining(): int
-    {
-        if (!$this->isInProgress() || !$this->started_at) {
-            return 0;
-        }
-
-        // Copy the Carbon instance: addHours() mutates in place, so calling this
-        // more than once on the same model would keep pushing the end time out.
-        $duration = $this->duration_hours ?: self::standardHours();
-        $endTime = $this->started_at->copy()->addHours($duration);
-        $remaining = now()->diffInSeconds($endTime, false);
-
-        return max(0, (int) $remaining);
     }
 
     /**
