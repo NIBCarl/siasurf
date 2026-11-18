@@ -254,7 +254,6 @@ class DashboardService
                     'spot_name' => $booking->surfSpot->name,
                     'started_at' => $booking->started_at,
                     'duration_hours' => $booking->duration_hours,
-                    'time_remaining' => $booking->getSessionTimeRemaining(),
                 ];
             })
             ->toArray();
@@ -392,7 +391,6 @@ class DashboardService
                     'spot_name' => $ongoingSession->surfSpot->name,
                     'started_at' => $ongoingSession->started_at,
                     'duration_hours' => $ongoingSession->duration_hours,
-                    'time_remaining' => $ongoingSession->getSessionTimeRemaining(),
                 ] : null,
                 'upcoming_bookings' => $upcomingBookings->map(fn($b) => [
                     'id' => $b->id,

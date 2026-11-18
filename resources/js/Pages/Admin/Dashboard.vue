@@ -56,7 +56,6 @@ interface Props {
     spot_name: string
     started_at: string
     duration_hours: number
-    time_remaining: number
   }>
   activity: Array<{
     type: string
@@ -69,6 +68,22 @@ interface Props {
 }
 
 defineProps<Props>()
+
+/**
+ * Format a session start timestamp for the live-session table.
+ *
+ * This replaces the old countdown column: sessions now show when the lesson
+ * began rather than a running clock, which is what SISA actually needs when
+ * reconciling a session against the attendance record.
+ */
+const formatStartedAt = (value: string | null | undefined) => {
+  if (!value) return '—'
+
+  const started = new Date(value)
+  if (Number.isNaN(started.getTime())) return '—'
+
+  return started.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
 
 const quickActions = [
   { label: 'Register Instructor', href: 'admin.instructors.create', icon: UserPlusIcon, color: 'ocean' },
@@ -245,7 +260,7 @@ const quickActions = [
                                 <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">ID</th>
                                 <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Team</th>
                                 <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Location</th>
-                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Time left</th>
+                                <th class="px-5 py-3 text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Started</th>
                                 <th class="px-5 py-3 text-right text-label font-semibold uppercase tracking-[0.06em] text-stone-600">Access</th>
                             </tr>
                         </thead>
@@ -272,26 +287,13 @@ const quickActions = [
                                 </td>
 
                                 <td class="whitespace-nowrap px-5 py-4">
-                                    <div class="flex items-center gap-3">
+                                    <div class="flex flex-col gap-0.5">
                                         <span class="font-mono text-body-sm font-semibold tabular-nums text-deep-900">
-                                            {{ Math.floor(session.time_remaining / 3600) }}:{{
-                                                Math.floor((session.time_remaining % 3600) / 60)
-                                                    .toString()
-                                                    .padStart(2, '0')
-                                            }}
+                                            {{ formatStartedAt(session.started_at) }}
                                         </span>
-                                        <div class="h-1.5 w-28 overflow-hidden rounded-full bg-sand-200">
-                                            <div
-                                                class="h-full rounded-full bg-lagoon-500 transition-all duration-1000"
-                                                :style="{
-                                                    width:
-                                                        Math.min(
-                                                            100,
-                                                            (session.time_remaining / (session.duration_hours * 3600)) * 100,
-                                                        ) + '%',
-                                                }"
-                                            />
-                                        </div>
+                                        <span class="text-label text-stone-500">
+                                            {{ session.duration_hours }}h lesson
+                                        </span>
                                     </div>
                                 </td>
 

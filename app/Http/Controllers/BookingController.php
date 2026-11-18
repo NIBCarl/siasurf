@@ -747,7 +747,6 @@ class BookingController extends Controller
 
         return Inertia::render('Student/Bookings/Show', [
             'booking' => $booking,
-            'sessionTimeRemaining' => $booking->getSessionTimeRemaining(),
         ]);
     }
 

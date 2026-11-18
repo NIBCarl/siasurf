@@ -607,6 +607,72 @@ class AvailabilityService
     // ---------------------------------------------------------------------
 
     /**
+     * Explain why a period with a published schedule has no bookable start.
+     *
+     * The generic "no bookable times" message hides the most common real
+     * cause: the instructor is mid-lesson. A student who sees only "fully
+     * booked" assumes the day is gone, when the truth is "busy until 10:00,
+     * free after".
+     *
+     * The end time is derived from the live session's own start + duration —
+     * NOT a blanket two hours — so a lesson that began at 07:00 frees the
+     * instructor at 09:00 rather than blocking until noon.
+     */
+    private function unbookableReason(int $instructorId, Carbon $day, string $timePeriod): ?string
+    {
+        // Deliberately NOT liveBookingsOnDate(): that helper calls
+        // releaseExpiredCheckoutHolds(), which mutates. Calling it from this
+        // read path released the lock that had just been created for a
+        // confirmed booking. Query the live session directly instead.
+        $live = Booking::query()
+            ->with('instructor')
+            ->where('instructor_id', $instructorId)
+            ->whereDate('date', $day->format('Y-m-d'))
+            ->where('status', BookingStatus::InProgress->value)
+            ->first();
+
+        if ($live === null) {
+            return null;
+        }
+
+        $freeAt = $this->sessionFreeAt($live);
+
+        if ($freeAt === null) {
+            return sprintf(
+                '%s is currently teaching a lesson, so this period is unavailable.',
+                $live->instructor?->name ?? 'The instructor'
+            );
+        }
+
+        return sprintf(
+            '%s is currently teaching until %s. The earliest a new lesson can start is %s.',
+            $live->instructor?->name ?? 'The instructor',
+            $freeAt->format('g:i A'),
+            $freeAt->format('g:i A')
+        );
+    }
+
+    /**
+     * When a live session is expected to finish, from its own start + duration.
+     */
+    private function sessionFreeAt(Booking $booking): ?Carbon
+    {
+        if ($booking->started_at === null) {
+            return null;
+        }
+
+        $minutes = $this->sessionMinutesFor(
+            $booking->instructor_id,
+            $this->dateOf($booking),
+            $booking->time_period instanceof \BackedEnum
+                ? $booking->time_period->value
+                : (string) $booking->time_period
+        );
+
+        return $booking->started_at->copy()->addMinutes($minutes);
+    }
+
+    /**
      * The two periods for a date, each with a verdict and the reason.
      *
      * `$students` is the size of the party being booked. It is compared against
@@ -679,7 +745,8 @@ class AvailabilityService
                 : [];
 
             if ($reason === null && empty($slots)) {
-                $reason = 'No bookable times are left in this period for that date.';
+                $reason = $this->unbookableReason($instructorId, $day, $value)
+                    ?? 'No bookable times are left in this period for that date.';
             }
 
             // "Remaining capacity" is measured at the next bookable start, not

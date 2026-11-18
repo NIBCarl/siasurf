@@ -81,16 +81,13 @@ interface Booking {
 
 interface Props {
   booking: Booking
-  sessionTimeRemaining?: number
 }
 
 const props = defineProps<Props>()
 
-const timeRemaining = ref(props.sessionTimeRemaining || 0)
 const paymentTimeRemaining = ref(0)
 const payingGCash = ref(false)
 
-let timer: ReturnType<typeof setInterval> | null = null
 let paymentTimer: ReturnType<typeof setInterval> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -115,13 +112,6 @@ const startGCashCheckout = () => {
 }
 
 onMounted(() => {
-  if (props.booking.status === 'in_progress' && timeRemaining.value > 0) {
-    timer = setInterval(() => {
-      timeRemaining.value -= 1
-      if (timeRemaining.value <= 0 && timer) clearInterval(timer)
-    }, 1000)
-  }
-
   calculatePaymentTimeRemaining()
   paymentTimer = setInterval(() => {
     if (props.booking.status === 'awaiting_payment' && props.booking.payment_deadline_at) {
@@ -144,7 +134,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
   if (paymentTimer) clearInterval(paymentTimer)
   if (pollTimer) clearInterval(pollTimer)
 
@@ -486,7 +475,6 @@ const canChat = computed(() =>
                                     {{ booking.surf_spot.name }} · {{ timeLabel(booking.time_period) }}
                                 </p>
                             </div>
-                            <Countdown :seconds="timeRemaining" label="Time left" />
                         </div>
                     </AppCard>
 
