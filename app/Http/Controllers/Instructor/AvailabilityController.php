@@ -264,6 +264,57 @@ class AvailabilityController extends Controller
     }
 
     /**
+     * Day-by-day availability for a whole month window.
+     *
+     * The booking form's calendar needs this to disable dates the instructor
+     * has blocked. Calling the single-date endpoint once per day would cost
+     * ~42 requests per month view; this resolves the range in three queries.
+     */
+    public function getCalendar(Request $request, $instructorId): JsonResponse
+    {
+        $validated = $request->validate([
+            'start' => 'nullable|date',
+            'days' => 'nullable|integer|min:1|max:120',
+            'students' => 'nullable|integer|min:1|max:10',
+        ]);
+
+        $students = (int) ($validated['students'] ?? 1);
+
+        // The booking horizon is capped by config so a student cannot browse
+        // indefinitely into the future against a weekly pattern.
+        $horizon = (int) config('siasurf.booking.horizon_days', 60);
+        $days = min((int) ($validated['days'] ?? $horizon), $horizon);
+
+        $start = isset($validated['start'])
+            ? \Carbon\Carbon::parse($validated['start'])
+            : now();
+
+        // Never hand back days that are already past.
+        if ($start->isBefore(now()->startOfDay())) {
+            $days = max(0, $days - (int) now()->startOfDay()->diffInDays($start));
+            $start = now()->startOfDay();
+        }
+
+        $availability = app(AvailabilityService::class);
+
+        $days = max(1, $days);
+
+        return response()->json([
+            'start' => $start->format('Y-m-d'),
+            'days' => $days,
+            'students' => $students,
+            'horizon_days' => $horizon,
+            'slot_capacity' => $availability->slotCapacity((int) $instructorId),
+            'days_map' => $availability->availabilityByDay(
+                (int) $instructorId,
+                $start,
+                $days,
+                $students
+            ),
+        ]);
+    }
+
+    /**
      * End times the student may choose for a given start time.
      *
      * The booking form shows a start selector and an end selector; this is the

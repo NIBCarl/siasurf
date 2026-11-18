@@ -600,6 +600,150 @@ class AvailabilityService
         return max(0, $capacity - $booked);
     }
 
+    /**
+     * Day-by-day availability for a date range, in a bounded number of queries.
+     *
+     * `periodsFor()` is one date per call. A month grid would need ~42 calls
+     * and the same number of round trips, so this resolves the whole window
+     * from three reads instead: the weekly pattern, the manual blocks in the
+     * range, and the live bookings in the range.
+     *
+     * Deliberately coarse: a day reports whether a period has ANY bookable
+     * start, not the start times themselves. The student still calls
+     * periodsFor() for the day they actually pick.
+     *
+     * @return array<string, array<string, array{available: bool, reason: ?string, remaining_capacity: int}>>
+     */
+    public function availabilityByDay(
+        int $instructorId,
+        Carbon|string $start,
+        int $days = 60,
+        int $students = 1,
+        ?int $exceptBookingId = null
+    ): array {
+        $from = ($start instanceof Carbon ? $start->copy() : Carbon::parse($start))->startOfDay();
+        $days = max(1, min($days, 120));
+        $to = $from->copy()->addDays($days - 1)->endOfDay();
+
+        // 1. Weekly pattern, one read for every weekday in the range.
+        $weekly = Availability::query()
+            ->where('user_id', $instructorId)
+            ->whereNull('specific_date')
+            ->where('is_available', true)
+            ->get(['day_of_week', 'time_period']);
+
+        $periodValue = fn ($period) => $period instanceof \BackedEnum
+            ? $period->value
+            : (string) $period;
+
+        $recurring = [];
+
+        foreach ($weekly as $row) {
+            $day = $row->day_of_week instanceof \BackedEnum
+                ? (int) $row->day_of_week->value
+                : (int) $row->day_of_week;
+
+            $recurring[$day][$periodValue($row->time_period)] = true;
+        }
+
+        $hasPublishedSchedule = $weekly->isNotEmpty();
+
+        // 2. Manual blocks across the whole range, keyed by date.
+        $manualBlocks = Availability::query()
+            ->where('user_id', $instructorId)
+            ->whereBetween('specific_date', [$from->format('Y-m-d'), $to->format('Y-m-d')])
+            ->where('is_available', false)
+            ->whereNull('blocked_by_booking_id')
+            ->get(['specific_date', 'time_period'])
+            ->groupBy(fn ($row) => $row->specific_date instanceof \DateTimeInterface
+                ? $row->specific_date->format('Y-m-d')
+                : (string) $row->specific_date)
+            ->map(fn ($rows) => $rows->map(fn ($row) => $periodValue($row->time_period))->all())
+            ->all();
+
+        // 3. Live bookings holding slots in the range, keyed by date.
+        $liveBookings = Booking::query()
+            ->with('instructor')
+            ->where('instructor_id', $instructorId)
+            ->whereBetween('date', [$from->format('Y-m-d'), $to->format('Y-m-d')])
+            ->whereIn('status', array_map(
+                fn (BookingStatus $status) => $status->value,
+                BookingStatus::slotHolding()
+            ))
+            ->when($exceptBookingId, fn ($query) => $query->where('id', '!=', $exceptBookingId))
+            ->get()
+            ->groupBy(fn (Booking $booking) => $this->dateOf($booking));
+
+        $level = $this->instructorLevel($instructorId);
+        $capacity = $level->slotCapacity();
+        $result = [];
+
+        for ($offset = 0; $offset < $days; $offset++) {
+            $day = $from->copy()->addDays($offset);
+            $dateString = $day->format('Y-m-d');
+            $dayOfWeek = (int) $day->format('w');
+
+            $dayBlocks = $manualBlocks[$dateString] ?? [];
+            $dayBookings = $liveBookings[$dateString] ?? collect();
+
+            $periods = [];
+
+            foreach (TimePeriod::cases() as $period) {
+                $value = $period->value;
+                $reason = null;
+
+                if ($hasPublishedSchedule && ! isset($recurring[$dayOfWeek][$value])) {
+                    $reason = 'Not available during the '
+                        . strtolower($period->label()) . ' on this day.';
+                } elseif (in_array($value, $dayBlocks, true)) {
+                    $reason = 'Blocked as personal time.';
+                }
+
+                $remaining = 0;
+
+                if ($reason === null) {
+                    // The single-date path drops starts inside the lead-time
+                    // buffer (Booking::PRE_LESSON_BUFFER_HOURS). Mirror it here
+                    // so the calendar never offers a date the student cannot
+                    // actually submit.
+                    $periodStart = $day->copy()->setTimeFromTimeString($period->startTime());
+
+                    if ($periodStart->lessThan(now()->addHours(Booking::PRE_LESSON_BUFFER_HOURS))) {
+                        $reason = 'Too soon to book — lessons need at least '
+                            . Booking::PRE_LESSON_BUFFER_HOURS . ' hour of lead time.';
+                    }
+                }
+
+                if ($reason === null) {
+                    $remaining = $this->remainingCapacityWithin(
+                        $dayBookings,
+                        $level,
+                        $capacity,
+                        $period->startTime(),
+                        $period->endTime()
+                    );
+
+                    if ($remaining < max(1, $students)) {
+                        $reason = $remaining === 0
+                            ? 'That time is already fully booked.'
+                            : 'Only ' . $remaining . ' spot' . ($remaining === 1 ? '' : 's') . ' left.';
+                        $remaining = max(0, $remaining);
+                    }
+                }
+
+                $periods[$value] = [
+                    'available' => $reason === null,
+                    'reason' => $reason,
+                    'remaining_capacity' => $remaining,
+                ];
+            }
+
+            $result[$dateString] = $periods;
+        }
+
+        return $result;
+    }
+
     // ---------------------------------------------------------------------
     // Bookability: the single place that answers "can this instructor be
     // booked for this slot?" It combines weekly availability, one-off blocks

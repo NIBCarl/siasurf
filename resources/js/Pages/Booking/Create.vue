@@ -8,6 +8,7 @@ import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import TextInput from '@/Components/TextInput.vue'
+import AvailabilityCalendar from '@/Components/UI/AvailabilityCalendar.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
 
@@ -545,16 +546,15 @@ const submit = () => {
               <form @submit.prevent="submit" class="p-8 space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   
-                  <!-- Date -->
-                  <div>
+                  <!-- Date: month calendar with blocked/unavailable days disabled -->
+                  <div class="col-span-full">
                     <InputLabel for="date" value="Date of Lesson" />
-                    <TextInput
+                    <AvailabilityCalendar
                       id="date"
-                      type="date"
-                      class="mt-1 block w-full"
+                      class="mt-1"
+                      :instructor-id="instructor.id"
+                      :students="form.student_count"
                       v-model="form.date"
-                      required
-                      :min="new Date().toISOString().split('T')[0]"
                     />
                     <InputError class="mt-2" :message="form.errors.date" />
                   </div>

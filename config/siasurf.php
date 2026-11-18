@@ -46,6 +46,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Booking Horizon
+    |--------------------------------------------------------------------------
+    |
+    | How far ahead a student may browse and book. Without a bound the booking
+    | calendar would happily render availability indefinitely into the future
+    | against a weekly pattern that is only meaningful for the near term.
+    |
+    */
+
+    'booking' => [
+        'horizon_days' => (int) env('SIASURF_BOOKING_HORIZON_DAYS', 60),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Slot capacity per instructor level
     |--------------------------------------------------------------------------
     |

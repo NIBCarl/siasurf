@@ -94,12 +94,33 @@ real domain, then run `php artisan instructors:generate-qr` to regenerate.
 
 Server-side was already correct — `AvailabilityService` rejects a period with
 `is_available = false` on that `specific_date`. The gap was purely UI:
-`<input type="date" :min="...">` cannot disable arbitrary dates.
+`<input type="date" :min="...">` cannot disable arbitrary dates, so a blocked
+day was still clickable.
 
-This is **not implemented yet** — it needs a calendar component
-(flatpickr / `@vuepic/vue-datepicker`) plus a `blocked_dates` endpoint. Left
-for a follow-up because it is a self-contained UI change with no schema
-impact.
+There was no calendar component and no date library installed, so this was
+built in-house rather than pulled from a library:
+
+- **`AvailabilityCalendar.vue`** — month grid, Monday-first. Days render as
+  open (clickable), partly open (one period free), or unavailable
+  (struck through, `title` explains why). Keyboard accessible, prev/next
+  month navigation bounded by the booking horizon. One dot per period.
+- **`AvailabilityService::availabilityByDay()`** — resolves a whole range in
+  three queries (weekly pattern, manual blocks, live bookings) instead of one
+  request per day. A month view would otherwise cost ~31 round trips.
+- **`GET /api/availability/{instructor}/calendar`** — exposes the range.
+  Clamped by `config('siasurf.booking.horizon_days')` (default 60, override
+  with `SIASURF_BOOKING_HORIZON_DAYS`).
+
+Why not flatpickr / `@vuepic/vue-datepicker`: the API returns **per-period
+availability with reasons**. A generic picker consumes that as a single
+boolean, so we would discard our own data and still write a custom cell
+renderer — a dependency for a grid we could write in 200 lines that matches
+the existing Tailwind tokens.
+
+Parity matters here: `AvailabilityCalendarTest` asserts the batch result
+agrees with `periodsFor()` day by day, including the
+`PRE_LESSON_BUFFER_HOURS` lead time, so the calendar never offers a date that
+then fails on submit.
 
 ### 11. Reserve instructor after waiver
 

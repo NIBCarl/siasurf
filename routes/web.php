@@ -266,6 +266,7 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'verified.instructor']
 
 // API routes for availability (public)
 Route::get('/api/availability/{instructor}', [AvailabilityController::class, 'getAvailableSlots'])->name('api.availability');
+Route::get('/api/availability/{instructor}/calendar', [AvailabilityController::class, 'getCalendar'])->name('api.availability.calendar');
 Route::get('/api/availability/{instructor}/end-times', [AvailabilityController::class, 'getAvailableEndTimes'])->name('api.availability.end-times');
 Route::get('/api/availability/{instructor}/booked-slots', [AvailabilityController::class, 'getBookedSlots'])->name('api.availability.booked-slots');
 
