@@ -194,9 +194,23 @@ class User extends Authenticatable implements MustVerifyEmail
                $this->instructorProfile->status === InstructorStatus::Active;
     }
 
+    /**
+     * Whether the instructor holds at least one verified certificate that has
+     * not expired.
+     *
+     * Expiry is evaluated at read time rather than relying on a sweep to flip
+     * `status` to Expired, so an instructor whose SISA ID lapsed overnight is
+     * hidden immediately instead of after the next scheduled job.
+     */
     public function hasVerifiedCertificate(): bool
     {
-        return $this->certificates()->where('status', CertificateStatus::Verified)->exists();
+        return $this->certificates()
+            ->where('status', CertificateStatus::Verified)
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>=', now());
+            })
+            ->exists();
     }
 
     public function isBookable(): bool

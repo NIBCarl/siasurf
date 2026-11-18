@@ -91,4 +91,22 @@ return [
         'suspension_days' => env('SIASURF_SUSPENSION_DAYS', 30),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | QR Codes
+    |--------------------------------------------------------------------------
+    |
+    | Instructor QR codes encode an absolute URL, so the host baked into the
+    | image must be reachable from a phone on the beach — not the developer's
+    | localhost. Set SIASURF_PUBLIC_URL to the LAN address or the real domain.
+    |
+    | Falls back to route() (i.e. APP_URL) when unset, which preserves the old
+    | behaviour rather than breaking environments that are already reachable.
+    |
+    */
+
+    'qr' => [
+        'public_url' => env('SIASURF_PUBLIC_URL', ''),
+    ],
+
 ];

@@ -146,7 +146,7 @@ class InstructorController extends Controller
         if ($profile && $profile->status === InstructorStatus::Active) {
             $path = $profile->qr_code_path;
             if (!$path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
-                $this->qrCodeService->generateInstructorQR($profile);
+                $this->qrCodeService->ensureInstructorQR($profile);
                 $instructor->load('instructorProfile');
             }
         }
@@ -194,7 +194,7 @@ class InstructorController extends Controller
         }
 
         // Generate QR code
-        $qrPath = $this->qrCodeService->generateInstructorQR($profile);
+        $qrPath = $this->qrCodeService->ensureInstructorQR($profile);
 
         // Update profile
         $profile->update([
