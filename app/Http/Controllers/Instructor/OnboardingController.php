@@ -35,8 +35,6 @@ class OnboardingController extends Controller
             'certificates.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // Max 10MB
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
-            'latitude' => 'nullable|numeric|between:9.5,10.2',
-            'longitude' => 'nullable|numeric|between:125.8,126.5',
         ], [
             'certificates.required' => 'Attach at least one certificate file (PDF, JPG, or PNG) before submitting.',
             'certificates.min' => 'Attach at least one certificate file (PDF, JPG, or PNG) before submitting.',
@@ -62,8 +60,6 @@ class OnboardingController extends Controller
                 'status' => InstructorStatus::PendingVerification,
                 'area' => $validated['area'] ?? null,
                 'meeting_point' => $validated['meeting_point'] ?? null,
-                'latitude' => $validated['latitude'] ?? null,
-                'longitude' => $validated['longitude'] ?? null,
             ]
         );
 

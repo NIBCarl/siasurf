@@ -28,8 +28,6 @@ const props = defineProps<{
     rate_per_hour: number;
     area?: string | null;
     meeting_point?: string | null;
-    latitude?: number | null;
-    longitude?: number | null;
   } | null
   uploadedCertificates?: number
 }>()
@@ -50,8 +48,6 @@ const form = useForm({
   rate_per_hour: props.profile?.rate_per_hour ?? 600,
   area: props.profile?.area ?? '',
   meeting_point: props.profile?.meeting_point ?? '',
-  latitude: props.profile?.latitude ?? '',
-  longitude: props.profile?.longitude ?? '',
   certificates: [] as File[],
 })
 
@@ -403,20 +399,8 @@ const handleFileChange = (e: Event) => {
                     <InputError class="text-xs font-bold" :message="form.errors.meeting_point" />
                   </div>
 
-                  <div class="space-y-2">
-                    <InputLabel for="latitude" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Latitude" />
-                    <TextInput id="latitude" v-model="form.latitude" type="number" step="0.0000001" class="block w-full" placeholder="9.8000000" />
-                    <InputError class="text-xs font-bold" :message="form.errors.latitude" />
-                  </div>
-
-                  <div class="space-y-2">
-                    <InputLabel for="longitude" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Longitude" />
-                    <TextInput id="longitude" v-model="form.longitude" type="number" step="0.0000001" class="block w-full" placeholder="126.1600000" />
-                    <InputError class="text-xs font-bold" :message="form.errors.longitude" />
-                  </div>
-
                   <p class="text-xs text-slate-500 md:col-span-2">
-                    Optional, but adding coordinates places you on the public instructor directory map. You can update this later from your public profile.
+                    Optional. Let students know your usual area and meeting point — you can update this later from your profile.
                   </p>
                 </div>
               </div>
