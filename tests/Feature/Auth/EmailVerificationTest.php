@@ -93,6 +93,11 @@ class EmailVerificationTest extends TestCase
             'skill_level' => 'beginner',
             'is_first_time' => true,
             'status' => 'active',
+            // This test is about email verification not blocking the dashboard.
+            // A student who has not seen the surf-profile prompt is redirected
+            // to it first, so record the prompt as skipped to isolate the
+            // concern under test.
+            'onboarding_skipped_at' => now(),
         ]);
 
         $this->actingAs($user)

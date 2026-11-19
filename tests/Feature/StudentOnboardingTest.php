@@ -200,6 +200,89 @@ class StudentOnboardingTest extends TestCase
     }
 
     /** @test */
+    public function a_fresh_student_is_prompted_on_their_first_visit_to_the_dashboard()
+    {
+        // Regression: the prompt originally lived in the login controller, so a
+        // brand-new signup - which goes register -> verify email -> /dashboard
+        // and never touches login - saw no onboarding at all. It only appeared
+        // on a *second* login, which is what the manual test did.
+        //
+        // /dashboard forwards to the role dashboard; the prompt fires there.
+        // Both links in that chain must end at onboarding.
+        $this->actingAs($this->student)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('student.dashboard'));
+
+        $this->actingAs($this->student)
+            ->get(route('student.dashboard'))
+            ->assertRedirectContains(route('student.onboarding'));
+    }
+
+    /** @test */
+    public function the_prompt_carries_the_intended_destination()
+    {
+        // The middleware remembers where the student was heading so they can be
+        // returned there after saving or skipping.
+        $response = $this->actingAs($this->student)->get(route('student.dashboard'));
+
+        $response->assertRedirect();
+
+        $location = $response->headers->get('Location');
+
+        $this->assertStringContainsString('/student/welcome', $location);
+        $this->assertStringContainsString('intended=', $location);
+        $this->assertStringContainsString(
+            urlencode(route('student.dashboard')),
+            $location,
+            'The intended destination should survive the trip through onboarding.'
+        );
+    }
+
+    /** @test */
+    public function the_prompt_does_not_loop_on_the_form_itself()
+    {
+        $this->actingAs($this->student)
+            ->get(route('student.onboarding'))
+            ->assertOk();
+    }
+
+    /** @test */
+    public function the_prompt_stops_once_the_details_are_saved()
+    {
+        $this->actingAs($this->student)->post(route('student.onboarding.store'), [
+            'date_of_birth' => now()->subYears(30)->format('Y-m-d'),
+            'height' => 170,
+            'weight' => 65,
+            'has_board' => false,
+        ]);
+
+        $this->actingAs($this->student)
+            ->get(route('student.dashboard'))
+            ->assertOk();
+    }
+
+    /** @test */
+    public function the_prompt_stops_after_skipping()
+    {
+        $this->actingAs($this->student)->post(route('student.onboarding.skip'));
+
+        $this->actingAs($this->student)
+            ->get(route('student.dashboard'))
+            ->assertOk();
+    }
+
+    /** @test */
+    public function instructors_are_never_prompted()
+    {
+        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor->assignRole('instructor');
+
+        $this->actingAs($instructor)
+            ->get(route('student.dashboard'))
+            ->assertForbidden();
+    }
+
+    /** @test */
     public function an_open_redirect_in_the_intended_field_is_ignored()
     {
         $this->actingAs($this->student)

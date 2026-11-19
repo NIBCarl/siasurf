@@ -94,7 +94,7 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 // Student Dashboard route
-Route::middleware(['auth', 'verified', 'role:student'])->get('/student/dashboard', [App\Http\Controllers\Student\DashboardController::class, 'index'])->name('student.dashboard');
+Route::middleware(['auth', 'verified', 'role:student', \App\Http\Middleware\PromptStudentOnboarding::class])->get('/student/dashboard', [App\Http\Controllers\Student\DashboardController::class, 'index'])->name('student.dashboard');
 
 // Profile routes - accessible to all authenticated users
 Route::middleware('auth')->group(function () {
@@ -252,8 +252,6 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
                 'rate_per_hour' => (float) $profile->rate_per_hour,
                 'area' => $profile->area,
                 'meeting_point' => $profile->meeting_point,
-                'latitude' => $profile->latitude !== null ? (float) $profile->latitude : null,
-                'longitude' => $profile->longitude !== null ? (float) $profile->longitude : null,
             ] : null,
             'uploadedCertificates' => $user->certificates()->count(),
         ]);
