@@ -126,6 +126,9 @@ class BookingController extends Controller
             // and maintained by the skill-upgrade flow) - not re-asked here.
             'studentSkillLevel' => auth()->user()->studentProfile?->skill_level ?? SkillLevel::Beginner->value,
             'studentName' => auth()->user()->name,
+            // Details captured during onboarding, so the student is not asked
+            // for their height and weight on every booking.
+            'prefill' => auth()->user()->studentProfile?->bookingPrefill() ?? [],
             'step' => 1,
         ]);
     }

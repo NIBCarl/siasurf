@@ -702,13 +702,36 @@ class AvailabilityService
                 $remaining = 0;
 
                 if ($reason === null) {
-                    // The single-date path drops starts inside the lead-time
-                    // buffer (Booking::PRE_LESSON_BUFFER_HOURS). Mirror it here
-                    // so the calendar never offers a date the student cannot
-                    // actually submit.
-                    $periodStart = $day->copy()->setTimeFromTimeString($period->startTime());
+                    // The single-date path (periodsFor) drops individual starts
+                    // inside the lead-time buffer, then reports the period as
+                    // available if ANY start survives. Checking only the period
+                    // start here was wrong: at 08:00 the 06:00 period start is
+                    // inside the buffer, so the calendar closed the whole
+                    // morning even though 10:00 and 11:00 were bookable.
+                    $cutOff = now()->addHours(Booking::PRE_LESSON_BUFFER_HOURS);
+                    $settings = $this->scheduleSettings($instructorId, $day, $period);
 
-                    if ($periodStart->lessThan(now()->addHours(Booking::PRE_LESSON_BUFFER_HOURS))) {
+                    $survivingStarts = $this->slotsInRange(
+                        $settings['start'],
+                        $settings['end'],
+                        $settings['step'],
+                        $this->minimumLessonMinutes(),
+                        $settings['open_slots']
+                    );
+
+                    $hasStartAfterCutOff = false;
+
+                    foreach ($survivingStarts as $candidate) {
+                        [$hour, $minute] = array_map('intval', explode(':', $candidate));
+                        $candidateStart = $day->copy()->setTime($hour, $minute);
+
+                        if ($candidateStart->greaterThan($cutOff)) {
+                            $hasStartAfterCutOff = true;
+                            break;
+                        }
+                    }
+
+                    if (! $hasStartAfterCutOff) {
                         $reason = 'Too soon to book — lessons need at least '
                             . Booking::PRE_LESSON_BUFFER_HOURS . ' hour of lead time.';
                     }

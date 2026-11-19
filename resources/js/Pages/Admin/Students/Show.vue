@@ -57,6 +57,14 @@ interface Student {
       skill_level: string
       is_first_time: boolean
       status: string
+      // Derived from date_of_birth, so it is always current.
+      age: number | null
+      height: string | null
+      weight: string | null
+      has_board: boolean
+      emergency_contact_name: string | null
+      emergency_contact_phone: string | null
+      medical_info: string | null
   } | null
   bookings_as_student: Booking[]
   reported_incidents: Incident[]
@@ -254,6 +262,44 @@ const toggleBanStatus = () => {
                             <div v-if="student.student_profile">
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">First Time Surfer?</p>
                                 <p class="font-bold text-slate-900">{{ student.student_profile.is_first_time ? 'Yes' : 'No' }}</p>
+                            </div>
+
+                            <!-- Details the student supplied at onboarding. Shown
+                                 to SISA so a safety decision has the facts, and
+                                 so support can answer "what do you have on me?" -->
+                            <div v-if="student.student_profile?.age != null">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Age</p>
+                                <p class="font-bold text-slate-900">
+                                    {{ student.student_profile.age }}
+                                    <span v-if="student.student_profile.age < 18" class="ml-1 text-[10px] font-bold uppercase text-amber-600">Minor</span>
+                                </p>
+                            </div>
+
+                            <div v-if="student.student_profile?.height || student.student_profile?.weight">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Height / Weight</p>
+                                <p class="font-bold text-slate-900">
+                                    {{ student.student_profile.height ? `${student.student_profile.height} cm` : '—' }}
+                                    /
+                                    {{ student.student_profile.weight ? `${student.student_profile.weight} kg` : '—' }}
+                                </p>
+                            </div>
+
+                            <div v-if="student.student_profile">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Own Surfboard</p>
+                                <p class="font-bold text-slate-900">{{ student.student_profile.has_board ? 'Yes' : 'No' }}</p>
+                            </div>
+
+                            <div v-if="student.student_profile?.emergency_contact_name || student.student_profile?.emergency_contact_phone">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                                    <PhoneIcon class="w-3 h-3" /> Emergency Contact
+                                </p>
+                                <p class="font-bold text-slate-900">{{ student.student_profile.emergency_contact_name || 'Unnamed' }}</p>
+                                <p class="text-sm text-slate-600">{{ student.student_profile.emergency_contact_phone || 'No number' }}</p>
+                            </div>
+
+                            <div v-if="student.student_profile?.medical_info">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Medical Notes</p>
+                                <p class="text-sm font-medium text-slate-800 whitespace-pre-line">{{ student.student_profile.medical_info }}</p>
                             </div>
                         </div>
                     </div>

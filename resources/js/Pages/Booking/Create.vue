@@ -46,6 +46,17 @@ interface Props {
   defaultDurationMinutes: number
   studentSkillLevel: string
   studentName: string
+  // Details captured at onboarding, so the student is not asked for their
+  // height and weight on every booking.
+  prefill?: {
+    student_age?: number
+    height?: number
+    weight?: number
+    has_board?: boolean
+    emergency_contact_name?: string
+    emergency_contact_phone?: string
+    medical_info?: string
+  }
   surfSpotRule?: string
   allowedSurfSpotDifficulties?: string[]
 }
@@ -99,6 +110,8 @@ const maxStudents = computed(() => {
   return 1 // default fallback
 })
 
+const prefill = props.prefill ?? {}
+
 const form = useForm({
   date: '',
   start_time: '',
@@ -107,14 +120,17 @@ const form = useForm({
   end_time: '',
   // Source of truth is the profile; this mirrors it for the server payload.
   skill_level: props.studentSkillLevel || 'beginner',
-  // Primary participant (the account holder).
-  student_age: 18,
-  height: '' as string | number,
-  weight: '' as string | number,
+  // Primary participant (the account holder). Falls back to the age of majority
+  // only when onboarding was skipped; ?? is used rather than || so a legitimate
+  // 0 is never swallowed.
+  student_age: prefill.student_age ?? 18,
+  height: prefill.height ?? ('' as string | number),
+  weight: prefill.weight ?? ('' as string | number),
   student_count: 1,
   surf_spot_id: props.surfSpots[0]?.id || '',
-  has_board: false,
-  notes: '',
+  has_board: prefill.has_board ?? false,
+  // Medical notes carry over so the instructor sees them without retyping.
+  notes: prefill.medical_info ?? '',
   // Declared companions (no accounts of their own).
   companions: [] as Companion[],
 })

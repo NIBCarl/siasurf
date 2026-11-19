@@ -106,6 +106,12 @@ class AvailabilityCalendarTest extends TestCase
     /** @test */
     public function the_batch_result_agrees_with_the_single_date_endpoint()
     {
+        // Freeze the clock. Without this the test straddles a real "now": the
+        // batch resolves lead time once for the whole window while periodsFor()
+        // evaluates it per call, so the two can disagree by a minute near a
+        // boundary - and the failure only appears at certain times of day.
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-01 08:00:00'));
+
         $map = $this->service()->availabilityByDay($this->instructor->id, now(), 14);
 
         foreach ($map as $date => $periods) {
@@ -119,6 +125,46 @@ class AvailabilityCalendarTest extends TestCase
                 );
             }
         }
+    }
+
+    /**
+     * Regression: the batch used to test the lead-time cut-off against the
+     * period START rather than each candidate slot. At 08:00 the 06:00 start was
+     * inside the one-hour buffer, so the whole morning was marked unbookable
+     * even though 10:00 and 11:00 were still open. The student saw a greyed-out
+     * day that the single-date endpoint said was bookable.
+     *
+     * @test
+     */
+    public function a_morning_stays_bookable_when_later_slots_are_still_open()
+    {
+        // 08:00 today: 06:00-09:00 starts are inside the buffer, 10:00 and
+        // 11:00 are not.
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-01 08:00:00'));
+
+        $map = $this->service()->availabilityByDay($this->instructor->id, today(), 1);
+        $single = $this->service()->periodsFor($this->instructor->id, today());
+
+        $this->assertTrue(
+            $map['2026-12-01']['morning']['available'],
+            'The morning has bookable starts after the cut-off, so it must not be closed.'
+        );
+
+        $this->assertTrue($single['morning']['available']);
+        $this->assertNotEmpty($single['morning']['slots']);
+    }
+
+    /** @test */
+    public function a_period_with_no_start_left_after_the_cut_off_is_closed()
+    {
+        // 11:30 today: only 11:00 remains in the morning, and it is inside the
+        // one-hour buffer, so the morning genuinely has nothing left.
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-01 11:30:00'));
+
+        $map = $this->service()->availabilityByDay($this->instructor->id, today(), 1);
+
+        $this->assertFalse($map['2026-12-01']['morning']['available']);
+        $this->assertStringContainsString('Too soon', $map['2026-12-01']['morning']['reason']);
     }
 
     /** @test */

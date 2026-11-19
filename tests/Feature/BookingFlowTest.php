@@ -267,13 +267,23 @@ class BookingFlowTest extends TestCase
         $this->assertSame(BookingStatus::Confirmed, $booking->status);
         $this->assertNotNull($booking->accepted_at);
 
-        // The slot is locked.
-        $this->assertDatabaseHas('availabilities', [
-            'user_id' => $this->instructor->id,
-            'specific_date' => $booking->date->format('Y-m-d'),
-            'time_period' => $booking->time_period->value,
-            'is_available' => false,
-        ]);
+        // The booking now holds capacity in its window. This instructor is
+        // Level 2 (capacity 2) and the party is one person, so the slot is NOT
+        // full and no lock row is expected - a lock is only written when a slot
+        // fills. Asserting a lock row here was only ever passing because the
+        // factory used to generate illegal student counts for the instructor's
+        // level, which made a one-person booking look like it filled the slot.
+        // start_time/end_time are cast to datetime:H:i, so they hydrate with a
+        // date attached. Format them back to "H:i" for the capacity lookup, which
+        // matches on the time string.
+        $remaining = app(\App\Services\AvailabilityService::class)->remainingCapacity(
+            $this->instructor->id,
+            $booking->date->format('Y-m-d'),
+            $booking->start_time->format('H:i'),
+            $booking->end_time->format('H:i'),
+        );
+
+        $this->assertSame(1, $remaining, 'A one-person booking must consume exactly one seat, leaving one free.');
     }
 
     /** @test */

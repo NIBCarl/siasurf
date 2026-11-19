@@ -56,6 +56,22 @@ const showsPhotoUploader = computed(() => user.value?.role === 'student' || user
                 <div class="max-w-xl">
                     <StudentSkillProfile />
                 </div>
+
+                <!-- The onboarding prompt is skippable, so it must stay reachable
+                     from here afterwards. -->
+                <div class="mt-6 border-t border-sand-200 pt-6">
+                    <p class="text-body-sm font-semibold text-deep-900">Booking details</p>
+                    <p class="mt-1 text-body-sm text-stone-600">
+                        Age, height, board, and emergency contact — used to prefill every booking.
+                    </p>
+                    <a
+                        :href="route('student.onboarding')"
+                        class="mt-3 inline-flex items-center gap-1.5 text-body-sm font-semibold text-lagoon-700 hover:text-lagoon-800"
+                    >
+                        Update your booking details
+                        <span aria-hidden="true">→</span>
+                    </a>
+                </div>
             </section>
 
             <!-- Profile Info Section -->
