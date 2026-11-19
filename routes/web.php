@@ -127,8 +127,9 @@ Route::middleware(['auth', 'verified'])
 
 // Student routes
 Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->as('student.')->group(function () {
-    // One-time profile capture. Skippable, so it is not a gate.
+    // One-time profile capture + skill pre-assessment. Skippable, so it is not a gate.
     Route::get('/welcome', [App\Http\Controllers\Student\OnboardingController::class, 'edit'])->name('onboarding');
+    Route::post('/welcome/assessment', [App\Http\Controllers\Student\OnboardingController::class, 'storeAssessment'])->name('onboarding.assessment');
     Route::post('/welcome', [App\Http\Controllers\Student\OnboardingController::class, 'store'])->name('onboarding.store');
     Route::post('/welcome/skip', [App\Http\Controllers\Student\OnboardingController::class, 'skip'])->name('onboarding.skip');
 

@@ -128,6 +128,7 @@ class BookingController extends Controller
 
         $booking->load([
             'student.studentProfile',
+            'student.latestSkillAssessment',
             'student.skillUpgradeRequests',
             'surfSpot',
             'payment',
@@ -154,8 +155,13 @@ class BookingController extends Controller
         // The roster computes this in the controller too; keep the label in one shape.
         $booking->setAttribute('attendance_label', $booking->attendance_status?->label());
 
+        $studentAssessment = $booking->student?->latestSkillAssessment
+            ? app(\App\Services\SkillAssessmentService::class)->formatForDisplay($booking->student->latestSkillAssessment)
+            : null;
+
         return Inertia::render('Instructor/Bookings/Show', [
             'booking' => $booking,
+            'studentAssessment' => $studentAssessment,
             'surfSpots' => $surfSpots,
             'acceptTimeRemaining' => $booking->getAcceptTimeRemaining(),
             // Same guards as the roster: accepting is refused once the window

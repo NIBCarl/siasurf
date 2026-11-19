@@ -43,6 +43,7 @@ class StudentOnboardingTest extends TestCase
     {
         $this->actingAs($this->student)
             ->post(route('student.onboarding.store'), [
+                'phone' => '+63 917 000 9999',
                 'date_of_birth' => now()->subYears(28)->format('Y-m-d'),
                 'height' => 175,
                 'weight' => 70,
@@ -55,10 +56,12 @@ class StudentOnboardingTest extends TestCase
 
         $profile = $this->profile();
 
+        $this->assertSame('+63 917 000 9999', $this->student->fresh()->phone);
         $this->assertSame(28, $profile->age);
         $this->assertSame('175.00', $profile->height);
         $this->assertSame('70.00', $profile->weight);
         $this->assertSame('Maria Reyes', $profile->emergency_contact_name);
+        $this->assertNull($profile->medical_info);
         $this->assertNotNull($profile->onboarding_completed_at);
         $this->assertTrue($profile->hasBookingDetails());
     }
@@ -173,11 +176,12 @@ class StudentOnboardingTest extends TestCase
     public function the_booking_form_receives_the_prefill()
     {
         $this->actingAs($this->student)->post(route('student.onboarding.store'), [
+            'phone' => '+63 917 888 4321',
             'date_of_birth' => now()->subYears(33)->format('Y-m-d'),
             'height' => 182,
             'weight' => 78,
             'has_board' => false,
-            'medical_info' => 'Knee injury in 2020',
+            'emergency_contact_name' => 'Elena Cruz',
         ]);
 
         $instructor = User::factory()->create(['role' => 'instructor']);
@@ -195,8 +199,34 @@ class StudentOnboardingTest extends TestCase
                 ->component('Booking/Create')
                 ->where('prefill.student_age', 33)
                 ->where('prefill.height', 182)
-                ->where('prefill.medical_info', 'Knee injury in 2020')
+                ->where('prefill.emergency_contact_name', 'Elena Cruz')
             );
+    }
+
+    /** @test */
+    public function onboarding_exposes_student_phone_and_omits_medical_info()
+    {
+        $this->student->update(['phone' => '+63 917 111 2222']);
+
+        $this->actingAs($this->student)
+            ->get(route('student.onboarding'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Student/Onboarding')
+                ->where('profile.phone', '+63 917 111 2222')
+                ->missing('profile.medical_info')
+            );
+    }
+
+    /** @test */
+    public function an_invalid_phone_number_is_rejected()
+    {
+        $this->actingAs($this->student)
+            ->post(route('student.onboarding.store'), [
+                'phone' => 'not-a-phone!',
+                'has_board' => true,
+            ])
+            ->assertSessionHasErrors('phone');
     }
 
     /** @test */

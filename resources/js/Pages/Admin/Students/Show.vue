@@ -70,8 +70,34 @@ interface Student {
   reported_incidents: Incident[]
 }
 
+interface SkillAssessment {
+  id: number
+  assessed_level: string
+  assessed_level_label: string
+  checklist_level: string
+  knowledge_level: string
+  knowledge_score: number
+  knowledge_total: number
+  can_swim_deep_water: boolean
+  is_first_time: boolean
+  water_safety_passed: boolean
+  safety_flags: Array<{ code: string; severity: string; message: string }>
+  has_safety_warnings: boolean
+  ticked_skills_count: number
+  ticked_skills: Array<{ tier: string; label: string }>
+  question_summary: Array<{
+    topic: string
+    required: boolean
+    answered: boolean
+    selected_label: string | null
+    correct: boolean
+  }>
+  assessed_at_label: string | null
+}
+
 interface Props {
   student: Student
+  skillAssessment?: SkillAssessment | null
 }
 
 const props = defineProps<Props>()
@@ -302,6 +328,69 @@ const toggleBanStatus = () => {
                                 <p class="text-sm font-medium text-slate-800 whitespace-pre-line">{{ student.student_profile.medical_info }}</p>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Skill Pre-Assessment Audit Card -->
+                    <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
+                        <div class="flex items-center justify-between gap-2 mb-5">
+                            <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Skill Pre-Assessment</h3>
+                            <Badge v-if="skillAssessment" :variant="skillAssessment.has_safety_warnings ? 'warning' : 'success'" class="text-[10px]">
+                                {{ skillAssessment.assessed_level.toUpperCase() }}
+                            </Badge>
+                            <Badge v-else variant="info" class="text-[10px]">NOT ASSESSED</Badge>
+                        </div>
+
+                        <div v-if="skillAssessment" class="space-y-4 text-sm">
+                            <div v-if="skillAssessment.safety_flags.length > 0" class="space-y-2">
+                                <div
+                                    v-for="flag in skillAssessment.safety_flags"
+                                    :key="flag.code"
+                                    :class="[
+                                        'rounded-xl border px-3 py-2 text-xs font-medium',
+                                        flag.severity === 'warning'
+                                            ? 'border-rose-200 bg-rose-50 text-rose-900'
+                                            : 'border-amber-200 bg-amber-50 text-amber-900',
+                                    ]"
+                                >
+                                    {{ flag.message }}
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3 text-xs">
+                                <div class="rounded-xl bg-slate-50 p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Checklist</p>
+                                    <p class="mt-1 font-bold capitalize text-slate-900">{{ skillAssessment.checklist_level }}</p>
+                                    <p class="text-slate-500">{{ skillAssessment.ticked_skills_count }} skills ticked</p>
+                                </div>
+                                <div class="rounded-xl bg-slate-50 p-3">
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Knowledge</p>
+                                    <p class="mt-1 font-bold capitalize text-slate-900">{{ skillAssessment.knowledge_level }}</p>
+                                    <p class="text-slate-500">{{ skillAssessment.knowledge_score }}/{{ skillAssessment.knowledge_total }} correct</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1.5 text-xs">
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Questions</p>
+                                <div
+                                    v-for="q in skillAssessment.question_summary"
+                                    :key="q.topic"
+                                    class="flex items-center justify-between gap-2 py-1 border-b border-slate-100 last:border-0"
+                                >
+                                    <span class="font-medium text-slate-700">{{ q.topic }}</span>
+                                    <span :class="q.correct ? 'font-bold text-emerald-600' : 'font-bold text-rose-600'">
+                                        {{ q.correct ? 'Correct' : q.answered ? 'Incorrect' : 'Unanswered' }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <p v-if="skillAssessment.assessed_at_label" class="text-[11px] text-slate-400">
+                                Completed {{ skillAssessment.assessed_at_label }}
+                            </p>
+                        </div>
+
+                        <p v-else class="text-xs text-slate-500">
+                            This student has not completed the skill pre-assessment yet and currently defaults to Beginner.
+                        </p>
                     </div>
                 </div>
 

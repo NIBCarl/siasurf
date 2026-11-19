@@ -124,4 +124,99 @@ return [
         'public_url' => env('SIASURF_PUBLIC_URL', ''),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Student Skill Pre-Assessment
+    |--------------------------------------------------------------------------
+    |
+    | Initial student level is derived from this pre-assessment rather than an
+    | unvalidated dropdown at signup. Answer keys stay strictly server-side;
+    | SkillAssessmentService strips `correct_index` before sharing the form
+    | definition with the frontend.
+    |
+    */
+
+    'skill_assessment' => [
+        'thresholds' => [
+            'intermediate_skills_required' => 4,
+            'advanced_skills_required' => 4,
+            'intermediate_knowledge_required' => 3,
+            'advanced_knowledge_required' => 4,
+        ],
+        'skills' => [
+            'basic' => [
+                'I can paddle a board on my own.',
+                'I can stand up on small, broken (white-water) waves.',
+            ],
+            'intermediate' => [
+                'I can paddle out past the breaking waves on my own.',
+                'I can catch unbroken (green) waves.',
+                'I can stand up in one motion and ride along the wave.',
+                'I can turn left and right while riding.',
+                'I can surf for about an hour without a long rest.',
+            ],
+            'advanced' => [
+                'I surf regularly without an instructor.',
+                'I can surf waves taller than me with control.',
+                'I can make controlled turns and change direction quickly.',
+                'I can surf reef breaks and crowded lineups.',
+                'I can surf for two hours or more.',
+            ],
+        ],
+        'questions' => [
+            [
+                'key' => 'water_safety',
+                'topic' => 'Water safety',
+                'question' => 'You’re caught in a rip current. What should you do?',
+                'options' => [
+                    'Swim straight back to shore as fast as you can',
+                    'Stay calm and swim parallel to the shore',
+                    'Stay still and wait for it to stop',
+                    'Swim against the current until it weakens',
+                ],
+                'correct_index' => 1,
+                'required' => true,
+            ],
+            [
+                'key' => 'surf_etiquette',
+                'topic' => 'Surf etiquette',
+                'question' => 'Two surfers are riding the same wave. Who has priority?',
+                'options' => [
+                    'The surfer who paddled out first',
+                    'The surfer closest to the breaking part of the wave',
+                    'The surfer with the longer board',
+                    'The surfer closer to the shore',
+                ],
+                'correct_index' => 1,
+                'required' => false,
+            ],
+            [
+                'key' => 'equipment',
+                'topic' => 'Equipment',
+                'question' => 'What is a leash for?',
+                'options' => [
+                    'It keeps the board attached to you',
+                    'It helps you paddle faster',
+                    'It protects the fins',
+                    'It keeps the board waxed',
+                ],
+                'correct_index' => 0,
+                'required' => false,
+            ],
+            [
+                'key' => 'surfing_spots',
+                'topic' => 'Surfing spots',
+                'question' => 'Why does the tide matter at a reef break?',
+                'options' => [
+                    'It changes the water color',
+                    'The reef can be shallow at low tide',
+                    'Waves stop at high tide',
+                    'It changes the wind direction',
+                ],
+                'correct_index' => 1,
+                'required' => false,
+            ],
+        ],
+    ],
+
 ];

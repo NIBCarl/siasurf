@@ -10,6 +10,7 @@ class StudentProfile extends Model
     protected $fillable = [
         'user_id',
         'skill_level',
+        'skill_assessed_at',
         'date_of_birth',
         'height',
         'weight',
@@ -26,6 +27,7 @@ class StudentProfile extends Model
     protected $casts = [
         'is_first_time' => 'boolean',
         'has_board' => 'boolean',
+        'skill_assessed_at' => 'datetime',
         'date_of_birth' => 'date',
         'height' => 'decimal:2',
         'weight' => 'decimal:2',

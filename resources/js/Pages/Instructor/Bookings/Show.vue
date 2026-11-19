@@ -100,8 +100,34 @@ interface Booking {
   }>
 }
 
+interface StudentAssessment {
+  id: number
+  assessed_level: string
+  assessed_level_label: string
+  checklist_level: string
+  knowledge_level: string
+  knowledge_score: number
+  knowledge_total: number
+  can_swim_deep_water: boolean
+  is_first_time: boolean
+  water_safety_passed: boolean
+  safety_flags: Array<{ code: string; severity: string; message: string }>
+  has_safety_warnings: boolean
+  ticked_skills_count: number
+  ticked_skills: Array<{ tier: string; label: string }>
+  question_summary: Array<{
+    topic: string
+    required: boolean
+    answered: boolean
+    selected_label: string | null
+    correct: boolean
+  }>
+  assessed_at_label: string | null
+}
+
 interface Props {
   booking: Booking
+  studentAssessment?: StudentAssessment | null
   surfSpots?: Array<{ id: number; name: string; difficulty: string }>
   acceptTimeRemaining?: number
   canBeAccepted?: boolean
@@ -952,6 +978,84 @@ const showPrimaryAttendance = computed(
                   <span class="chip chip-neutral">{{ booking.board_recommendation.type }}</span>
                   <span class="chip chip-neutral">{{ booking.board_recommendation.volume_liters }}L</span>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Student Skill Pre-Assessment Summary (safety warnings + answers) -->
+          <section v-if="studentAssessment" class="surface p-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-sand-200 pb-3">
+              <div>
+                <h2 class="text-title font-semibold tracking-tight text-deep-950">Student skill pre-assessment</h2>
+                <p v-if="studentAssessment.assessed_at_label" class="mt-0.5 text-body-sm text-stone-500">
+                  Assessed {{ studentAssessment.assessed_at_label }}
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="chip chip-neutral capitalize">
+                  {{ studentAssessment.assessed_level }}
+                </span>
+                <span
+                  class="chip"
+                  :class="studentAssessment.water_safety_passed ? 'chip-positive' : 'chip-critical'"
+                >
+                  {{ studentAssessment.knowledge_score }}/{{ studentAssessment.knowledge_total }} quiz
+                </span>
+              </div>
+            </div>
+
+            <div v-if="studentAssessment.safety_flags.length > 0" class="mt-3 space-y-2">
+              <div
+                v-for="flag in studentAssessment.safety_flags"
+                :key="flag.code"
+                :class="[
+                  'flex items-start gap-2 rounded-control border px-3 py-2 text-body-sm',
+                  flag.severity === 'warning'
+                    ? 'border-rose-200 bg-rose-50 text-rose-900'
+                    : 'border-amber-200 bg-amber-50 text-amber-900',
+                ]"
+              >
+                <ExclamationTriangleIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{{ flag.message }}</span>
+              </div>
+            </div>
+
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <div class="surface-well p-3">
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                  Knowledge answers ({{ studentAssessment.knowledge_score }}/{{ studentAssessment.knowledge_total }})
+                </p>
+                <ul class="mt-2 space-y-1.5 text-body-sm">
+                  <li
+                    v-for="item in studentAssessment.question_summary"
+                    :key="item.topic"
+                    class="flex items-center justify-between gap-2"
+                  >
+                    <span class="text-deep-900">{{ item.topic }}</span>
+                    <span
+                      :class="[
+                        'rounded-full px-2 py-0.5 text-xs font-semibold',
+                        item.correct
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-rose-50 text-rose-700',
+                      ]"
+                    >
+                      {{ item.correct ? 'Correct' : item.answered ? 'Incorrect' : 'Unanswered' }}
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="surface-well p-3">
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                  Ticked skills ({{ studentAssessment.ticked_skills_count }})
+                </p>
+                <ul v-if="studentAssessment.ticked_skills.length > 0" class="mt-2 list-disc space-y-1 pl-4 text-body-sm text-stone-700">
+                  <li v-for="(skill, idx) in studentAssessment.ticked_skills" :key="idx">
+                    {{ skill.label }}
+                  </li>
+                </ul>
+                <p v-else class="mt-2 text-body-sm text-stone-500">No skills ticked.</p>
               </div>
             </div>
           </section>

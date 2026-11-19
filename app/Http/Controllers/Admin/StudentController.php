@@ -28,7 +28,11 @@ class StudentController extends Controller
             });
         }
 
-        $students = $query->paginate(15)->withQueryString();
+        $students = $query
+            ->latest()
+            ->orderByDesc('id')
+            ->paginate(15)
+            ->withQueryString();
 
         return Inertia::render('Admin/Students/Index', [
             'students' => $students,
@@ -45,14 +49,20 @@ class StudentController extends Controller
 
         $user->load([
             'studentProfile',
+            'latestSkillAssessment',
             'bookingsAsStudent' => function ($q) {
                 $q->latest()->with(['instructor.instructorProfile', 'surfSpot', 'payment', 'waiver', 'review']);
             },
             'reportedIncidents'
         ]);
 
+        $skillAssessment = $user->latestSkillAssessment
+            ? app(\App\Services\SkillAssessmentService::class)->formatForDisplay($user->latestSkillAssessment)
+            : null;
+
         return Inertia::render('Admin/Students/Show', [
-            'student' => $user
+            'student' => $user,
+            'skillAssessment' => $skillAssessment,
         ]);
     }
 

@@ -28,7 +28,7 @@ class PromptStudentOnboarding
         }
 
         // Already on the form (or submitting it): never redirect in a loop.
-        if ($request->routeIs('student.onboarding', 'student.onboarding.store', 'student.onboarding.skip')) {
+        if ($request->routeIs('student.onboarding', 'student.onboarding.assessment', 'student.onboarding.store', 'student.onboarding.skip')) {
             return $next($request);
         }
 

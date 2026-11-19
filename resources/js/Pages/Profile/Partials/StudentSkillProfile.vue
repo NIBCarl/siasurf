@@ -39,12 +39,41 @@ const getLevelBadgeClass = (level: string) => {
             <div class="flex items-center space-x-4">
                 <div class="flex-1">
                     <p class="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Current Level</p>
-                    <div class="flex items-center">
+                    <div class="flex flex-wrap items-center gap-2">
                         <span :class="['px-3 py-1.5 rounded-xl text-sm font-bold ring-1 ring-inset capitalize shadow-sm', getLevelBadgeClass(studentProfile.skill_level)]">
                             {{ studentProfile.skill_level }}
                         </span>
+                        <span
+                            v-if="studentProfile.skill_assessed_at"
+                            class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20"
+                        >
+                            Pre-assessed
+                        </span>
+                        <span
+                            v-else
+                            class="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/20"
+                        >
+                            Not yet assessed
+                        </span>
                     </div>
                 </div>
+            </div>
+
+            <div
+                v-if="!studentProfile.skill_assessed_at"
+                class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+            >
+                <p class="font-semibold">Complete your skill pre-assessment</p>
+                <p class="mt-1 text-amber-800">
+                    Your account currently defaults to Beginner. Answer the short pre-assessment so SiaSurf can match you with the right instructors and surf zones.
+                </p>
+                <a
+                    :href="route('student.onboarding')"
+                    class="mt-2.5 inline-flex items-center gap-1.5 font-semibold text-lagoon-700 hover:text-lagoon-800"
+                >
+                    Take skill pre-assessment
+                    <span aria-hidden="true">→</span>
+                </a>
             </div>
 
             <!-- Pending Request Alert -->

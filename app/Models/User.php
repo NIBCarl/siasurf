@@ -122,6 +122,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(SkillUpgradeRequest::class, 'student_id');
     }
 
+    public function skillAssessments(): HasMany
+    {
+        return $this->hasMany(StudentSkillAssessment::class, 'user_id');
+    }
+
+    public function latestSkillAssessment(): HasOne
+    {
+        return $this->hasOne(StudentSkillAssessment::class, 'user_id')->latestOfMany();
+    }
+
     public function submittedUpgradeRequests(): HasMany
     {
         return $this->hasMany(SkillUpgradeRequest::class, 'instructor_id');

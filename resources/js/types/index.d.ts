@@ -18,6 +18,7 @@ export interface User {
     };
     student_profile?: {
         skill_level: string;
+        skill_assessed_at?: string | null;
         is_first_time: boolean;
     };
     skill_upgrade_requests?: Array<{
