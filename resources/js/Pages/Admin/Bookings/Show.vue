@@ -31,6 +31,8 @@ interface Booking {
   skill_level: string
   student_age: number
   student_count: number
+  needs_hotel_pickup?: boolean
+  hotel_name?: string | null
   notes: string
   decline_reason?: string | null
   student: { id: number; name: string; email: string; phone: string; student_profile?: { status: string } | null }
@@ -50,6 +52,7 @@ interface Booking {
     verified_by?: { name: string } | null
   }
   waiver?: { id: number; signed_at: string; pdf_path: string }
+  waivers?: Array<{ id: number; type: string; participant_name?: string | null; signed_by: string; signed_at: string }>
   review?: { id: number; rating: number | null; comment: string; photo_path: string | null; created_at: string }
 }
 
@@ -178,6 +181,14 @@ const getStatusVariant = (status: string) => {
                                 <p class="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Schedule Window</p>
                                 <p class="text-xl font-black text-slate-900 capitalize">{{ booking.time_period }}</p>
                                 <p class="text-xs text-slate-400 font-bold">{{ booking.date }}</p>
+                            </div>
+                        </div>
+
+                        <div v-if="booking.needs_hotel_pickup && booking.hotel_name" class="mt-6 p-4 bg-ocean-50/70 rounded-2xl border border-ocean-100 flex items-center gap-3">
+                            <MapPinIcon class="w-5 h-5 text-ocean-600 shrink-0" />
+                            <div>
+                                <p class="text-[10px] font-black uppercase text-ocean-700 tracking-widest">Hotel Pickup Requested</p>
+                                <p class="text-sm font-bold text-slate-900">{{ booking.hotel_name }}</p>
                             </div>
                         </div>
 
@@ -445,17 +456,30 @@ const getStatusVariant = (status: string) => {
                                 </div>
                             </div>
 
-                            <div v-if="booking.waiver" class="space-y-6 text-center py-4">
+                            <div v-if="(booking.waivers && booking.waivers.length > 0) || booking.waiver" class="space-y-6 text-center py-4">
                                 <div class="w-16 h-16 bg-ocean-500/20 rounded-full flex items-center justify-center mx-auto ring-4 ring-ocean-500/10">
                                     <DocumentTextIcon class="w-8 h-8 text-ocean-400" />
                                 </div>
                                 <div class="space-y-1">
                                     <p class="text-sm font-black text-ocean-400">Electronic Waiver Active</p>
-                                    <p class="text-[10px] font-bold opacity-30 tracking-tight">Signed: {{ new Date(booking.waiver.signed_at).toLocaleString() }}</p>
+                                    <p v-if="booking.waiver" class="text-[10px] font-bold opacity-30 tracking-tight">Signed: {{ new Date(booking.waiver.signed_at).toLocaleString() }}</p>
                                 </div>
-                                <div class="pt-4">
-                                    <a 
-                                        :href="route('waivers.view', booking.waiver.id)" 
+                                <div class="pt-2 space-y-2">
+                                    <template v-if="booking.waivers && booking.waivers.length > 0">
+                                        <div v-for="w in booking.waivers" :key="w.id" class="flex items-center justify-center gap-2">
+                                            <a
+                                                :href="route('waivers.view', w.id)"
+                                                target="_blank"
+                                                class="inline-block px-5 py-2 bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5"
+                                            >
+                                                {{ w.type === 'parental_consent' ? 'Consent' : 'Waiver' }}
+                                                <template v-if="w.participant_name"> · {{ w.participant_name }}</template>
+                                            </a>
+                                        </div>
+                                    </template>
+                                    <a
+                                        v-else-if="booking.waiver"
+                                        :href="route('waivers.view', booking.waiver.id)"
                                         target="_blank"
                                         class="inline-block px-8 py-2.5 bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5"
                                     >

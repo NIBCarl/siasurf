@@ -40,6 +40,8 @@ interface Booking {
   weight: number | null
   student_count: number
   has_board: boolean
+  needs_hotel_pickup?: boolean
+  hotel_name?: string | null
   duration_hours: number
   started_at: string | null
   notes: string | null
@@ -914,14 +916,30 @@ const showPrimaryAttendance = computed(
                     <ExclamationTriangleIcon class="h-3.5 w-3.5" aria-hidden="true" />
                     Medical note: {{ participant.medical_info }}
                   </span>
-                  <span
-                    v-if="participant.emergency_contact_phone"
-                    class="chip chip-neutral"
-                  >
-                    <PhoneIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    {{ participant.emergency_contact_name ?? 'Emergency' }} · {{ participant.emergency_contact_phone }}
-                  </span>
-                </div>
+                    <span
+                      v-if="participant.emergency_contact_phone || participant.emergency_contact_name"
+                      class="chip chip-neutral"
+                    >
+                      <PhoneIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      <template v-if="participant.emergency_contact_name && participant.emergency_contact_phone && participant.emergency_contact_name !== participant.emergency_contact_phone">
+                        {{ participant.emergency_contact_name }} · {{ participant.emergency_contact_phone }}
+                      </template>
+                      <template v-else>
+                        {{ participant.emergency_contact_phone || participant.emergency_contact_name }}
+                      </template>
+                    </span>
+                    <a
+                      v-for="waiver in participant.waivers ?? []"
+                      :key="waiver.id"
+                      :href="route('waivers.view', waiver.id)"
+                      target="_blank"
+                      rel="noopener"
+                      class="chip chip-neutral hover:border-lagoon-600 hover:text-lagoon-700"
+                    >
+                      <DocumentCheckIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      View {{ waiver.type === 'parental_consent' ? 'Consent' : 'Waiver' }} PDF
+                    </a>
+                  </div>
               </div>
 
               <!-- Booking-level fallback for sessions recorded without a party list -->
@@ -952,6 +970,26 @@ const showPrimaryAttendance = computed(
                   <span class="chip chip-neutral">{{ booking.board_recommendation.type }}</span>
                   <span class="chip chip-neutral">{{ booking.board_recommendation.volume_liters }}L</span>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            v-if="booking.needs_hotel_pickup && booking.hotel_name"
+            class="rounded-card border border-lagoon-200 bg-lagoon-50 p-4"
+          >
+            <div class="flex items-start gap-3">
+              <MapPinIcon class="mt-0.5 h-5 w-5 shrink-0 text-lagoon-700" aria-hidden="true" />
+              <div>
+                <p class="text-label font-bold uppercase tracking-[0.06em] text-lagoon-800">
+                  Hotel pickup requested
+                </p>
+                <p class="mt-1 text-body font-semibold text-deep-950">
+                  {{ booking.hotel_name }}
+                </p>
+                <p class="mt-0.5 text-body-sm text-lagoon-900">
+                  The student requested pickup from this accommodation before the surf lesson.
+                </p>
               </div>
             </div>
           </section>

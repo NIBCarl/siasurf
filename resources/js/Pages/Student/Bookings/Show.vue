@@ -35,6 +35,8 @@ interface Booking {
   height: number | null
   weight: number | null
   student_count: number
+  needs_hotel_pickup?: boolean
+  hotel_name?: string | null
   notes: string | null
   decline_reason?: string | null
   cancellation_reason?: string | null
@@ -74,7 +76,8 @@ interface Booking {
     receipt_note?: string | null
     verified_by?: { name: string } | null
   }
-  waiver?: { signed_at: string } | null
+  waiver?: { id: number; signed_at: string; type?: string } | null
+  waivers?: Array<{ id: number; type: string; participant_name?: string | null; signed_by: string; signed_at: string }>
   payment_deadline_at?: string
   student_id: number
 }
@@ -608,6 +611,17 @@ const canChat = computed(() =>
                                     #SURF-{{ booking.id.toString().padStart(5, '0') }}
                                 </dd>
                             </div>
+                            <div>
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Pickup</dt>
+                                <dd class="mt-1 text-body font-semibold text-deep-900">
+                                    <template v-if="booking.needs_hotel_pickup && booking.hotel_name">
+                                        Hotel pickup · {{ booking.hotel_name }}
+                                    </template>
+                                    <template v-else>
+                                        Meet at surf spot
+                                    </template>
+                                </dd>
+                            </div>
                         </dl>
 
                         <div
@@ -683,6 +697,35 @@ const canChat = computed(() =>
                         <p v-if="booking.waiver?.signed_at" class="mt-2 text-label text-stone-500">
                             Signed {{ new Date(booking.waiver.signed_at).toLocaleDateString('en-US') }}
                         </p>
+
+                        <div
+                            v-if="booking.waivers && booking.waivers.length > 0"
+                            class="mt-3 flex flex-wrap gap-2"
+                        >
+                            <a
+                                v-for="w in booking.waivers"
+                                :key="w.id"
+                                :href="route('waivers.view', w.id)"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex items-center gap-1.5 rounded-control border border-sand-300 bg-white px-3 py-1.5 text-label font-semibold text-deep-900 hover:border-lagoon-600 hover:text-lagoon-700"
+                            >
+                                View {{ w.type === 'parental_consent' ? 'Parental Consent' : 'Waiver' }} PDF
+                                <template v-if="booking.waivers.length > 1 && w.participant_name">
+                                    ({{ w.participant_name }})
+                                </template>
+                            </a>
+                        </div>
+                        <div v-else-if="booking.waiver?.id" class="mt-3">
+                            <a
+                                :href="route('waivers.view', booking.waiver.id)"
+                                target="_blank"
+                                rel="noopener"
+                                class="inline-flex items-center gap-1.5 rounded-control border border-sand-300 bg-white px-3 py-1.5 text-label font-semibold text-deep-900 hover:border-lagoon-600 hover:text-lagoon-700"
+                            >
+                                View Waiver PDF
+                            </a>
+                        </div>
 
                         <!-- Underpaid Violation Alert -->
                         <div

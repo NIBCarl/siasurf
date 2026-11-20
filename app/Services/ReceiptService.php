@@ -16,17 +16,37 @@ class ReceiptService
     {
         $booking->load(['student', 'instructor', 'surfSpot', 'payment']);
 
+        $receiptNumber = 'RCP-' . str_pad($booking->id, 6, '0', STR_PAD_LEFT);
+        $payment = $booking->payment;
+        $totalDue = (float) $booking->total_amount;
+        $paidAmount = (float) ($payment->amount ?? $booking->total_amount);
+        $isUnderpaid = max(0, round($totalDue - $paidAmount, 2)) > 0
+            || ($payment && $payment->status?->value === 'underpaid');
+
+        $gatewayTxId = $payment?->transaction_id;
+        $hasRealGatewayTx = !empty($gatewayTxId) && !str_starts_with((string) $gatewayTxId, 'mock_');
+        $hasExternalRef = !empty($payment?->receipt_reference) || $hasRealGatewayTx;
+
+        $pageHeight = 615;
+        if ($isUnderpaid) {
+            $pageHeight += 85;
+        }
+        if ($hasExternalRef) {
+            $pageHeight += 25;
+        }
+
         $data = [
             'booking' => $booking,
-            'receipt_number' => 'RCP-' . str_pad($booking->id, 6, '0', STR_PAD_LEFT),
+            'receipt_number' => $receiptNumber,
             'date_issued' => now()->format('F d, Y'),
             'company_name' => config('app.name', 'SiaSurf'),
             'company_address' => 'Siargao Island, Surigao del Norte, Philippines',
             'company_email' => config('app.admin_email', 'admin@siasurf.com'),
+            'page_height' => $pageHeight,
         ];
 
         $pdf = PDF::loadView('pdfs.receipt', $data);
-        $pdf->setPaper('A4');
+        $pdf->setPaper([0, 0, 420, $pageHeight]);
         
         $filename = "receipts/booking_{$booking->id}_" . time() . ".pdf";
         

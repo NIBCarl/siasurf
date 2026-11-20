@@ -2,34 +2,111 @@
 
 namespace App\Services;
 
+use App\Enums\WaiverType;
 use App\Models\Booking;
 use App\Models\BookingParticipant;
 use App\Models\Waiver;
-use App\Enums\WaiverType;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 class WaiverService
 {
     /**
-     * Create a liability waiver for a booking
+     * Create a liability waiver for a booking (or specific participant).
+     *
+     * @param  array<string, mixed>  $details
      */
     public function createLiabilityWaiver(
         Booking $booking,
         string $signedBy,
         string $signatureData,
-        ?BookingParticipant $participant = null
+        ?BookingParticipant $participant = null,
+        array $details = []
     ): Waiver {
+        $booking->loadMissing(['student.studentProfile', 'instructor', 'surfSpot', 'primaryParticipant']);
+
+        $resolvedParticipant = $participant ?? $booking->primaryParticipant;
+        $isPrimary = $resolvedParticipant === null || $resolvedParticipant->isPrimary();
+        $studentProfile = $booking->student?->studentProfile;
+
         $signedAt = now();
         $retentionUntil = $signedAt->copy()->addYears(7);
 
+        $participantName = $details['participant_name']
+            ?? ($isPrimary ? $booking->student?->name : $resolvedParticipant?->full_name)
+            ?? $signedBy;
+
+        $birthdayRaw = $details['birthday']
+            ?? ($isPrimary
+                ? $studentProfile?->birthday?->format('Y-m-d')
+                : $resolvedParticipant?->birthday?->format('Y-m-d'));
+
+        $birthdayCarbon = $birthdayRaw ? Carbon::parse($birthdayRaw) : null;
+
+        $age = $details['age']
+            ?? $birthdayCarbon?->age
+            ?? $resolvedParticipant?->age
+            ?? $booking->student_age;
+
+        $email = $details['email']
+            ?? ($isPrimary ? $booking->student?->email : $resolvedParticipant?->email);
+
+        $country = $details['country']
+            ?? ($isPrimary ? $studentProfile?->country : $resolvedParticipant?->country);
+
+        $needsHotelPickup = (bool) $booking->needs_hotel_pickup;
+        $hotelName = $needsHotelPickup
+            ? ($details['hotel_name'] ?? $booking->hotel_name)
+            : null;
+
+        $emergencyContact = $details['emergency_contact'] ?? null;
+        $medicalInfo = array_key_exists('medical_info', $details)
+            ? $details['medical_info']
+            : $resolvedParticipant?->medical_info;
+        $surfShop = $details['surf_shop'] ?? config('waiver.surf_shop', config('app.name', 'SiaSurf'));
+        $instructorName = $details['instructor_name'] ?? ($booking->instructor?->name ?? '');
+        $witnessName = $details['witness_name'] ?? ($booking->instructor?->name ?? '');
+        $signedByGuardian = (bool) ($details['signed_by_guardian'] ?? ($age !== null && $age < 18));
+
+        $snapshot = [
+            'participant_name' => $participantName,
+            'birthday' => $birthdayCarbon?->format('Y-m-d'),
+            'birthday_formatted' => $birthdayCarbon?->format('F d, Y'),
+            'age' => $age !== null ? (int) $age : null,
+            'email' => $email,
+            'country' => $country,
+            'needs_hotel_pickup' => $needsHotelPickup,
+            'hotel_name' => $hotelName,
+            'emergency_contact' => $emergencyContact,
+            'medical_info' => $medicalInfo,
+            'surf_shop' => $surfShop,
+            'instructor_name' => $instructorName,
+            'witness_name' => $witnessName,
+            'signed_by_guardian' => $signedByGuardian,
+            'signature_data' => $signatureData,
+            'participant_id' => $resolvedParticipant?->id,
+        ];
+
         // Generate PDF
-        $pdfPath = $this->generateWaiverPDF($booking, WaiverType::Liability, $signedBy, $signedAt);
+        $pdfPath = $this->generateWaiverPDF($booking, WaiverType::Liability, $signedBy, $signedAt, $snapshot);
 
         return Waiver::create([
             'booking_id' => $booking->id,
-            'participant_id' => $participant?->id ?? $booking->primaryParticipant?->id,
+            'participant_id' => $resolvedParticipant?->id,
             'type' => WaiverType::Liability->value,
+            'participant_name' => $snapshot['participant_name'],
+            'birthday' => $snapshot['birthday'],
+            'age' => $snapshot['age'],
+            'email' => $snapshot['email'],
+            'country' => $snapshot['country'],
+            'hotel_name' => $snapshot['hotel_name'],
+            'emergency_contact' => $snapshot['emergency_contact'],
+            'medical_info' => $snapshot['medical_info'],
+            'surf_shop' => $snapshot['surf_shop'],
+            'instructor_name' => $snapshot['instructor_name'],
+            'witness_name' => $snapshot['witness_name'],
+            'signed_by_guardian' => $snapshot['signed_by_guardian'],
             'signed_by' => $signedBy,
             'signature_data' => $signatureData,
             'pdf_path' => $pdfPath,
@@ -202,29 +279,105 @@ class WaiverService
     }
 
     /**
-     * Generate liability waiver PDF
+     * Generate liability waiver PDF matching the SISA Surf Lesson Waiver form.
+     *
+     * @param  array<string, mixed>  $snapshot
      */
-    private function generateWaiverPDF(Booking $booking, WaiverType $type, string $signedBy, $signedAt): string
-    {
+    private function generateWaiverPDF(
+        Booking $booking,
+        WaiverType $type,
+        string $signedBy,
+        $signedAt,
+        array $snapshot = []
+    ): string {
+        $signatureImage = $this->validImageDataUri($snapshot['signature_data'] ?? null);
+        $logoDataUri = $this->logoDataUri();
+
         $data = [
             'booking' => $booking,
             'waiver_type' => $type->label(),
+            'waiver_title' => config('waiver.title', 'SURF LESSON WAIVER, LIABILITY, AND INDEMNITY AGREEMENT'),
+            'clauses' => config('waiver.clauses', []),
+            'logo_data_uri' => $logoDataUri,
+            'participant_name' => $snapshot['participant_name'] ?? $booking->student?->name ?? $signedBy,
+            'birthday_formatted' => $snapshot['birthday_formatted'] ?? '',
+            'age' => $snapshot['age'] ?? $booking->student_age,
+            'email' => $snapshot['email'] ?? $booking->student?->email ?? '',
+            'country' => $snapshot['country'] ?? '',
+            'needs_hotel_pickup' => (bool) ($snapshot['needs_hotel_pickup'] ?? $booking->needs_hotel_pickup),
+            'hotel_name' => $snapshot['hotel_name'] ?? null,
+            'emergency_contact' => $snapshot['emergency_contact'] ?? '',
+            'medical_info' => $snapshot['medical_info'] ?? null,
+            'surf_shop' => $snapshot['surf_shop'] ?? config('waiver.surf_shop', 'SiaSurf'),
+            'instructor_name' => $snapshot['instructor_name'] ?? ($booking->instructor?->name ?? ''),
+            'witness_name' => $snapshot['witness_name'] ?? ($booking->instructor?->name ?? ''),
             'signed_by' => $signedBy,
+            'signed_by_guardian' => (bool) ($snapshot['signed_by_guardian'] ?? false),
+            'signature_image' => $signatureImage,
             'signed_at' => $signedAt->format('F d, Y'),
             'signed_at_datetime' => $signedAt->format('F d, Y h:i A'),
+            'retention_until' => $signedAt->copy()->addYears(7)->format('F d, Y'),
             'company_name' => config('app.name', 'SiaSurf'),
-            'waiver_id' => 'WVR-' . str_pad($booking->id, 6, '0', STR_PAD_LEFT),
+            'waiver_id' => 'WVR-' . str_pad((string) $booking->id, 6, '0', STR_PAD_LEFT),
         ];
 
-        $pdf = PDF::loadView('pdfs.waiver', $data);
-        $pdf->setPaper('A4');
+        $pdf = Pdf::loadView('pdfs.waiver', $data);
+        $pdf->setPaper('A4', 'landscape');
 
-        $filename = "waivers/liability_booking_{$booking->id}_" . time() . ".pdf";
+        $participantKey = $snapshot['participant_id'] ?? 'primary';
+        $uniqueSuffix = substr(md5((string) microtime(true) . mt_rand()), 0, 6);
+        $filename = "waivers/liability_booking_{$booking->id}_p{$participantKey}_" . time() . "_{$uniqueSuffix}.pdf";
         $content = $pdf->output();
 
         Storage::disk('local')->put($filename, $content);
 
         return $filename;
+    }
+
+    /**
+     * Return a DomPDF-safe image data URI only when the payload decodes to a
+     * valid bitmap image (so synthetic test strings cannot break PDF rendering).
+     */
+    private function validImageDataUri(?string $dataUri): ?string
+    {
+        if (! is_string($dataUri) || ! preg_match('#^data:image/(png|jpe?g|gif);base64,(.+)$#si', $dataUri, $matches)) {
+            return null;
+        }
+
+        $binary = base64_decode($matches[2], true);
+
+        if ($binary === false || strlen($binary) < 16) {
+            return null;
+        }
+
+        if (@getimagesizefromstring($binary) === false) {
+            return null;
+        }
+
+        return $dataUri;
+    }
+
+    /**
+     * Inline the configured waiver logo as a data URI for offline DomPDF rendering.
+     */
+    private function logoDataUri(): ?string
+    {
+        $relative = config('waiver.logo_path', 'images/logo.png');
+        $fullPath = public_path($relative);
+
+        if (! is_file($fullPath) || ! is_readable($fullPath)) {
+            return null;
+        }
+
+        $binary = @file_get_contents($fullPath);
+        if ($binary === false) {
+            return null;
+        }
+
+        $info = @getimagesizefromstring($binary);
+        $mime = is_array($info) && ! empty($info['mime']) ? $info['mime'] : 'image/png';
+
+        return 'data:' . $mime . ';base64,' . base64_encode($binary);
     }
 
     /**
@@ -247,13 +400,13 @@ class WaiverService
             'signed_at' => $signedAt->format('F d, Y'),
             'signed_at_datetime' => $signedAt->format('F d, Y h:i A'),
             'company_name' => config('app.name', 'SiaSurf'),
-            'waiver_id' => 'WVR-PC-' . str_pad($booking->id, 6, '0', STR_PAD_LEFT),
+            'waiver_id' => 'WVR-PC-' . str_pad((string) $booking->id, 6, '0', STR_PAD_LEFT),
         ];
 
-        $pdf = PDF::loadView('pdfs.parental_consent', $data);
+        $pdf = Pdf::loadView('pdfs.parental_consent', $data);
         $pdf->setPaper('A4');
 
-        $filename = "waivers/parental_consent_booking_{$booking->id}_" . time() . ".pdf";
+        $filename = "waivers/parental_consent_booking_{$booking->id}_" . time() . '.pdf';
         $content = $pdf->output();
 
         Storage::disk('local')->put($filename, $content);

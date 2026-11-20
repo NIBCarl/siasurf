@@ -1,210 +1,342 @@
+@php
+    $resolvedPageHeight = (int) ($page_height ?? 615);
+    $resolvedCardMinHeight = max(560, $resolvedPageHeight - 24);
+@endphp
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <title>Payment Receipt - {{ $receipt_number }}</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .header {
-            text-align: center;
-            border-bottom: 3px solid #0891B2;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            color: #0891B2;
+        @page {
+            size: 420pt {{ $resolvedPageHeight }}pt;
             margin: 0;
-            font-size: 32px;
         }
-        .header p {
-            margin: 5px 0;
-            color: #666;
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: #1B93E8;
+            font-family: DejaVu Sans, Helvetica, Arial, sans-serif;
+            color: #3F454D;
         }
-        .receipt-info {
-            background: #f0fdfa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 30px;
+        .page-frame {
+            padding: 3pt 8pt 8pt 8pt;
         }
-        .receipt-info h2 {
-            margin-top: 0;
-            color: #0E7490;
+        .zigzag-wrap {
+            width: 404pt;
+            height: 9pt;
+            line-height: 0;
+            font-size: 0;
+            margin: 0;
+            padding: 0;
         }
-        .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        .zigzag-img {
+            display: block;
+            width: 404pt;
+            height: 9pt;
+            margin: 0;
+            padding: 0;
         }
-        .info-item {
-            margin-bottom: 10px;
+        .receipt-card {
+            width: 404pt;
+            background-color: #FFFFFF;
+            min-height: {{ $resolvedCardMinHeight }}pt;
+            margin: 0;
+            padding: 0;
         }
-        .info-item strong {
-            color: #0E7490;
+        .card-inner {
+            padding: 12pt 26pt 14pt 26pt;
         }
-        .booking-details {
-            margin: 30px 0;
+        .hero {
+            text-align: center;
         }
-        .booking-details h3 {
-            color: #0E7490;
-            border-bottom: 2px solid #e5e7eb;
-            padding-bottom: 10px;
+        .hero-kicker {
+            font-size: 11.5pt;
+            font-weight: normal;
+            color: #4B5563;
+            margin: 0 0 11pt 0;
         }
-        table {
+        .monogram-table {
+            margin: 0 auto 9pt auto;
+            border-collapse: collapse;
+        }
+        .monogram-circle {
+            width: 64pt;
+            height: 64pt;
+            border-radius: 32pt;
+            background-color: #CCCCCC;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 25pt;
+            font-weight: normal;
+            color: #4A4A4A;
+            line-height: 1;
+        }
+        .merchant-name {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #374151;
+            margin: 0 0 9pt 0;
+            letter-spacing: 0.2pt;
+        }
+        .hero-label {
+            font-size: 11pt;
+            font-weight: normal;
+            color: #555B64;
+            margin: 0 0 3pt 0;
+        }
+        .hero-amount {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #4B525A;
+            margin: 0 0 4pt 0;
+            letter-spacing: 0.2pt;
+        }
+        .hero-method {
+            font-size: 11pt;
+            font-weight: normal;
+            color: #555B64;
+            margin: 0;
+        }
+        .underpaid-banner {
+            display: inline-block;
+            margin-top: 7pt;
+            padding: 2.5pt 10pt;
+            border-radius: 10pt;
+            background-color: #FEE2E2;
+            color: #B91C1C;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+        .dashed-divider {
+            border-top: 1pt dashed #D5D9DF;
+            height: 0;
+            margin: 13pt 0;
+        }
+        .ref-block {
+            text-align: center;
+        }
+        .ref-number {
+            font-size: 11.5pt;
+            font-weight: bold;
+            color: #374151;
+            margin: 0 0 4pt 0;
+            word-wrap: break-word;
+        }
+        .ref-timestamp {
+            font-size: 10pt;
+            font-weight: normal;
+            color: #4B5563;
+            margin: 0;
+        }
+        .details-heading {
+            text-align: center;
+            font-size: 11.5pt;
+            font-weight: bold;
+            color: #4B525A;
+            margin: 0 0 10pt 0;
+        }
+        .details-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
         }
-        th, td {
-            padding: 12px;
+        .details-table td {
+            padding: 4pt 0;
+            vertical-align: top;
+            font-size: 9.2pt;
+            line-height: 1.3;
+        }
+        .detail-label {
+            width: 42%;
+            color: #6B7280;
+            font-weight: normal;
             text-align: left;
-            border-bottom: 1px solid #e5e7eb;
+            padding-right: 8pt;
         }
-        th {
-            background: #f0fdfa;
-            color: #0E7490;
+        .detail-value {
+            width: 58%;
+            color: #3F454D;
             font-weight: bold;
+            text-align: left;
+            word-wrap: break-word;
         }
-        .total-row {
-            font-weight: bold;
-            font-size: 18px;
-            background: #f0fdfa;
+        .value-underpaid {
+            color: #DC2626;
         }
-        .footer {
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 2px solid #e5e7eb;
+        .receipt-footer {
+            margin-top: 14pt;
+            padding-top: 9pt;
+            border-top: 1pt dashed #E2E6EC;
             text-align: center;
-            color: #666;
+            color: #88909B;
+            font-size: 7.4pt;
+            line-height: 1.45;
         }
-        .status-paid {
-            display: inline-block;
-            background: #10B981;
-            color: white;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-weight: bold;
-        }
-        .status-underpaid {
-            display: inline-block;
-            background: #E11D48;
-            color: white;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-weight: bold;
+        .receipt-footer p {
+            margin: 0 0 1.5pt 0;
         }
     </style>
 </head>
 <body>
     @php
+        $payment = $booking->payment;
         $totalDue = (float) $booking->total_amount;
-        $paidAmount = (float) ($booking->payment->amount ?? $booking->total_amount);
+        $paidAmount = (float) ($payment->amount ?? $booking->total_amount);
         $balanceDue = max(0, round($totalDue - $paidAmount, 2));
-        $isUnderpaid = $balanceDue > 0 || ($booking->payment && $booking->payment->status?->value === 'underpaid');
-    @endphp
-    <div class="header">
-        <h1>{{ $company_name }}</h1>
-        <p>{{ $company_address }}</p>
-        <p>Email: {{ $company_email }}</p>
-    </div>
+        $isUnderpaid = $balanceDue > 0 || ($payment && $payment->status?->value === 'underpaid');
 
-    <div class="receipt-info">
-        <h2>PAYMENT RECEIPT</h2>
-        <div class="info-grid">
-            <div>
-                <div class="info-item">
-                    <strong>Receipt Number:</strong> {{ $receipt_number }}
-                </div>
-                <div class="info-item">
-                    <strong>Date Issued:</strong> {{ $date_issued }}
-                </div>
-                <div class="info-item">
-                    <strong>Payment Status:</strong>
+        $methodValue = $payment?->payment_method?->value ?? 'gcash';
+        $methodPhrase = match ($methodValue) {
+            'gcash' => 'using your GCash',
+            'paymaya' => 'using your PayMaya',
+            'cash' => 'paid via Cash on Hand',
+            default => 'using ' . ($payment?->payment_method?->label() ?? 'GCash'),
+        };
+
+        $gatewayTxId = $payment?->transaction_id;
+        $hasRealGatewayTx = !empty($gatewayTxId) && !str_starts_with((string) $gatewayTxId, 'mock_');
+        $refNo = $payment?->receipt_reference
+            ?: ($hasRealGatewayTx ? $gatewayTxId : $receipt_number);
+
+        $timestampSource = $payment?->paid_at
+            ?? $payment?->receipt_verified_at
+            ?? now();
+        $formattedTimestamp = $timestampSource
+            ->copy()
+            ->timezone(config('app.timezone', 'Asia/Manila'))
+            ->format('d F Y h:i:s A');
+
+        $monogram = strtoupper(substr(trim((string) $company_name), 0, 1) ?: 'S');
+        $bookingCode = '#SURF-' . str_pad((string) $booking->id, 5, '0', STR_PAD_LEFT);
+
+        $datePart = $booking->date->format('M d, Y');
+        if ($booking->start_time && $booking->end_time) {
+            $scheduleLabel = $datePart . ' • ' . $booking->start_time->format('g:i A') . ' - ' . $booking->end_time->format('g:i A');
+        } elseif ($booking->time_period) {
+            $scheduleLabel = $datePart . ' • ' . ucfirst($booking->time_period->value);
+        } else {
+            $scheduleLabel = $datePart;
+        }
+
+        $studentCount = (int) ($booking->student_count ?? 1);
+        $studentsLabel = $studentCount . ' ' . ($studentCount === 1 ? 'Student' : 'Students');
+
+        // Crisp vector serrated top edge (29 teeth across 404pt width)
+        $toothCount = 29;
+        $svgWidth = 404.0;
+        $step = $svgWidth / $toothCount;
+        $teeth = ['0,9', '0,1.5'];
+        for ($i = 0; $i < $toothCount; $i++) {
+            $valleyX = round(($i + 0.5) * $step, 2);
+            $peakX = round(($i + 1) * $step, 2);
+            $teeth[] = "{$valleyX},7.5";
+            $teeth[] = "{$peakX},1.5";
+        }
+        $teeth[] = '404,9';
+        $zigzagSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="404" height="9" viewBox="0 0 404 9">'
+            . '<rect width="404" height="9" fill="#1B93E8"/>'
+            . '<polygon points="' . implode(' ', $teeth) . '" fill="#FFFFFF"/>'
+            . '</svg>';
+        $zigzagDataUri = 'data:image/svg+xml;base64,' . base64_encode($zigzagSvg);
+    @endphp
+
+    <div class="page-frame">
+        <div class="zigzag-wrap">
+            <img src="{{ $zigzagDataUri }}" alt="" class="zigzag-img">
+        </div>
+
+        <div class="receipt-card">
+            <div class="card-inner">
+                <!-- Hero Payment Summary -->
+                <div class="hero">
+                    <p class="hero-kicker">Payment received for</p>
+
+                    <table class="monogram-table" align="center">
+                        <tr>
+                            <td class="monogram-circle">{{ $monogram }}</td>
+                        </tr>
+                    </table>
+
+                    <p class="merchant-name">{{ $company_name }}</p>
+                    <p class="hero-label">the amount of</p>
+                    <p class="hero-amount">PHP {{ number_format($paidAmount, 2) }}</p>
+                    <p class="hero-method">{{ $methodPhrase }}</p>
+
                     @if($isUnderpaid)
-                        <span class="status-underpaid">UNDERPAID (BALANCE DUE: ₱{{ number_format($balanceDue, 2) }})</span>
-                    @else
-                        <span class="status-paid">PAID</span>
+                        <div class="underpaid-banner">
+                            UNDERPAID &bull; BALANCE DUE: PHP {{ number_format($balanceDue, 2) }}
+                        </div>
                     @endif
                 </div>
-            </div>
-            <div>
-                <div class="info-item">
-                    <strong>Customer:</strong> {{ $booking->student->name }}
+
+                <div class="dashed-divider"></div>
+
+                <!-- Reference & Timestamp -->
+                <div class="ref-block">
+                    <p class="ref-number">Ref. No. {{ $refNo }}</p>
+                    <p class="ref-timestamp">{{ $formattedTimestamp }}</p>
                 </div>
-                <div class="info-item">
-                    <strong>Email:</strong> {{ $booking->student->email }}
-                </div>
-                <div class="info-item">
-                    <strong>Transaction ID:</strong> {{ $booking->payment->transaction_id ?? 'N/A' }}
+
+                <div class="dashed-divider"></div>
+
+                <!-- Receipt Details -->
+                <p class="details-heading">Details</p>
+
+                <table class="details-table">
+                    <tr>
+                        <td class="detail-label">Amount Paid</td>
+                        <td class="detail-value">PHP {{ number_format($paidAmount, 2) }}</td>
+                    </tr>
+                    @if($isUnderpaid)
+                        <tr>
+                            <td class="detail-label">Lesson Total</td>
+                            <td class="detail-value">PHP {{ number_format($totalDue, 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="detail-label">Balance Due</td>
+                            <td class="detail-value value-underpaid">PHP {{ number_format($balanceDue, 2) }}</td>
+                        </tr>
+                    @endif
+                    @if($refNo !== $receipt_number)
+                        <tr>
+                            <td class="detail-label">Receipt No.</td>
+                            <td class="detail-value">{{ $receipt_number }}</td>
+                        </tr>
+                    @endif
+                    <tr>
+                        <td class="detail-label">Booking ID</td>
+                        <td class="detail-value">{{ $bookingCode }}</td>
+                    </tr>
+                    <tr>
+                        <td class="detail-label">Customer</td>
+                        <td class="detail-value">{{ $booking->student->name }}</td>
+                    </tr>
+                    <tr>
+                        <td class="detail-label">Instructor</td>
+                        <td class="detail-value">{{ $booking->instructor->name }}</td>
+                    </tr>
+                    <tr>
+                        <td class="detail-label">Surf Spot</td>
+                        <td class="detail-value">{{ $booking->surfSpot->name }}</td>
+                    </tr>
+                    <tr>
+                        <td class="detail-label">Schedule</td>
+                        <td class="detail-value">{{ $scheduleLabel }}</td>
+                    </tr>
+                    <tr>
+                        <td class="detail-label">Students</td>
+                        <td class="detail-value">{{ $studentsLabel }}</td>
+                    </tr>
+                </table>
+
+                <!-- Compact Footer -->
+                <div class="receipt-footer">
+                    <p>{{ $company_address }} &bull; {{ $company_email }}</p>
+                    <p>Please arrive 15 minutes before your scheduled lesson time.</p>
+                    <p>This is a computer-generated receipt and does not require a signature.</p>
                 </div>
             </div>
         </div>
-    </div>
-
-    <div class="booking-details">
-        <h3>Booking Details</h3>
-        
-        <table>
-            <thead>
-                <tr>
-                    <th>Item</th>
-                    <th>Description</th>
-                    <th style="text-align: right;">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Surf Lesson</td>
-                    <td>
-                        Instructor: {{ $booking->instructor->name }}<br>
-                        Date: {{ $booking->date->format('F d, Y') }}<br>
-                        Time: {{ $booking->time_period ? ucfirst($booking->time_period->value) : 'N/A' }}<br>
-                        Location: {{ $booking->surfSpot->name }}<br>
-                        Skill Level: {{ $booking->skill_level ? ucfirst($booking->skill_level->value) : 'N/A' }}<br>
-                        Students: {{ $booking->student_count }}
-                    </td>
-                    <td style="text-align: right;">₱{{ number_format($booking->total_amount, 2) }}</td>
-                </tr>
-                @if($booking->notes)
-                <tr>
-                    <td colspan="3" style="font-size: 12px; color: #666;">
-                        <strong>Notes:</strong> {{ $booking->notes }}
-                    </td>
-                </tr>
-                @endif
-            </tbody>
-            <tfoot>
-                <tr class="total-row">
-                    <td colspan="2" style="text-align: right;">LESSON TOTAL:</td>
-                    <td style="text-align: right;">₱{{ number_format($totalDue, 2) }}</td>
-                </tr>
-                <tr class="total-row">
-                    <td colspan="2" style="text-align: right;">AMOUNT PAID:</td>
-                    <td style="text-align: right;">₱{{ number_format($paidAmount, 2) }}</td>
-                </tr>
-                @if($isUnderpaid)
-                <tr class="total-row" style="color: #E11D48;">
-                    <td colspan="2" style="text-align: right;">UNPAID BALANCE DUE:</td>
-                    <td style="text-align: right;">₱{{ number_format($balanceDue, 2) }}</td>
-                </tr>
-                @endif
-            </tfoot>
-        </table>
-    </div>
-
-    <div class="footer">
-        <p><strong>Thank you for choosing {{ $company_name }}!</strong></p>
-        <p>Please arrive 15 minutes before your scheduled lesson time.</p>
-        <p style="font-size: 12px; margin-top: 20px;">
-            This is a computer-generated receipt and does not require a signature.<br>
-            For questions or concerns, please contact us at {{ $company_email }}
-        </p>
     </div>
 </body>
 </html>

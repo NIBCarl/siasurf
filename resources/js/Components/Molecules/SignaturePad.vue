@@ -7,6 +7,8 @@ interface Props {
   backgroundColor?: string
   penColor?: string
   penWidth?: number
+  placeholder?: string
+  compact?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -14,7 +16,9 @@ const props = withDefaults(defineProps<Props>(), {
   height: 200,
   backgroundColor: '#ffffff',
   penColor: '#1f2937',
-  penWidth: 2
+  penWidth: 2,
+  placeholder: 'Sign here',
+  compact: false,
 })
 
 const emit = defineEmits<{
@@ -32,17 +36,15 @@ let lastY = 0
 
 onMounted(() => {
   if (!canvasRef.value) return
-  
+
   context = canvasRef.value.getContext('2d')
   if (!context) return
-  
-  // Setup canvas
+
   context.strokeStyle = props.penColor
   context.lineWidth = props.penWidth
   context.lineCap = 'round'
   context.lineJoin = 'round'
-  
-  // Fill background
+
   context.fillStyle = props.backgroundColor
   context.fillRect(0, 0, props.width, props.height)
 })
@@ -50,20 +52,22 @@ onMounted(() => {
 const getCoordinates = (event: MouseEvent | TouchEvent): { x: number; y: number } => {
   const canvas = canvasRef.value
   if (!canvas) return { x: 0, y: 0 }
-  
+
   const rect = canvas.getBoundingClientRect()
-  
+  const scaleX = rect.width > 0 ? canvas.width / rect.width : 1
+  const scaleY = rect.height > 0 ? canvas.height / rect.height : 1
+
   if ('touches' in event) {
     const touch = event.touches[0] || event.changedTouches[0]
     return {
-      x: touch.clientX - rect.left,
-      y: touch.clientY - rect.top
+      x: (touch.clientX - rect.left) * scaleX,
+      y: (touch.clientY - rect.top) * scaleY,
     }
   }
-  
+
   return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
   }
 }
 
@@ -72,24 +76,36 @@ const startDrawing = (event: MouseEvent | TouchEvent) => {
   const coords = getCoordinates(event)
   lastX = coords.x
   lastY = coords.y
-  
+
+  // Draw a dot so single taps/clicks also register cleanly.
+  if (context) {
+    context.beginPath()
+    context.arc(coords.x, coords.y, props.penWidth / 2, 0, Math.PI * 2)
+    context.fillStyle = props.penColor
+    context.fill()
+    hasSignature.value = true
+    emit('signature', getSignatureData())
+  }
+
   event.preventDefault()
 }
 
 const draw = (event: MouseEvent | TouchEvent) => {
   if (!isDrawing.value || !context) return
-  
+
   const coords = getCoordinates(event)
-  
+
+  context.strokeStyle = props.penColor
+  context.lineWidth = props.penWidth
   context.beginPath()
   context.moveTo(lastX, lastY)
   context.lineTo(coords.x, coords.y)
   context.stroke()
-  
+
   lastX = coords.x
   lastY = coords.y
   hasSignature.value = true
-  
+
   emit('signature', getSignatureData())
   event.preventDefault()
 }
@@ -100,7 +116,7 @@ const stopDrawing = () => {
 
 const clearSignature = () => {
   if (!context || !canvasRef.value) return
-  
+
   context.fillStyle = props.backgroundColor
   context.fillRect(0, 0, props.width, props.height)
   hasSignature.value = false
@@ -116,7 +132,7 @@ const getSignatureData = (): string => {
 onMounted(() => {
   const canvas = canvasRef.value
   if (!canvas) return
-  
+
   canvas.addEventListener('touchstart', startDrawing, { passive: false })
   canvas.addEventListener('touchmove', draw, { passive: false })
   canvas.addEventListener('touchend', stopDrawing)
@@ -126,7 +142,7 @@ onMounted(() => {
 onUnmounted(() => {
   const canvas = canvasRef.value
   if (!canvas) return
-  
+
   canvas.removeEventListener('touchstart', startDrawing)
   canvas.removeEventListener('touchmove', draw)
   canvas.removeEventListener('touchend', stopDrawing)
@@ -136,15 +152,16 @@ onUnmounted(() => {
 defineExpose({
   clearSignature,
   getSignatureData,
-  hasSignature
+  hasSignature,
 })
 </script>
 
 <template>
   <div class="signature-pad-container">
-    <div 
+    <div
       class="signature-pad"
-      :style="{ width: width + 'px', height: height + 'px' }"
+      :class="{ 'signature-pad-compact': compact }"
+      :style="{ maxWidth: width + 'px' }"
     >
       <canvas
         ref="canvasRef"
@@ -157,15 +174,16 @@ defineExpose({
         @mouseleave="stopDrawing"
       />
       <div v-if="!hasSignature" class="signature-placeholder">
-        <span class="placeholder-text">Sign here</span>
+        <span class="placeholder-text" :class="{ 'text-sm': compact }">{{ placeholder }}</span>
       </div>
     </div>
-    
-    <div class="signature-actions">
+
+    <div class="signature-actions" :style="{ maxWidth: width + 'px' }">
       <button
         type="button"
         @click="clearSignature"
         class="clear-button"
+        :class="{ 'px-2.5 py-1 text-xs': compact }"
       >
         Clear Signature
       </button>
@@ -175,12 +193,16 @@ defineExpose({
 
 <style scoped>
 .signature-pad-container {
-  @apply flex flex-col items-center gap-3;
+  @apply flex w-full flex-col items-center gap-2;
 }
 
 .signature-pad {
-  @apply relative rounded-lg border-2 border-dashed border-slate-300 bg-white overflow-hidden;
+  @apply relative w-full rounded-lg border-2 border-dashed border-slate-300 bg-white overflow-hidden;
   @apply transition-colors duration-200;
+}
+
+.signature-pad-compact {
+  @apply rounded-md border border-slate-400;
 }
 
 .signature-pad:hover {
@@ -188,7 +210,7 @@ defineExpose({
 }
 
 .signature-canvas {
-  @apply cursor-crosshair;
+  @apply block h-auto w-full cursor-crosshair touch-none;
 }
 
 .signature-placeholder {
@@ -196,7 +218,7 @@ defineExpose({
 }
 
 .placeholder-text {
-  @apply text-slate-400 text-lg font-medium;
+  @apply text-slate-400 text-base font-medium;
 }
 
 .signature-actions {
@@ -204,7 +226,7 @@ defineExpose({
 }
 
 .clear-button {
-  @apply px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-md;
+  @apply px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded-md;
   @apply hover:bg-slate-50 hover:text-slate-700 transition-colors duration-200;
   @apply focus:outline-none focus:ring-2 focus:ring-ocean-500 focus:ring-offset-2;
 }

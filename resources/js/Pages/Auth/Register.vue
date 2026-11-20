@@ -10,6 +10,33 @@ const props = defineProps<{
     defaultRole?: 'student' | 'instructor';
 }>();
 
+const maxBirthday = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 5);
+    return d.toISOString().split('T')[0];
+})();
+
+const commonCountries = [
+    'Philippines',
+    'Australia',
+    'United States',
+    'United Kingdom',
+    'Canada',
+    'France',
+    'Germany',
+    'Spain',
+    'Netherlands',
+    'Italy',
+    'Switzerland',
+    'Sweden',
+    'Japan',
+    'South Korea',
+    'Singapore',
+    'New Zealand',
+    'Israel',
+    'Brazil',
+];
+
 const form = useForm({
     name: '',
     email: '',
@@ -18,6 +45,8 @@ const form = useForm({
     role: props.defaultRole === 'instructor' ? 'instructor' : 'student',
     skill_level: 'beginner',
     is_first_time: true,
+    birthday: '',
+    country: '',
 });
 
 const submit = () => {
@@ -97,9 +126,43 @@ const submit = () => {
 
             <!-- Student Profile Fields -->
             <div v-if="form.role === 'student'" class="mt-6 border-t border-slate-200 pt-4">
-                <h3 class="text-sm font-medium text-slate-900">Surf Experience</h3>
-                <p class="text-xs text-slate-500 mb-4">This helps us match you with the right instructor.</p>
-                
+                <h3 class="text-sm font-medium text-slate-900">Student Profile &amp; Surf Experience</h3>
+                <p class="text-xs text-slate-500 mb-4">Used to match you with the right instructor and prefill your surf lesson waiver.</p>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <InputLabel for="birthday" value="Birthday" />
+                        <TextInput
+                            id="birthday"
+                            type="date"
+                            class="mt-1 block w-full"
+                            v-model="form.birthday"
+                            :max="maxBirthday"
+                            min="1920-01-01"
+                            required
+                        />
+                        <InputError class="mt-2" :message="form.errors.birthday" />
+                    </div>
+
+                    <div>
+                        <InputLabel for="country" value="Country" />
+                        <TextInput
+                            id="country"
+                            type="text"
+                            list="register-country-options"
+                            class="mt-1 block w-full"
+                            v-model="form.country"
+                            placeholder="e.g. Philippines"
+                            autocomplete="country-name"
+                            required
+                        />
+                        <datalist id="register-country-options">
+                            <option v-for="country in commonCountries" :key="country" :value="country" />
+                        </datalist>
+                        <InputError class="mt-2" :message="form.errors.country" />
+                    </div>
+                </div>
+
                 <div class="mt-4">
                     <InputLabel for="skill_level" value="Skill Level" />
                     <select

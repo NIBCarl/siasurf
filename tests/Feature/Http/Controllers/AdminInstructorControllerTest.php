@@ -247,4 +247,113 @@ class AdminInstructorControllerTest extends TestCase
 
         $response->assertSessionHasErrors(['email']);
     }
+
+    #[Test]
+    public function activating_a_pending_instructor_via_edit_verifies_pending_certificates_and_shows_them_in_find_instructor()
+    {
+        Storage::fake('local');
+
+        $cert = $this->instructor->certificates()->create([
+            'type' => CertificateType::SurfSkill,
+            'file_path' => 'certificates/pending.png',
+            'status' => CertificateStatus::PendingVerification,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.instructors.update', $this->instructor->id), [
+                'name' => $this->instructor->name,
+                'email' => $this->instructor->email,
+                'level' => 1,
+                'rate_per_hour' => 600,
+                'status' => InstructorStatus::Active->value,
+                'area' => 'General Luna',
+            ])
+            ->assertRedirect(route('admin.instructors.show', $this->instructor->id));
+
+        $this->assertDatabaseHas('instructor_profiles', [
+            'user_id' => $this->instructor->id,
+            'status' => InstructorStatus::Active->value,
+        ]);
+        $this->assertDatabaseHas('certificates', [
+            'id' => $cert->id,
+            'status' => CertificateStatus::Verified->value,
+        ]);
+
+        $student = User::factory()->create(['role' => 'student']);
+        $student->assignRole('student');
+        $student->studentProfile()->create([
+            'skill_level' => 'beginner',
+            'is_first_time' => true,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($student)
+            ->get(route('instructors.search'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('instructors.data', 1)
+                ->where('instructors.data.0.id', $this->instructor->id)
+            );
+    }
+
+    #[Test]
+    public function verifying_a_pending_instructor_without_checkboxes_approves_pending_certificates_and_shows_them_in_find_instructor()
+    {
+        Storage::fake('local');
+
+        $cert = $this->instructor->certificates()->create([
+            'type' => CertificateType::SurfSkill,
+            'file_path' => 'certificates/pending.png',
+            'status' => CertificateStatus::PendingVerification,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.instructors.verify', $this->instructor->id))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('instructor_profiles', [
+            'user_id' => $this->instructor->id,
+            'status' => InstructorStatus::Active->value,
+        ]);
+        $this->assertDatabaseHas('certificates', [
+            'id' => $cert->id,
+            'status' => CertificateStatus::Verified->value,
+        ]);
+
+        $student = User::factory()->create(['role' => 'student']);
+        $student->assignRole('student');
+        $student->studentProfile()->create([
+            'skill_level' => 'beginner',
+            'is_first_time' => true,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($student)
+            ->get(route('instructors.search'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('instructors.data', 1)
+                ->where('instructors.data.0.id', $this->instructor->id)
+            );
+    }
+
+    #[Test]
+    public function activating_a_pending_instructor_with_no_certificates_is_rejected()
+    {
+        $this->actingAs($this->admin)
+            ->from(route('admin.instructors.edit', $this->instructor->id))
+            ->put(route('admin.instructors.update', $this->instructor->id), [
+                'name' => $this->instructor->name,
+                'email' => $this->instructor->email,
+                'level' => 1,
+                'rate_per_hour' => 600,
+                'status' => InstructorStatus::Active->value,
+            ])
+            ->assertSessionHasErrors('status');
+
+        $this->assertDatabaseHas('instructor_profiles', [
+            'user_id' => $this->instructor->id,
+            'status' => InstructorStatus::PendingVerification->value,
+        ]);
+    }
 }

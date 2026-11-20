@@ -179,6 +179,7 @@ class BookingParticipantsTest extends TestCase
         $sign = fn (int $participantId) => $this->actingAs($this->student)->post(
             route('bookings.store-waiver', $booking),
             [
+                'emergency_contact' => 'Jane Doe - +63 917 000 0000',
                 'signed_by' => 'Signer',
                 'signature' => 'data:image/png;base64,AAAA',
                 'agreement' => true,
@@ -220,6 +221,7 @@ class BookingParticipantsTest extends TestCase
         $this->actingAs($this->student)->post(
             route('bookings.store-waiver', $booking),
             [
+                'emergency_contact' => 'Jane Doe - +63 917 000 0000',
                 'signed_by' => 'Signer',
                 'signature' => 'data:image/png;base64,AAAA',
                 'agreement' => true,

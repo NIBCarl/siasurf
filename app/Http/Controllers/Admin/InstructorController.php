@@ -179,9 +179,20 @@ class InstructorController extends Controller
 
         $oldStatus = $profile->status;
 
-        // Update certificates status if provided
-        if ($request->has('certificate_ids') && ! empty($request->certificate_ids)) {
-            Certificate::whereIn('id', $request->certificate_ids)
+        // Verify explicitly selected certificates (scoped to this instructor).
+        if ($request->filled('certificate_ids') && is_array($request->certificate_ids)) {
+            $instructor->certificates()
+                ->whereIn('id', $request->certificate_ids)
+                ->update([
+                    'status' => CertificateStatus::Verified->value,
+                    'verified_at' => now(),
+                ]);
+        } elseif (! $instructor->hasVerifiedCertificate()) {
+            // If the admin clicked Verify & License without ticking individual
+            // boxes, approve the instructor's pending certificates so they are
+            // immediately discoverable in Find Instructor (BR-2.1).
+            $instructor->certificates()
+                ->where('status', CertificateStatus::PendingVerification->value)
                 ->update([
                     'status' => CertificateStatus::Verified->value,
                     'verified_at' => now(),
@@ -403,6 +414,31 @@ class InstructorController extends Controller
             'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
         ]);
 
+        $profile = $instructor->instructorProfile;
+        $wasActive = $profile->status === InstructorStatus::Active;
+        $becomingActive = $validated['status'] === InstructorStatus::Active->value;
+
+        // BR-2.1: Find Instructor only lists active instructors who also have at
+        // least one verified certificate. When an admin sets status to "Active
+        // (Verified)" from Edit Dossier, approve any pending certificates so
+        // the instructor does not end up active-but-hidden from tourists.
+        if ($becomingActive && ! $instructor->hasVerifiedCertificate()) {
+            $verifiedPending = $instructor->certificates()
+                ->where('status', CertificateStatus::PendingVerification->value)
+                ->update([
+                    'status' => CertificateStatus::Verified->value,
+                    'verified_at' => now(),
+                ]);
+
+            if (! $wasActive && $verifiedPending === 0) {
+                return back()
+                    ->withErrors([
+                        'status' => 'Cannot mark an instructor Active (Verified) without at least one uploaded certificate.',
+                    ])
+                    ->withInput();
+            }
+        }
+
         // Update user
         $instructor->update([
             'name' => $validated['name'],
@@ -411,7 +447,7 @@ class InstructorController extends Controller
         ]);
 
         // Update profile
-        $instructor->instructorProfile->update([
+        $profile->update([
             'bio' => $validated['bio'] ?? null,
             'level' => $validated['level'],
             'status' => $validated['status'],
@@ -421,6 +457,11 @@ class InstructorController extends Controller
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
         ]);
+
+        if ($becomingActive && empty($profile->qr_code_path)) {
+            $qrPath = $this->qrCodeService->generateInstructorQR($profile->fresh());
+            $profile->update(['qr_code_path' => $qrPath]);
+        }
 
         return redirect()
             ->route('admin.instructors.show', $instructor->id)
