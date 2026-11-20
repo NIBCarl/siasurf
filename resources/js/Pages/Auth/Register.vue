@@ -6,12 +6,16 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
+const props = defineProps<{
+    defaultRole?: 'student' | 'instructor';
+}>();
+
 const form = useForm({
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
-    role: 'student',
+    role: props.defaultRole === 'instructor' ? 'instructor' : 'student',
     skill_level: 'beginner',
     is_first_time: true,
 });

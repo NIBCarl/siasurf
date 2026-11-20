@@ -28,4 +28,21 @@ enum CertificateType: string
             self::SurfSkill, self::ISA => false,
         };
     }
+
+    /**
+     * Infer certificate type from the uploaded filename.
+     */
+    public static function fromFilename(string $filename): self
+    {
+        $normalized = strtolower($filename);
+
+        // NOTE: 'sisa' must be tested before 'isa' — "sisa" contains "isa".
+        return match (true) {
+            str_contains($normalized, 'bls') => self::BLS,
+            str_contains($normalized, 'wasar') => self::WaSAR,
+            str_contains($normalized, 'sisa') => self::SISA,
+            str_contains($normalized, 'isa') => self::ISA,
+            default => self::SurfSkill,
+        };
+    }
 }

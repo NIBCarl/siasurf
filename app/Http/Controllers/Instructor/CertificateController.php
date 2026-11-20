@@ -14,6 +14,13 @@ class CertificateController extends Controller
 {
     public function store(Request $request, FileScanService $scanner): RedirectResponse
     {
+        $user = $request->user();
+
+        if (! $user->hasInstructorProfile()) {
+            return redirect()->route('instructor.onboarding')
+                ->with('error', 'Complete your instructor onboarding first.');
+        }
+
         $request->validate([
             'certificates' => 'required|array|min:1',
             'certificates.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // Max 10MB
@@ -24,8 +31,6 @@ class CertificateController extends Controller
             'certificates.*.mimes' => 'Documents must be a PDF, JPG, or PNG file.',
             'certificates.*.uploaded' => 'A document could not be uploaded because it is larger than this server allows (max '.$this->uploadMaxSizeLabel().' per file). Compress it and try again.',
         ]);
-
-        $user = auth()->user();
 
         if ($request->hasFile('certificates')) {
             foreach ($request->file('certificates') as $file) {
@@ -39,20 +44,7 @@ class CertificateController extends Controller
                     ]);
                 }
 
-                // Determine certificate type ('sisa' before 'isa' — "sisa" contains "isa")
-                $type = CertificateType::SurfSkill;
-                $filename = strtolower($file->getClientOriginalName());
-                if (str_contains($filename, 'bls')) {
-                    $type = CertificateType::BLS;
-                } elseif (str_contains($filename, 'wasar')) {
-                    $type = CertificateType::WaSAR;
-                } elseif (str_contains($filename, 'sisa')) {
-                    $type = CertificateType::SISA;
-                } elseif (str_contains($filename, 'isa')) {
-                    $type = CertificateType::ISA;
-                } elseif (str_contains($filename, 'surf')) {
-                    $type = CertificateType::SurfSkill;
-                }
+                $type = CertificateType::fromFilename($file->getClientOriginalName());
 
                 // Store file based on environment configuration
                 $disk = config('filesystems.default') === 's3' ? 's3' : 'public';

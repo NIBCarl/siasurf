@@ -2,8 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Enums\CertificateStatus;
+use App\Enums\CertificateType;
+use App\Enums\InstructorStatus;
 use App\Models\InstructorProfile;
+use App\Models\User;
+use App\Services\FileScanService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -36,12 +40,15 @@ class InstructorOnboardingTest extends TestCase
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'role' => 'instructor',
-        ])->assertRedirect('/dashboard');
+        ])->assertRedirect(route('verification.notice'));
 
-        $this->assertTrue(User::where('email', 'newinst@example.test')->first()->hasRole('instructor'));
+        $user = User::where('email', 'newinst@example.test')->firstOrFail();
+        $this->assertTrue($user->hasRole('instructor'));
 
-        $this->get('/dashboard')->assertRedirect(route('instructor.onboarding'));
-        $this->get('/instructor/onboarding')->assertOk();
+        $user->markEmailAsVerified();
+
+        $this->actingAs($user->fresh())->get('/dashboard')->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user->fresh())->get('/instructor/onboarding')->assertOk();
     }
 
     public function test_instructor_can_add_a_certificate_from_the_profile_page(): void
@@ -156,18 +163,19 @@ class InstructorOnboardingTest extends TestCase
         ]);
 
         $this->actingAs($user)->get('/dashboard')->assertRedirect(route('instructor.onboarding'));
-        $this->actingAs($user)->get('/instructor/pending')->assertOk();
+        $this->actingAs($user)->get('/instructor/pending')->assertRedirect(route('instructor.onboarding'));
     }
 
-    public function test_unverified_email_is_not_enforced_on_instructor_routes(): void
+    public function test_unverified_email_instructor_is_redirected_to_verification_notice(): void
     {
-        // User model does NOT implement MustVerifyEmail, so the 'verified'
-        // middleware is a no-op and email_verified_at = null does not block anyone.
         $user = User::factory()->instructor()->unverified()->create(['email' => 'unverified@example.test']);
         $user->assignRole('instructor');
 
-        $this->actingAs($user)->get('/instructor/onboarding')->assertOk();
-        $this->actingAs($user)->get('/dashboard')->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->get('/instructor/onboarding')->assertRedirect(route('verification.notice'));
+        $this->actingAs($user)->get('/dashboard')->assertRedirect(route('verification.notice'));
+        $this->actingAs($user)->get('/')->assertRedirect(route('verification.notice'));
+        $this->actingAs($user)->get('/instructors')->assertRedirect(route('verification.notice'));
+        $this->actingAs($user)->get('/profile')->assertRedirect(route('verification.notice'));
     }
 
     public function test_onboarding_page_reports_real_upload_limits_and_existing_state(): void
@@ -177,7 +185,7 @@ class InstructorOnboardingTest extends TestCase
             'user_id' => $user->id,
             'bio' => 'Existing bio',
             'level' => 3,
-            'status' => 'pending_verification',
+            'status' => 'rejected',
             'rate_per_hour' => 1500,
         ]);
         $user->certificates()->create([
@@ -256,5 +264,295 @@ class InstructorOnboardingTest extends TestCase
             ->assertSessionHasErrors([
                 'certificates' => 'Attach at least one certificate file (PDF, JPG, or PNG) before submitting.',
             ]);
+    }
+
+    public function test_level_3_onboarding_requires_at_least_1500_rate(): void
+    {
+        Storage::fake('public');
+        $user = $this->instructor('level3min@example.test');
+
+        $this->actingAs($user)
+            ->from('/instructor/onboarding')
+            ->post('/instructor/onboarding', [
+                'bio' => 'Master instructor.',
+                'level' => 3,
+                'rate_per_hour' => 800,
+                'certificates' => [UploadedFile::fake()->create('isa_cert.pdf', 100, 'application/pdf')],
+            ])
+            ->assertSessionHasErrors('rate_per_hour')
+            ->assertRedirect('/instructor/onboarding');
+
+        $this->assertDatabaseCount('instructor_profiles', 0);
+    }
+
+    public function test_unonboarded_instructor_cannot_bypass_onboarding_across_routes(): void
+    {
+        Storage::fake('public');
+
+        $user = $this->instructor('unonboarded@example.test');
+
+        $activeInstructor = $this->instructor('verified-other@example.test');
+        $activeInstructor->instructorProfile()->create([
+            'bio' => 'Active instructor',
+            'level' => 2,
+            'status' => InstructorStatus::Active->value,
+            'rate_per_hour' => 800,
+        ]);
+        $activeInstructor->certificates()->create([
+            'type' => CertificateType::SISA->value,
+            'file_path' => 'certificates/active.pdf',
+            'status' => CertificateStatus::Verified->value,
+            'verified_at' => now(),
+            'expires_at' => now()->addYear(),
+        ]);
+
+        $this->actingAs($user)->get('/')->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->get(route('instructors.search'))->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->get(route('instructors.profile', $activeInstructor))->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->get(route('surf-spots.index'))->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->get(route('profile.edit'))->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->post(route('profile.avatar.update'), [
+            'avatar' => UploadedFile::fake()->image('avatar.jpg', 200, 200),
+        ])->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->delete(route('profile.destroy'), [
+            'password' => 'password',
+        ])->assertRedirect(route('instructor.onboarding'));
+        $this->assertDatabaseHas('users', ['id' => $user->id]);
+
+        $this->actingAs($user)->get(route('instructor.pending'))->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->get(route('instructor.dashboard'))->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->get(route('instructor.availability.index'))->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->post(route('instructor.certificates.store'), [
+            'certificates' => [UploadedFile::fake()->create('cert.pdf', 100, 'application/pdf')],
+        ])->assertRedirect(route('instructor.onboarding'));
+        $this->assertDatabaseCount('certificates', 1);
+
+        // Role boundaries stay 403
+        $this->actingAs($user)->get(route('admin.instructors.index'))->assertForbidden();
+        $this->actingAs($user)->get(route('bookings.create', $activeInstructor))->assertForbidden();
+
+        // Logout remains reachable
+        $this->actingAs($user)->post(route('logout'))->assertRedirect('/');
+    }
+
+    public function test_pending_instructor_is_restricted_to_pending_and_cannot_resubmit_onboarding(): void
+    {
+        Storage::fake('public');
+
+        $user = $this->instructor('pending@example.test');
+        $user->instructorProfile()->create([
+            'bio' => 'Pending instructor',
+            'level' => 1,
+            'status' => InstructorStatus::PendingVerification->value,
+            'rate_per_hour' => 600,
+        ]);
+        $user->certificates()->create([
+            'type' => CertificateType::SISA->value,
+            'file_path' => 'certificates/pending.pdf',
+            'status' => CertificateStatus::PendingVerification->value,
+        ]);
+
+        $this->actingAs($user)->get('/')->assertRedirect(route('instructor.pending'));
+        $this->actingAs($user)->get(route('instructors.search'))->assertRedirect(route('instructor.pending'));
+        $this->actingAs($user)->get(route('profile.edit'))->assertRedirect(route('instructor.pending'));
+        $this->actingAs($user)->get(route('instructor.onboarding'))->assertRedirect(route('instructor.pending'));
+        $this->actingAs($user)->get(route('instructor.dashboard'))->assertRedirect(route('instructor.pending'));
+
+        $this->actingAs($user)->post(route('instructor.onboarding.store'), [
+            'bio' => 'Attempted escalation',
+            'level' => 3,
+            'rate_per_hour' => 1500,
+            'certificates' => [UploadedFile::fake()->create('extra.pdf', 100, 'application/pdf')],
+        ])->assertRedirect(route('instructor.pending'));
+
+        $this->assertDatabaseHas('instructor_profiles', [
+            'user_id' => $user->id,
+            'level' => 1,
+            'status' => InstructorStatus::PendingVerification->value,
+        ]);
+
+        $this->actingAs($user)->get(route('instructor.pending'))->assertOk();
+        $this->actingAs($user)->post(route('instructor.certificates.store'), [
+            'certificates' => [UploadedFile::fake()->create('bls_extra.pdf', 100, 'application/pdf')],
+        ])->assertRedirect();
+        $this->assertSame(2, $user->certificates()->count());
+
+        $this->actingAs($user)->post(route('logout'))->assertRedirect('/');
+    }
+
+    public function test_suspended_instructor_cannot_escape_suspension_screen(): void
+    {
+        $user = $this->instructor('suspended@example.test');
+        $user->instructorProfile()->create([
+            'bio' => 'Suspended instructor',
+            'level' => 2,
+            'status' => InstructorStatus::Suspended->value,
+            'rate_per_hour' => 800,
+            'suspended_until' => now()->addWeeks(2),
+            'suspension_reason' => 'Three active strikes.',
+        ]);
+
+        $this->actingAs($user)->get('/')->assertRedirect(route('instructor.suspended'));
+        $this->actingAs($user)->get(route('instructors.search'))->assertRedirect(route('instructor.suspended'));
+        $this->actingAs($user)->get(route('profile.edit'))->assertRedirect(route('instructor.suspended'));
+        $this->actingAs($user)->delete(route('profile.destroy'), [
+            'password' => 'password',
+        ])->assertRedirect(route('instructor.suspended'));
+        $this->assertDatabaseHas('users', ['id' => $user->id]);
+
+        $this->actingAs($user)->get(route('instructor.dashboard'))->assertRedirect(route('instructor.suspended'));
+        $this->actingAs($user)->get(route('instructor.onboarding'))->assertRedirect(route('instructor.suspended'));
+        $this->actingAs($user)->get(route('instructor.pending'))->assertRedirect(route('instructor.suspended'));
+
+        $this->actingAs($user)->get(route('instructor.suspended'))->assertOk();
+        $this->actingAs($user)->post(route('logout'))->assertRedirect('/');
+    }
+
+    public function test_verified_active_instructor_cannot_reenter_onboarding_pending_or_suspended_screens(): void
+    {
+        Storage::fake('public');
+
+        $user = $this->instructor('active@example.test');
+        $user->instructorProfile()->create([
+            'bio' => 'Active instructor',
+            'level' => 1,
+            'status' => InstructorStatus::Active->value,
+            'rate_per_hour' => 600,
+        ]);
+
+        $this->actingAs($user)->get(route('instructor.onboarding'))->assertRedirect(route('instructor.dashboard'));
+        $this->actingAs($user)->get(route('instructor.pending'))->assertRedirect(route('instructor.dashboard'));
+        $this->actingAs($user)->get(route('instructor.suspended'))->assertRedirect(route('instructor.dashboard'));
+
+        $this->actingAs($user)->post(route('instructor.onboarding.store'), [
+            'bio' => 'Attempted level overwrite',
+            'level' => 3,
+            'rate_per_hour' => 1500,
+            'certificates' => [UploadedFile::fake()->create('fake.pdf', 100, 'application/pdf')],
+        ])->assertRedirect(route('instructor.dashboard'));
+
+        $this->assertDatabaseHas('instructor_profiles', [
+            'user_id' => $user->id,
+            'level' => 1,
+            'status' => InstructorStatus::Active->value,
+        ]);
+    }
+
+    public function test_vacation_mode_keeps_dashboard_and_availability_accessible_while_non_bookable(): void
+    {
+        $user = $this->instructor('vacation@example.test');
+        $user->instructorProfile()->create([
+            'bio' => 'Active instructor',
+            'level' => 2,
+            'status' => InstructorStatus::Active->value,
+            'rate_per_hour' => 800,
+        ]);
+
+        $this->actingAs($user)->post(route('instructor.availability.toggle-status'))->assertRedirect();
+        $user->refresh();
+
+        $this->assertSame(InstructorStatus::Inactive, $user->instructorProfile->status);
+        $this->assertFalse($user->isBookable());
+
+        $this->actingAs($user)->get('/dashboard')->assertRedirect(route('instructor.dashboard'));
+        $this->actingAs($user)->get(route('instructor.dashboard'))->assertOk();
+        $this->actingAs($user)->get(route('instructor.availability.index'))->assertOk();
+
+        // Can toggle Vacation Mode back OFF
+        $this->actingAs($user)->post(route('instructor.availability.toggle-status'))->assertRedirect();
+        $user->refresh();
+
+        $this->assertSame(InstructorStatus::Active, $user->instructorProfile->status);
+        $this->assertTrue($user->isBookable());
+    }
+
+    public function test_admin_rejection_sends_instructor_back_to_onboarding_for_resubmission(): void
+    {
+        Storage::fake('public');
+
+        $admin = User::factory()->admin()->create();
+        $admin->assignRole('admin');
+
+        $user = $this->instructor('rejected@example.test');
+        $user->instructorProfile()->create([
+            'bio' => 'Pending instructor',
+            'level' => 1,
+            'status' => InstructorStatus::PendingVerification->value,
+            'rate_per_hour' => 600,
+        ]);
+        $user->certificates()->create([
+            'type' => CertificateType::SISA->value,
+            'file_path' => 'certificates/initial.pdf',
+            'status' => CertificateStatus::PendingVerification->value,
+        ]);
+
+        $this->actingAs($user)->get(route('instructor.pending'))->assertOk();
+
+        $this->actingAs($admin)->post(route('admin.instructors.reject', $user), [
+            'reason' => 'Certificate scan is unreadable.',
+        ])->assertRedirect();
+
+        $this->assertSame(InstructorStatus::Rejected, $user->instructorProfile->fresh()->status);
+
+        $this->actingAs($user)->get('/dashboard')->assertRedirect(route('instructor.onboarding'));
+        $this->actingAs($user)->get(route('instructor.onboarding'))->assertOk();
+
+        $this->actingAs($user)->post(route('instructor.onboarding.store'), [
+            'bio' => 'Updated bio with clear certificate scan.',
+            'level' => 1,
+            'rate_per_hour' => 650,
+            'certificates' => [UploadedFile::fake()->create('sisa_clear.pdf', 150, 'application/pdf')],
+        ])->assertRedirect(route('instructor.pending'));
+
+        $this->assertDatabaseHas('instructor_profiles', [
+            'user_id' => $user->id,
+            'status' => InstructorStatus::PendingVerification->value,
+            'rate_per_hour' => 650,
+        ]);
+    }
+
+    public function test_failed_file_scan_does_not_leave_a_partial_instructor_profile(): void
+    {
+        Storage::fake('public');
+
+        $this->mock(FileScanService::class, function ($mock) {
+            $mock->shouldReceive('assertSafe')
+                ->once()
+                ->andThrow(new \RuntimeException('The file failed the malware scan.'));
+        });
+
+        $user = $this->instructor('scanfail@example.test');
+
+        $this->actingAs($user)
+            ->from('/instructor/onboarding')
+            ->post('/instructor/onboarding', [
+                'bio' => 'Certified surf instructor.',
+                'level' => 1,
+                'rate_per_hour' => 600,
+                'certificates' => [UploadedFile::fake()->create('infected.pdf', 100, 'application/pdf')],
+            ])
+            ->assertSessionHasErrors('certificates')
+            ->assertRedirect('/instructor/onboarding');
+
+        $this->assertDatabaseCount('instructor_profiles', 0);
+        $this->assertDatabaseCount('certificates', 0);
+        $this->assertSame([], Storage::disk('public')->allFiles('certificates'));
+    }
+
+    public function test_register_page_honors_role_query_parameter(): void
+    {
+        $this->get(route('register', ['role' => 'instructor']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Auth/Register')
+                ->where('defaultRole', 'instructor')
+            );
+
+        $this->get(route('register', ['role' => 'admin']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Auth/Register')
+                ->where('defaultRole', 'student')
+            );
     }
 }

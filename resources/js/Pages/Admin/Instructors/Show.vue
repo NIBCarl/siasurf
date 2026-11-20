@@ -116,6 +116,7 @@ const getStatusVariant = (status: string) => {
     case 'active': return 'ocean'
     case 'pending_verification': return 'warning'
     case 'suspended': return 'danger'
+    case 'rejected': return 'danger'
     default: return 'info'
   }
 }

@@ -20,9 +20,9 @@ Broadcast::channel('student.{id}', function (User $user, int $id) {
     return $user->id === $id && $user->isStudent();
 });
 
-// Instructor private channel - only the instructor can listen
+// Instructor private channel - only the instructor can listen once onboarded
 Broadcast::channel('instructor.{id}', function (User $user, int $id) {
-    return $user->id === $id && $user->isInstructor();
+    return $user->id === $id && $user->isInstructor() && $user->hasInstructorProfile();
 });
 
 // Admin notifications channel - only admins can listen

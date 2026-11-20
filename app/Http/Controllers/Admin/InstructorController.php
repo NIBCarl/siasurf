@@ -234,7 +234,7 @@ class InstructorController extends Controller
         $oldStatus = $profile->status;
 
         $profile->update([
-            'status' => InstructorStatus::Inactive->value,
+            'status' => InstructorStatus::Rejected->value,
         ]);
 
         // Send rejection notification
@@ -244,7 +244,7 @@ class InstructorController extends Controller
             \Log::error('Failed to send rejection notification: '.$e->getMessage());
         }
 
-        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Inactive, $validated['reason']);
+        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Rejected, $validated['reason']);
 
         return back()->with('success', 'Instructor application rejected.');
     }
@@ -392,7 +392,7 @@ class InstructorController extends Controller
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
             'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
-            'status' => 'required|string',
+            'status' => 'required|string|in:'.implode(',', array_column(InstructorStatus::cases(), 'value')),
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',

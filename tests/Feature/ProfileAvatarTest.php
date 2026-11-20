@@ -47,6 +47,12 @@ class ProfileAvatarTest extends TestCase
     public function test_instructor_can_upload_a_profile_photo(): void
     {
         $user = User::factory()->instructor()->create();
+        $user->instructorProfile()->create([
+            'bio' => 'Verified instructor bio',
+            'level' => 1,
+            'status' => 'active',
+            'rate_per_hour' => 600,
+        ]);
 
         $response = $this->actingAs($user)->post(route('profile.avatar.update'), [
             'avatar' => UploadedFile::fake()->image('instructor.png', 320, 320),
@@ -113,6 +119,12 @@ class ProfileAvatarTest extends TestCase
     public function test_user_can_remove_their_profile_photo(): void
     {
         $user = User::factory()->instructor()->create();
+        $user->instructorProfile()->create([
+            'bio' => 'Verified instructor bio',
+            'level' => 1,
+            'status' => 'active',
+            'rate_per_hour' => 600,
+        ]);
 
         $this->actingAs($user)->post(route('profile.avatar.update'), [
             'avatar' => UploadedFile::fake()->image('me.jpg', 300, 300),

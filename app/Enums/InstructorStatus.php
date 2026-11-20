@@ -8,6 +8,7 @@ enum InstructorStatus: string
     case Active = 'active';
     case Suspended = 'suspended';
     case Inactive = 'inactive';
+    case Rejected = 'rejected';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum InstructorStatus: string
             self::Active => 'Active',
             self::Suspended => 'Suspended',
             self::Inactive => 'Inactive',
+            self::Rejected => 'Rejected',
         };
     }
 
@@ -26,6 +28,7 @@ enum InstructorStatus: string
             self::Active => 'green',
             self::Suspended => 'red',
             self::Inactive => 'gray',
+            self::Rejected => 'red',
         };
     }
 

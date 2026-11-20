@@ -40,6 +40,8 @@ const props = defineProps<{
 
 const page = usePage();
 const isAuthenticated = computed(() => Boolean((page.props.auth as any)?.user));
+const isStudent = computed(() => (page.props.auth as any)?.user?.role === 'student');
+const canBook = computed(() => !isAuthenticated.value || isStudent.value);
 const instructorAvatar = computed(() => resolveAvatarUrl(props.instructor));
 const instructorInitials = computed(() =>
     String(props.instructor.name ?? '')
@@ -102,7 +104,7 @@ const instructorLevelDescription: Record<number, string> = {
                 Back to Discovery
             </Link>
             
-            <div class="flex items-center gap-4">
+            <div v-if="canBook" class="flex items-center gap-4">
                 <Link 
                     :href="route('bookings.create', instructor.id)" 
                     class="rounded-2xl bg-ocean-600 px-8 py-3.5 text-sm font-black text-white shadow-xl shadow-ocean-100 transition-all hover:bg-ocean-700 active:scale-95"
@@ -351,7 +353,7 @@ const instructorLevelDescription: Record<number, string> = {
                             </div>
 
                             <Link
-                                v-if="isAuthenticated"
+                                v-if="isStudent"
                                 :href="route('bookings.create', instructor.id)"
                                 class="flex h-16 w-full items-center justify-center rounded-2xl bg-ocean-500 text-sm font-black text-white shadow-2xl shadow-ocean-900/40 transition-all hover:bg-ocean-400 active:scale-95 group/btn"
                             >
@@ -359,7 +361,7 @@ const instructorLevelDescription: Record<number, string> = {
                                 <ArrowLeftIcon class="w-4 h-4 ml-3 rotate-180 group-hover/btn:translate-x-1 transition-transform" />
                             </Link>
 
-                            <div v-else class="space-y-3">
+                            <div v-else-if="!isAuthenticated" class="space-y-3">
                                 <Link
                                     :href="route('bookings.create', instructor.id)"
                                     class="flex h-16 w-full items-center justify-center rounded-2xl bg-ocean-500 text-sm font-black text-white shadow-2xl shadow-ocean-900/40 transition-all hover:bg-ocean-400 active:scale-95"
@@ -377,6 +379,10 @@ const instructorLevelDescription: Record<number, string> = {
                                     Browsing is free · sign in only when you book
                                 </p>
                             </div>
+
+                            <p v-else class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-xs font-semibold text-slate-300">
+                                Booking is available to student accounts.
+                            </p>
 
                             <div class="mt-8 flex items-center justify-center gap-3">
                                 <div class="h-1 w-1 rounded-full bg-slate-700" />

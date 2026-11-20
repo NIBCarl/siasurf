@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import AppButton from '@/Components/UI/AppButton.vue'
@@ -8,7 +8,6 @@ import StatCard from '@/Components/UI/StatCard.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import ActivityFeed from '@/Components/Organisms/ActivityFeed.vue'
 import RevenueChart from '@/Components/Organisms/RevenueChart.vue'
-import BookingDistributionChart from '@/Components/Organisms/BookingDistributionChart.vue'
 import PopularSpotsChart from '@/Components/Organisms/PopularSpotsChart.vue'
 import TopInstructorsTable from '@/Components/Organisms/TopInstructorsTable.vue'
 import { 
@@ -128,7 +127,7 @@ const quickActions = [
                     :icon="BanknotesIcon"
                 />
                 <StatCard
-                    label="Safety incidents"
+                    label="Incident report"
                     :value="stats.incidents.total"
                     :meta="`${stats.incidents.critical} critical · ${stats.incidents.this_month} this month`"
                     :tone="stats.incidents.critical > 0 ? 'critical' : 'neutral'"
@@ -174,13 +173,6 @@ const quickActions = [
                 </div>
 
                 <div class="space-y-4">
-                    <AppCard padding="lg">
-                        <SectionHeader eyebrow="Distribution" title="Skill mix" />
-                        <div class="mt-4">
-                            <BookingDistributionChart />
-                        </div>
-                    </AppCard>
-
                     <AppCard padding="md">
                         <SectionHeader eyebrow="Shortcuts" title="Operations" />
                         <div class="mt-3 space-y-2">

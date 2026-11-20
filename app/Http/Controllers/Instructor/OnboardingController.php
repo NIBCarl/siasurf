@@ -11,11 +11,19 @@ use App\Services\FileScanService;
 use App\Services\PricingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class OnboardingController extends Controller
 {
     public function store(Request $request): RedirectResponse
     {
+        $user = $request->user();
+
+        if (! $user->needsInstructorOnboarding()) {
+            return redirect()->route($user->isVerifiedInstructor() ? 'instructor.dashboard' : 'instructor.pending');
+        }
+
         // PHP discards the entire request (POST + FILES) when it exceeds post_max_size.
         // Laravel then sees an empty request, so validation reports "certificates are
         // required" even though the user did attach files. Detect and explain it.
@@ -50,64 +58,67 @@ class OnboardingController extends Controller
             'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
         ]);
 
-        $user = auth()->user();
+        if ((int) $validated['level'] === 3 && (float) $validated['rate_per_hour'] < 1500) {
+            return back()->withErrors([
+                'rate_per_hour' => 'Level 3 instructors must set a base rate of at least ₱1,500 per hour.',
+            ])->withInput();
+        }
 
-        // Create or update the instructor profile
-        $user->instructorProfile()->updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                'bio' => $validated['bio'],
-                'level' => $validated['level'],
-                'rate_per_hour' => $validated['rate_per_hour'],
-                'status' => InstructorStatus::PendingVerification,
-                'area' => $validated['area'] ?? null,
-                'meeting_point' => $validated['meeting_point'] ?? null,
-                'latitude' => $validated['latitude'] ?? null,
-                'longitude' => $validated['longitude'] ?? null,
-            ]
-        );
+        // Phase 13 - verify the real MIME type and (when enabled) scan every
+        // file before writing a profile or storing anything to disk.
+        $files = $request->file('certificates', []);
+        $scanner = app(FileScanService::class);
 
-        // Upload certificates
-        if ($request->hasFile('certificates')) {
-            $scanner = app(FileScanService::class);
+        foreach ($files as $file) {
+            try {
+                $scanner->assertSafe($file);
+            } catch (\RuntimeException $exception) {
+                return back()->withErrors([
+                    'certificates' => $exception->getMessage(),
+                ])->withInput($request->except('certificates'));
+            }
+        }
 
-            foreach ($request->file('certificates') as $file) {
-                // Phase 13 - verify the real MIME type and (when enabled) scan
-                // for malware before the file is written anywhere.
-                try {
-                    $scanner->assertSafe($file);
-                } catch (\RuntimeException $exception) {
-                    return back()->withErrors([
-                        'certificates' => $exception->getMessage(),
+        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $storedCertificates = [];
+
+        try {
+            foreach ($files as $file) {
+                $storedCertificates[] = [
+                    'type' => CertificateType::fromFilename($file->getClientOriginalName()),
+                    'file_path' => $file->store('certificates', $disk),
+                ];
+            }
+
+            DB::transaction(function () use ($user, $validated, $storedCertificates): void {
+                $user->instructorProfile()->updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'bio' => $validated['bio'],
+                        'level' => $validated['level'],
+                        'rate_per_hour' => $validated['rate_per_hour'],
+                        'status' => InstructorStatus::PendingVerification,
+                        'area' => $validated['area'] ?? null,
+                        'meeting_point' => $validated['meeting_point'] ?? null,
+                        'latitude' => $validated['latitude'] ?? null,
+                        'longitude' => $validated['longitude'] ?? null,
+                    ]
+                );
+
+                foreach ($storedCertificates as $certificate) {
+                    $user->certificates()->create([
+                        'type' => $certificate['type'],
+                        'file_path' => $certificate['file_path'],
+                        'status' => CertificateStatus::PendingVerification,
                     ]);
                 }
-
-                // Try to determine certificate type based on filename, otherwise default to SurfSkill
-                // NOTE: 'sisa' must be tested before 'isa' — "sisa" contains "isa".
-                $type = CertificateType::SurfSkill;
-                $filename = strtolower($file->getClientOriginalName());
-                if (str_contains($filename, 'bls')) {
-                    $type = CertificateType::BLS;
-                } elseif (str_contains($filename, 'wasar')) {
-                    $type = CertificateType::WaSAR;
-                } elseif (str_contains($filename, 'sisa')) {
-                    $type = CertificateType::SISA;
-                } elseif (str_contains($filename, 'isa')) {
-                    $type = CertificateType::ISA;
-                } elseif (str_contains($filename, 'surf')) {
-                    $type = CertificateType::SurfSkill;
-                }
-
-                // Store file based on environment configuration
-                $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
-                $path = $file->store('certificates', $disk);
-
-                $user->certificates()->create([
-                    'type' => $type,
-                    'file_path' => $path,
-                    'status' => CertificateStatus::PendingVerification,
-                ]);
+            });
+        } catch (\Throwable $exception) {
+            foreach ($storedCertificates as $certificate) {
+                Storage::disk($disk)->delete($certificate['file_path']);
             }
+
+            throw $exception;
         }
 
         return redirect()->route('instructor.pending')->with('success', 'Profile and certificates submitted successfully. Please wait for Admin verification.');

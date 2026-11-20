@@ -125,6 +125,7 @@ const submit = () => {
                   <option value="active">Active (Verified)</option>
                   <option value="pending_verification">Pending Verification</option>
                   <option value="suspended">Suspended</option>
+                  <option value="rejected">Rejected</option>
                   <option value="inactive">Inactive</option>
                </select>
                <InputError :message="form.errors.status" />

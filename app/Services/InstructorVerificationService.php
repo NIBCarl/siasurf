@@ -37,6 +37,7 @@ class InstructorVerificationService
             $suspended => 'suspended',
             $profile->status === InstructorStatus::PendingVerification => 'pending',
             $profile->status === InstructorStatus::Inactive => 'inactive',
+            $profile->status === InstructorStatus::Rejected => 'rejected',
             !$hasValidCertificate => 'unverified',
             default => 'verified',
         };
@@ -67,6 +68,7 @@ class InstructorVerificationService
             'suspended' => 'Suspended',
             'pending' => 'Verification pending',
             'inactive' => 'Inactive',
+            'rejected' => 'Rejected',
             default => 'Not verified',
         };
     }
@@ -78,6 +80,7 @@ class InstructorVerificationService
             'suspended' => 'This instructor is temporarily suspended and is not authorised to teach. Do not book.',
             'pending' => 'SISA has not approved this instructor yet. Do not book until verification is complete.',
             'inactive' => 'This instructor is not currently active and is not accepting lessons.',
+            'rejected' => 'This instructor application was not approved by SISA. Do not book.',
             default => 'No valid certification is on file. This person is not authorised to teach through SiaSurf.',
         };
     }
@@ -86,7 +89,7 @@ class InstructorVerificationService
     {
         return match ($status) {
             'verified' => 'verified',
-            'suspended' => 'critical',
+            'suspended', 'rejected' => 'critical',
             'pending' => 'pending',
             default => 'neutral',
         };
