@@ -5,7 +5,7 @@ import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import { computed, ref } from 'vue'
 
 interface Props {
-  status: string
+  status?: string
 }
 
 defineProps<Props>()
@@ -83,7 +83,7 @@ const submitAdditionalDocs = () => {
 
         <h1 class="text-4xl font-extrabold text-slate-900 mb-6 tracking-tight">Hang Loose! <br> We're verifying your profile.</h1>
         <p class="text-xl text-slate-600 mb-12">
-          Our team is currently reviewing your certifications and documentation. This usually takes **24-48 hours**. We'll email you as soon as you're cleared to start booking lessons.
+          Our team is currently reviewing your certifications and documentation. This usually takes <strong>24–48 hours</strong>. We'll email you as soon as you're cleared to start booking lessons.
         </p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
@@ -133,9 +133,6 @@ const submitAdditionalDocs = () => {
         <div class="space-x-4">
            <Link :href="route('logout')" method="post" as="button">
               <BaseButton variant="secondary" outline>Logout</BaseButton>
-           </Link>
-           <Link :href="route('instructor.profile.edit')">
-              <BaseButton variant="secondary" outline>View Profile Data</BaseButton>
            </Link>
         </div>
 

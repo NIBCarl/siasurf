@@ -8,7 +8,7 @@ Route::post('/webhooks/payments', [PaymentController::class, 'webhook'])
     ->name('payments.webhook');
 
 // Payment routes for authenticated users
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'verified', 'instructor.not_suspended'])->group(function () {
     // Payment page
     Route::get('/payments/{booking}', [PaymentController::class, 'show'])
         ->name('payments.show');
@@ -69,6 +69,3 @@ if (app()->environment('local', 'development', 'testing')) {
             ->name('payments.mock-process');
     });
 }
-
-// Include main web routes
-require __DIR__.'/web.php';

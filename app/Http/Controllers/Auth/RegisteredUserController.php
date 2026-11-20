@@ -19,9 +19,13 @@ class RegisteredUserController extends Controller
     /**
      * Display the registration view.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
-        return Inertia::render('Auth/Register');
+        $role = $request->query('role');
+
+        return Inertia::render('Auth/Register', [
+            'defaultRole' => in_array($role, ['student', 'instructor'], true) ? $role : 'student',
+        ]);
     }
 
     /**

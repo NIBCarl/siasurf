@@ -68,25 +68,25 @@ Route::get('/dashboard', function () {
     }
 
     if ($user->hasRole('instructor')) {
-        if ($user->instructorProfile && $user->instructorProfile->status === InstructorStatus::Suspended) {
+        if ($user->isSuspendedInstructor()) {
             return redirect()->route('instructor.suspended');
         }
 
-        // If no profile or no certificates, they must onboard
-        $certificateCount = $user->certificates()->count();
-        if (! $user->instructorProfile || $certificateCount === 0) {
-            $message = $user->instructorProfile
-                ? 'Your instructor profile is saved, but no certificate has been uploaded yet. Upload at least one certificate (PDF, JPG, or PNG) to continue verification.'
-                : 'Complete your instructor onboarding to continue.';
+        if ($user->needsInstructorOnboarding()) {
+            $message = match (true) {
+                $user->instructorProfile?->status === InstructorStatus::Rejected => 'Your previous instructor application was rejected. Update your details and upload valid certificates to resubmit.',
+                $user->hasInstructorProfile() => 'Your instructor profile is saved, but no certificate has been uploaded yet. Upload at least one certificate (PDF, JPG, or PNG) to continue verification.',
+                default => 'Complete your instructor onboarding to continue.',
+            };
 
             return redirect()->route('instructor.onboarding')->with('error', $message);
         }
 
-        if ($user->instructorProfile->status === InstructorStatus::PendingVerification) {
+        if ($user->isPendingInstructorVerification()) {
             return redirect()->route('instructor.pending');
         }
 
-        // Verified instructors go to their real dashboard
+        // Verified instructors (including Vacation Mode) go to their real dashboard
         return redirect()->route('instructor.dashboard');
     }
 
@@ -96,8 +96,8 @@ Route::get('/dashboard', function () {
 // Student Dashboard route
 Route::middleware(['auth', 'verified', 'role:student', \App\Http\Middleware\PromptStudentOnboarding::class])->get('/student/dashboard', [App\Http\Controllers\Student\DashboardController::class, 'index'])->name('student.dashboard');
 
-// Profile routes - accessible to all authenticated users
-Route::middleware('auth')->group(function () {
+// Profile routes - accessible to authenticated and email-verified users
+Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -114,7 +114,7 @@ Route::middleware('auth')->group(function () {
 
 // Booking-scoped chat. The booking policy decides who is a participant, so the
 // same endpoints serve both the student and the instructor.
-Route::middleware(['auth', 'verified'])
+Route::middleware(['auth', 'verified', 'instructor.not_suspended'])
     ->prefix('bookings/{booking}/chat')
     ->as('chat.')
     ->group(function () {
@@ -182,7 +182,7 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('bookings')->as(
 });
 
 // Waiver download routes (authenticated users)
-Route::middleware(['auth'])->prefix('waivers')->as('waivers.')->group(function () {
+Route::middleware(['auth', 'verified', 'instructor.not_suspended'])->prefix('waivers')->as('waivers.')->group(function () {
     Route::get('/{waiver}/download', [WaiverController::class, 'download'])->name('download');
     Route::get('/{waiver}/view', [WaiverController::class, 'view'])->name('view');
 });
@@ -263,11 +263,6 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
 
     // Instructor Certificate Upload
     Route::post('/certificates', [App\Http\Controllers\Instructor\CertificateController::class, 'store'])->name('certificates.store');
-});
-
-// Verified instructor only routes
-Route::middleware(['auth', 'verified', 'role:instructor', 'verified.instructor'])->prefix('instructor')->as('instructor.verified.')->group(function () {
-    // Additional verified instructor routes
 });
 
 // API routes for availability (public)

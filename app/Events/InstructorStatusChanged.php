@@ -67,6 +67,7 @@ class InstructorStatusChanged implements ShouldBroadcast
             InstructorStatus::Active => 'Congratulations! Your instructor account is active and visible to students.',
             InstructorStatus::Suspended => 'Your instructor account has been suspended. Please contact admin for details.',
             InstructorStatus::Inactive => 'Your instructor profile is currently inactive and hidden from search.',
+            InstructorStatus::Rejected => 'Your instructor application was rejected. Please review the feedback and resubmit your onboarding details.',
             default => "Your instructor status has been updated to {$this->newStatus->label()}.",
         };
     }

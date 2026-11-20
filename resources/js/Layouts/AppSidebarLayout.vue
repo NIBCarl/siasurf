@@ -48,8 +48,15 @@ const isSidebarOpen = ref(false);
 
 const user = computed(() => (page.props.auth as any)?.user ?? null);
 const hasUser = computed(() => !!user.value);
-const shouldShowSidebar = computed(() => hasUser.value && !props.hideSidebar);
 const role = computed(() => user.value?.role ?? 'guest');
+const isRestrictedInstructor = computed(() => {
+    if (role.value !== 'instructor') return false;
+    const profile = user.value?.instructor_profile;
+    return !user.value?.email_verified_at
+        || !profile
+        || !['active', 'inactive'].includes(profile.status);
+});
+const shouldShowSidebar = computed(() => hasUser.value && !props.hideSidebar && !isRestrictedInstructor.value);
 
 watch(
     () => page.url,
@@ -458,9 +465,19 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
                 </div>
 
                 <div class="flex shrink-0 items-center gap-2">
-                    <NotificationDropdown v-if="hasUser" :user-id="user.id" :user-role="user.role" />
+                    <NotificationDropdown v-if="hasUser && !isRestrictedInstructor" :user-id="user.id" :user-role="user.role" />
 
-                    <template v-else>
+                    <Link
+                        v-if="hasUser && !shouldShowSidebar"
+                        :href="route('logout')"
+                        method="post"
+                        as="button"
+                        class="inline-flex h-10 items-center rounded-control border border-sand-200 bg-white px-3.5 text-body-sm font-semibold text-deep-800 transition-colors hover:bg-sand-100"
+                    >
+                        Sign out
+                    </Link>
+
+                    <template v-if="!hasUser">
                         <Link
                             :href="route('login')"
                             class="inline-flex h-11 items-center rounded-control px-3 text-body-sm font-semibold text-deep-800 transition-colors hover:bg-sand-100"

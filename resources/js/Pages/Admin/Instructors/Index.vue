@@ -79,6 +79,8 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
             return { label: 'Pending verification', variant: 'pending' }
         case 'suspended':
             return { label: 'Suspended', variant: 'critical' }
+        case 'rejected':
+            return { label: 'Rejected', variant: 'critical' }
         case 'inactive':
             return { label: 'Inactive', variant: 'neutral' }
         default:
@@ -167,6 +169,7 @@ const paginationLabel = (label: string) =>
                         <option value="active">Active</option>
                         <option value="pending_verification">Pending verification</option>
                         <option value="suspended">Suspended</option>
+                        <option value="rejected">Rejected</option>
                         <option value="inactive">Inactive</option>
                     </select>
 

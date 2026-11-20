@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { onMounted, ref } from 'vue';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed, onMounted, ref } from 'vue';
 
 defineProps<{
     canLogin?: boolean;
@@ -8,6 +8,10 @@ defineProps<{
     laravelVersion: string;
     phpVersion: string;
 }>();
+
+const page = usePage();
+const user = computed(() => (page.props.auth as any)?.user ?? null);
+const userRole = computed(() => user.value?.role ?? null);
 
 const isScrolled = ref(false);
 
@@ -39,7 +43,7 @@ onMounted(() => {
                 </div>
 
                 <div class="hidden items-center gap-8 md:flex">
-                    <Link :href="route('instructors.search')" :class="['text-sm font-medium transition-colors duration-300 hover:text-teal-500', isScrolled ? 'text-slate-600' : 'text-white/90']">Find Instructors</Link>
+                    <Link v-if="userRole !== 'instructor'" :href="route('instructors.search')" :class="['text-sm font-medium transition-colors duration-300 hover:text-teal-500', isScrolled ? 'text-slate-600' : 'text-white/90']">Find Instructors</Link>
                     <a href="#features" :class="['text-sm font-medium transition-colors duration-300 hover:text-teal-500', isScrolled ? 'text-slate-600' : 'text-white/90']">Safety Features</a>
                     <a href="#about" :class="['text-sm font-medium transition-colors duration-300 hover:text-teal-500', isScrolled ? 'text-slate-600' : 'text-white/90']">About Siargao</a>
                 </div>
@@ -101,20 +105,43 @@ onMounted(() => {
                     
                     <div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
                         <Link
-                            :href="route('instructors.search')"
+                            v-if="userRole === 'instructor'"
+                            :href="route('dashboard')"
                             class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-teal-600 px-8 py-4 text-lg font-bold text-white transition-all hover:bg-teal-700 sm:w-auto"
                         >
-                            <span>Book a Lesson</span>
+                            <span>Go to Instructor Portal</span>
                             <svg class="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                             </svg>
                         </Link>
                         <Link
-                            :href="route('register', { role: 'instructor' })"
-                            class="flex w-full items-center justify-center rounded-full bg-white/10 px-8 py-4 text-lg font-bold text-white backdrop-blur-md transition hover:bg-white/20 sm:w-auto"
+                            v-else-if="userRole === 'admin'"
+                            :href="route('admin.dashboard')"
+                            class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-teal-600 px-8 py-4 text-lg font-bold text-white transition-all hover:bg-teal-700 sm:w-auto"
                         >
-                            Instructor Portal
+                            <span>Admin Dashboard</span>
+                            <svg class="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                            </svg>
                         </Link>
+                        <template v-else>
+                            <Link
+                                :href="route('instructors.search')"
+                                class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-teal-600 px-8 py-4 text-lg font-bold text-white transition-all hover:bg-teal-700 sm:w-auto"
+                            >
+                                <span>Book a Lesson</span>
+                                <svg class="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                </svg>
+                            </Link>
+                            <Link
+                                v-if="!user"
+                                :href="route('register', { role: 'instructor' })"
+                                class="flex w-full items-center justify-center rounded-full bg-white/10 px-8 py-4 text-lg font-bold text-white backdrop-blur-md transition hover:bg-white/20 sm:w-auto"
+                            >
+                                Instructor Portal
+                            </Link>
+                        </template>
                     </div>
                 </div>
             </div>

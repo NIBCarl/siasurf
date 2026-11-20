@@ -37,7 +37,7 @@ class HandleInertiaRequests extends Middleware
         }
 
         if ($user && $user->role === 'instructor') {
-            $user->load('instructorProfile');
+            $user->loadMissing('instructorProfile');
         }
 
         return [
@@ -90,7 +90,7 @@ class HandleInertiaRequests extends Middleware
                     ];
                 }
 
-                if ($user->role !== 'instructor') {
+                if ($user->role !== 'instructor' || ! $user->isVerifiedInstructor()) {
                     return null;
                 }
 

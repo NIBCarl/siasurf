@@ -199,9 +199,40 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isVerifiedInstructor(): bool
     {
-        return $this->isInstructor() &&
-               $this->instructorProfile !== null &&
-               $this->instructorProfile->status === InstructorStatus::Active;
+        return $this->isInstructor()
+            && $this->instructorProfile !== null
+            && in_array($this->instructorProfile->status, [
+                InstructorStatus::Active,
+                InstructorStatus::Inactive,
+            ], true);
+    }
+
+    public function isSuspendedInstructor(): bool
+    {
+        return $this->isInstructor()
+            && $this->instructorProfile !== null
+            && $this->instructorProfile->isSuspended();
+    }
+
+    public function needsInstructorOnboarding(): bool
+    {
+        if (! $this->isInstructor() || $this->isSuspendedInstructor() || $this->isVerifiedInstructor()) {
+            return false;
+        }
+
+        if ($this->instructorProfile === null || $this->instructorProfile->status === InstructorStatus::Rejected) {
+            return true;
+        }
+
+        return ! $this->certificates()->exists();
+    }
+
+    public function isPendingInstructorVerification(): bool
+    {
+        return $this->isInstructor()
+            && $this->instructorProfile !== null
+            && $this->instructorProfile->status === InstructorStatus::PendingVerification
+            && $this->certificates()->exists();
     }
 
     /**
@@ -225,7 +256,9 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isBookable(): bool
     {
-        return $this->isVerifiedInstructor() &&
-               ($this->instructorProfile->suspended_until === null || $this->instructorProfile->suspended_until <= now());
+        return $this->isInstructor()
+            && $this->instructorProfile !== null
+            && $this->instructorProfile->status === InstructorStatus::Active
+            && ($this->instructorProfile->suspended_until === null || $this->instructorProfile->suspended_until <= now());
     }
 }
