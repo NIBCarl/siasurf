@@ -254,7 +254,11 @@ class BookingFlowTest extends TestCase
     {
         $this->instructor->instructorProfile->update(['auto_accept_bookings' => true]);
 
-        $booking = $this->booking(['status' => BookingStatus::Pending]);
+        $booking = $this->booking([
+            'status' => BookingStatus::Pending,
+            'skill_level' => 'intermediate',
+            'session_type' => 'guiding',
+        ]);
         $this->signLiability($booking);
 
         $this->actingAs($this->student)
@@ -267,20 +271,16 @@ class BookingFlowTest extends TestCase
         $this->assertSame(BookingStatus::Confirmed, $booking->status);
         $this->assertNotNull($booking->accepted_at);
 
-        // The booking now holds capacity in its window. This instructor is
-        // Level 2 (capacity 2) and the party is one person, so the slot is NOT
-        // full and no lock row is expected - a lock is only written when a slot
-        // fills. Asserting a lock row here was only ever passing because the
-        // factory used to generate illegal student counts for the instructor's
-        // level, which made a one-person booking look like it filled the slot.
-        // start_time/end_time are cast to datetime:H:i, so they hydrate with a
-        // date attached. Format them back to "H:i" for the capacity lookup, which
-        // matches on the time string.
+        // Level 2 Intermediate Guiding has capacity 2; a one-person booking
+        // consumes 1 seat and leaves 1 free for another Intermediate surfer.
         $remaining = app(\App\Services\AvailabilityService::class)->remainingCapacity(
             $this->instructor->id,
             $booking->date->format('Y-m-d'),
             $booking->start_time->format('H:i'),
             $booking->end_time->format('H:i'),
+            null,
+            \App\Enums\SkillLevel::Intermediate,
+            \App\Enums\SessionType::Guiding,
         );
 
         $this->assertSame(1, $remaining, 'A one-person booking must consume exactly one seat, leaving one free.');

@@ -23,7 +23,37 @@ return [
 
     'pricing' => [
         'min_rate_per_hour' => env('SIASURF_MIN_RATE', 600),
-        'max_rate_per_hour' => env('SIASURF_MAX_RATE', 1500),
+        'max_rate_per_hour' => env('SIASURF_MAX_RATE', 1000),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Service-Based Pricing Bands
+    |--------------------------------------------------------------------------
+    |
+    | Rates are governed by the service provided (Teaching, Guiding, Coaching)
+    | rather than instructor level, so a beginner booking a Level 3 instructor
+    | for Teaching still pays the Teaching rate. Instructors may choose any
+    | hourly rate within each authorized service's published range.
+    |
+    */
+
+    'services' => [
+        'teaching' => [
+            'min_rate' => (float) env('SIASURF_TEACHING_MIN_RATE', 600),
+            'max_rate' => (float) env('SIASURF_TEACHING_MAX_RATE', 1000),
+            'default_rate' => (float) env('SIASURF_TEACHING_DEFAULT_RATE', 600),
+        ],
+        'guiding' => [
+            'min_rate' => (float) env('SIASURF_GUIDING_MIN_RATE', 800),
+            'max_rate' => (float) env('SIASURF_GUIDING_MAX_RATE', 1500),
+            'default_rate' => (float) env('SIASURF_GUIDING_DEFAULT_RATE', 800),
+        ],
+        'coaching' => [
+            'min_rate' => (float) env('SIASURF_COACHING_MIN_RATE', 1500),
+            'max_rate' => (float) env('SIASURF_COACHING_MAX_RATE', 2000),
+            'default_rate' => (float) env('SIASURF_COACHING_DEFAULT_RATE', 1500),
+        ],
     ],
 
     /*
@@ -81,7 +111,7 @@ return [
     'instructor_capacity' => [
         1 => (int) env('SIASURF_LEVEL1_CAPACITY', 1),
         2 => (int) env('SIASURF_LEVEL2_CAPACITY', 2),
-        3 => (int) env('SIASURF_LEVEL3_CAPACITY', 5),
+        3 => (int) env('SIASURF_LEVEL3_CAPACITY', 3),
     ],
 
     /*

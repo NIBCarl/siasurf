@@ -251,6 +251,8 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
                 'bio' => $profile->bio,
                 'level' => $profile->level->value,
                 'rate_per_hour' => (float) $profile->rate_per_hour,
+                'guiding_rate' => $profile->guiding_rate !== null ? (float) $profile->guiding_rate : null,
+                'coaching_rate' => $profile->coaching_rate !== null ? (float) $profile->coaching_rate : null,
                 'area' => $profile->area,
                 'meeting_point' => $profile->meeting_point,
             ] : null,

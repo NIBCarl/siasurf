@@ -121,7 +121,7 @@ class InstructorDirectoryTest extends TestCase
             ->patch(route('instructor.profile.update'), [
                 'name' => $this->instructor->name,
                 'bio' => 'Updated bio',
-                'rate_per_hour' => 1200,
+                'rate_per_hour' => 900,
                 'area' => 'Cloud 9',
                 'meeting_point' => 'Tower by the break',
                 'latitude' => 9.8089,

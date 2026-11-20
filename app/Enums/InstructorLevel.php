@@ -29,9 +29,9 @@ enum InstructorLevel: int
     public function description(): string
     {
         return match($this) {
-            self::Level1 => 'Certified to teach beginner students only. Maximum 1 student per session (1-on-1).',
-            self::Level2 => 'Certified to teach all skill levels. Maximum 2 students per session.',
-            self::Level3 => 'Master instructor certified to teach all skill levels and group sessions. Maximum 5 students.',
+            self::Level1 => 'Certified for Teaching beginner students only. Maximum 1 student per session (1-on-1).',
+            self::Level2 => 'Certified for Teaching (1 beginner) or Guiding (up to 2 intermediate students of the same level).',
+            self::Level3 => 'Master instructor certified for Teaching, Guiding, and Coaching (1–3 students of the same skill level).',
         };
     }
 
@@ -40,7 +40,27 @@ enum InstructorLevel: int
         return match($this) {
             self::Level1 => 1,
             self::Level2 => 2,
-            self::Level3 => 5,
+            self::Level3 => 3,
+        };
+    }
+
+    /**
+     * Skill-aware maximum number of students allowed in one slot.
+     *
+     *  - Level 1: 1 beginner
+     *  - Level 2: 1 beginner OR 2 intermediate
+     *  - Level 3: 1–3 students of the same skill level (beginner, intermediate, or advanced)
+     */
+    public function maxStudentsFor(SkillLevel $skill): int
+    {
+        return match ($this) {
+            self::Level1 => $skill === SkillLevel::Beginner ? 1 : 0,
+            self::Level2 => match ($skill) {
+                SkillLevel::Beginner => 1,
+                SkillLevel::Intermediate => 2,
+                SkillLevel::Advanced => 0,
+            },
+            self::Level3 => 3,
         };
     }
 
@@ -48,23 +68,38 @@ enum InstructorLevel: int
     {
         return match($this) {
             self::Level1 => [SkillLevel::Beginner->value],
-            self::Level2 => [SkillLevel::Beginner->value, SkillLevel::Intermediate->value, SkillLevel::Advanced->value],
+            self::Level2 => [SkillLevel::Beginner->value, SkillLevel::Intermediate->value],
             self::Level3 => [SkillLevel::Beginner->value, SkillLevel::Intermediate->value, SkillLevel::Advanced->value],
+        };
+    }
+
+    /**
+     * Services this instructor certification level is authorized to offer.
+     *
+     * @return array<int, SessionType>
+     */
+    public function allowedServices(): array
+    {
+        return match ($this) {
+            self::Level1 => [SessionType::Teaching],
+            self::Level2 => [SessionType::Teaching, SessionType::Guiding],
+            self::Level3 => [SessionType::Teaching, SessionType::Guiding, SessionType::Coaching],
         };
     }
 
     /**
      * How many students may share one time slot with this instructor.
      *
-     * This is the capacity the availability engine sums `student_count`
-     * against. It is the same hard safety ceiling enforced by SafetyService:
-     *
-     *  - Level 1 -> 1 student (1-on-1 only)
-     *  - Level 2 -> 2 students
-     *  - Level 3 -> 5 students (may be split across several bookings)
+     * When `$skill` is supplied, returns the exact skill-dependent ceiling
+     * (e.g., Level 2 holds max 1 beginner or max 2 intermediates). Without a
+     * skill, returns the instructor level's overall maximum seat count.
      */
-    public function slotCapacity(): int
+    public function slotCapacity(?SkillLevel $skill = null): int
     {
+        if ($skill !== null) {
+            return $this->maxStudentsFor($skill);
+        }
+
         return $this->maxStudents();
     }
 

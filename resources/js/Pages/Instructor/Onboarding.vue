@@ -26,6 +26,8 @@ const props = defineProps<{
     bio: string | null;
     level: number;
     rate_per_hour: number;
+    guiding_rate?: number | null;
+    coaching_rate?: number | null;
     area?: string | null;
     meeting_point?: string | null;
   } | null
@@ -41,23 +43,29 @@ const maxFileMb = computed(() => Number((page.props as any).uploads?.maxFileMb ?
 const maxRequestMb = computed(() => Number((page.props as any).uploads?.maxRequestMb ?? 20))
 const acceptedExtensions = ['pdf', 'jpg', 'jpeg', 'png']
 
+// Per-service hourly-rate bands shared from the server so the UI can never drift
+// from PricingService.
+const pricing = computed(() => (page.props as any).pricing ?? {})
+const teachingBand = computed(() => pricing.value.services?.teaching ?? { min: 600, max: 1000, default: 600, rangeLabel: '₱600–₱1,000' })
+const guidingBand = computed(() => pricing.value.services?.guiding ?? { min: 800, max: 1500, default: 800, rangeLabel: '₱800–₱1,500' })
+const coachingBand = computed(() => pricing.value.services?.coaching ?? { min: 1500, max: 2000, default: 1500, rangeLabel: '₱1,500–₱2,000' })
+
+const rateMin = computed(() => Number(teachingBand.value.min ?? 600))
+const rateMax = computed(() => Number(teachingBand.value.max ?? 1000))
+
 // Existing instructors (e.g. profile saved without certificates) keep their input.
 const form = useForm({
   bio: props.profile?.bio ?? '',
   level: props.profile?.level ?? 1,
   rate_per_hour: props.profile?.rate_per_hour ?? 600,
+  guiding_rate: props.profile?.guiding_rate ?? 800,
+  coaching_rate: props.profile?.coaching_rate ?? 1500,
   area: props.profile?.area ?? '',
   meeting_point: props.profile?.meeting_point ?? '',
   certificates: [] as File[],
 })
 
 const fileErrors = ref<string[]>([])
-
-// Published hourly-rate band, shared from the server so the UI can never drift
-// from the validation rules in PricingService.
-const pricing = computed(() => (page.props as any).pricing ?? {})
-const rateMin = computed(() => Number(pricing.value.minRatePerHour ?? 600))
-const rateMax = computed(() => Number(pricing.value.maxRatePerHour ?? 1500))
 
 const rateDialogOpen = ref(false)
 const lastOverCapValue = ref<number | null>(null)
@@ -94,16 +102,13 @@ const validationErrors = computed(() =>
   Object.values((page.props as any).errors ?? {}).filter(Boolean) as string[],
 )
 
-// Auto-suggest and enforce minimum rates depending on selected level
+// Ensure default service rates sit inside each newly unlocked band when switching level
 watch(() => form.level, (newLevel) => {
-  if (newLevel === 3) {
-    if (form.rate_per_hour < 1500) {
-      form.rate_per_hour = 1500
-    }
-  } else {
-    if (form.rate_per_hour < 600) {
-      form.rate_per_hour = 600
-    }
+  if (newLevel >= 2 && (!form.guiding_rate || Number(form.guiding_rate) < guidingBand.value.min)) {
+    form.guiding_rate = guidingBand.value.default
+  }
+  if (newLevel >= 3 && (!form.coaching_rate || Number(form.coaching_rate) < coachingBand.value.min)) {
+    form.coaching_rate = coachingBand.value.default
   }
 })
 
@@ -123,21 +128,21 @@ const levelInfo = [
   { 
     level: 1, 
     label: 'Beginner', 
-    desc: 'Certified to guide beginner students in safe shallow zones only. 1-on-1 sessions (max 1 student).',
+    desc: 'Teaching first-timers and beginners in safe shallow zones. 1-on-1 only (max 1 student).',
     badge: 'Level 1',
     icon: Compass
   },
   { 
     level: 2, 
     label: 'Intermediate', 
-    desc: 'Certified to teach all student skill levels. Maximum 2 students per session.',
+    desc: 'Teaching (1 beginner) or Guiding (up to 2 intermediate students of the same level).',
     badge: 'Level 2',
     icon: Waves
   },
   { 
     level: 3, 
     label: 'Advanced', 
-    desc: 'Master/ISA Certified instructor. Allowed group coaching (up to 5) and advanced guiding.',
+    desc: 'Teaching, Guiding, and Coaching for 1–3 students of the same skill level (beginner, intermediate, or advanced).',
     badge: 'Level 3 / Expert',
     icon: Award
   },
@@ -336,45 +341,96 @@ const handleFileChange = (e: Event) => {
                     </div>
                   </div>
 
-                  <!-- Rate per hour -->
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2.5">
-                      <Coins class="w-4 h-4 text-sand-600 stroke-[1.75]" />
-                      <InputLabel for="rate" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Base Rate Per Hour (PHP)" />
-                    </div>
-                    <div class="relative rounded-lg mt-1">
-                      <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span class="text-slate-500 font-bold text-sm">₱</span>
+                  <!-- Service Rates (per hour) -->
+                  <div class="space-y-5">
+                    <div class="space-y-2">
+                      <div class="flex items-center gap-2.5">
+                        <Coins class="w-4 h-4 text-sand-600 stroke-[1.75]" />
+                        <InputLabel for="rate" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Teaching Rate Per Hour (PHP)" />
                       </div>
-                      <TextInput
-                        id="rate"
-                        type="number"
-                        v-model="form.rate_per_hour"
-                        class="pl-9 block w-full border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500 rounded-lg transition-all duration-200 bg-white py-3.5 text-sm font-bold text-slate-900"
-                        placeholder="600"
-                        required
-                        :min="form.level === 3 ? 1500 : rateMin"
-                        :max="rateMax"
-                        step="50"
-                        @blur="checkRate"
-                      />
-                    </div>
-                    <p
-                      v-if="rateOverCap"
-                      class="mt-2 flex items-center gap-1.5 text-xs font-bold text-rose-600"
-                    >
-                      <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-100 text-[10px]">!</span>
-                      Standard pricing cannot exceed ₱{{ rateMax.toLocaleString() }} per hour.
-                    </p>
-
-                    <div class="mt-4 border-l-2 border-sand-400 pl-4 py-1">
-                      <p class="text-xs text-slate-600 font-medium leading-relaxed">
-                        For <span class="font-bold text-slate-900">{{ levelInfo.find(l => l.level === form.level)?.label }} Level</span>, the base rate must be between
-                        <span class="font-bold text-slate-900">₱{{ (form.level === 3 ? 1500 : rateMin).toLocaleString() }}</span> and
-                        <span class="font-bold text-slate-900">₱{{ rateMax.toLocaleString() }}/hour</span>.
+                      <div class="relative rounded-lg mt-1">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <span class="text-slate-500 font-bold text-sm">₱</span>
+                        </div>
+                        <TextInput
+                          id="rate"
+                          type="number"
+                          v-model="form.rate_per_hour"
+                          class="pl-9 block w-full border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500 rounded-lg transition-all duration-200 bg-white py-3.5 text-sm font-bold text-slate-900"
+                          placeholder="600"
+                          required
+                          :min="rateMin"
+                          :max="rateMax"
+                          step="50"
+                          @blur="checkRate"
+                        />
+                      </div>
+                      <p
+                        v-if="rateOverCap"
+                        class="mt-2 flex items-center gap-1.5 text-xs font-bold text-rose-600"
+                      >
+                        <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-100 text-[10px]">!</span>
+                        Teaching rate cannot exceed ₱{{ rateMax.toLocaleString() }} per hour.
                       </p>
+                      <p class="text-xs text-slate-500">
+                        For beginner Teaching sessions. Allowed range: <span class="font-bold text-slate-800">{{ teachingBand.rangeLabel }}/hour</span>.
+                      </p>
+                      <InputError class="mt-1 text-xs font-bold" :message="form.errors.rate_per_hour" />
                     </div>
-                    <InputError class="mt-2 text-xs font-bold" :message="form.errors.rate_per_hour" />
+
+                    <div v-if="form.level >= 2" class="space-y-2">
+                      <div class="flex items-center gap-2.5">
+                        <Coins class="w-4 h-4 text-sand-600 stroke-[1.75]" />
+                        <InputLabel for="guiding_rate" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Guiding Rate Per Hour (PHP)" />
+                      </div>
+                      <div class="relative rounded-lg mt-1">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <span class="text-slate-500 font-bold text-sm">₱</span>
+                        </div>
+                        <TextInput
+                          id="guiding_rate"
+                          type="number"
+                          v-model="form.guiding_rate"
+                          class="pl-9 block w-full border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500 rounded-lg transition-all duration-200 bg-white py-3.5 text-sm font-bold text-slate-900"
+                          placeholder="800"
+                          required
+                          :min="guidingBand.min"
+                          :max="guidingBand.max"
+                          step="50"
+                        />
+                      </div>
+                      <p class="text-xs text-slate-500">
+                        For Guiding sessions (surfers needing lineup assistance). Allowed range: <span class="font-bold text-slate-800">{{ guidingBand.rangeLabel }}/hour</span>.
+                      </p>
+                      <InputError class="mt-1 text-xs font-bold" :message="form.errors.guiding_rate" />
+                    </div>
+
+                    <div v-if="form.level >= 3" class="space-y-2">
+                      <div class="flex items-center gap-2.5">
+                        <Coins class="w-4 h-4 text-sand-600 stroke-[1.75]" />
+                        <InputLabel for="coaching_rate" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Coaching Rate Per Hour (PHP)" />
+                      </div>
+                      <div class="relative rounded-lg mt-1">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <span class="text-slate-500 font-bold text-sm">₱</span>
+                        </div>
+                        <TextInput
+                          id="coaching_rate"
+                          type="number"
+                          v-model="form.coaching_rate"
+                          class="pl-9 block w-full border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500 rounded-lg transition-all duration-200 bg-white py-3.5 text-sm font-bold text-slate-900"
+                          placeholder="1500"
+                          required
+                          :min="coachingBand.min"
+                          :max="coachingBand.max"
+                          step="50"
+                        />
+                      </div>
+                      <p class="text-xs text-slate-500">
+                        For Coaching sessions (technique, maneuvers, and surf skills). Allowed range: <span class="font-bold text-slate-800">{{ coachingBand.rangeLabel }}/hour</span>.
+                      </p>
+                      <InputError class="mt-1 text-xs font-bold" :message="form.errors.coaching_rate" />
+                    </div>
                   </div>
                 </div>
               </div>

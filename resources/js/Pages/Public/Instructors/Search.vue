@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import {
@@ -28,6 +28,16 @@ interface DirectoryInstructor {
     average_rating: number;
     level_label?: string | null;
     max_students?: number | null;
+    display_rate?: number | null;
+    display_service_label?: string | null;
+    service_rates?: Array<{
+        type: string;
+        label: string;
+        description: string;
+        rate: number;
+        min: number;
+        max: number;
+    }>;
     teaches_all_levels?: boolean | null;
     available_today?: boolean;
     open_periods?: string[];
@@ -35,6 +45,8 @@ interface DirectoryInstructor {
         bio?: string | null;
         level: number;
         rate_per_hour: number;
+        guiding_rate?: number | null;
+        coaching_rate?: number | null;
         area?: string | null;
         meeting_point?: string | null;
         latitude?: number | null;
@@ -104,9 +116,11 @@ const mappedInstructors = computed(() =>
             longitude: Number(instructor.instructor_profile?.longitude),
             level: instructor.instructor_profile?.level ?? null,
             level_label: instructor.level_label ?? null,
-            rate_per_hour: instructor.instructor_profile?.rate_per_hour
-                ? Number(instructor.instructor_profile.rate_per_hour)
-                : null,
+            rate_per_hour: instructor.display_rate
+                ? Number(instructor.display_rate)
+                : instructor.instructor_profile?.rate_per_hour
+                  ? Number(instructor.instructor_profile.rate_per_hour)
+                  : null,
             average_rating: instructor.average_rating ?? 0,
             total_reviews: instructor.total_reviews ?? 0,
             avatar_url: instructor.avatar_url ?? null,
@@ -503,7 +517,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                                     </p>
                                 </div>
                                 <p class="shrink-0 text-body-sm font-semibold text-deep-950">
-                                    ₱{{ formatRate(instructor.instructor_profile.rate_per_hour) }}
+                                    ₱{{ formatRate(instructor.display_rate ?? instructor.instructor_profile.rate_per_hour) }}
                                 </p>
                             </div>
                         </button>
@@ -561,16 +575,24 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                                             {{ instructor.level_label }}
                                         </span>
                                         <span v-if="instructor.teaches_all_levels !== null" class="chip chip-neutral">
-                                            {{ instructor.teaches_all_levels ? 'All levels' : 'Beginners only' }}
+                                            {{
+                                                instructor.teaches_all_levels
+                                                    ? 'All levels'
+                                                    : instructor.instructor_profile.level === 2
+                                                      ? 'Beginner & Intermediate'
+                                                      : 'Beginners only'
+                                            }}
                                         </span>
                                     </div>
                                 </div>
 
                                 <div class="shrink-0 text-right">
                                     <p class="metric text-title font-semibold text-deep-950">
-                                        ₱{{ formatRate(instructor.instructor_profile.rate_per_hour) }}
+                                        ₱{{ formatRate(instructor.display_rate ?? instructor.instructor_profile.rate_per_hour) }}
                                     </p>
-                                    <p class="text-body-sm text-stone-600">per hour</p>
+                                    <p class="text-body-sm text-stone-600">
+                                        {{ instructor.display_service_label ? `${instructor.display_service_label} / hr` : 'per hour' }}
+                                    </p>
                                 </div>
                             </div>
 

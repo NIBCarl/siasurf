@@ -84,6 +84,8 @@ class InstructorController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $level = (int) $request->input('level', 1);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
@@ -91,16 +93,12 @@ class InstructorController extends Controller
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
-            'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
+            ...PricingService::rateValidationRulesForLevel($level),
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',
             'longitude' => 'nullable|numeric|between:125.8,126.5',
-        ], [
-            'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
-            'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
-            'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
-        ]);
+        ], PricingService::rateValidationMessages());
 
         // Create user
         $user = User::create([
@@ -111,13 +109,15 @@ class InstructorController extends Controller
             'phone' => $validated['phone'] ?? null,
         ]);
 
+        $rates = PricingService::normalizeRatesForLevel((int) $validated['level'], $validated);
+
         // Create instructor profile
         InstructorProfile::create([
             'user_id' => $user->id,
             'bio' => $validated['bio'] ?? null,
             'level' => $validated['level'],
             'status' => InstructorStatus::PendingVerification->value,
-            'rate_per_hour' => $validated['rate_per_hour'],
+            ...$rates,
             'area' => $validated['area'] ?? null,
             'meeting_point' => $validated['meeting_point'] ?? null,
             'latitude' => $validated['latitude'] ?? null,
@@ -385,23 +385,21 @@ class InstructorController extends Controller
      */
     public function update(Request $request, User $instructor): RedirectResponse
     {
+        $level = (int) $request->input('level', $instructor->instructorProfile?->level?->value ?? 1);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,'.$instructor->id,
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
-            'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
+            ...PricingService::rateValidationRulesForLevel($level),
             'status' => 'required|string',
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',
             'longitude' => 'nullable|numeric|between:125.8,126.5',
-        ], [
-            'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
-            'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
-            'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
-        ]);
+        ], PricingService::rateValidationMessages());
 
         // Update user
         $instructor->update([
@@ -410,12 +408,18 @@ class InstructorController extends Controller
             'phone' => $validated['phone'] ?? null,
         ]);
 
+        $rates = PricingService::normalizeRatesForLevel(
+            (int) $validated['level'],
+            $validated,
+            $instructor->instructorProfile
+        );
+
         // Update profile
         $instructor->instructorProfile->update([
             'bio' => $validated['bio'] ?? null,
             'level' => $validated['level'],
             'status' => $validated['status'],
-            'rate_per_hour' => $validated['rate_per_hour'],
+            ...$rates,
             'area' => $validated['area'] ?? null,
             'meeting_point' => $validated['meeting_point'] ?? null,
             'latitude' => $validated['latitude'] ?? null,

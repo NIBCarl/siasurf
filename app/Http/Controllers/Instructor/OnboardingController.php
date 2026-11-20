@@ -25,12 +25,12 @@ class OnboardingController extends Controller
             ]);
         }
 
+        $level = (int) $request->input('level', 1);
+
         $validated = $request->validate([
             'bio' => 'required|string|max:1000',
             'level' => 'required|integer|in:1,2,3',
-            // Bounded on both ends: a floor-only rule let absurd values reach
-            // decimal(10,2) and fail as a raw SQL error.
-            'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
+            ...PricingService::rateValidationRulesForLevel($level),
             'certificates' => 'required|array|min:1',
             'certificates.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // Max 10MB
             'area' => 'nullable|string|max:100',
@@ -43,12 +43,11 @@ class OnboardingController extends Controller
             'certificates.*.uploaded' => 'A certificate could not be uploaded because it is larger than this server allows (max '.$this->uploadMaxSizeLabel().' per file). Compress it and try again.',
             'bio.max' => 'Keep your bio to 1000 characters or fewer.',
             'bio.required' => 'Tell students about your experience before submitting.',
-            'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
-            'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
-            'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
+            ...PricingService::rateValidationMessages(),
         ]);
 
         $user = auth()->user();
+        $rates = PricingService::normalizeRatesForLevel((int) $validated['level'], $validated, $user->instructorProfile);
 
         // Create or update the instructor profile
         $user->instructorProfile()->updateOrCreate(
@@ -56,7 +55,7 @@ class OnboardingController extends Controller
             [
                 'bio' => $validated['bio'],
                 'level' => $validated['level'],
-                'rate_per_hour' => $validated['rate_per_hour'],
+                ...$rates,
                 'status' => InstructorStatus::PendingVerification,
                 'area' => $validated['area'] ?? null,
                 'meeting_point' => $validated['meeting_point'] ?? null,

@@ -28,10 +28,14 @@ const props = withDefaults(
         modelValue: string
         students?: number
         horizonDays?: number
+        skillLevel?: string
+        sessionType?: string
     }>(),
     {
         students: 1,
         horizonDays: 60,
+        skillLevel: undefined,
+        sessionType: undefined,
     },
 )
 
@@ -197,13 +201,17 @@ async function load() {
     failed.value = false
 
     try {
+        const params: Record<string, string | number> = {
+            instructor: props.instructorId,
+            start: toKey(cursor.value),
+            days: 31,
+            students: props.students,
+        }
+        if (props.skillLevel) params.skill_level = props.skillLevel
+        if (props.sessionType) params.session_type = props.sessionType
+
         const response = await fetch(
-            route('api.availability.calendar', {
-                instructor: props.instructorId,
-                start: toKey(cursor.value),
-                days: 31,
-                students: props.students,
-            }),
+            route('api.availability.calendar', params),
             { headers: { Accept: 'application/json' } },
         )
 
@@ -219,7 +227,13 @@ async function load() {
 }
 
 watch(cursor, load, { immediate: true })
-watch(() => props.students, load)
+watch(
+    [() => props.students, () => props.skillLevel, () => props.sessionType],
+    () => {
+        days.value = {}
+        load()
+    },
+)
 
 function shiftMonth(delta: number) {
     cursor.value = new Date(cursor.value.getFullYear(), cursor.value.getMonth() + delta, 1)

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\CertificateStatus;
 use App\Enums\InstructorLevel;
 use App\Enums\InstructorStatus;
+use App\Enums\SessionType;
 use App\Enums\SkillLevel;
 use App\Models\InstructorProfile;
 use App\Models\SurfSpot;
@@ -87,15 +88,29 @@ class InstructorSearchController extends Controller
             });
         }
 
-        // Filter by price range
+        // Applicable service for price display/filtering/sorting:
+        // Beginner -> Teaching (rate_per_hour), Intermediate -> Guiding, Advanced -> Coaching.
+        $viewerService = $skillLevel ? SessionType::recommendedFor($skillLevel, 3) : null;
+        $priceExpr = match ($viewerService) {
+            SessionType::Guiding => 'COALESCE(guiding_rate, '.SessionType::Guiding->defaultRate().')',
+            SessionType::Coaching => 'COALESCE(coaching_rate, '.SessionType::Coaching->defaultRate().')',
+            default => 'rate_per_hour',
+        };
+        $qualifiedPriceExpr = match ($viewerService) {
+            SessionType::Guiding => 'COALESCE(instructor_profiles.guiding_rate, '.SessionType::Guiding->defaultRate().')',
+            SessionType::Coaching => 'COALESCE(instructor_profiles.coaching_rate, '.SessionType::Coaching->defaultRate().')',
+            default => 'instructor_profiles.rate_per_hour',
+        };
+
+        // Filter by price range (against the service this student actually books)
         if ($request->filled('min_price')) {
-            $query->whereHas('instructorProfile', function ($q) use ($request) {
-                $q->where('rate_per_hour', '>=', $request->min_price);
+            $query->whereHas('instructorProfile', function ($q) use ($request, $priceExpr) {
+                $q->whereRaw("{$priceExpr} >= ?", [(float) $request->min_price]);
             });
         }
         if ($request->filled('max_price')) {
-            $query->whereHas('instructorProfile', function ($q) use ($request) {
-                $q->where('rate_per_hour', '<=', $request->max_price);
+            $query->whereHas('instructorProfile', function ($q) use ($request, $priceExpr) {
+                $q->whereRaw("{$priceExpr} <= ?", [(float) $request->max_price]);
             });
         }
 
@@ -124,12 +139,12 @@ class InstructorSearchController extends Controller
         switch ($sortBy) {
             case 'price_low':
                 $query->join('instructor_profiles', 'users.id', '=', 'instructor_profiles.user_id')
-                    ->orderBy('instructor_profiles.rate_per_hour', 'asc')
+                    ->orderByRaw("{$qualifiedPriceExpr} asc")
                     ->select('users.*');
                 break;
             case 'price_high':
                 $query->join('instructor_profiles', 'users.id', '=', 'instructor_profiles.user_id')
-                    ->orderBy('instructor_profiles.rate_per_hour', 'desc')
+                    ->orderByRaw("{$qualifiedPriceExpr} desc")
                     ->select('users.*');
                 break;
             case 'rating':
@@ -157,7 +172,7 @@ class InstructorSearchController extends Controller
         $mapInstructors = (clone $query)
             ->limit(200)
             ->get()
-            ->map(fn (User $instructor) => $this->transformInstructor($instructor))
+            ->map(fn (User $instructor) => $this->transformInstructor($instructor, [], $viewerService))
             ->values();
 
         $instructors = $query->paginate(12)
@@ -173,6 +188,7 @@ class InstructorSearchController extends Controller
         $instructors->through(fn (User $instructor) => $this->transformInstructor(
             $instructor,
             $openPeriods[$instructor->id] ?? [],
+            $viewerService,
         ));
 
         // Get surf spots for filtering
@@ -216,14 +232,20 @@ class InstructorSearchController extends Controller
      * @param  array<int, string>  $openPeriods  periods the instructor still has open today
      * @return array<string, mixed>
      */
-    private function transformInstructor(User $instructor, array $openPeriods = []): array
-    {
+    private function transformInstructor(
+        User $instructor,
+        array $openPeriods = [],
+        ?SessionType $viewerService = null
+    ): array {
         $profile = $instructor->instructorProfile;
 
         $level = $profile?->level;
         $levelEnum = $level instanceof InstructorLevel
             ? $level
             : ($level !== null ? InstructorLevel::tryFrom((int) $level) : null);
+
+        $activeService = $viewerService ?? SessionType::Teaching;
+        $displayRate = $profile ? $profile->rateForService($activeService) : 600.0;
 
         return array_merge($instructor->toArray(), [
             'total_reviews' => (int) ($instructor->reviews_as_instructor_count ?? 0),
@@ -233,6 +255,9 @@ class InstructorSearchController extends Controller
             // Safety rules the directory is allowed to state out loud.
             'level_label' => $levelEnum?->shortLabel(),
             'max_students' => $levelEnum?->maxStudents(),
+            'display_rate' => $displayRate,
+            'display_service_label' => $activeService->label(),
+            'service_rates' => $profile ? $profile->serviceRates() : [],
             'teaches_all_levels' => $levelEnum
                 ? count($levelEnum->allowedSkillLevels()) === count(SkillLevel::cases())
                 : null,
@@ -308,6 +333,7 @@ class InstructorSearchController extends Controller
 
         return Inertia::render('Public/Instructors/Profile', [
             'instructor' => $instructor,
+            'serviceRates' => $instructor->instructorProfile?->serviceRates() ?? [],
             'averageRating' => round($averageRating, 1),
             'totalReviews' => $totalReviews,
             // FR 1.8.2 - show the weekly schedule up front so students do not

@@ -37,9 +37,11 @@ class SkillLevelMatchingTest extends TestCase
 
     public function test_slot_capacity_matches_the_hard_safety_ceiling(): void
     {
-        $this->assertSame(2, InstructorLevel::Level1->slotCapacity());
-        $this->assertSame(1, InstructorLevel::Level2->slotCapacity());
-        $this->assertSame(5, InstructorLevel::Level3->slotCapacity());
+        $this->assertSame(1, InstructorLevel::Level1->slotCapacity());
+        $this->assertSame(2, InstructorLevel::Level2->slotCapacity());
+        $this->assertSame(1, InstructorLevel::Level2->slotCapacity(SkillLevel::Beginner));
+        $this->assertSame(2, InstructorLevel::Level2->slotCapacity(SkillLevel::Intermediate));
+        $this->assertSame(3, InstructorLevel::Level3->slotCapacity());
     }
 
     public function test_only_level_one_holds_the_slot_while_pending(): void
@@ -49,10 +51,10 @@ class SkillLevelMatchingTest extends TestCase
         $this->assertFalse(InstructorLevel::Level3->holdsSlotWhilePending());
     }
 
-    public function test_parallel_bookings_are_only_possible_for_group_instructors(): void
+    public function test_parallel_bookings_are_possible_for_multi_seat_instructors(): void
     {
         $this->assertFalse(InstructorLevel::Level1->allowsParallelBookings());
-        $this->assertFalse(InstructorLevel::Level2->allowsParallelBookings());
+        $this->assertTrue(InstructorLevel::Level2->allowsParallelBookings());
         $this->assertTrue(InstructorLevel::Level3->allowsParallelBookings());
     }
 

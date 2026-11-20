@@ -13,6 +13,7 @@ use App\Enums\AttendanceStatus;
 use App\Enums\BookingStatus;
 use App\Enums\CancellationReason;
 use App\Enums\PaymentStatus;
+use App\Enums\SessionType;
 use App\Enums\SkillLevel;
 use App\Enums\TimePeriod;
 
@@ -90,6 +91,8 @@ class Booking extends Model
         'end_time',
         'duration_hours',
         'skill_level',
+        'session_type',
+        'hourly_rate',
         'student_age',
         'student_count',
         'status',
@@ -122,6 +125,8 @@ class Booking extends Model
         'start_time' => 'datetime:H:i',
         'end_time' => 'datetime:H:i',
         'skill_level' => SkillLevel::class,
+        'session_type' => SessionType::class,
+        'hourly_rate' => 'decimal:2',
         'status' => BookingStatus::class,
         'payment_status' => PaymentStatus::class,
         'has_board' => 'boolean',

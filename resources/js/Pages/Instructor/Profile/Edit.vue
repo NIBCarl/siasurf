@@ -57,13 +57,19 @@ const props = defineProps<{
 
 const page = usePage()
 const user = page.props.auth.user as User
-const pricing = computed(() => (page.props as any).pricing ?? { minRatePerHour: 600, maxRatePerHour: 2500 })
+const pricing = computed(() => (page.props as any).pricing ?? { minRatePerHour: 600, maxRatePerHour: 1000 })
+const teachingBand = computed(() => pricing.value.services?.teaching ?? { min: 600, max: 1000, rangeLabel: '₱600–₱1,000' })
+const guidingBand = computed(() => pricing.value.services?.guiding ?? { min: 800, max: 1500, rangeLabel: '₱800–₱1,500' })
+const coachingBand = computed(() => pricing.value.services?.coaching ?? { min: 1500, max: 2000, rangeLabel: '₱1,500–₱2,000' })
+const instructorLevel = computed(() => Number(user.instructor_profile?.level ?? 1))
 const flashSuccess = computed(() => (page.props.flash as any)?.success ?? null)
 
 const form = useForm({
   name: user.name,
   bio: user.instructor_profile?.bio || '',
   rate_per_hour: Number(user.instructor_profile?.rate_per_hour) || 600,
+  guiding_rate: Number((user.instructor_profile as any)?.guiding_rate) || 800,
+  coaching_rate: Number((user.instructor_profile as any)?.coaching_rate) || 1500,
   area: user.instructor_profile?.area || '',
   meeting_point: user.instructor_profile?.meeting_point || '',
   latitude: user.instructor_profile?.latitude ?? '',
@@ -242,27 +248,82 @@ const certificateVariant = (status: string): BadgeVariant => {
                 <InputError class="mt-2" :message="form.errors.bio" />
               </div>
 
-              <div>
-                <InputLabel for="rate" value="Rate per hour" />
-                <div class="relative mt-1">
-                  <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
-                    ₱
-                  </span>
-                  <TextInput
-                    id="rate"
-                    type="number"
-                    v-model="form.rate_per_hour"
-                    class="block w-full pl-8"
-                    required
-                    :min="pricing.minRatePerHour"
-                    :max="pricing.maxRatePerHour"
-                    step="50"
-                  />
+              <div class="space-y-4 rounded-control border border-sand-200 bg-sand-50/40 p-5">
+                <div>
+                  <p class="text-body-sm font-semibold text-deep-900">Service rates (per hour)</p>
+                  <p class="mt-0.5 text-label text-stone-600">
+                    Students are charged based on the service they book. Choose any rate within each SISA-approved range.
+                  </p>
                 </div>
-                <p class="mt-1 text-label text-stone-500">
-                  Allowed range: {{ pricing.rangeLabel }}.
-                </p>
-                <InputError class="mt-2" :message="form.errors.rate_per_hour" />
+
+                <div>
+                  <InputLabel for="rate" value="Teaching rate (beginners)" />
+                  <div class="relative mt-1">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
+                      ₱
+                    </span>
+                    <TextInput
+                      id="rate"
+                      type="number"
+                      v-model="form.rate_per_hour"
+                      class="block w-full pl-8"
+                      required
+                      :min="teachingBand.min"
+                      :max="teachingBand.max"
+                      step="50"
+                    />
+                  </div>
+                  <p class="mt-1 text-label text-stone-500">
+                    Allowed range: {{ teachingBand.rangeLabel }}/hour.
+                  </p>
+                  <InputError class="mt-2" :message="form.errors.rate_per_hour" />
+                </div>
+
+                <div v-if="instructorLevel >= 2">
+                  <InputLabel for="guiding_rate" value="Guiding rate (lineup assistance)" />
+                  <div class="relative mt-1">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
+                      ₱
+                    </span>
+                    <TextInput
+                      id="guiding_rate"
+                      type="number"
+                      v-model="form.guiding_rate"
+                      class="block w-full pl-8"
+                      required
+                      :min="guidingBand.min"
+                      :max="guidingBand.max"
+                      step="50"
+                    />
+                  </div>
+                  <p class="mt-1 text-label text-stone-500">
+                    Allowed range: {{ guidingBand.rangeLabel }}/hour.
+                  </p>
+                  <InputError class="mt-2" :message="form.errors.guiding_rate" />
+                </div>
+
+                <div v-if="instructorLevel >= 3">
+                  <InputLabel for="coaching_rate" value="Coaching rate (technique &amp; surf skills)" />
+                  <div class="relative mt-1">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
+                      ₱
+                    </span>
+                    <TextInput
+                      id="coaching_rate"
+                      type="number"
+                      v-model="form.coaching_rate"
+                      class="block w-full pl-8"
+                      required
+                      :min="coachingBand.min"
+                      :max="coachingBand.max"
+                      step="50"
+                    />
+                  </div>
+                  <p class="mt-1 text-label text-stone-500">
+                    Allowed range: {{ coachingBand.rangeLabel }}/hour.
+                  </p>
+                  <InputError class="mt-2" :message="form.errors.coaching_rate" />
+                </div>
               </div>
 
               <div class="rounded-control border border-lagoon-100 bg-lagoon-50/40 p-5">

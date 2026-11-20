@@ -13,6 +13,8 @@ export interface User {
         level: number;
         status: string;
         rate_per_hour: number;
+        guiding_rate?: number | null;
+        coaching_rate?: number | null;
         strike_count: number;
         qr_code_path: string;
     };

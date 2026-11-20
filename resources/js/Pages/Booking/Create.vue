@@ -20,8 +20,18 @@ interface Instructor {
   instructor_profile: {
     level: number
     rate_per_hour: number
+    guiding_rate?: number | null
+    coaching_rate?: number | null
     bio: string
   }
+}
+
+interface ServiceOption {
+  type: string
+  label: string
+  description: string
+  rate: number
+  recommended: boolean
 }
 
 interface SurfSpot {
@@ -46,6 +56,8 @@ interface Props {
   defaultDurationMinutes: number
   studentSkillLevel: string
   studentName: string
+  serviceOptions?: ServiceOption[]
+  defaultSessionType?: string
   // Details captured at onboarding, so the student is not asked for their
   // height and weight on every booking.
   prefill?: {
@@ -75,12 +87,14 @@ interface Companion {
   guardian_phone: string
 }
 
+const props = defineProps<Props>()
+
 const emptyCompanion = (): Companion => ({
   full_name: '',
   age: '',
   height: '',
   weight: '',
-  skill_level: 'beginner',
+  skill_level: props.studentSkillLevel || 'beginner',
   has_board: false,
   emergency_contact_name: '',
   emergency_contact_phone: '',
@@ -88,8 +102,6 @@ const emptyCompanion = (): Companion => ({
   guardian_name: '',
   guardian_phone: '',
 })
-
-const props = defineProps<Props>()
 
 const instructorAvatar = computed(() => resolveAvatarUrl(props.instructor))
 const instructorInitials = computed(() =>
@@ -101,13 +113,31 @@ const instructorInitials = computed(() =>
     .join(''),
 )
 
-// Compute max students based on instructor level
+// Compute max students from the server's skill-aware safety rules.
 const maxStudents = computed(() => {
+  if (typeof props.safetyRules?.max_students === 'number' && props.safetyRules.max_students > 0) {
+    return props.safetyRules.max_students
+  }
   const level = props.instructor.instructor_profile.level
   if (level === 1) return 1
-  if (level === 2) return 2
-  if (level === 3) return 5
-  return 1 // default fallback
+  if (level === 2) return (props.studentSkillLevel || 'beginner') === 'beginner' ? 1 : 2
+  if (level === 3) return 3
+  return 1
+})
+
+const serviceOptions = computed<ServiceOption[]>(() => {
+  if (props.serviceOptions && props.serviceOptions.length > 0) {
+    return props.serviceOptions
+  }
+  return [
+    {
+      type: 'teaching',
+      label: 'Teaching',
+      description: 'First-timer or complete beginner instruction.',
+      rate: Number(props.instructor.instructor_profile.rate_per_hour || 600),
+      recommended: true,
+    },
+  ]
 })
 
 const prefill = props.prefill ?? {}
@@ -118,6 +148,7 @@ const form = useForm({
   // The student now chooses both ends. The server validates the range against
   // the instructor's schedule and the slot's remaining student capacity.
   end_time: '',
+  session_type: props.defaultSessionType || serviceOptions.value[0]?.type || 'teaching',
   // Source of truth is the profile; this mirrors it for the server payload.
   skill_level: props.studentSkillLevel || 'beginner',
   // Primary participant (the account holder). Falls back to the age of majority
@@ -134,6 +165,10 @@ const form = useForm({
   // Declared companions (no accounts of their own).
   companions: [] as Companion[],
 })
+
+const activeService = computed<ServiceOption>(
+  () => serviceOptions.value.find((option) => option.type === form.session_type) ?? serviceOptions.value[0],
+)
 
 // Generate available time slots
 //
@@ -181,7 +216,14 @@ const fetchAvailability = async (date: string) => {
   try {
     const { data } = await axios.get(
       route('api.availability', { instructor: props.instructor.id }),
-      { params: { date, students: form.student_count || 1 } },
+      {
+        params: {
+          date,
+          students: form.student_count || 1,
+          skill_level: props.studentSkillLevel || 'beginner',
+          session_type: form.session_type,
+        },
+      },
     )
     availability.value = data
 
@@ -224,6 +266,8 @@ const fetchEndTimes = async () => {
           date: form.date,
           start_time: form.start_time,
           students: form.student_count || 1,
+          skill_level: props.studentSkillLevel || 'beginner',
+          session_type: form.session_type,
         },
       },
     )
@@ -261,9 +305,9 @@ watch(() => form.date, (date) => {
   fetchAvailability(date)
 })
 
-// Re-check the start list when the party grows or shrinks: a slot with one
-// seat left cannot take a group of two.
-watch(() => form.student_count, () => {
+// Re-check availability when the party size or service type changes:
+// shared slots only match same-level + same-service bookings.
+watch([() => form.student_count, () => form.session_type], () => {
   if (form.date) {
     fetchAvailability(form.date)
   }
@@ -335,22 +379,45 @@ const selectedPeriod = computed<'morning' | 'afternoon'>(() => {
   return hour < 12 ? 'morning' : 'afternoon'
 })
 
+// User-preferred duration preset (60 = Surf Experience, 120 = Learn to Surf).
+const preferredDurationMinutes = ref<number>(props.defaultDurationMinutes || 120)
+
+const computeEndTimeForMinutes = (start: string, minutes: number): string => {
+  if (!start) return ''
+  const [hour, minute] = start.split(':').map(Number)
+  const end = new Date()
+  end.setHours(hour, minute + minutes, 0, 0)
+  return `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
+}
+
+const durationOptionEndTime = (minutes: number): string | null => {
+  if (!form.start_time) return null
+  const candidate = computeEndTimeForMinutes(form.start_time, minutes)
+  return endTimeOptions.value.some((option) => option.value === candidate) ? candidate : null
+}
+
+const selectDurationPreset = (minutes: number) => {
+  preferredDurationMinutes.value = minutes
+  const candidate = durationOptionEndTime(minutes)
+  if (candidate) {
+    form.end_time = candidate
+  }
+}
+
 // Lesson length, in minutes. Until an end time is chosen this mirrors the
-// instructor's configured slot length so the estimate is meaningful.
+// chosen preset (or instructor's configured slot length).
 const defaultLessonMinutes = computed(() => {
+  if (preferredDurationMinutes.value > 0) {
+    return preferredDurationMinutes.value
+  }
   const fromSlot = availability.value?.periods?.[selectedPeriod.value]?.duration_minutes
   return fromSlot && fromSlot > 0 ? fromSlot : props.defaultDurationMinutes
 })
 
-// The end time to preselect: start + the instructor's usual lesson length.
+// The end time to preselect: start + preferred lesson length.
 const preferredEndTime = computed(() => {
   if (!form.start_time) return ''
-
-  const [hour, minute] = form.start_time.split(':').map(Number)
-  const end = new Date()
-  end.setHours(hour, minute + defaultLessonMinutes.value, 0, 0)
-
-  return `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
+  return computeEndTimeForMinutes(form.start_time, defaultLessonMinutes.value)
 })
 
 // What the student actually selected with the two time pickers.
@@ -459,9 +526,9 @@ const tideWarning = computed(() => {
   return null
 })
 
-// Client-side pricing calculation
+// Client-side pricing calculation (service-based rate)
 const estimatedPrice = computed(() => {
-  const baseRate = props.instructor.instructor_profile.rate_per_hour || 600
+  const baseRate = Number(activeService.value?.rate ?? props.instructor.instructor_profile.rate_per_hour ?? 600)
   const hours = lessonHours.value
   const studentCount = form.student_count || 1
   
@@ -520,7 +587,10 @@ const submit = () => {
         skill_level: props.studentSkillLevel,
         has_board: data.has_board,
       },
-      ...data.companions,
+      ...data.companions.map((companion) => ({
+        ...companion,
+        skill_level: props.studentSkillLevel || 'beginner',
+      })),
     ],
   })).post(route('bookings.store-details', props.instructor.id))
 }
@@ -561,6 +631,45 @@ const submit = () => {
 
               <form @submit.prevent="submit" class="p-8 space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  <!-- Service Type (pricing is determined by the service provided) -->
+                  <div class="col-span-full">
+                    <InputLabel value="Session Service Type" />
+                    <p class="mt-0.5 text-xs text-slate-500">
+                      Pricing is based on the service you choose, not the instructor's certification tier.
+                    </p>
+                    <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <button
+                        v-for="service in serviceOptions"
+                        :key="service.type"
+                        type="button"
+                        @click="form.session_type = service.type"
+                        :class="[
+                          'relative flex flex-col justify-between rounded-xl border p-4 text-left transition-all',
+                          form.session_type === service.type
+                            ? 'border-ocean-600 bg-ocean-50/60 ring-2 ring-ocean-200'
+                            : 'border-slate-200 bg-white hover:border-ocean-300',
+                        ]"
+                      >
+                        <div>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm font-bold text-slate-900">{{ service.label }}</span>
+                            <span
+                              v-if="service.recommended"
+                              class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700"
+                            >
+                              Recommended
+                            </span>
+                          </div>
+                          <p class="mt-1 text-xs text-slate-600 leading-snug">{{ service.description }}</p>
+                        </div>
+                        <p class="mt-3 text-sm font-extrabold text-ocean-700">
+                          ₱{{ Number(service.rate).toLocaleString() }}<span class="text-xs font-medium text-slate-500"> / hr</span>
+                        </p>
+                      </button>
+                    </div>
+                    <InputError class="mt-2" :message="form.errors.session_type" />
+                  </div>
                   
                   <!-- Date: month calendar with blocked/unavailable days disabled -->
                   <div class="col-span-full">
@@ -570,6 +679,8 @@ const submit = () => {
                       class="mt-1"
                       :instructor-id="instructor.id"
                       :students="form.student_count"
+                      :skill-level="studentSkillLevel"
+                      :session-type="form.session_type"
                       v-model="form.date"
                     />
                     <InputError class="mt-2" :message="form.errors.date" />
@@ -721,6 +832,51 @@ const submit = () => {
                     </div>
 
                     <template v-else>
+                      <!-- Quick duration recommendations (1hr Surf Experience vs 2hr Learn to Surf) -->
+                      <div class="mt-2 mb-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          :disabled="!durationOptionEndTime(60)"
+                          @click="selectDurationPreset(60)"
+                          :class="[
+                            'rounded-xl border p-3 text-left transition-all',
+                            lessonMinutes === 60
+                              ? 'border-ocean-600 bg-ocean-50/70 ring-2 ring-ocean-200'
+                              : 'border-slate-200 bg-white hover:border-ocean-300',
+                            !durationOptionEndTime(60) ? 'cursor-not-allowed opacity-50' : '',
+                          ]"
+                        >
+                          <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-900">1 Hour — Surf Experience</span>
+                            <span class="text-xs font-extrabold text-ocean-700">₱{{ Number(estimatedPrice.rate).toLocaleString() }}/surfer</span>
+                          </div>
+                          <p class="mt-1 text-[11px] text-slate-500">Great for a quick first-time taste of surfing.</p>
+                        </button>
+
+                        <button
+                          type="button"
+                          :disabled="!durationOptionEndTime(120)"
+                          @click="selectDurationPreset(120)"
+                          :class="[
+                            'rounded-xl border p-3 text-left transition-all',
+                            lessonMinutes === 120
+                              ? 'border-ocean-600 bg-ocean-50/70 ring-2 ring-ocean-200'
+                              : 'border-slate-200 bg-white hover:border-ocean-300',
+                            !durationOptionEndTime(120) ? 'cursor-not-allowed opacity-50' : '',
+                          ]"
+                        >
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs font-bold text-slate-900">2 Hours — Learn to Surf</span>
+                            <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">
+                              Recommended
+                            </span>
+                          </div>
+                          <p class="mt-1 text-[11px] text-slate-500">
+                            Best if you really want to learn proper paddling, pop-up &amp; wave riding.
+                          </p>
+                        </button>
+                      </div>
+
                       <select
                         v-model="form.end_time"
                         class="mt-1 block w-full border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm"
@@ -803,7 +959,7 @@ const submit = () => {
                       >+</button>
                     </div>
                     <p class="mt-1 text-xs text-slate-500">
-                      Max {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }} for {{ instructor.instructor_profile.level === 1 ? 'Level 1 (1-on-1)' : instructor.instructor_profile.level === 2 ? 'Level 2' : 'Level 3 (Group)' }} instructors<span v-if="maxStudents > 1 && selectedSlotRemainingSeats !== null" class="font-semibold text-ocean-700"> · {{ selectedSlotRemainingSeats }} of {{ maxStudents }} {{ selectedSlotRemainingSeats === 1 ? 'seat' : 'seats' }} open at {{ formatSlotLabel(form.start_time) }}</span>
+                      Max {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }} ({{ maxStudents > 1 ? 'same skill level required' : '1-on-1' }})<span v-if="maxStudents > 1 && selectedSlotRemainingSeats !== null" class="font-semibold text-ocean-700"> · {{ selectedSlotRemainingSeats }} of {{ maxStudents }} {{ selectedSlotRemainingSeats === 1 ? 'seat' : 'seats' }} open at {{ formatSlotLabel(form.start_time) }}</span>
                     </p>
                   </div>
 
@@ -1012,14 +1168,13 @@ const submit = () => {
 
                         <div class="md:col-span-2">
                           <InputLabel value="Skill Level" />
-                          <select
-                            v-model="companion.skill_level"
-                            class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500"
-                          >
-                            <option value="beginner">Beginner</option>
-                            <option value="intermediate">Intermediate</option>
-                            <option value="advanced">Advanced</option>
-                          </select>
+                          <div class="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                            <span class="text-sm font-semibold capitalize text-slate-800">{{ studentSkillLevel }}</span>
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Same level required</span>
+                          </div>
+                          <p class="mt-1 text-[11px] text-slate-500">
+                            All surfers in a group session must share the same skill level for safety.
+                          </p>
                           <InputError class="mt-1" :message="companionError(index, 'skill_level')" />
                         </div>
                         <div>
@@ -1151,8 +1306,12 @@ const submit = () => {
               <!-- Price Breakdown -->
               <div class="space-y-4">
                 <div class="flex justify-between text-sm">
-                  <span class="text-slate-500">Lesson Rate</span>
-                  <span class="font-medium text-slate-900">₱{{ estimatedPrice.rate }}/hr</span>
+                  <span class="text-slate-500">Service</span>
+                  <span class="font-semibold text-slate-900">{{ activeService?.label ?? 'Teaching' }}</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                  <span class="text-slate-500">Hourly Rate</span>
+                  <span class="font-medium text-slate-900">₱{{ Number(estimatedPrice.rate).toLocaleString() }}/hr</span>
                 </div>
                  <div class="flex justify-between text-sm">
                   <span class="text-slate-500">Duration</span>

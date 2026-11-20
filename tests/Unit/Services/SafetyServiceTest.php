@@ -97,11 +97,27 @@ class SafetyServiceTest extends TestCase
     }
 
     /** @test */
-    public function level_3_instructor_can_handle_5_students()
+    public function level_2_instructor_cannot_handle_2_beginners()
+    {
+        $this->expectException(SafetyViolationException::class);
+
+        $data = [
+            'instructor_level' => 2,
+            'student_count' => 2,
+            'skill_level' => SkillLevel::Beginner->value,
+            'student_age' => 20,
+            'surf_spot_difficulty' => 'beginner',
+        ];
+
+        $this->safetyService->validateBookingSafety($data);
+    }
+
+    /** @test */
+    public function level_3_instructor_can_handle_3_same_level_students()
     {
         $data = [
             'instructor_level' => 3,
-            'student_count' => 5,
+            'student_count' => 3,
             'skill_level' => SkillLevel::Advanced->value,
             'student_age' => 30,
             'surf_spot_difficulty' => 'advanced',
@@ -111,13 +127,13 @@ class SafetyServiceTest extends TestCase
     }
 
     /** @test */
-    public function level_3_instructor_cannot_handle_6_students()
+    public function level_3_instructor_cannot_handle_4_students()
     {
         $this->expectException(SafetyViolationException::class);
 
         $data = [
             'instructor_level' => 3,
-            'student_count' => 6,
+            'student_count' => 4,
             'skill_level' => SkillLevel::Beginner->value,
             'student_age' => 20,
             'surf_spot_difficulty' => 'beginner',
@@ -203,7 +219,8 @@ class SafetyServiceTest extends TestCase
     /** @test */
     public function advanced_lessons_cannot_use_level_2_instructor()
     {
-        // Level 2 instructors can now teach advanced students
+        $this->expectException(SafetyViolationException::class);
+
         $data = [
             'instructor_level' => 2,
             'student_count' => 1,
@@ -212,7 +229,7 @@ class SafetyServiceTest extends TestCase
             'surf_spot_difficulty' => 'advanced',
         ];
 
-        $this->assertTrue($this->safetyService->wouldPassValidation($data));
+        $this->safetyService->validateBookingSafety($data);
     }
 
     /** @test */
@@ -263,7 +280,7 @@ class SafetyServiceTest extends TestCase
     {
         $rules = $this->safetyService->getApplicableRules(3);
 
-        $this->assertEquals(5, $rules['max_students']);
+        $this->assertEquals(3, $rules['max_students']);
         $this->assertTrue($rules['can_teach_children']);
     }
 
@@ -272,10 +289,12 @@ class SafetyServiceTest extends TestCase
     {
         $this->assertTrue($this->safetyService->canHandleGroupSize(1, 1));
         $this->assertFalse($this->safetyService->canHandleGroupSize(1, 2));
-        $this->assertTrue($this->safetyService->canHandleGroupSize(2, 2));
-        $this->assertFalse($this->safetyService->canHandleGroupSize(2, 3));
-        $this->assertTrue($this->safetyService->canHandleGroupSize(3, 5));
-        $this->assertFalse($this->safetyService->canHandleGroupSize(3, 6));
+        $this->assertTrue($this->safetyService->canHandleGroupSize(2, 1, 'beginner'));
+        $this->assertFalse($this->safetyService->canHandleGroupSize(2, 2, 'beginner'));
+        $this->assertTrue($this->safetyService->canHandleGroupSize(2, 2, 'intermediate'));
+        $this->assertFalse($this->safetyService->canHandleGroupSize(2, 3, 'intermediate'));
+        $this->assertTrue($this->safetyService->canHandleGroupSize(3, 3));
+        $this->assertFalse($this->safetyService->canHandleGroupSize(3, 4));
     }
 
     /** @test */
@@ -285,13 +304,13 @@ class SafetyServiceTest extends TestCase
         $this->assertTrue($this->safetyService->canTeachSkillLevel(1, SkillLevel::Beginner->value));
         $this->assertFalse($this->safetyService->canTeachSkillLevel(1, SkillLevel::Intermediate->value));
         $this->assertFalse($this->safetyService->canTeachSkillLevel(1, SkillLevel::Advanced->value));
-        
-        // Level 2 can teach all skill levels
+
+        // Level 2 can teach beginners (1-on-1) and guide intermediates (up to 2)
         $this->assertTrue($this->safetyService->canTeachSkillLevel(2, SkillLevel::Beginner->value));
         $this->assertTrue($this->safetyService->canTeachSkillLevel(2, SkillLevel::Intermediate->value));
-        $this->assertTrue($this->safetyService->canTeachSkillLevel(2, SkillLevel::Advanced->value));
-        
-        // Level 3 can teach all skill levels
+        $this->assertFalse($this->safetyService->canTeachSkillLevel(2, SkillLevel::Advanced->value));
+
+        // Level 3 can teach/guide/coach all skill levels
         $this->assertTrue($this->safetyService->canTeachSkillLevel(3, SkillLevel::Beginner->value));
         $this->assertTrue($this->safetyService->canTeachSkillLevel(3, SkillLevel::Intermediate->value));
         $this->assertTrue($this->safetyService->canTeachSkillLevel(3, SkillLevel::Advanced->value));

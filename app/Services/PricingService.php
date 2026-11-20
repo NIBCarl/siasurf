@@ -2,18 +2,21 @@
 
 namespace App\Services;
 
+use App\Enums\SessionType;
+use App\Enums\SkillLevel;
 use App\Models\Booking;
 use App\Models\InstructorProfile;
 
 class PricingService
 {
     /**
-     * Base rates per instructor level
+     * Default base rates per service (fallback when an instructor has not
+     * explicitly customized a rate yet).
      */
     const BASE_RATES = [
-        1 => 600.00,  // Level 1: ₱600/hour
-        2 => 800.00,  // Level 2: ₱800/hour
-        3 => 1500.00, // Level 3: ₱1,500/hour
+        1 => 600.00,  // Teaching default: ₱600/hour
+        2 => 800.00,  // Guiding default: ₱800/hour
+        3 => 1500.00, // Coaching default: ₱1,500/hour
     ];
 
     /**
@@ -32,61 +35,175 @@ class PricingService
     ];
 
     /**
-     * Lowest published hourly rate (BR-4.1).
+     * Lowest published hourly rate for Teaching (BR-4.1).
      */
     public static function minRatePerHour(): float
     {
-        return (float) config('siasurf.pricing.min_rate_per_hour', 600);
+        return SessionType::Teaching->minRate();
     }
 
     /**
-     * Highest published hourly rate (the standard ceiling).
-     *
-     * Values above this are rejected by validation rather than being allowed to
-     * reach `instructor_profiles.rate_per_hour`, which is `decimal(10,2)` and
-     * raises SQLSTATE[22003] for anything past 99,999,999.99.
+     * Highest published hourly rate for Teaching.
      */
     public static function maxRatePerHour(): float
     {
-        return (float) config('siasurf.pricing.max_rate_per_hour', 1500);
+        return SessionType::Teaching->maxRate();
     }
 
     /**
-     * The validation rule string for the rate field, e.g. "min:600|max:1500".
+     * Validation rule string for the Teaching rate (`rate_per_hour`).
      */
-    public static function rateRangeRule(): string
+    public static function rateRangeRule(?SessionType $service = null): string
     {
-        return 'min:'.self::minRatePerHour().'|max:'.self::maxRatePerHour();
+        return ($service ?? SessionType::Teaching)->rateRangeRule();
     }
 
     /**
      * Human-readable bounds for validation messages and the UI.
      */
-    public static function rateRangeLabel(): string
+    public static function rateRangeLabel(?SessionType $service = null): string
     {
-        return '₱'.number_format(self::minRatePerHour()).'–₱'.number_format(self::maxRatePerHour());
+        return ($service ?? SessionType::Teaching)->rateRangeLabel();
     }
 
     /**
-     * Calculate price for a booking
+     * Full per-service pricing band map shared with Inertia pages so every
+     * form enforces the exact server ranges.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function serviceRateBands(): array
+    {
+        $bands = [];
+
+        foreach (SessionType::cases() as $service) {
+            $bands[$service->value] = [
+                'type' => $service->value,
+                'label' => $service->label(),
+                'description' => $service->description(),
+                'column' => $service->profileColumn(),
+                'min' => $service->minRate(),
+                'max' => $service->maxRate(),
+                'default' => $service->defaultRate(),
+                'rangeLabel' => $service->rateRangeLabel(),
+                'allowedLevels' => $service->allowedInstructorLevels(),
+            ];
+        }
+
+        return $bands;
+    }
+
+    /**
+     * Validation rules for instructor service rates based on certification level.
+     *
+     * Instructors may set any hourly rate inside each authorized service's
+     * published band. Unauthorized services are ignored / stored as null.
+     *
+     * @return array<string, string>
+     */
+    public static function rateValidationRulesForLevel(int $level): array
+    {
+        $rules = [
+            'rate_per_hour' => 'required|numeric|'.SessionType::Teaching->rateRangeRule(),
+        ];
+
+        if ($level >= 2) {
+            $rules['guiding_rate'] = 'nullable|numeric|'.SessionType::Guiding->rateRangeRule();
+        }
+
+        if ($level >= 3) {
+            $rules['coaching_rate'] = 'nullable|numeric|'.SessionType::Coaching->rateRangeRule();
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Human-readable validation messages for all three service rate fields.
+     *
+     * @return array<string, string>
+     */
+    public static function rateValidationMessages(): array
+    {
+        return [
+            'rate_per_hour.min' => 'The teaching rate must be at least ₱'.number_format(SessionType::Teaching->minRate()).' per hour.',
+            'rate_per_hour.max' => 'The teaching rate cannot exceed ₱'.number_format(SessionType::Teaching->maxRate()).' per hour.',
+            'rate_per_hour.numeric' => 'Enter the teaching rate as a number, for example 600.',
+            'guiding_rate.min' => 'The guiding rate must be at least ₱'.number_format(SessionType::Guiding->minRate()).' per hour.',
+            'guiding_rate.max' => 'The guiding rate cannot exceed ₱'.number_format(SessionType::Guiding->maxRate()).' per hour.',
+            'guiding_rate.numeric' => 'Enter the guiding rate as a number, for example 800.',
+            'coaching_rate.min' => 'The coaching rate must be at least ₱'.number_format(SessionType::Coaching->minRate()).' per hour.',
+            'coaching_rate.max' => 'The coaching rate cannot exceed ₱'.number_format(SessionType::Coaching->maxRate()).' per hour.',
+            'coaching_rate.numeric' => 'Enter the coaching rate as a number, for example 1500.',
+        ];
+    }
+
+    /**
+     * Normalize persisted service rates according to instructor certification level.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array{rate_per_hour: float, guiding_rate: ?float, coaching_rate: ?float}
+     */
+    public static function normalizeRatesForLevel(int $level, array $validated, ?InstructorProfile $existing = null): array
+    {
+        $teachingRate = (float) $validated['rate_per_hour'];
+
+        $guidingRate = null;
+        if ($level >= 2) {
+            if (array_key_exists('guiding_rate', $validated) && $validated['guiding_rate'] !== null && $validated['guiding_rate'] !== '') {
+                $guidingRate = (float) $validated['guiding_rate'];
+            } elseif ($existing?->guiding_rate !== null) {
+                $guidingRate = (float) $existing->guiding_rate;
+            } else {
+                $guidingRate = SessionType::Guiding->defaultRate();
+            }
+        }
+
+        $coachingRate = null;
+        if ($level >= 3) {
+            if (array_key_exists('coaching_rate', $validated) && $validated['coaching_rate'] !== null && $validated['coaching_rate'] !== '') {
+                $coachingRate = (float) $validated['coaching_rate'];
+            } elseif ($existing?->coaching_rate !== null) {
+                $coachingRate = (float) $existing->coaching_rate;
+            } else {
+                $coachingRate = SessionType::Coaching->defaultRate();
+            }
+        }
+
+        return [
+            'rate_per_hour' => $teachingRate,
+            'guiding_rate' => $guidingRate,
+            'coaching_rate' => $coachingRate,
+        ];
+    }
+
+    /**
+     * Calculate price for a booking based on the service provided (Teaching,
+     * Guiding, or Coaching), NOT the instructor's certification level.
      */
     public function calculatePrice(
         InstructorProfile $profile,
         int $studentCount,
         array $addOns = [],
         ?string $discountType = null,
-        ?int $durationHours = null
+        ?int $durationHours = null,
+        ?SessionType $sessionType = null,
+        ?SkillLevel $skillLevel = null
     ): array {
-        // Validate student count against instructor level limits
-        $maxStudents = $profile->maxStudents();
+        $service = $sessionType ?? SessionType::Teaching;
+
+        // Validate student count against skill-aware capacity limits
+        $maxStudents = $skillLevel !== null
+            ? $profile->maxStudentsFor($skillLevel)
+            : $profile->maxStudents();
+
         if ($studentCount > $maxStudents) {
             throw new \InvalidArgumentException(
                 "Student count ({$studentCount}) exceeds instructor's maximum capacity ({$maxStudents})"
             );
         }
 
-        $baseRate = $profile->rate_per_hour ?? self::BASE_RATES[$profile->level->value] ?? 600.00;
-        // Price the actual lesson length; default to the platform standard (2h).
+        $baseRate = $profile->rateForService($service);
         $hours = $durationHours ?? Booking::standardHours();
 
         // Calculate base price
@@ -110,6 +227,7 @@ class PricingService
         $total = $subtotal - $discount;
 
         return [
+            'session_type' => $service->value,
             'base_rate' => $baseRate,
             'hours' => $hours,
             'student_count' => $studentCount,
@@ -125,23 +243,38 @@ class PricingService
     }
 
     /**
-     * Get minimum rate for instructor level
+     * Get minimum rate for a service (or legacy level integer).
      */
-    public function getMinimumRate(int $level): float
+    public function getMinimumRate(int|SessionType $target): float
     {
-        return self::BASE_RATES[$level] ?? 600.00;
+        if ($target instanceof SessionType) {
+            return $target->minRate();
+        }
+
+        return self::BASE_RATES[$target] ?? SessionType::Teaching->minRate();
     }
 
     /**
-     * Validate that instructor rate sits inside the published band.
-     *
-     * Previously this only checked the floor, so a 10-billion-peso rate was
-     * "valid" right up until MySQL rejected the insert.
+     * Validate that a rate sits inside the published band for a service.
      */
-    public function isRateValid(float $rate, int $level): bool
+    public function isServiceRateValid(float $rate, SessionType $service): bool
     {
-        return $rate >= $this->getMinimumRate($level)
-            && $rate <= static::maxRatePerHour();
+        return $rate >= $service->minRate()
+            && $rate <= $service->maxRate();
+    }
+
+    /**
+     * Validate a rate against its corresponding service band (1=Teaching, 2=Guiding, 3=Coaching).
+     */
+    public function isRateValid(float $rate, int $level = 1): bool
+    {
+        $service = match ($level) {
+            2 => SessionType::Guiding,
+            3 => SessionType::Coaching,
+            default => SessionType::Teaching,
+        };
+
+        return $this->isServiceRateValid($rate, $service);
     }
 
     /**

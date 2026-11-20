@@ -10,9 +10,12 @@ import RateCapDialog from '@/Components/Molecules/RateCapDialog.vue'
 
 const page = usePage()
 
-// Published hourly-rate band, shared from the server.
-const rateMin = computed(() => Number((page.props as any).pricing?.minRatePerHour ?? 600))
-const rateMax = computed(() => Number((page.props as any).pricing?.maxRatePerHour ?? 1500))
+// Published hourly-rate bands, shared from the server.
+const teachingBand = computed(() => (page.props as any).pricing?.services?.teaching ?? { min: 600, max: 1000, default: 600 })
+const guidingBand = computed(() => (page.props as any).pricing?.services?.guiding ?? { min: 800, max: 1500, default: 800 })
+const coachingBand = computed(() => (page.props as any).pricing?.services?.coaching ?? { min: 1500, max: 2000, default: 1500 })
+const rateMin = computed(() => Number(teachingBand.value.min ?? 600))
+const rateMax = computed(() => Number(teachingBand.value.max ?? 1000))
 
 const form = useForm({
   name: '',
@@ -22,6 +25,8 @@ const form = useForm({
   bio: '',
   level: 1,
   rate_per_hour: 600,
+  guiding_rate: 800,
+  coaching_rate: 1500,
   area: '',
   meeting_point: '',
   latitude: '',
@@ -112,15 +117,15 @@ const submit = () => {
             <div>
                <InputLabel value="Teaching Level" class="mb-2" />
                <select v-model="form.level" class="w-full border-slate-100 rounded-2xl focus:ring-ocean-500 focus:border-ocean-500 font-bold">
-                  <option :value="1">Level 1 - Beginner (1-on-1)</option>
-                  <option :value="2">Level 2 - Intermediate (Max 2 students)</option>
-                  <option :value="3">Level 3 - Expert (Groups max 5)</option>
+                  <option :value="1">Level 1 - Beginner Teaching (Max 1)</option>
+                  <option :value="2">Level 2 - Teaching (1) &amp; Guiding (Max 2 Intermediate)</option>
+                  <option :value="3">Level 3 - Teaching, Guiding &amp; Coaching (Max 3 same-level)</option>
                </select>
                <InputError :message="form.errors.level" />
             </div>
 
             <div>
-               <InputLabel value="Hourly Rate (₱)" class="mb-2" />
+               <InputLabel value="Teaching Rate (₱/hr)" class="mb-2" />
                <TextInput
                   id="rate_per_hour"
                   v-model="form.rate_per_hour"
@@ -133,12 +138,48 @@ const submit = () => {
                   @blur="checkRate"
                />
                <p v-if="rateOverCap" class="mt-1 text-xs font-bold text-rose-600">
-                  Standard pricing cannot exceed ₱{{ rateMax.toLocaleString() }} per hour.
+                  Teaching rate cannot exceed ₱{{ rateMax.toLocaleString() }} per hour.
                </p>
                <p v-else class="mt-1 text-xs text-slate-500">
                   Allowed range: ₱{{ rateMin.toLocaleString() }} – ₱{{ rateMax.toLocaleString() }} per hour.
                </p>
                <InputError :message="form.errors.rate_per_hour" />
+            </div>
+
+            <div v-if="form.level >= 2">
+               <InputLabel value="Guiding Rate (₱/hr)" class="mb-2" />
+               <TextInput
+                  id="guiding_rate"
+                  v-model="form.guiding_rate"
+                  type="number"
+                  class="w-full font-black text-ocean-600"
+                  :min="guidingBand.min"
+                  :max="guidingBand.max"
+                  step="50"
+                  required
+               />
+               <p class="mt-1 text-xs text-slate-500">
+                  Allowed range: ₱{{ Number(guidingBand.min).toLocaleString() }} – ₱{{ Number(guidingBand.max).toLocaleString() }} per hour.
+               </p>
+               <InputError :message="form.errors.guiding_rate" />
+            </div>
+
+            <div v-if="form.level >= 3">
+               <InputLabel value="Coaching Rate (₱/hr)" class="mb-2" />
+               <TextInput
+                  id="coaching_rate"
+                  v-model="form.coaching_rate"
+                  type="number"
+                  class="w-full font-black text-ocean-600"
+                  :min="coachingBand.min"
+                  :max="coachingBand.max"
+                  step="50"
+                  required
+               />
+               <p class="mt-1 text-xs text-slate-500">
+                  Allowed range: ₱{{ Number(coachingBand.min).toLocaleString() }} – ₱{{ Number(coachingBand.max).toLocaleString() }} per hour.
+               </p>
+               <InputError :message="form.errors.coaching_rate" />
             </div>
          </div>
 
