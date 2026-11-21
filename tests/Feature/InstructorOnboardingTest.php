@@ -266,7 +266,54 @@ class InstructorOnboardingTest extends TestCase
             ]);
     }
 
-    public function test_level_3_onboarding_requires_at_least_1500_rate(): void
+    public function test_onboarding_omits_latitude_and_longitude_and_saves_area_and_meeting_point(): void
+    {
+        Storage::fake('public');
+        $user = $this->instructor('location@example.test');
+        InstructorProfile::create([
+            'user_id' => $user->id,
+            'bio' => 'Existing bio',
+            'level' => 2,
+            'status' => 'pending_verification',
+            'rate_per_hour' => 800,
+            'area' => 'General Luna',
+            'meeting_point' => 'Cloud 9 tower',
+            'latitude' => 9.8123456,
+            'longitude' => 126.1654321,
+        ]);
+
+        $this->actingAs($user)
+            ->get('/instructor/onboarding')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Instructor/Onboarding')
+                ->where('profile.area', 'General Luna')
+                ->where('profile.meeting_point', 'Cloud 9 tower')
+                ->missing('profile.latitude')
+                ->missing('profile.longitude')
+            );
+
+        $this->actingAs($user)
+            ->post('/instructor/onboarding', [
+                'bio' => 'Updated surf bio.',
+                'level' => 2,
+                'rate_per_hour' => 800,
+                'area' => 'Catangnan',
+                'meeting_point' => 'Cloud 9 boardwalk',
+                'latitude' => 9.9000000,
+                'longitude' => 126.2000000,
+                'certificates' => [UploadedFile::fake()->create('sisa_certificate.pdf', 100, 'application/pdf')],
+            ])
+            ->assertRedirect(route('instructor.pending'));
+
+        $profile = $user->instructorProfile()->firstOrFail();
+        $this->assertSame('Catangnan', $profile->area);
+        $this->assertSame('Cloud 9 boardwalk', $profile->meeting_point);
+        $this->assertEquals(9.8123456, (float) $profile->latitude);
+        $this->assertEquals(126.1654321, (float) $profile->longitude);
+    }
+
+    public function test_level_3_onboarding_requires_at_least_1500_coaching_rate(): void
     {
         Storage::fake('public');
         $user = $this->instructor('level3min@example.test');
@@ -277,12 +324,34 @@ class InstructorOnboardingTest extends TestCase
                 'bio' => 'Master instructor.',
                 'level' => 3,
                 'rate_per_hour' => 800,
+                'guiding_rate' => 1100,
+                'coaching_rate' => 1400,
                 'certificates' => [UploadedFile::fake()->create('isa_cert.pdf', 100, 'application/pdf')],
             ])
-            ->assertSessionHasErrors('rate_per_hour')
+            ->assertSessionHasErrors('coaching_rate')
             ->assertRedirect('/instructor/onboarding');
 
         $this->assertDatabaseCount('instructor_profiles', 0);
+
+        $this->actingAs($user)
+            ->post('/instructor/onboarding', [
+                'bio' => 'Master instructor.',
+                'level' => 3,
+                'rate_per_hour' => 800,
+                'guiding_rate' => 1100,
+                'coaching_rate' => 1600,
+                'certificates' => [UploadedFile::fake()->create('isa_cert.pdf', 100, 'application/pdf')],
+            ])
+            ->assertRedirect(route('instructor.pending'));
+
+        $this->assertDatabaseHas('instructor_profiles', [
+            'user_id' => $user->id,
+            'level' => 3,
+            'rate_per_hour' => 800,
+            'guiding_rate' => 1100,
+            'coaching_rate' => 1600,
+            'status' => InstructorStatus::PendingVerification->value,
+        ]);
     }
 
     public function test_unonboarded_instructor_cannot_bypass_onboarding_across_routes(): void

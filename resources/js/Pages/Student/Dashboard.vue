@@ -72,6 +72,10 @@ const props = defineProps<Props>()
 const page = usePage()
 const firstName = computed(() => (page.props.auth.user as any)?.name?.split(' ')[0] ?? 'Surfer')
 const chatUnread = computed(() => Number((page.props as any).nav?.chatUnread ?? 0))
+const needsSkillAssessment = computed(() => {
+  const profile = (page.props.auth.user as any)?.student_profile
+  return Boolean(profile && !profile.skill_assessed_at)
+})
 
 const formatDate = (dateString: string) =>
   new Date(dateString).toLocaleDateString('en-US', {
@@ -182,6 +186,23 @@ onUnmounted(() => {
         <template #header>Student overview</template>
 
         <div class="space-y-6">
+            <div
+                v-if="needsSkillAssessment"
+                class="flex flex-col gap-3 rounded-panel border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+                <div>
+                    <p class="text-body-sm font-semibold text-amber-950">
+                        Verify your surf level with the skill pre-assessment
+                    </p>
+                    <p class="mt-0.5 text-body-sm text-amber-800">
+                        Your account currently defaults to Beginner. Complete the 2-minute pre-assessment to unlock the right instructors and surf zones.
+                    </p>
+                </div>
+                <AppButton :href="route('student.onboarding')" size="sm" class="shrink-0">
+                    Take pre-assessment
+                </AppButton>
+            </div>
+
             <div class="grid gap-6 lg:grid-cols-12">
                 <!-- Hero -->
                 <div class="lg:col-span-7">

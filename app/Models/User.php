@@ -122,6 +122,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(SkillUpgradeRequest::class, 'student_id');
     }
 
+    public function skillAssessments(): HasMany
+    {
+        return $this->hasMany(StudentSkillAssessment::class, 'user_id');
+    }
+
+    public function latestSkillAssessment(): HasOne
+    {
+        return $this->hasOne(StudentSkillAssessment::class, 'user_id')->latestOfMany();
+    }
+
     public function submittedUpgradeRequests(): HasMany
     {
         return $this->hasMany(SkillUpgradeRequest::class, 'instructor_id');
@@ -225,9 +235,23 @@ class User extends Authenticatable implements MustVerifyEmail
             && $this->certificates()->exists();
     }
 
+    /**
+     * Whether the instructor holds at least one verified certificate that has
+     * not expired.
+     *
+     * Expiry is evaluated at read time rather than relying on a sweep to flip
+     * `status` to Expired, so an instructor whose SISA ID lapsed overnight is
+     * hidden immediately instead of after the next scheduled job.
+     */
     public function hasVerifiedCertificate(): bool
     {
-        return $this->certificates()->where('status', CertificateStatus::Verified)->exists();
+        return $this->certificates()
+            ->where('status', CertificateStatus::Verified)
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>=', now());
+            })
+            ->exists();
     }
 
     public function isBookable(): bool

@@ -63,14 +63,13 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'bio' => 'nullable|string|max:1000',
-            'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
+            ...PricingService::rateValidationRulesForLevel($profile->level->value),
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',
             'longitude' => 'nullable|numeric|between:125.8,126.5',
         ], [
-            'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
-            'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
+            ...PricingService::rateValidationMessages(),
             'latitude.between' => 'Choose a latitude inside Siargao Island.',
             'longitude.between' => 'Choose a longitude inside Siargao Island.',
         ]);
@@ -84,10 +83,11 @@ class ProfileController extends Controller
         }
 
         $user->update(['name' => $validated['name']]);
+        $rates = PricingService::normalizeRatesForLevel($profile->level->value, $validated, $profile);
 
         $profile->update([
             'bio' => $validated['bio'] ?? null,
-            'rate_per_hour' => $validated['rate_per_hour'],
+            ...$rates,
             'area' => $validated['area'] ?? null,
             'meeting_point' => $validated['meeting_point'] ?? null,
             'latitude' => $validated['latitude'] ?? null,

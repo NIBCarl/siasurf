@@ -40,7 +40,6 @@ interface OngoingSession {
   spot_name: string
   started_at: string
   duration_hours: number
-  time_remaining: number
 }
 
 interface UpcomingBooking {
@@ -149,31 +148,17 @@ const slotLabel = (start?: string | null, end?: string | null, fallback?: string
   return fallback ? fallback.charAt(0).toUpperCase() + fallback.slice(1) : ''
 }
 
-const ongoingTimeLeft = ref(props.activities.ongoing_session?.time_remaining ?? 0)
-let ongoingTimer: ReturnType<typeof setInterval> | null = null
-
 const mountedAt = Date.now()
 const nowTick = ref(Date.now())
 let acceptTicker: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
-  if (ongoingTimeLeft.value > 0) {
-    ongoingTimer = setInterval(() => {
-      if (ongoingTimeLeft.value > 0) {
-        ongoingTimeLeft.value -= 1
-      } else if (ongoingTimer) {
-        clearInterval(ongoingTimer)
-      }
-    }, 1000)
-  }
-
   acceptTicker = setInterval(() => {
     nowTick.value = Date.now()
   }, 1000)
 })
 
 onUnmounted(() => {
-  if (ongoingTimer) clearInterval(ongoingTimer)
   if (acceptTicker) clearInterval(acceptTicker)
 })
 
@@ -380,7 +365,6 @@ const quickActions = computed<QuickAction[]>(() => [
                     </div>
 
                     <div class="flex flex-wrap items-center gap-3">
-                        <Countdown :seconds="ongoingTimeLeft" label="Time left" />
                         <AppButton
                             :href="route('instructor.bookings.show', activities.ongoing_session.id)"
                             variant="secondary"

@@ -580,13 +580,21 @@ class ScreenshotDemoSeeder extends Seeder
 
     private function user(string $name, string $email, string $role, string $password): User
     {
-        return User::create([
+        $user = User::create([
             'name' => $name,
             'email' => $email,
             'password' => $password,
             'role' => $role,
             'email_verified_at' => now(),
         ]);
+
+        // The Spatie role must be assigned here as well: the `role` column is
+        // only a denormalised mirror, and every `role:admin` middleware check
+        // reads the Spatie assignment. Without this the seeded admin could log
+        // in but was rejected by every admin route.
+        $user->assignRole($role);
+
+        return $user;
     }
 
     private function instructor(string $name, string $email, string $password, array $profile): User

@@ -25,7 +25,7 @@ auth.json
 # Laravel Framework & Application Storage
 # ==============================================================================
 /public/build/
-/public/hot/
+/public/hot
 /public/storage
 /storage/*.key
 /storage/oauth-*.key
@@ -214,9 +214,10 @@ desktop.ini
 .impeccable/live/deferred-svelte-component-accepts.json
 .impeccable/live/*.png
 # impeccable-ignore-end
-
 # ==============================================================================
 # Specifications & Documentation
 # ==============================================================================
 siasurf-system-specification.xml
-
+screenshots/
+.md
+.docx

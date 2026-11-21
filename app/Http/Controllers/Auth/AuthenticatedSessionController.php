@@ -33,7 +33,27 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // Send a student who has never seen the profile prompt there first.
+        // `intended` still wins, so deep links keep working - a student who
+        // clicked "book this lesson" goes straight back to that page.
+        $intended = $request->session()->pull('url.intended');
+
+        if ($intended !== null) {
+            return redirect($intended);
+        }
+
+        $user = $request->user();
+
+        if ($user?->isStudent() && $user->studentProfile?->needsOnboarding()) {
+            return redirect()->route('student.onboarding');
+        }
+
+        // Plain route() call: the third argument is the absolute flag, and this
+        // controller previously passed it as a named argument, which Laravel
+        // rejects with "Unknown named parameter $absolute". It only surfaced
+        // for admins and instructors because they reach this line while
+        // students are redirected to onboarding first.
+        return redirect()->route('dashboard');
     }
 
     /**

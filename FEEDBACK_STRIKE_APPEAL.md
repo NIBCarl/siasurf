@@ -164,5 +164,5 @@ This behavior is reflected in:
 - `AGENTS.md` Phase 4, Phase 9, Phase 10 and the Business Rules table
 - `PRODUCT.md` capabilities
 - `siasurf_methodology.md` §1.6 and §3.2
-- `DOCUMENT/SiaSurf_IntroductionMethodology...` Safety and Strike Management
+- `Capstone2_Introduction_V2.docx` Safety and Strike Management
 

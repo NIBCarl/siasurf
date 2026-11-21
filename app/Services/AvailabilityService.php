@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Enums\BookingStatus;
 use App\Enums\InstructorLevel;
+use App\Enums\SessionType;
+use App\Enums\SkillLevel;
 use App\Enums\TimePeriod;
 use App\Exceptions\BookingRequestException;
 use App\Models\Availability;
@@ -103,11 +105,21 @@ class AvailabilityService
             return $this->blockForBooking($booking);
         }
 
+        $bookingSkill = $booking->skill_level instanceof SkillLevel
+            ? $booking->skill_level
+            : SkillLevel::tryFrom((string) $booking->skill_level);
+        $bookingService = $booking->session_type instanceof SessionType
+            ? $booking->session_type
+            : SessionType::tryFrom((string) $booking->session_type);
+
         $remaining = $this->remainingCapacity(
             $booking->instructor_id,
             $this->dateOf($booking),
             $range[0],
             $range[1],
+            null,
+            $bookingSkill,
+            $bookingService,
         );
 
         return $remaining <= 0 ? $this->blockForBooking($booking) : null;
@@ -384,9 +396,13 @@ class AvailabilityService
      * `config/siasurf.php` when SISA changes the policy; SafetyService still
      * enforces the per-booking group ceiling.
      */
-    public function slotCapacity(int $instructorId): int
+    public function slotCapacity(int $instructorId, ?SkillLevel $skill = null): int
     {
         $level = $this->instructorLevel($instructorId);
+
+        if ($skill !== null) {
+            return $level->maxStudentsFor($skill);
+        }
 
         $configured = (int) config(
             'siasurf.instructor_capacity.' . $level->value,
@@ -559,24 +575,32 @@ class AvailabilityService
         Carbon|string $date,
         string $startTime,
         string $endTime,
-        ?int $exceptBookingId = null
+        ?int $exceptBookingId = null,
+        ?SkillLevel $skill = null,
+        ?SessionType $sessionType = null
     ): int {
         $level = $this->instructorLevel($instructorId);
-        $capacity = $this->slotCapacity($instructorId);
+        $capacity = $this->slotCapacity($instructorId, $skill);
         $overlapping = $this->bookingsInRange($instructorId, $date, $startTime, $endTime, $exceptBookingId);
 
-        return $this->remainingCapacityWithin($overlapping, $level, $capacity, $startTime, $endTime);
+        return $this->remainingCapacityWithin($overlapping, $level, $capacity, $startTime, $endTime, $skill, $sessionType);
     }
 
     /**
      * Same calculation, without hitting the database again.
+     *
+     * Shared slots require the same skill level and the same service type.
+     * Capacity is skill-dependent (e.g., Level 2 holds max 1 beginner or max 2
+     * intermediates; Level 3 holds max 3 students of the same level).
      */
     private function remainingCapacityWithin(
         Collection $liveBookings,
         InstructorLevel $level,
         int $capacity,
         string $startTime,
-        string $endTime
+        string $endTime,
+        ?SkillLevel $skill = null,
+        ?SessionType $sessionType = null
     ): int {
         $start = $this->timeString($startTime) ?? (string) $startTime;
         $end = $this->timeString($endTime) ?? (string) $endTime;
@@ -588,16 +612,265 @@ class AvailabilityService
         });
 
         if ($overlapping->isEmpty()) {
-            return $capacity;
+            return $skill !== null ? $level->maxStudentsFor($skill) : $capacity;
         }
 
         if ($level->holdsSlotWhilePending()) {
             return 0;
         }
 
+        $first = $overlapping->first();
+        $existingSkill = $first instanceof Booking ? $this->skillOf($first) : null;
+        $existingService = $first instanceof Booking ? $this->sessionTypeOf($first) : null;
+
+        if ($skill !== null && $existingSkill !== null && $existingSkill !== $skill) {
+            return 0;
+        }
+
+        if ($sessionType !== null && $existingService !== null && $existingService !== $sessionType) {
+            return 0;
+        }
+
+        $effectiveCapacity = $existingSkill !== null
+            ? $level->maxStudentsFor($existingSkill)
+            : $capacity;
+
         $booked = (int) $overlapping->sum(fn (Booking $booking) => $this->studentsIn($booking));
 
-        return max(0, $capacity - $booked);
+        return max(0, $effectiveCapacity - $booked);
+    }
+
+    private function skillOf(Booking $booking): ?SkillLevel
+    {
+        if ($booking->skill_level instanceof SkillLevel) {
+            return $booking->skill_level;
+        }
+
+        return $booking->skill_level !== null
+            ? SkillLevel::tryFrom((string) $booking->skill_level)
+            : null;
+    }
+
+    private function sessionTypeOf(Booking $booking): ?SessionType
+    {
+        if ($booking->session_type instanceof SessionType) {
+            return $booking->session_type;
+        }
+
+        return $booking->session_type !== null
+            ? SessionType::tryFrom((string) $booking->session_type)
+            : null;
+    }
+
+    private function slotMismatchReason(
+        int $instructorId,
+        Carbon $day,
+        string $start,
+        string $end,
+        ?int $exceptBookingId,
+        ?SkillLevel $skill,
+        ?SessionType $sessionType
+    ): ?string {
+        if ($skill === null && $sessionType === null) {
+            return null;
+        }
+
+        $overlapping = $this->bookingsInRange($instructorId, $day, $start, $end, $exceptBookingId);
+        $first = $overlapping->first();
+
+        if (! $first instanceof Booking) {
+            return null;
+        }
+
+        $existingSkill = $this->skillOf($first);
+        $existingService = $this->sessionTypeOf($first);
+
+        if ($skill !== null && $existingSkill !== null && $existingSkill !== $skill) {
+            return sprintf(
+                'This time slot is already reserved for a %s session. Shared slots require all students to be the same skill level.',
+                $existingSkill->label()
+            );
+        }
+
+        if ($sessionType !== null && $existingService !== null && $existingService !== $sessionType) {
+            return sprintf(
+                'This time slot is already reserved for a %s session. Please pick another time or matching service.',
+                $existingService->label()
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * Day-by-day availability for a date range, in a bounded number of queries.
+     *
+     * `periodsFor()` is one date per call. A month grid would need ~42 calls
+     * and the same number of round trips, so this resolves the whole window
+     * from three reads instead: the weekly pattern, the manual blocks in the
+     * range, and the live bookings in the range.
+     *
+     * Deliberately coarse: a day reports whether a period has ANY bookable
+     * start, not the start times themselves. The student still calls
+     * periodsFor() for the day they actually pick.
+     *
+     * @return array<string, array<string, array{available: bool, reason: ?string, remaining_capacity: int}>>
+     */
+    public function availabilityByDay(
+        int $instructorId,
+        Carbon|string $start,
+        int $days = 60,
+        int $students = 1,
+        ?int $exceptBookingId = null,
+        ?SkillLevel $skill = null,
+        ?SessionType $sessionType = null
+    ): array {
+        $from = ($start instanceof Carbon ? $start->copy() : Carbon::parse($start))->startOfDay();
+        $days = max(1, min($days, 120));
+        $to = $from->copy()->addDays($days - 1)->endOfDay();
+
+        // 1. Weekly pattern, one read for every weekday in the range.
+        $weekly = Availability::query()
+            ->where('user_id', $instructorId)
+            ->whereNull('specific_date')
+            ->where('is_available', true)
+            ->get(['day_of_week', 'time_period']);
+
+        $periodValue = fn ($period) => $period instanceof \BackedEnum
+            ? $period->value
+            : (string) $period;
+
+        $recurring = [];
+
+        foreach ($weekly as $row) {
+            $day = $row->day_of_week instanceof \BackedEnum
+                ? (int) $row->day_of_week->value
+                : (int) $row->day_of_week;
+
+            $recurring[$day][$periodValue($row->time_period)] = true;
+        }
+
+        $hasPublishedSchedule = $weekly->isNotEmpty();
+
+        // 2. Manual blocks across the whole range, keyed by date.
+        $manualBlocks = Availability::query()
+            ->where('user_id', $instructorId)
+            ->whereBetween('specific_date', [$from->format('Y-m-d'), $to->format('Y-m-d')])
+            ->where('is_available', false)
+            ->whereNull('blocked_by_booking_id')
+            ->get(['specific_date', 'time_period'])
+            ->groupBy(fn ($row) => $row->specific_date instanceof \DateTimeInterface
+                ? $row->specific_date->format('Y-m-d')
+                : (string) $row->specific_date)
+            ->map(fn ($rows) => $rows->map(fn ($row) => $periodValue($row->time_period))->all())
+            ->all();
+
+        // 3. Live bookings holding slots in the range, keyed by date.
+        $liveBookings = Booking::query()
+            ->with('instructor')
+            ->where('instructor_id', $instructorId)
+            ->whereBetween('date', [$from->format('Y-m-d'), $to->format('Y-m-d')])
+            ->whereIn('status', array_map(
+                fn (BookingStatus $status) => $status->value,
+                BookingStatus::slotHolding()
+            ))
+            ->when($exceptBookingId, fn ($query) => $query->where('id', '!=', $exceptBookingId))
+            ->get()
+            ->groupBy(fn (Booking $booking) => $this->dateOf($booking));
+
+        $level = $this->instructorLevel($instructorId);
+        $capacity = $level->slotCapacity($skill);
+        $result = [];
+
+        for ($offset = 0; $offset < $days; $offset++) {
+            $day = $from->copy()->addDays($offset);
+            $dateString = $day->format('Y-m-d');
+            $dayOfWeek = (int) $day->format('w');
+
+            $dayBlocks = $manualBlocks[$dateString] ?? [];
+            $dayBookings = $liveBookings[$dateString] ?? collect();
+
+            $periods = [];
+
+            foreach (TimePeriod::cases() as $period) {
+                $value = $period->value;
+                $reason = null;
+
+                if ($hasPublishedSchedule && ! isset($recurring[$dayOfWeek][$value])) {
+                    $reason = 'Not available during the '
+                        . strtolower($period->label()) . ' on this day.';
+                } elseif (in_array($value, $dayBlocks, true)) {
+                    $reason = 'Blocked as personal time.';
+                }
+
+                $remaining = 0;
+
+                if ($reason === null) {
+                    // The single-date path (periodsFor) drops individual starts
+                    // inside the lead-time buffer, then reports the period as
+                    // available if ANY start survives. Checking only the period
+                    // start here was wrong: at 08:00 the 06:00 period start is
+                    // inside the buffer, so the calendar closed the whole
+                    // morning even though 10:00 and 11:00 were bookable.
+                    $cutOff = now()->addHours(Booking::PRE_LESSON_BUFFER_HOURS);
+                    $settings = $this->scheduleSettings($instructorId, $day, $period);
+
+                    $survivingStarts = $this->slotsInRange(
+                        $settings['start'],
+                        $settings['end'],
+                        $settings['step'],
+                        $this->minimumLessonMinutes(),
+                        $settings['open_slots']
+                    );
+
+                    $hasStartAfterCutOff = false;
+
+                    foreach ($survivingStarts as $candidate) {
+                        [$hour, $minute] = array_map('intval', explode(':', $candidate));
+                        $candidateStart = $day->copy()->setTime($hour, $minute);
+
+                        if ($candidateStart->greaterThan($cutOff)) {
+                            $hasStartAfterCutOff = true;
+                            break;
+                        }
+                    }
+
+                    if (! $hasStartAfterCutOff) {
+                        $reason = 'Too soon to book — lessons need at least '
+                            . Booking::PRE_LESSON_BUFFER_HOURS . ' hour of lead time.';
+                    }
+                }
+
+                if ($reason === null) {
+                    $remaining = $this->remainingCapacityWithin(
+                        $dayBookings,
+                        $level,
+                        $capacity,
+                        $period->startTime(),
+                        $period->endTime(),
+                        $skill,
+                        $sessionType
+                    );
+
+                    if ($remaining < max(1, $students)) {
+                        $reason = $remaining === 0
+                            ? 'That time is already fully booked.'
+                            : 'Only ' . $remaining . ' spot' . ($remaining === 1 ? '' : 's') . ' left.';
+                        $remaining = max(0, $remaining);
+                    }
+                }
+
+                $periods[$value] = [
+                    'available' => $reason === null,
+                    'reason' => $reason,
+                    'remaining_capacity' => $remaining,
+                ];
+            }
+
+            $result[$dateString] = $periods;
+        }
+
+        return $result;
     }
 
     // ---------------------------------------------------------------------
@@ -605,6 +878,72 @@ class AvailabilityService
     // booked for this slot?" It combines weekly availability, one-off blocks
     // and slots a live booking already owns.
     // ---------------------------------------------------------------------
+
+    /**
+     * Explain why a period with a published schedule has no bookable start.
+     *
+     * The generic "no bookable times" message hides the most common real
+     * cause: the instructor is mid-lesson. A student who sees only "fully
+     * booked" assumes the day is gone, when the truth is "busy until 10:00,
+     * free after".
+     *
+     * The end time is derived from the live session's own start + duration —
+     * NOT a blanket two hours — so a lesson that began at 07:00 frees the
+     * instructor at 09:00 rather than blocking until noon.
+     */
+    private function unbookableReason(int $instructorId, Carbon $day, string $timePeriod): ?string
+    {
+        // Deliberately NOT liveBookingsOnDate(): that helper calls
+        // releaseExpiredCheckoutHolds(), which mutates. Calling it from this
+        // read path released the lock that had just been created for a
+        // confirmed booking. Query the live session directly instead.
+        $live = Booking::query()
+            ->with('instructor')
+            ->where('instructor_id', $instructorId)
+            ->whereDate('date', $day->format('Y-m-d'))
+            ->where('status', BookingStatus::InProgress->value)
+            ->first();
+
+        if ($live === null) {
+            return null;
+        }
+
+        $freeAt = $this->sessionFreeAt($live);
+
+        if ($freeAt === null) {
+            return sprintf(
+                '%s is currently teaching a lesson, so this period is unavailable.',
+                $live->instructor?->name ?? 'The instructor'
+            );
+        }
+
+        return sprintf(
+            '%s is currently teaching until %s. The earliest a new lesson can start is %s.',
+            $live->instructor?->name ?? 'The instructor',
+            $freeAt->format('g:i A'),
+            $freeAt->format('g:i A')
+        );
+    }
+
+    /**
+     * When a live session is expected to finish, from its own start + duration.
+     */
+    private function sessionFreeAt(Booking $booking): ?Carbon
+    {
+        if ($booking->started_at === null) {
+            return null;
+        }
+
+        $minutes = $this->sessionMinutesFor(
+            $booking->instructor_id,
+            $this->dateOf($booking),
+            $booking->time_period instanceof \BackedEnum
+                ? $booking->time_period->value
+                : (string) $booking->time_period
+        );
+
+        return $booking->started_at->copy()->addMinutes($minutes);
+    }
 
     /**
      * The two periods for a date, each with a verdict and the reason.
@@ -616,8 +955,14 @@ class AvailabilityService
      *
      * @return array<string, array{available: bool, reason: ?string, slots: array<int, string>, duration_minutes: int, capacity: int, remaining_capacity: int}>
      */
-    public function periodsFor(int $instructorId, Carbon|string $date, int $students = 1, ?int $exceptBookingId = null): array
-    {
+    public function periodsFor(
+        int $instructorId,
+        Carbon|string $date,
+        int $students = 1,
+        ?int $exceptBookingId = null,
+        ?SkillLevel $skill = null,
+        ?SessionType $sessionType = null
+    ): array {
         $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
         $dateString = $day->format('Y-m-d');
 
@@ -675,11 +1020,12 @@ class AvailabilityService
             // the instructor's remaining student capacity inside
             // bookableStartTimes().
             $slots = $reason === null
-                ? $this->bookableStartTimes($instructorId, $day, $value, $students, $exceptBookingId)
+                ? $this->bookableStartTimes($instructorId, $day, $value, $students, $exceptBookingId, $skill, $sessionType)
                 : [];
 
             if ($reason === null && empty($slots)) {
-                $reason = 'No bookable times are left in this period for that date.';
+                $reason = $this->unbookableReason($instructorId, $day, $value)
+                    ?? 'No bookable times are left in this period for that date.';
             }
 
             // "Remaining capacity" is measured at the next bookable start, not
@@ -693,6 +1039,8 @@ class AvailabilityService
                     $slots[0],
                     Carbon::createFromFormat('H:i', $slots[0])->addHour()->format('H:i'),
                     $exceptBookingId,
+                    $skill,
+                    $sessionType,
                 );
 
             $result[$value] = [
@@ -706,12 +1054,14 @@ class AvailabilityService
                         $slotTime,
                         Carbon::createFromFormat('H:i', $slotTime)->addHour()->format('H:i'),
                         $exceptBookingId,
+                        $skill,
+                        $sessionType,
                     ),
                 ])->all() : [],
                 // Lesson length the student will actually book by default
                 // (drives the pre-selected end time and the price estimate).
                 'duration_minutes' => $this->sessionMinutesFor($instructorId, $day, $value),
-                'capacity' => $this->slotCapacity($instructorId),
+                'capacity' => $this->slotCapacity($instructorId, $skill),
                 'remaining_capacity' => $remaining,
             ];
         }
@@ -730,7 +1080,9 @@ class AvailabilityService
         Carbon|string $date,
         string $timePeriod,
         int $students = 1,
-        ?int $exceptBookingId = null
+        ?int $exceptBookingId = null,
+        ?SkillLevel $skill = null,
+        ?SessionType $sessionType = null
     ): array {
         $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
         $period = TimePeriod::tryFrom($timePeriod);
@@ -755,7 +1107,7 @@ class AvailabilityService
         );
 
         $level = $this->instructorLevel($instructorId);
-        $capacity = $this->slotCapacity($instructorId);
+        $capacity = $this->slotCapacity($instructorId, $skill);
         $liveBookings = $this->liveBookingsOnDate($instructorId, $day, $exceptBookingId);
         $requested = max(1, $students);
 
@@ -771,11 +1123,10 @@ class AvailabilityService
                 continue;
             }
 
-            // Capacity is measured across the whole one-hour minimum window, so
-            // a Level 3 slot with 4 of 5 students booked still accepts one more.
+            // Capacity is measured across the whole one-hour minimum window.
             $slotEnd = $slotStart->copy()->addMinutes($minimumMinutes)->format('H:i');
 
-            if ($this->remainingCapacityWithin($liveBookings, $level, $capacity, $time, $slotEnd) < $requested) {
+            if ($this->remainingCapacityWithin($liveBookings, $level, $capacity, $time, $slotEnd, $skill, $sessionType) < $requested) {
                 continue;
             }
 
@@ -800,7 +1151,9 @@ class AvailabilityService
         Carbon|string $date,
         string $startTime,
         int $students = 1,
-        ?int $exceptBookingId = null
+        ?int $exceptBookingId = null,
+        ?SkillLevel $skill = null,
+        ?SessionType $sessionType = null
     ): array {
         $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
         $start = $this->timeString($startTime);
@@ -829,7 +1182,7 @@ class AvailabilityService
         }
 
         $level = $this->instructorLevel($instructorId);
-        $capacity = $this->slotCapacity($instructorId);
+        $capacity = $this->slotCapacity($instructorId, $skill);
         $liveBookings = $this->liveBookingsOnDate($instructorId, $day, $exceptBookingId);
         $requested = max(1, $students);
 
@@ -844,7 +1197,7 @@ class AvailabilityService
         while ($cursor->lessThanOrEqualTo($finish)) {
             $end = $cursor->format('H:i');
 
-            if ($this->remainingCapacityWithin($liveBookings, $level, $capacity, $start, $end) >= $requested) {
+            if ($this->remainingCapacityWithin($liveBookings, $level, $capacity, $start, $end, $skill, $sessionType) >= $requested) {
                 $ends[] = $end;
             }
 
@@ -993,6 +1346,46 @@ class AvailabilityService
     }
 
     /**
+     * How far ahead a student may book, in days. Mirrors the value the booking
+     * calendar uses so the UI and the server cannot disagree.
+     */
+    public function bookingHorizonDays(): int
+    {
+        return max(1, (int) config('siasurf.booking.horizon_days', 60));
+    }
+
+    /**
+     * The last date that may be booked.
+     */
+    public function lastBookableDate(): Carbon
+    {
+        return today()->addDays($this->bookingHorizonDays());
+    }
+
+    /**
+     * Non-null when the date sits past the booking horizon.
+     *
+     * The calendar already refuses to render these days, but the form is not the
+     * authority - a hand-crafted POST would otherwise sail through with a date
+     * months into the future, against a weekly pattern that means nothing that
+     * far out. Checked here so every entry point shares the same rule.
+     */
+    private function beyondHorizonReason(Carbon $day): ?string
+    {
+        $last = $this->lastBookableDate();
+
+        // copy() matters: Carbon objects are handles, so mutating $day here
+        // would also truncate the caller's date to midnight.
+        if ($day->copy()->startOfDay()->greaterThan($last)) {
+            return 'Bookings open at most ' . $this->bookingHorizonDays()
+                . ' days ahead. The latest date you can book is '
+                . $last->format('j M Y') . '.';
+        }
+
+        return null;
+    }
+
+    /**
      * Whether the instructor has ever published a weekly schedule. Used to tell
      * "has not set this up yet" apart from "deliberately unavailable".
      */
@@ -1019,6 +1412,10 @@ class AvailabilityService
 
         if ($day->isBefore(today())) {
             return 'That date is in the past.';
+        }
+
+        if (($beyondHorizon = $this->beyondHorizonReason($day)) !== null) {
+            return $beyondHorizon;
         }
 
         $periods = $this->periodsFor($instructorId, $day, $students);
@@ -1055,12 +1452,18 @@ class AvailabilityService
         string $startTime,
         string $endTime,
         int $students = 1,
-        ?int $exceptBookingId = null
+        ?int $exceptBookingId = null,
+        ?SkillLevel $skill = null,
+        ?SessionType $sessionType = null
     ): ?string {
         $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
 
         if ($day->isBefore(today())) {
             return 'That date is in the past.';
+        }
+
+        if (($beyondHorizon = $this->beyondHorizonReason($day)) !== null) {
+            return $beyondHorizon;
         }
 
         $start = $this->timeString($startTime);
@@ -1095,7 +1498,7 @@ class AvailabilityService
             return 'A lesson cannot cross from morning into afternoon. Please shorten the session.';
         }
 
-        $periods = $this->periodsFor($instructorId, $day, $students, $exceptBookingId);
+        $periods = $this->periodsFor($instructorId, $day, $students, $exceptBookingId, $skill, $sessionType);
         $verdict = $periods[$period->value] ?? null;
 
         if (!$verdict) {
@@ -1103,6 +1506,10 @@ class AvailabilityService
         }
 
         if (!$verdict['available']) {
+            if (($mismatch = $this->slotMismatchReason($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType)) !== null) {
+                return $mismatch;
+            }
+
             return $verdict['reason'];
         }
 
@@ -1126,9 +1533,13 @@ class AvailabilityService
         }
 
         $requested = max(1, $students);
-        $remaining = $this->remainingCapacity($instructorId, $day, $start, $end, $exceptBookingId);
+        $remaining = $this->remainingCapacity($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType);
 
         if ($remaining < $requested) {
+            if ($remaining === 0 && ($mismatch = $this->slotMismatchReason($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType)) !== null) {
+                return $mismatch;
+            }
+
             return $remaining === 0
                 ? 'That time slot is already fully booked. Please choose another time.'
                 : 'Only ' . $remaining . ' ' . ($remaining === 1 ? 'spot is' : 'spots are')
@@ -1169,7 +1580,9 @@ class AvailabilityService
         string $startTime,
         string $endTime,
         int $students = 1,
-        ?int $exceptBookingId = null
+        ?int $exceptBookingId = null,
+        ?SkillLevel $skill = null,
+        ?SessionType $sessionType = null
     ): void {
         $reason = $this->rangeBookabilityReason(
             $instructorId,
@@ -1177,7 +1590,9 @@ class AvailabilityService
             $startTime,
             $endTime,
             $students,
-            $exceptBookingId
+            $exceptBookingId,
+            $skill,
+            $sessionType
         );
 
         if ($reason !== null) {

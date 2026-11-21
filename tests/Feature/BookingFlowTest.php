@@ -254,7 +254,11 @@ class BookingFlowTest extends TestCase
     {
         $this->instructor->instructorProfile->update(['auto_accept_bookings' => true]);
 
-        $booking = $this->booking(['status' => BookingStatus::Pending]);
+        $booking = $this->booking([
+            'status' => BookingStatus::Pending,
+            'skill_level' => 'intermediate',
+            'session_type' => 'guiding',
+        ]);
         $this->signLiability($booking);
 
         $this->actingAs($this->student)
@@ -267,13 +271,19 @@ class BookingFlowTest extends TestCase
         $this->assertSame(BookingStatus::Confirmed, $booking->status);
         $this->assertNotNull($booking->accepted_at);
 
-        // The slot is locked.
-        $this->assertDatabaseHas('availabilities', [
-            'user_id' => $this->instructor->id,
-            'specific_date' => $booking->date->format('Y-m-d'),
-            'time_period' => $booking->time_period->value,
-            'is_available' => false,
-        ]);
+        // Level 2 Intermediate Guiding has capacity 2; a one-person booking
+        // consumes 1 seat and leaves 1 free for another Intermediate surfer.
+        $remaining = app(\App\Services\AvailabilityService::class)->remainingCapacity(
+            $this->instructor->id,
+            $booking->date->format('Y-m-d'),
+            $booking->start_time->format('H:i'),
+            $booking->end_time->format('H:i'),
+            null,
+            \App\Enums\SkillLevel::Intermediate,
+            \App\Enums\SessionType::Guiding,
+        );
+
+        $this->assertSame(1, $remaining, 'A one-person booking must consume exactly one seat, leaving one free.');
     }
 
     /** @test */

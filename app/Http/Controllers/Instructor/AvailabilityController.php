@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Availability;
 use App\Models\Booking;
 use App\Enums\DayOfWeek;
+use App\Enums\SessionType;
+use App\Enums\SkillLevel;
 use App\Enums\TimePeriod;
 use App\Services\AvailabilityService;
 use App\Services\SafetyService;
@@ -236,16 +238,17 @@ class AvailabilityController extends Controller
     {
         $validated = $request->validate([
             'date' => 'required|date',
-            // Party size drives the capacity check: a Level 3 slot with 4 of 5
-            // seats taken is bookable for one student but not for two.
             'students' => 'nullable|integer|min:1|max:10',
+            'skill_level' => 'nullable|in:beginner,intermediate,advanced',
+            'session_type' => 'nullable|in:teaching,guiding,coaching',
         ]);
 
         $date = \Carbon\Carbon::parse($validated['date']);
         $students = (int) ($validated['students'] ?? 1);
+        [$skill, $sessionType] = $this->resolveSkillAndService($request, $validated);
 
         $availability = app(AvailabilityService::class);
-        $periods = $availability->periodsFor((int) $instructorId, $date, $students);
+        $periods = $availability->periodsFor((int) $instructorId, $date, $students, null, $skill, $sessionType);
 
         $availableSlots = [];
         foreach ($periods as $value => $period) {
@@ -259,7 +262,64 @@ class AvailabilityController extends Controller
             'periods' => $periods,
             'has_any_slot' => collect($periods)->contains(fn ($period) => $period['available']),
             'students' => $students,
-            'slot_capacity' => $availability->slotCapacity((int) $instructorId),
+            'slot_capacity' => $availability->slotCapacity((int) $instructorId, $skill),
+        ]);
+    }
+
+    /**
+     * Day-by-day availability for a whole month window.
+     *
+     * The booking form's calendar needs this to disable dates the instructor
+     * has blocked. Calling the single-date endpoint once per day would cost
+     * ~42 requests per month view; this resolves the range in three queries.
+     */
+    public function getCalendar(Request $request, $instructorId): JsonResponse
+    {
+        $validated = $request->validate([
+            'start' => 'nullable|date',
+            'days' => 'nullable|integer|min:1|max:120',
+            'students' => 'nullable|integer|min:1|max:10',
+            'skill_level' => 'nullable|in:beginner,intermediate,advanced',
+            'session_type' => 'nullable|in:teaching,guiding,coaching',
+        ]);
+
+        $students = (int) ($validated['students'] ?? 1);
+        [$skill, $sessionType] = $this->resolveSkillAndService($request, $validated);
+
+        $availability = app(AvailabilityService::class);
+
+        // The booking horizon is owned by the service so the calendar, the form
+        // and the server-side assertion cannot drift apart.
+        $horizon = $availability->bookingHorizonDays();
+        $days = min((int) ($validated['days'] ?? $horizon), $horizon);
+
+        $start = isset($validated['start'])
+            ? \Carbon\Carbon::parse($validated['start'])
+            : now();
+
+        // Never hand back days that are already past.
+        if ($start->isBefore(now()->startOfDay())) {
+            $days = max(0, $days - (int) now()->startOfDay()->diffInDays($start));
+            $start = now()->startOfDay();
+        }
+
+        $days = max(1, $days);
+
+        return response()->json([
+            'start' => $start->format('Y-m-d'),
+            'days' => $days,
+            'students' => $students,
+            'horizon_days' => $horizon,
+            'slot_capacity' => $availability->slotCapacity((int) $instructorId, $skill),
+            'days_map' => $availability->availabilityByDay(
+                (int) $instructorId,
+                $start,
+                $days,
+                $students,
+                null,
+                $skill,
+                $sessionType
+            ),
         ]);
     }
 
@@ -275,9 +335,12 @@ class AvailabilityController extends Controller
             'date' => 'required|date',
             'start_time' => 'required|date_format:H:i',
             'students' => 'nullable|integer|min:1|max:10',
+            'skill_level' => 'nullable|in:beginner,intermediate,advanced',
+            'session_type' => 'nullable|in:teaching,guiding,coaching',
         ]);
 
         $students = (int) ($validated['students'] ?? 1);
+        [$skill, $sessionType] = $this->resolveSkillAndService($request, $validated);
         $availability = app(AvailabilityService::class);
 
         $endTimes = $availability->bookableEndTimes(
@@ -285,6 +348,9 @@ class AvailabilityController extends Controller
             $validated['date'],
             $validated['start_time'],
             $students,
+            null,
+            $skill,
+            $sessionType,
         );
 
         return response()->json([
@@ -297,8 +363,32 @@ class AvailabilityController extends Controller
                 $validated['date'],
                 $validated['start_time'],
                 $endTimes[0] ?? $validated['start_time'],
+                null,
+                $skill,
+                $sessionType,
             ),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{0: ?SkillLevel, 1: ?SessionType}
+     */
+    private function resolveSkillAndService(Request $request, array $validated): array
+    {
+        $rawSkill = $validated['skill_level'] ?? null;
+
+        if ($rawSkill === null && $request->user()?->isStudent()) {
+            $profileSkill = $request->user()->studentProfile?->skill_level;
+            $rawSkill = $profileSkill instanceof SkillLevel ? $profileSkill->value : $profileSkill;
+        }
+
+        $skill = $rawSkill !== null ? SkillLevel::tryFrom((string) $rawSkill) : null;
+        $sessionType = isset($validated['session_type'])
+            ? SessionType::tryFrom((string) $validated['session_type'])
+            : null;
+
+        return [$skill, $sessionType];
     }
 
     /**

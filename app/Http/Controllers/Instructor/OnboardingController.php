@@ -33,18 +33,16 @@ class OnboardingController extends Controller
             ]);
         }
 
+        $level = (int) $request->input('level', 1);
+
         $validated = $request->validate([
             'bio' => 'required|string|max:1000',
             'level' => 'required|integer|in:1,2,3',
-            // Bounded on both ends: a floor-only rule let absurd values reach
-            // decimal(10,2) and fail as a raw SQL error.
-            'rate_per_hour' => 'required|numeric|'.PricingService::rateRangeRule(),
+            ...PricingService::rateValidationRulesForLevel($level),
             'certificates' => 'required|array|min:1',
             'certificates.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // Max 10MB
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
-            'latitude' => 'nullable|numeric|between:9.5,10.2',
-            'longitude' => 'nullable|numeric|between:125.8,126.5',
         ], [
             'certificates.required' => 'Attach at least one certificate file (PDF, JPG, or PNG) before submitting.',
             'certificates.min' => 'Attach at least one certificate file (PDF, JPG, or PNG) before submitting.',
@@ -53,16 +51,10 @@ class OnboardingController extends Controller
             'certificates.*.uploaded' => 'A certificate could not be uploaded because it is larger than this server allows (max '.$this->uploadMaxSizeLabel().' per file). Compress it and try again.',
             'bio.max' => 'Keep your bio to 1000 characters or fewer.',
             'bio.required' => 'Tell students about your experience before submitting.',
-            'rate_per_hour.min' => 'The base rate must be at least ₱'.number_format(PricingService::minRatePerHour()).' per hour.',
-            'rate_per_hour.max' => 'The standard rate cannot exceed ₱'.number_format(PricingService::maxRatePerHour()).' per hour.',
-            'rate_per_hour.numeric' => 'Enter the rate as a number, for example 800.',
+            ...PricingService::rateValidationMessages(),
         ]);
 
-        if ((int) $validated['level'] === 3 && (float) $validated['rate_per_hour'] < 1500) {
-            return back()->withErrors([
-                'rate_per_hour' => 'Level 3 instructors must set a base rate of at least ₱1,500 per hour.',
-            ])->withInput();
-        }
+        $rates = PricingService::normalizeRatesForLevel((int) $validated['level'], $validated, $user->instructorProfile);
 
         // Phase 13 - verify the real MIME type and (when enabled) scan every
         // file before writing a profile or storing anything to disk.
@@ -90,18 +82,16 @@ class OnboardingController extends Controller
                 ];
             }
 
-            DB::transaction(function () use ($user, $validated, $storedCertificates): void {
+            DB::transaction(function () use ($user, $validated, $rates, $storedCertificates): void {
                 $user->instructorProfile()->updateOrCreate(
                     ['user_id' => $user->id],
                     [
                         'bio' => $validated['bio'],
                         'level' => $validated['level'],
-                        'rate_per_hour' => $validated['rate_per_hour'],
+                        ...$rates,
                         'status' => InstructorStatus::PendingVerification,
                         'area' => $validated['area'] ?? null,
                         'meeting_point' => $validated['meeting_point'] ?? null,
-                        'latitude' => $validated['latitude'] ?? null,
-                        'longitude' => $validated['longitude'] ?? null,
                     ]
                 );
 

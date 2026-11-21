@@ -22,6 +22,14 @@ import { resolveAvatarUrl } from '@/utils/avatar';
 const props = defineProps<{
     instructor: any;
     totalReviews: number;
+    serviceRates?: Array<{
+        type: string;
+        label: string;
+        description: string;
+        rate: number;
+        min: number;
+        max: number;
+    }>;
     weeklyAvailability?: Array<{
         value: number;
         label: string;
@@ -80,9 +88,9 @@ const instructorLevelLabel: Record<number, string> = {
 };
 
 const instructorLevelDescription: Record<number, string> = {
-    1: 'Certified to teach beginner students only. Maximum 1 student per session (1-on-1).',
-    2: 'Certified to teach all skill levels (beginner, intermediate, advanced). Maximum 2 students per session.',
-    3: 'Master instructor certified to teach all skill levels and group sessions. Maximum 5 students.'
+    1: 'Certified for Beginner Teaching only. Maximum 1 student per session (1-on-1).',
+    2: 'Certified for Beginner Teaching (1 student) and Intermediate Guiding (up to 2 students).',
+    3: 'Certified for Teaching, Guiding, and Coaching across all skill levels (up to 3 same-level students).'
 };
 </script>
 
@@ -322,16 +330,35 @@ const instructorLevelDescription: Record<number, string> = {
                         <div class="absolute -top-12 -right-12 h-40 w-40 bg-ocean-500/20 rounded-full blur-3xl transition-all group-hover:scale-150 duration-700" />
                         
                         <div class="relative">
-                            <div class="mb-10 flex items-center justify-between">
+                            <div class="mb-8 flex items-center justify-between">
                                 <div>
-                                    <div class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Hourly Investment</div>
+                                    <div class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">
+                                        {{ serviceRates && serviceRates.length > 1 ? 'Starting Hourly Rate' : 'Hourly Investment' }}
+                                    </div>
                                     <div class="flex items-baseline gap-2">
                                         <span class="text-[10px] font-black text-slate-400">PHP</span>
-                                        <span class="text-5xl font-black tracking-tight italic">₱{{ instructor.instructor_profile.rate_per_hour }}</span>
+                                        <span class="text-5xl font-black tracking-tight italic">₱{{ Number(instructor.instructor_profile.rate_per_hour).toLocaleString() }}</span>
                                     </div>
                                 </div>
                                 <div class="h-16 w-16 rounded-3xl bg-white/10 flex items-center justify-center backdrop-blur-xl border border-white/10 group-hover:rotate-12 transition-transform duration-500">
                                     <BanknotesIcon class="h-8 w-8 text-ocean-400" />
+                                </div>
+                            </div>
+
+                            <div v-if="serviceRates && serviceRates.length > 0" class="mb-8 space-y-2.5">
+                                <p class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Service Rates (per hour)</p>
+                                <div
+                                    v-for="service in serviceRates"
+                                    :key="service.type"
+                                    class="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                                >
+                                    <div>
+                                        <p class="text-xs font-black uppercase tracking-wider text-white">{{ service.label }}</p>
+                                        <p class="text-[10px] text-slate-400">{{ service.description }}</p>
+                                    </div>
+                                    <span class="ml-3 shrink-0 text-sm font-black text-ocean-300">
+                                        ₱{{ Number(service.rate).toLocaleString() }}/hr
+                                    </span>
                                 </div>
                             </div>
 

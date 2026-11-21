@@ -43,8 +43,6 @@ const form = useForm({
     password: '',
     password_confirmation: '',
     role: props.defaultRole === 'instructor' ? 'instructor' : 'student',
-    skill_level: 'beginner',
-    is_first_time: true,
     birthday: '',
     country: '',
 });
@@ -124,10 +122,10 @@ const submit = () => {
                 <InputError class="mt-2" :message="form.errors.role" />
             </div>
 
-            <!-- Student Profile Fields -->
+            <!-- Student Profile Fields (for waiver prefill) -->
             <div v-if="form.role === 'student'" class="mt-6 border-t border-slate-200 pt-4">
-                <h3 class="text-sm font-medium text-slate-900">Student Profile &amp; Surf Experience</h3>
-                <p class="text-xs text-slate-500 mb-4">Used to match you with the right instructor and prefill your surf lesson waiver.</p>
+                <h3 class="text-sm font-medium text-slate-900">Student Profile</h3>
+                <p class="text-xs text-slate-500 mb-4">Used to prefill your surf lesson waiver.</p>
 
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
@@ -163,34 +161,12 @@ const submit = () => {
                     </div>
                 </div>
 
-                <div class="mt-4">
-                    <InputLabel for="skill_level" value="Skill Level" />
-                    <select
-                        id="skill_level"
-                        v-model="form.skill_level"
-                        class="mt-1 block w-full border-slate-300 focus:border-wave-500 focus:ring-wave-500 rounded-md shadow-sm"
-                        required
-                    >
-                        <option value="beginner">Beginner (Never surfed or still learning basics)</option>
-                        <option value="intermediate">Intermediate (Can catch green waves and turn)</option>
-                        <option value="advanced">Advanced (Proficient in maneuvers)</option>
-                    </select>
-                    <InputError class="mt-2" :message="form.errors.skill_level" />
-                </div>
-
-                <div class="mt-4 flex items-start">
-                    <div class="flex h-5 items-center">
-                        <input
-                            id="is_first_time"
-                            type="checkbox"
-                            v-model="form.is_first_time"
-                            class="h-4 w-4 rounded border-slate-300 text-wave-600 focus:ring-wave-500"
-                        />
-                    </div>
-                    <div class="ml-3 text-sm">
-                        <label for="is_first_time" class="font-medium text-slate-700">This is my first time surfing in Siargao</label>
-                        <p class="text-slate-500">We'll give you extra care and tips for beginners.</p>
-                    </div>
+                <!-- Student Onboarding Notice -->
+                <div class="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3.5">
+                    <h3 class="text-sm font-medium text-slate-900">Skill Pre-Assessment</h3>
+                    <p class="mt-1 text-xs text-slate-600">
+                        Right after signing up, you'll complete a quick skill &amp; water-safety pre-assessment to set your surf level and matching breaks.
+                    </p>
                 </div>
             </div>
 

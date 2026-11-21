@@ -42,13 +42,15 @@ class BookingParticipantsTest extends TestCase
             'status' => 'active',
         ]);
 
-        // Level 3 can take a group of up to 5.
+        // Level 3 can take a same-level group of up to 3.
         $this->instructor = User::factory()->create(['role' => 'instructor']);
         $this->instructor->assignRole('instructor');
         $this->instructor->instructorProfile()->create([
             'level' => InstructorLevel::Level3,
             'status' => 'active',
-            'rate_per_hour' => 1500,
+            'rate_per_hour' => 800,
+            'guiding_rate' => 1200,
+            'coaching_rate' => 1800,
             'auto_accept_bookings' => false,
         ]);
 
@@ -102,7 +104,7 @@ class BookingParticipantsTest extends TestCase
                     'age' => 28,
                     'height' => 160,
                     'weight' => 55,
-                    'skill_level' => 'beginner',
+                    'skill_level' => 'intermediate',
                     'has_board' => true,
                     'emergency_contact_name' => 'Jane',
                     'emergency_contact_phone' => '+63 900 000 0000',
@@ -121,7 +123,7 @@ class BookingParticipantsTest extends TestCase
         $this->assertSame('primary', $booking->participants[0]->role);
         $this->assertSame('companion', $booking->participants[1]->role);
         $this->assertSame('Companion One', $booking->participants[1]->full_name);
-        $this->assertSame('beginner', $booking->participants[1]->skill_level->value);
+        $this->assertSame('intermediate', $booking->participants[1]->skill_level->value);
     }
 
     /** @test */
@@ -155,7 +157,7 @@ class BookingParticipantsTest extends TestCase
         $payload = $this->basePayload([
             'participants' => [
                 ['full_name' => 'Primary Surfer', 'age' => 30, 'height' => 175, 'weight' => 70, 'skill_level' => 'intermediate', 'has_board' => false],
-                ['full_name' => 'Companion One', 'age' => 28, 'height' => 160, 'weight' => 55, 'skill_level' => 'beginner', 'has_board' => true],
+                ['full_name' => 'Companion One', 'age' => 28, 'height' => 160, 'weight' => 55, 'skill_level' => 'intermediate', 'has_board' => true],
             ],
         ]);
 
@@ -206,7 +208,7 @@ class BookingParticipantsTest extends TestCase
         $payload = $this->basePayload([
             'participants' => [
                 ['full_name' => 'Primary Surfer', 'age' => 30, 'height' => 175, 'weight' => 70, 'skill_level' => 'intermediate', 'has_board' => false],
-                ['full_name' => 'Companion One', 'age' => 28, 'height' => 160, 'weight' => 55, 'skill_level' => 'beginner', 'has_board' => true],
+                ['full_name' => 'Companion One', 'age' => 28, 'height' => 160, 'weight' => 55, 'skill_level' => 'intermediate', 'has_board' => true],
             ],
         ]);
 

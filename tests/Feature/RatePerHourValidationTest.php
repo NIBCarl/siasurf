@@ -51,9 +51,9 @@ class RatePerHourValidationTest extends TestCase
         ];
     }
 
-    public function test_the_configured_ceiling_is_1500_by_default(): void
+    public function test_the_configured_ceiling_is_1000_for_teaching_by_default(): void
     {
-        $this->assertSame(1500.0, PricingService::maxRatePerHour());
+        $this->assertSame(1000.0, PricingService::maxRatePerHour());
         $this->assertSame(600.0, PricingService::minRatePerHour());
     }
 
@@ -72,19 +72,19 @@ class RatePerHourValidationTest extends TestCase
         $this->actingAs($this->instructor)
             ->post(route('instructor.onboarding.store'), $this->onboardingPayload(5000))
             ->assertSessionHasErrors([
-                'rate_per_hour' => 'The standard rate cannot exceed ₱1,500 per hour.',
+                'rate_per_hour' => 'The teaching rate cannot exceed ₱1,000 per hour.',
             ]);
     }
 
     public function test_onboarding_accepts_the_cap_exactly(): void
     {
         $this->actingAs($this->instructor)
-            ->post(route('instructor.onboarding.store'), $this->onboardingPayload(1500))
+            ->post(route('instructor.onboarding.store'), $this->onboardingPayload(1000))
             ->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('instructor_profiles', [
             'user_id' => $this->instructor->id,
-            'rate_per_hour' => 1500,
+            'rate_per_hour' => 1000,
         ]);
     }
 
@@ -149,6 +149,7 @@ class RatePerHourValidationTest extends TestCase
             'level' => 2,
             'status' => 'active',
             'rate_per_hour' => 800,
+            'guiding_rate' => 1000,
         ]);
 
         $this->actingAs($this->admin)
@@ -157,13 +158,15 @@ class RatePerHourValidationTest extends TestCase
                 'email' => $this->instructor->email,
                 'level' => 2,
                 'status' => 'active',
-                'rate_per_hour' => 1450,
+                'rate_per_hour' => 950,
+                'guiding_rate' => 1450,
             ])
             ->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('instructor_profiles', [
             'user_id' => $this->instructor->id,
-            'rate_per_hour' => 1450,
+            'rate_per_hour' => 950,
+            'guiding_rate' => 1450,
         ]);
     }
 
@@ -171,10 +174,21 @@ class RatePerHourValidationTest extends TestCase
     {
         $service = app(PricingService::class);
 
+        // Teaching band (1): 600–1000
         $this->assertFalse($service->isRateValid(10000000000, 1));
-        $this->assertFalse($service->isRateValid(1500.01, 3));
-        $this->assertTrue($service->isRateValid(1500, 3));
+        $this->assertFalse($service->isRateValid(1000.01, 1));
+        $this->assertTrue($service->isRateValid(1000, 1));
+
+        // Guiding band (2): 800–1500
+        $this->assertFalse($service->isRateValid(1500.01, 2));
         $this->assertTrue($service->isRateValid(800, 2));
+        $this->assertTrue($service->isRateValid(1500, 2));
+
+        // Coaching band (3): 1500–2000
+        $this->assertFalse($service->isRateValid(1499.99, 3));
+        $this->assertFalse($service->isRateValid(2000.01, 3));
+        $this->assertTrue($service->isRateValid(1500, 3));
+        $this->assertTrue($service->isRateValid(2000, 3));
     }
 
     /**
@@ -188,8 +202,14 @@ class RatePerHourValidationTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('pricing.minRatePerHour', 600)
-                ->where('pricing.maxRatePerHour', 1500)
-                ->where('pricing.rangeLabel', '₱600–₱1,500')
+                ->where('pricing.maxRatePerHour', 1000)
+                ->where('pricing.rangeLabel', '₱600–₱1,000')
+                ->where('pricing.services.teaching.min', 600)
+                ->where('pricing.services.teaching.max', 1000)
+                ->where('pricing.services.guiding.min', 800)
+                ->where('pricing.services.guiding.max', 1500)
+                ->where('pricing.services.coaching.min', 1500)
+                ->where('pricing.services.coaching.max', 2000)
             );
     }
 }

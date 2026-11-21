@@ -60,6 +60,7 @@ class HandleInertiaRequests extends Middleware
                 'minRatePerHour' => PricingService::minRatePerHour(),
                 'maxRatePerHour' => PricingService::maxRatePerHour(),
                 'rangeLabel' => PricingService::rateRangeLabel(),
+                'services' => PricingService::serviceRateBands(),
             ],
             // Real counts for the sidebar badges. Nothing is invented: each value
             // is a direct query against this instructor's own records.

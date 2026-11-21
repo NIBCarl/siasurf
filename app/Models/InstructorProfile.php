@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Enums\InstructorStatus;
 use App\Enums\InstructorLevel;
+use App\Enums\SessionType;
+use App\Enums\SkillLevel;
 
 class InstructorProfile extends Model
 {
@@ -23,6 +25,8 @@ class InstructorProfile extends Model
         'level',
         'status',
         'rate_per_hour',
+        'guiding_rate',
+        'coaching_rate',
         'strike_count',
         'qr_code_path',
         'suspended_until',
@@ -35,6 +39,8 @@ class InstructorProfile extends Model
         'level' => InstructorLevel::class,
         'status' => InstructorStatus::class,
         'rate_per_hour' => 'decimal:2',
+        'guiding_rate' => 'decimal:2',
+        'coaching_rate' => 'decimal:2',
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
         'strike_count' => 'integer',
@@ -130,6 +136,46 @@ class InstructorProfile extends Model
     public function maxStudents(): int
     {
         return $this->level->maxStudents();
+    }
+
+    public function maxStudentsFor(SkillLevel $skill): int
+    {
+        return $this->level->maxStudentsFor($skill);
+    }
+
+    /**
+     * Resolve this instructor's active hourly rate for a given service.
+     * Falls back to the service's published floor when not yet explicitly set.
+     */
+    public function rateForService(SessionType $service): float
+    {
+        $raw = match ($service) {
+            SessionType::Teaching => $this->rate_per_hour,
+            SessionType::Guiding => $this->guiding_rate,
+            SessionType::Coaching => $this->coaching_rate,
+        };
+
+        return $raw !== null && (float) $raw > 0
+            ? (float) $raw
+            : $service->defaultRate();
+    }
+
+    /**
+     * Authorized services and active hourly rates for this instructor's level.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function serviceRates(): array
+    {
+        return array_map(fn (SessionType $service) => [
+            'type' => $service->value,
+            'label' => $service->label(),
+            'description' => $service->description(),
+            'rate' => $this->rateForService($service),
+            'min_rate' => $service->minRate(),
+            'max_rate' => $service->maxRate(),
+            'range_label' => $service->rateRangeLabel(),
+        ], $this->level->allowedServices());
     }
 
     public function canTeachSkillLevel(string $skillLevel): bool

@@ -94,7 +94,7 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 // Student Dashboard route
-Route::middleware(['auth', 'verified', 'role:student'])->get('/student/dashboard', [App\Http\Controllers\Student\DashboardController::class, 'index'])->name('student.dashboard');
+Route::middleware(['auth', 'verified', 'role:student', \App\Http\Middleware\PromptStudentOnboarding::class])->get('/student/dashboard', [App\Http\Controllers\Student\DashboardController::class, 'index'])->name('student.dashboard');
 
 // Profile routes - accessible to authenticated and email-verified users
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -127,6 +127,12 @@ Route::middleware(['auth', 'verified', 'instructor.not_suspended'])
 
 // Student routes
 Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->as('student.')->group(function () {
+    // One-time profile capture + skill pre-assessment. Skippable, so it is not a gate.
+    Route::get('/welcome', [App\Http\Controllers\Student\OnboardingController::class, 'edit'])->name('onboarding');
+    Route::post('/welcome/assessment', [App\Http\Controllers\Student\OnboardingController::class, 'storeAssessment'])->name('onboarding.assessment');
+    Route::post('/welcome', [App\Http\Controllers\Student\OnboardingController::class, 'store'])->name('onboarding.store');
+    Route::post('/welcome/skip', [App\Http\Controllers\Student\OnboardingController::class, 'skip'])->name('onboarding.skip');
+
     // Student bookings
     Route::get('/bookings', [BookingController::class, 'index'])->name('bookings.index');
     Route::get('/bookings/{booking}', [BookingController::class, 'show'])->name('bookings.show');
@@ -245,10 +251,10 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
                 'bio' => $profile->bio,
                 'level' => $profile->level->value,
                 'rate_per_hour' => (float) $profile->rate_per_hour,
+                'guiding_rate' => $profile->guiding_rate !== null ? (float) $profile->guiding_rate : null,
+                'coaching_rate' => $profile->coaching_rate !== null ? (float) $profile->coaching_rate : null,
                 'area' => $profile->area,
                 'meeting_point' => $profile->meeting_point,
-                'latitude' => $profile->latitude !== null ? (float) $profile->latitude : null,
-                'longitude' => $profile->longitude !== null ? (float) $profile->longitude : null,
             ] : null,
             'uploadedCertificates' => $user->certificates()->count(),
         ]);
@@ -261,6 +267,7 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
 
 // API routes for availability (public)
 Route::get('/api/availability/{instructor}', [AvailabilityController::class, 'getAvailableSlots'])->name('api.availability');
+Route::get('/api/availability/{instructor}/calendar', [AvailabilityController::class, 'getCalendar'])->name('api.availability.calendar');
 Route::get('/api/availability/{instructor}/end-times', [AvailabilityController::class, 'getAvailableEndTimes'])->name('api.availability.end-times');
 Route::get('/api/availability/{instructor}/booked-slots', [AvailabilityController::class, 'getBookedSlots'])->name('api.availability.booked-slots');
 

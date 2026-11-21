@@ -23,7 +23,37 @@ return [
 
     'pricing' => [
         'min_rate_per_hour' => env('SIASURF_MIN_RATE', 600),
-        'max_rate_per_hour' => env('SIASURF_MAX_RATE', 1500),
+        'max_rate_per_hour' => env('SIASURF_MAX_RATE', 1000),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Service-Based Pricing Bands
+    |--------------------------------------------------------------------------
+    |
+    | Rates are governed by the service provided (Teaching, Guiding, Coaching)
+    | rather than instructor level, so a beginner booking a Level 3 instructor
+    | for Teaching still pays the Teaching rate. Instructors may choose any
+    | hourly rate within each authorized service's published range.
+    |
+    */
+
+    'services' => [
+        'teaching' => [
+            'min_rate' => (float) env('SIASURF_TEACHING_MIN_RATE', 600),
+            'max_rate' => (float) env('SIASURF_TEACHING_MAX_RATE', 1000),
+            'default_rate' => (float) env('SIASURF_TEACHING_DEFAULT_RATE', 600),
+        ],
+        'guiding' => [
+            'min_rate' => (float) env('SIASURF_GUIDING_MIN_RATE', 800),
+            'max_rate' => (float) env('SIASURF_GUIDING_MAX_RATE', 1500),
+            'default_rate' => (float) env('SIASURF_GUIDING_DEFAULT_RATE', 800),
+        ],
+        'coaching' => [
+            'min_rate' => (float) env('SIASURF_COACHING_MIN_RATE', 1500),
+            'max_rate' => (float) env('SIASURF_COACHING_MAX_RATE', 2000),
+            'default_rate' => (float) env('SIASURF_COACHING_DEFAULT_RATE', 1500),
+        ],
     ],
 
     /*
@@ -42,6 +72,21 @@ return [
 
     'session' => [
         'standard_hours' => env('SIASURF_STANDARD_SESSION_HOURS', 2),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Booking Horizon
+    |--------------------------------------------------------------------------
+    |
+    | How far ahead a student may browse and book. Without a bound the booking
+    | calendar would happily render availability indefinitely into the future
+    | against a weekly pattern that is only meaningful for the near term.
+    |
+    */
+
+    'booking' => [
+        'horizon_days' => (int) env('SIASURF_BOOKING_HORIZON_DAYS', 60),
     ],
 
     /*
@@ -66,7 +111,7 @@ return [
     'instructor_capacity' => [
         1 => (int) env('SIASURF_LEVEL1_CAPACITY', 1),
         2 => (int) env('SIASURF_LEVEL2_CAPACITY', 2),
-        3 => (int) env('SIASURF_LEVEL3_CAPACITY', 5),
+        3 => (int) env('SIASURF_LEVEL3_CAPACITY', 3),
     ],
 
     /*
@@ -89,6 +134,119 @@ return [
     'strikes' => [
         'threshold' => env('SIASURF_STRIKE_THRESHOLD', 3),
         'suspension_days' => env('SIASURF_SUSPENSION_DAYS', 30),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | QR Codes
+    |--------------------------------------------------------------------------
+    |
+    | Instructor QR codes encode an absolute URL, so the host baked into the
+    | image must be reachable from a phone on the beach — not the developer's
+    | localhost. Set SIASURF_PUBLIC_URL to the LAN address or the real domain.
+    |
+    | Falls back to route() (i.e. APP_URL) when unset, which preserves the old
+    | behaviour rather than breaking environments that are already reachable.
+    |
+    */
+
+    'qr' => [
+        'public_url' => env('SIASURF_PUBLIC_URL', ''),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Student Skill Pre-Assessment
+    |--------------------------------------------------------------------------
+    |
+    | Initial student level is derived from this pre-assessment rather than an
+    | unvalidated dropdown at signup. Answer keys stay strictly server-side;
+    | SkillAssessmentService strips `correct_index` before sharing the form
+    | definition with the frontend.
+    |
+    */
+
+    'skill_assessment' => [
+        'thresholds' => [
+            'intermediate_skills_required' => 4,
+            'advanced_skills_required' => 4,
+            'intermediate_knowledge_required' => 3,
+            'advanced_knowledge_required' => 4,
+        ],
+        'skills' => [
+            'basic' => [
+                'I can paddle a board on my own.',
+                'I can stand up on small, broken (white-water) waves.',
+            ],
+            'intermediate' => [
+                'I can paddle out past the breaking waves on my own.',
+                'I can catch unbroken (green) waves.',
+                'I can stand up in one motion and ride along the wave.',
+                'I can turn left and right while riding.',
+                'I can surf for about an hour without a long rest.',
+            ],
+            'advanced' => [
+                'I surf regularly without an instructor.',
+                'I can surf waves taller than me with control.',
+                'I can make controlled turns and change direction quickly.',
+                'I can surf reef breaks and crowded lineups.',
+                'I can surf for two hours or more.',
+            ],
+        ],
+        'questions' => [
+            [
+                'key' => 'water_safety',
+                'topic' => 'Water safety',
+                'question' => 'You’re caught in a rip current. What should you do?',
+                'options' => [
+                    'Swim straight back to shore as fast as you can',
+                    'Stay calm and swim parallel to the shore',
+                    'Stay still and wait for it to stop',
+                    'Swim against the current until it weakens',
+                ],
+                'correct_index' => 1,
+                'required' => true,
+            ],
+            [
+                'key' => 'surf_etiquette',
+                'topic' => 'Surf etiquette',
+                'question' => 'Two surfers are riding the same wave. Who has priority?',
+                'options' => [
+                    'The surfer who paddled out first',
+                    'The surfer closest to the breaking part of the wave',
+                    'The surfer with the longer board',
+                    'The surfer closer to the shore',
+                ],
+                'correct_index' => 1,
+                'required' => false,
+            ],
+            [
+                'key' => 'equipment',
+                'topic' => 'Equipment',
+                'question' => 'What is a leash for?',
+                'options' => [
+                    'It keeps the board attached to you',
+                    'It helps you paddle faster',
+                    'It protects the fins',
+                    'It keeps the board waxed',
+                ],
+                'correct_index' => 0,
+                'required' => false,
+            ],
+            [
+                'key' => 'surfing_spots',
+                'topic' => 'Surfing spots',
+                'question' => 'Why does the tide matter at a reef break?',
+                'options' => [
+                    'It changes the water color',
+                    'The reef can be shallow at low tide',
+                    'Waves stop at high tide',
+                    'It changes the wind direction',
+                ],
+                'correct_index' => 1,
+                'required' => false,
+            ],
+        ],
     ],
 
 ];

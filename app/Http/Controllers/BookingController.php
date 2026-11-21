@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\BookingStatus;
 use App\Enums\CancellationReason;
 use App\Enums\PaymentStatus;
+use App\Enums\SessionType;
 use App\Enums\SkillLevel;
 use App\Events\BookingCancelled;
 use App\Events\BookingCreated;
@@ -92,17 +93,31 @@ class BookingController extends Controller
 
         $instructor->load(['instructorProfile', 'availabilities']);
 
-        // Get safety rules applicable to this instructor
-        $safetyRules = $this->safetyService->getApplicableRules(
-            $instructor->instructorProfile->level->value
-        );
-
         // Get available surf spots based on the student's own level. An
         // intermediate surfer may use beginner/intermediate breaks but never an
         // advanced one; the front end narrows this further for the party.
         // Outer/inner sections are separate records, so order the picker by
         // entry difficulty and then by the name students will recognise.
         $studentSkill = $viewerSkill ?? SkillLevel::Beginner;
+        $instructorLevelValue = $instructor->instructorProfile->level->value;
+
+        // Get safety rules applicable to this instructor + student's skill level
+        $safetyRules = $this->safetyService->getApplicableRules(
+            $instructorLevelValue,
+            $studentSkill->value
+        );
+
+        $recommendedService = SessionType::recommendedFor($studentSkill, $instructorLevelValue);
+        $serviceOptions = array_map(
+            fn (SessionType $service) => [
+                'type' => $service->value,
+                'label' => $service->label(),
+                'description' => $service->description(),
+                'rate' => $instructor->instructorProfile->rateForService($service),
+                'recommended' => $service === $recommendedService,
+            ],
+            SessionType::optionsFor($studentSkill, $instructorLevelValue)
+        );
 
         $surfSpots = SurfSpot::where('is_active', true)
             ->whereIn('difficulty', $studentSkill->allowedSurfSpotDifficulties())
@@ -117,6 +132,8 @@ class BookingController extends Controller
             'instructor' => $instructor,
             'surfSpots' => $surfSpots,
             'safetyRules' => $safetyRules,
+            'serviceOptions' => $serviceOptions,
+            'defaultSessionType' => $recommendedService->value,
             // Explains why some breaks are not in the list.
             'surfSpotRule' => $studentSkill->surfSpotRuleLabel(),
             'allowedSurfSpotDifficulties' => $studentSkill->allowedSurfSpotDifficulties(),
@@ -131,10 +148,13 @@ class BookingController extends Controller
             'studentName' => $studentUser->name,
             'studentProfile' => [
                 'email' => $studentUser->email,
-                'birthday' => $studentProfile?->birthday?->format('Y-m-d'),
+                'birthday' => ($studentProfile?->birthday ?? $studentProfile?->date_of_birth)?->format('Y-m-d'),
                 'age' => $studentProfile?->age,
                 'country' => $studentProfile?->country,
             ],
+            // Details captured during onboarding, so the student is not asked
+            // for their height and weight on every booking.
+            'prefill' => $studentProfile?->bookingPrefill() ?? [],
             'step' => 1,
         ]);
     }
@@ -167,6 +187,9 @@ class BookingController extends Controller
             // slot's remaining student capacity. Older clients that only send a
             // start time fall back to the instructor's standard lesson length.
             'end_time' => ['nullable', 'date_format:H:i', 'after:start_time'],
+            // Service type (teaching, guiding, coaching). Defaults cleanly to
+            // the recommended service for this student + instructor pair.
+            'session_type' => 'nullable|in:teaching,guiding,coaching',
             // Primary skill is derived from the profile; still accepted for
             // backwards compatibility with older clients.
             'skill_level' => 'nullable|in:beginner,intermediate,advanced',
@@ -359,6 +382,13 @@ class BookingController extends Controller
                 . '. This instructor is Level ' . $instructorLevelValue . '.');
         }
 
+        // Resolve service type (Teaching / Guiding / Coaching). Defaults to the
+        // natural service for this student + instructor pair so beginners pay
+        // the Teaching rate even when booking a Level 3 instructor.
+        $sessionType = ! empty($validated['session_type'])
+            ? SessionType::from($validated['session_type'])
+            : SessionType::recommendedFor($studentSkill, $instructorLevelValue);
+
         // Get surf spot for validation
         $surfSpot = SurfSpot::findOrFail($validated['surf_spot_id']);
 
@@ -370,19 +400,21 @@ class BookingController extends Controller
         );
 
         // Step 3: Safety validation. With an explicit party, every participant
-        // is checked (most restrictive wins); otherwise use the legacy
-        // single-person rules so old clients keep working.
+        // is checked (all must be the same skill level); otherwise use the
+        // single-person rules so older clients keep working.
         try {
             if ($hasExplicitParticipants) {
                 $this->safetyService->validateParticipants(
                     $participantsInput,
                     $instructorLevelValue,
                     $surfSpot->difficulty,
-                    auth()->id()
+                    auth()->id(),
+                    $sessionType
                 );
             } else {
                 $this->safetyService->validateBookingSafety([
                     'instructor_level' => $instructorLevelValue,
+                    'session_type' => $sessionType->value,
                     'student_count' => $validated['student_count'],
                     'skill_level' => $validated['skill_level'],
                     'student_age' => $validated['student_age'],
@@ -399,29 +431,32 @@ class BookingController extends Controller
         $this->availabilityService->releaseExpiredCheckoutHolds($instructor->id);
         $this->availabilityService->releaseStudentCheckoutHolds(auth()->id(), $instructor->id);
 
-        // FR 1.8 - the instructor's own availability must be respected, and the
-        // exact range must still have room for this party. This replaces the
-        // old "any overlap is a conflict" check, which made Level 3 group
-        // bookings impossible.
+        // FR 1.8 - respect the instructor's schedule, skill-dependent seat cap,
+        // and same-level/same-service shared-slot rule.
         try {
             $this->availabilityService->assertRangeIsBookable(
                 $instructor->id,
                 $validated['date'],
                 $validated['start_time'],
                 $validated['end_time'],
-                $validated['student_count']
+                $validated['student_count'],
+                null,
+                $studentSkill,
+                $sessionType
             );
         } catch (BookingRequestException $exception) {
             return back()->with('error', $exception->getMessage());
         }
 
-        // Calculate pricing using the same duration the booking will run for.
+        // Calculate pricing using the service provided (Teaching / Guiding / Coaching).
         $pricing = $this->pricingService->calculatePrice(
             $instructor->instructorProfile,
             $validated['student_count'],
             [],
             null,
-            $validated['duration_hours']
+            $validated['duration_hours'],
+            $sessionType,
+            $studentSkill
         );
 
         // Abuse guard: block a duplicate request for the same slot, and cap how
@@ -440,7 +475,7 @@ class BookingController extends Controller
         // row is locked so two students cannot both pass the capacity check and
         // create overlapping requests in the same instant.
         try {
-            $booking = DB::transaction(function () use ($validated, $instructor, $pricing, $participantsInput) {
+            $booking = DB::transaction(function () use ($validated, $instructor, $pricing, $participantsInput, $studentSkill, $sessionType) {
                 User::query()->whereKey($instructor->id)->lockForUpdate()->first();
 
                 $this->availabilityService->releaseExpiredCheckoutHolds($instructor->id);
@@ -453,7 +488,10 @@ class BookingController extends Controller
                     $validated['date'],
                     $validated['start_time'],
                     $validated['end_time'],
-                    $validated['student_count']
+                    $validated['student_count'],
+                    null,
+                    $studentSkill,
+                    $sessionType
                 );
 
                 $this->requestGuard->assertStudentMayRequest(auth()->user(), [
@@ -472,6 +510,8 @@ class BookingController extends Controller
                     'end_time' => $validated['end_time'],
                     'duration_hours' => $validated['duration_hours'],
                     'skill_level' => $validated['skill_level'],
+                    'session_type' => $sessionType->value,
+                    'hourly_rate' => $pricing['base_rate'],
                     'student_age' => $validated['student_age'],
                     'height' => $validated['height'],
                     'weight' => $validated['weight'],
@@ -819,7 +859,6 @@ class BookingController extends Controller
 
         return Inertia::render('Student/Bookings/Show', [
             'booking' => $booking,
-            'sessionTimeRemaining' => $booking->getSessionTimeRemaining(),
         ]);
     }
 

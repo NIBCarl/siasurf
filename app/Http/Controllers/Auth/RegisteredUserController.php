@@ -40,8 +40,6 @@ class RegisteredUserController extends Controller
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|in:student,instructor',
-            'skill_level' => 'required_if:role,student|in:beginner,intermediate,advanced',
-            'is_first_time' => 'required_if:role,student|boolean',
             'birthday' => ['nullable', 'date', 'after:1920-01-01', 'before_or_equal:'.now()->subYears(5)->toDateString()],
             'country' => 'nullable|string|max:100',
         ]);
@@ -55,11 +53,13 @@ class RegisteredUserController extends Controller
 
         // Assign Spatie role
         $user->assignRole($request->role);
-        
+
         if ($request->role === 'student') {
+            // New students always start at beginner until they complete the
+            // skill pre-assessment during onboarding.
             $user->studentProfile()->create([
-                'skill_level' => $request->skill_level ?? 'beginner',
-                'is_first_time' => $request->is_first_time ?? true,
+                'skill_level' => 'beginner',
+                'is_first_time' => true,
                 'birthday' => $request->birthday ?: null,
                 'country' => $request->filled('country') ? trim((string) $request->country) : null,
             ]);

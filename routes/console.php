@@ -40,3 +40,10 @@ Schedule::command(\App\Console\Commands\CleanupExpiredWaivers::class)
     ->monthlyOn(1, '02:30')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/waiver-retention.log'));
+
+// A lapsed SISA ID hides the instructor from students. Visibility is derived at
+// read time, so this sweep only flips the stored status and notifies.
+Schedule::command(\App\Console\Commands\ExpireCertificates::class)
+    ->dailyAt('00:15')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/certificate-expiry.log'));
