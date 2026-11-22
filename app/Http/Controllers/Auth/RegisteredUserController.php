@@ -40,6 +40,8 @@ class RegisteredUserController extends Controller
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|in:student,instructor',
+            'birthday' => ['nullable', 'date', 'after:1920-01-01', 'before_or_equal:'.now()->subYears(5)->toDateString()],
+            'country' => 'nullable|string|max:100',
         ]);
 
         $user = User::create([
@@ -58,6 +60,8 @@ class RegisteredUserController extends Controller
             $user->studentProfile()->create([
                 'skill_level' => 'beginner',
                 'is_first_time' => true,
+                'birthday' => $request->birthday ?: null,
+                'country' => $request->filled('country') ? trim((string) $request->country) : null,
             ]);
         }
 

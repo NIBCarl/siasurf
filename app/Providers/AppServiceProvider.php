@@ -53,6 +53,7 @@ class AppServiceProvider extends ServiceProvider
         // Explicit registration keeps chat authorization predictable even if
         // the model/policy naming ever changes.
         Gate::policy(\App\Models\Conversation::class, \App\Policies\ConversationPolicy::class);
+        Gate::policy(\App\Models\Refund::class, \App\Policies\RefundPolicy::class);
 
         // Define gates for role-based access
         Gate::define('admin', function (User $user) {

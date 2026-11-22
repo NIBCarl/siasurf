@@ -47,6 +47,13 @@ interface SurfSpot {
   description: string
 }
 
+interface StudentProfileInfo {
+  email?: string | null
+  birthday?: string | null
+  age?: number | null
+  country?: string | null
+}
+
 interface Props {
   instructor: Instructor
   surfSpots: SurfSpot[]
@@ -56,8 +63,10 @@ interface Props {
   defaultDurationMinutes: number
   studentSkillLevel: string
   studentName: string
+  studentProfile?: StudentProfileInfo
   serviceOptions?: ServiceOption[]
   defaultSessionType?: string
+  serviceFeePercent?: number
   // Details captured at onboarding, so the student is not asked for their
   // height and weight on every booking.
   prefill?: {
@@ -75,7 +84,10 @@ interface Props {
 
 interface Companion {
   full_name: string
+  birthday: string
   age: number | string
+  email: string
+  country: string
   height: number | string
   weight: number | string
   skill_level: string
@@ -91,7 +103,10 @@ const props = defineProps<Props>()
 
 const emptyCompanion = (): Companion => ({
   full_name: '',
+  birthday: '',
   age: '',
+  email: '',
+  country: '',
   height: '',
   weight: '',
   skill_level: props.studentSkillLevel || 'beginner',
@@ -102,6 +117,28 @@ const emptyCompanion = (): Companion => ({
   guardian_name: '',
   guardian_phone: '',
 })
+
+const maxBirthday = (() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 5)
+  return d.toISOString().split('T')[0]
+})()
+
+const calculateAgeFromBirthday = (birthday: string): number | null => {
+  if (!birthday) return null
+  const birth = new Date(birthday)
+  if (Number.isNaN(birth.getTime())) return null
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--
+  }
+  return age >= 0 ? age : null
+}
+
+const hasProfileBirthday = computed(() => Boolean(props.studentProfile?.birthday))
+const hasProfileCountry = computed(() => Boolean(props.studentProfile?.country))
 
 const instructorAvatar = computed(() => resolveAvatarUrl(props.instructor))
 const instructorInitials = computed(() =>
@@ -154,16 +191,34 @@ const form = useForm({
   // Primary participant (the account holder). Falls back to the age of majority
   // only when onboarding was skipped; ?? is used rather than || so a legitimate
   // 0 is never swallowed.
-  student_age: prefill.student_age ?? 18,
+  student_age: props.studentProfile?.age ?? prefill.student_age ?? 18,
+  student_birthday: props.studentProfile?.birthday ?? '',
+  student_country: props.studentProfile?.country ?? '',
   height: prefill.height ?? ('' as string | number),
   weight: prefill.weight ?? ('' as string | number),
   student_count: 1,
   surf_spot_id: props.surfSpots[0]?.id || '',
   has_board: prefill.has_board ?? false,
+  needs_hotel_pickup: false,
+  hotel_name: '',
   // Medical notes carry over so the instructor sees them without retyping.
   notes: prefill.medical_info ?? '',
   // Declared companions (no accounts of their own).
   companions: [] as Companion[],
+})
+
+watch(() => form.student_birthday, (birthday) => {
+  const computedAge = calculateAgeFromBirthday(birthday)
+  if (computedAge !== null) {
+    form.student_age = computedAge
+  }
+})
+
+watch(() => form.needs_hotel_pickup, (needsPickup) => {
+  if (!needsPickup) {
+    form.hotel_name = ''
+    form.clearErrors('hotel_name')
+  }
 })
 
 const activeService = computed<ServiceOption>(
@@ -526,17 +581,24 @@ const tideWarning = computed(() => {
   return null
 })
 
-// Client-side pricing calculation (service-based rate)
+// Client-side pricing calculation (service-based rate + 7% non-refundable platform service fee)
 const estimatedPrice = computed(() => {
   const baseRate = Number(activeService.value?.rate ?? props.instructor.instructor_profile.rate_per_hour ?? 600)
   const hours = lessonHours.value
   const studentCount = form.student_count || 1
-  
-  const basePrice = baseRate * hours * studentCount
+  const feePercent = Number(props.serviceFeePercent ?? 7)
+
+  const lessonPrice = Math.round(baseRate * hours * studentCount * 100) / 100
+  const serviceFee = Math.round(lessonPrice * (feePercent / 100) * 100) / 100
+  const total = Math.round((lessonPrice + serviceFee) * 100) / 100
+
   return {
-    basePrice,
-    total: basePrice,
-    rate: baseRate
+    basePrice: lessonPrice,
+    lessonPrice,
+    serviceFeePercent: feePercent,
+    serviceFee,
+    total,
+    rate: baseRate,
   }
 })
 
@@ -569,6 +631,13 @@ const childSafetyViolation = computed(() => {
   return null
 })
 
+const syncCompanionAge = (companion: Companion) => {
+  const age = calculateAgeFromBirthday(companion.birthday)
+  if (age !== null) {
+    companion.age = age
+  }
+}
+
 const submit = () => {
   if (childSafetyViolation.value) {
     return
@@ -577,11 +646,15 @@ const submit = () => {
   // Send the full party: primary first (account holder), then companions.
   form.transform((data) => ({
     ...data,
+    hotel_name: data.needs_hotel_pickup ? data.hotel_name : null,
     skill_level: props.studentSkillLevel,
     participants: [
       {
         full_name: props.studentName,
+        birthday: data.student_birthday || props.studentProfile?.birthday || null,
         age: data.student_age,
+        email: props.studentProfile?.email || null,
+        country: data.student_country || props.studentProfile?.country || null,
         height: data.height,
         weight: data.weight,
         skill_level: props.studentSkillLevel,
@@ -966,7 +1039,15 @@ const submit = () => {
                   <!-- Primary participant's age -->
                   <div>
                     <InputLabel for="student_age" value="Your Age" />
+                    <div
+                      v-if="hasProfileBirthday && studentProfile?.age !== null && studentProfile?.age !== undefined"
+                      class="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                    >
+                      <span class="text-sm font-semibold text-slate-800">{{ form.student_age }} years old</span>
+                      <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">From profile birthday</span>
+                    </div>
                     <TextInput
+                      v-else
                       id="student_age"
                       type="number"
                       class="mt-1 block w-full"
@@ -975,6 +1056,85 @@ const submit = () => {
                       min="5"
                       max="100"
                     />
+                  </div>
+
+                  <!-- Missing waiver profile fields for legacy student accounts -->
+                  <div
+                    v-if="!hasProfileBirthday || !hasProfileCountry"
+                    class="col-span-full grid grid-cols-1 md:grid-cols-2 gap-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-5"
+                  >
+                    <div class="col-span-full">
+                      <h4 class="text-sm font-bold text-amber-950">Complete Your Waiver Profile Details</h4>
+                      <p class="text-xs text-amber-800 mt-0.5">
+                        These will be saved to your student profile and automatically prefilled on your surf lesson waiver.
+                      </p>
+                    </div>
+                    <div v-if="!hasProfileBirthday">
+                      <InputLabel for="student_birthday" value="Your Birthday" />
+                      <TextInput
+                        id="student_birthday"
+                        type="date"
+                        class="mt-1 block w-full"
+                        v-model="form.student_birthday"
+                        :max="maxBirthday"
+                        min="1920-01-01"
+                      />
+                      <InputError class="mt-1" :message="form.errors.student_birthday" />
+                    </div>
+                    <div v-if="!hasProfileCountry">
+                      <InputLabel for="student_country" value="Your Country" />
+                      <TextInput
+                        id="student_country"
+                        type="text"
+                        class="mt-1 block w-full"
+                        v-model="form.student_country"
+                        placeholder="e.g. Philippines"
+                      />
+                      <InputError class="mt-1" :message="form.errors.student_country" />
+                    </div>
+                  </div>
+
+                  <!-- Own Board Check -->
+                  <div class="col-span-full bg-ocean-50/50 p-6 rounded-2xl border border-ocean-100/50">
+                    <div class="flex items-center space-x-4">
+                      <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-ocean-100 shadow-sm">
+                        <svg class="w-6 h-6 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                      <div class="flex-grow">
+                        <h4 class="text-sm font-bold text-slate-900">Surfboard Requirement</h4>
+                        <p class="text-xs text-slate-500">Do you have your own surfboard for this lesson?</p>
+                      </div>
+                      <div class="flex items-center space-x-4 bg-white p-1 rounded-xl border border-slate-200">
+                        <button 
+                          type="button"
+                          @click="form.has_board = true"
+                          :class="[
+                            'px-4 py-2 text-xs font-bold rounded-lg transition-all',
+                            form.has_board
+                              ? 'bg-ocean-600 text-white shadow-md'
+                              : 'text-slate-500 hover:bg-slate-50'
+                          ]"
+                        >Yes, I have</button>
+                        <button 
+                          type="button"
+                          @click="form.has_board = false"
+                          :class="[
+                            'px-4 py-2 text-xs font-bold rounded-lg transition-all',
+                            !form.has_board
+                              ? 'bg-ocean-600 text-white shadow-md'
+                              : 'text-slate-500 hover:bg-slate-50'
+                          ]"
+                        >No, I'll rent</button>
+                      </div>
+                    </div>
+                    <p v-if="!form.has_board" class="mt-3 text-[10px] text-amber-600 font-medium flex items-center">
+                      <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      Note: Rental fees are not included in the lesson price and are paid separately to the instructor.
+                    </p>
                   </div>
 
                   <!-- Physical Profile -->
@@ -1071,46 +1231,66 @@ const submit = () => {
                       </p>
                     </div>
 
-                    <!-- Own Board Check -->
-                    <div class="col-span-full bg-ocean-50/50 p-6 rounded-2xl border border-ocean-100/50">
-                      <div class="flex items-center space-x-4">
-                        <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-ocean-100 shadow-sm">
+                    <!-- Hotel Pickup Option (decides whether Hotel appears on the waiver) -->
+                    <div class="col-span-full bg-slate-50/80 p-6 rounded-2xl border border-slate-200/80">
+                      <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm w-fit">
                           <svg class="w-6 h-6 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
                         </div>
                         <div class="flex-grow">
-                          <h4 class="text-sm font-bold text-slate-900">Surfboard Requirement</h4>
-                          <p class="text-xs text-slate-500">Do you have your own surfboard for this lesson?</p>
+                          <h4 class="text-sm font-bold text-slate-900">Hotel Pickup Option</h4>
+                          <p class="text-xs text-slate-500">
+                            Would you like the instructor to pick you up from the hotel where you are staying?
+                          </p>
                         </div>
-                        <div class="flex items-center space-x-4 bg-white p-1 rounded-xl border border-slate-200">
-                          <button 
+                        <div class="flex items-center space-x-2 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
+                          <button
                             type="button"
-                            @click="form.has_board = true"
+                            @click="form.needs_hotel_pickup = false"
                             :class="[
                               'px-4 py-2 text-xs font-bold rounded-lg transition-all',
-                              form.has_board
+                              !form.needs_hotel_pickup
                                 ? 'bg-ocean-600 text-white shadow-md'
-                                : 'text-slate-500 hover:bg-slate-50'
+                                : 'text-slate-500 hover:bg-slate-50',
                             ]"
-                          >Yes, I have</button>
-                          <button 
+                          >
+                            No, I'll meet at spot
+                          </button>
+                          <button
                             type="button"
-                            @click="form.has_board = false"
+                            @click="form.needs_hotel_pickup = true"
                             :class="[
                               'px-4 py-2 text-xs font-bold rounded-lg transition-all',
-                              !form.has_board
+                              form.needs_hotel_pickup
                                 ? 'bg-ocean-600 text-white shadow-md'
-                                : 'text-slate-500 hover:bg-slate-50'
+                                : 'text-slate-500 hover:bg-slate-50',
                             ]"
-                          >No, I'll rent</button>
+                          >
+                            Yes, pick me up
+                          </button>
                         </div>
                       </div>
-                      <p v-if="!form.has_board" class="mt-3 text-[10px] text-amber-600 font-medium flex items-center">
-                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        Note: Rental fees are not included in the lesson price and are paid separately to the instructor.
+
+                      <div v-if="form.needs_hotel_pickup" class="mt-4 pt-4 border-t border-slate-200/80">
+                        <InputLabel for="hotel_name" value="Hotel / Resort / Accommodation Name *" />
+                        <TextInput
+                          id="hotel_name"
+                          type="text"
+                          class="mt-1 block w-full bg-white"
+                          v-model="form.hotel_name"
+                          required
+                          placeholder="e.g. Bravo Beach Resort, General Luna"
+                        />
+                        <p class="mt-1 text-xs text-slate-500">
+                          Your hotel will be included on your surf lesson waiver and shared with your instructor for pickup.
+                        </p>
+                        <InputError class="mt-2" :message="form.errors.hotel_name" />
+                      </div>
+                      <p v-else class="mt-3 text-xs text-slate-500">
+                        You will meet your instructor directly at the surf spot. Hotel details will not appear on your waiver.
                       </p>
                     </div>
                   </div>
@@ -1146,6 +1326,31 @@ const submit = () => {
                           <InputLabel :value="`Full Name`" />
                           <TextInput v-model="companion.full_name" type="text" class="mt-1 block w-full" placeholder="Companion's full name" />
                           <InputError class="mt-1" :message="companionError(index, 'full_name')" />
+                        </div>
+
+                        <div>
+                          <InputLabel value="Birthday" />
+                          <TextInput
+                            v-model="companion.birthday"
+                            type="date"
+                            :max="maxBirthday"
+                            min="1920-01-01"
+                            class="mt-1 block w-full"
+                            @change="syncCompanionAge(companion)"
+                          />
+                          <InputError class="mt-1" :message="companionError(index, 'birthday')" />
+                        </div>
+
+                        <div>
+                          <InputLabel value="Email" />
+                          <TextInput v-model="companion.email" type="email" class="mt-1 block w-full" placeholder="companion@email.com" />
+                          <InputError class="mt-1" :message="companionError(index, 'email')" />
+                        </div>
+
+                        <div>
+                          <InputLabel value="Country" />
+                          <TextInput v-model="companion.country" type="text" class="mt-1 block w-full" placeholder="e.g. Philippines" />
+                          <InputError class="mt-1" :message="companionError(index, 'country')" />
                         </div>
 
                         <div>
@@ -1229,13 +1434,13 @@ const submit = () => {
 
                 <!-- Notes -->
                 <div>
-                  <InputLabel for="notes" value="Special Requests / Medical Info" />
+                  <InputLabel for="notes" value="Special Requests" />
                   <textarea
                     id="notes"
                     v-model="form.notes"
                     class="mt-1 block w-full border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm"
                     rows="3"
-                    placeholder="Any allergies, physical conditions, or preferences..."
+                    placeholder="Any lesson preferences, goals, or special requests..."
                   ></textarea>
                 </div>
 
@@ -1248,9 +1453,9 @@ const submit = () => {
                     variant="primary" 
                     size="lg"
                     :loading="form.processing"
-                    :disabled="form.processing || !form.date || !form.start_time || Boolean(childSafetyViolation)"
+                    :disabled="form.processing || !form.date || !form.start_time || Boolean(childSafetyViolation) || (form.needs_hotel_pickup && !form.hotel_name.trim())"
                   >
-                    Continue to Safety Check &rarr;
+                    Continue to Waiver &rarr;
                   </BaseButton>
                 </div>
               </form>
@@ -1321,7 +1526,17 @@ const submit = () => {
                   <span class="text-slate-500">Students</span>
                   <span class="font-medium text-slate-900">x {{ form.student_count }}</span>
                 </div>
-                
+                <div class="flex justify-between text-sm">
+                  <span class="text-slate-500">Lesson Price</span>
+                  <span class="font-medium text-slate-900">₱{{ estimatedPrice.lessonPrice.toLocaleString() }}</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                  <span class="text-slate-500">
+                    Service Fee ({{ estimatedPrice.serviceFeePercent }}% · non-refundable)
+                  </span>
+                  <span class="font-medium text-slate-900">₱{{ estimatedPrice.serviceFee.toLocaleString() }}</span>
+                </div>
+
                 <div class="pt-4 border-t border-slate-100 flex justify-between items-center">
                   <span class="text-base font-bold text-slate-900">Total Price</span>
                   <span class="text-2xl font-black text-ocean-600">₱{{ estimatedPrice.total.toLocaleString() }}</span>

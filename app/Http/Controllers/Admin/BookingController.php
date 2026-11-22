@@ -18,7 +18,7 @@ class BookingController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = Booking::with(['student', 'instructor', 'surfSpot', 'payment'])
+        $query = Booking::with(['student', 'instructor', 'surfSpot', 'payment', 'latestRefund'])
             ->orderByDesc('created_at');
 
         // Simple status filter
@@ -44,7 +44,19 @@ class BookingController extends Controller
      */
     public function show(Booking $booking): Response
     {
-        $booking->load(['student.studentProfile', 'instructor', 'surfSpot', 'payment.verifiedBy', 'waiver', 'review']);
+        $booking->load([
+            'student.studentProfile',
+            'instructor',
+            'surfSpot',
+            'payment.verifiedBy',
+            'latestRefund',
+            'refunds.initiatedBy',
+            'changeRequests.reviewedBy',
+            'waiver',
+            'waivers',
+            'participants.waivers',
+            'review',
+        ]);
 
         return Inertia::render('Admin/Bookings/Show', [
             'booking' => $booking,
@@ -62,6 +74,8 @@ class BookingController extends Controller
                 'booking.student',
                 'booking.instructor',
                 'booking.surfSpot',
+                'booking.payment',
+                'booking.latestRefund',
                 'requestedBy',
                 'reviewedBy',
             ])

@@ -17,6 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
         __DIR__.'/../routes/channels.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/payments',
+        ]);
+
         $middleware->web(append: [
             \App\Http\Middleware\EnsureInstructorLifecycleState::class,
             \App\Http\Middleware\HandleInertiaRequests::class,

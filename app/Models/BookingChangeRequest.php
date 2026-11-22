@@ -20,6 +20,7 @@ class BookingChangeRequest extends Model
         'status',
         'requires_admin_approval',
         'reason',
+        'cancellation_reason',
         'original_date',
         'original_time_period',
         'original_start_time',
@@ -37,6 +38,7 @@ class BookingChangeRequest extends Model
     protected $casts = [
         'type' => ChangeRequestType::class,
         'status' => ChangeRequestStatus::class,
+        'cancellation_reason' => \App\Enums\CancellationReason::class,
         'requires_admin_approval' => 'boolean',
         'original_date' => 'date',
         'original_start_time' => 'datetime:H:i',

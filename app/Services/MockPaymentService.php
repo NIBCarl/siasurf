@@ -93,27 +93,25 @@ class MockPaymentService implements PaymentServiceInterface
     /**
      * Process mock refund
      */
-    public function processRefund(Booking $booking, ?float $amount = null): array
-    {
+    public function processRefund(
+        Booking $booking,
+        ?float $amount = null,
+        string $reason = 'requested_by_customer',
+        array $metadata = []
+    ): array {
         $refundId = 'mock_refund_' . Str::random(16);
-        $refundAmount = $amount ?? $booking->total_amount;
-
-        // Update payment status
-        if ($booking->payment) {
-            $booking->payment->update([
-                'status' => PaymentStatus::Refunded,
-                'refunded_at' => now(),
-            ]);
-        }
+        $refundAmount = $amount ?? $booking->effectiveLessonPrice();
 
         return [
             'id' => $refundId,
             'type' => 'refund',
             'attributes' => [
-                'amount' => $refundAmount * 100,
+                'amount' => (int) round($refundAmount * 100),
                 'currency' => 'PHP',
                 'status' => 'succeeded',
-                'payment_id' => $booking->payment?->transaction_id,
+                'reason' => $reason,
+                'payment_id' => $booking->payment?->gateway_payment_id ?? $booking->payment?->transaction_id,
+                'metadata' => $metadata,
             ],
         ];
     }
@@ -154,6 +152,7 @@ class MockPaymentService implements PaymentServiceInterface
             $booking->payment->update([
                 'status' => PaymentStatus::Completed,
                 'transaction_id' => $transactionId,
+                'gateway_payment_id' => $booking->payment->gateway_payment_id ?: ('mock_pay_' . Str::random(12)),
                 'paid_at' => now(),
             ]);
         }

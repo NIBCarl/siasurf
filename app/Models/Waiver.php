@@ -15,6 +15,18 @@ class Waiver extends Model
         'booking_id',
         'participant_id',
         'type',
+        'participant_name',
+        'birthday',
+        'age',
+        'email',
+        'country',
+        'hotel_name',
+        'emergency_contact',
+        'medical_info',
+        'surf_shop',
+        'instructor_name',
+        'witness_name',
+        'signed_by_guardian',
         'signed_by',
         'signature_data',
         'pdf_path',
@@ -24,6 +36,9 @@ class Waiver extends Model
 
     protected $casts = [
         'type' => WaiverType::class,
+        'birthday' => 'date:Y-m-d',
+        'age' => 'integer',
+        'signed_by_guardian' => 'boolean',
         'signed_at' => 'datetime',
         'retention_until' => 'datetime',
     ];

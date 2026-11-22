@@ -132,6 +132,8 @@ class BookingController extends Controller
             'student.skillUpgradeRequests',
             'surfSpot',
             'payment',
+            'latestRefund',
+            'refunds',
             'waiver',
             'participants.waivers',
             'review',
@@ -409,6 +411,7 @@ class BookingController extends Controller
         $validated = $request->validate([
             'type' => ['required', 'string', 'in:cancellation,reschedule'],
             'reason' => ['nullable', 'string', 'max:500'],
+            'cancellation_reason' => ['nullable', 'string', 'in:instructor,weather'],
             'date' => ['nullable', 'required_if:type,reschedule', 'date', 'after_or_equal:today'],
             'time_period' => ['nullable', 'required_if:type,reschedule', 'string', 'in:morning,afternoon'],
             'start_time' => ['nullable', 'required_if:type,reschedule', 'date_format:H:i'],
@@ -422,10 +425,15 @@ class BookingController extends Controller
 
         try {
             if ($validated['type'] === \App\Enums\ChangeRequestType::Cancellation->value) {
+                $cause = ($validated['cancellation_reason'] ?? null) === 'weather'
+                    ? \App\Enums\CancellationReason::Weather
+                    : \App\Enums\CancellationReason::Instructor;
+
                 $changeRequest = $changeService->requestCancellation(
                     $booking,
                     auth()->user(),
-                    $validated['reason'] ?? null
+                    $validated['reason'] ?? null,
+                    $cause
                 );
             } else {
                 $changeRequest = $changeService->requestReschedule(
@@ -526,7 +534,23 @@ class BookingController extends Controller
                 if ($status->countsAsAttended()) {
                     $booking->complete(auth()->id());
                 } elseif ($status === AttendanceStatus::Absent) {
-                    $booking->update(['status' => BookingStatus::NoShow]);
+                    $payment = $booking->payment;
+                    $retainedAmount = ($payment && $payment->payment_method === PaymentMethod::GCash && $booking->isPaid())
+                        ? $booking->effectiveLessonPrice()
+                        : 0.0;
+
+                    $booking->update([
+                        'status' => BookingStatus::NoShow,
+                        'cancellation_reason' => \App\Enums\CancellationReason::StudentNoShow,
+                        'cancellation_note' => $booking->cancellation_note ?: 'Student did not arrive for the scheduled lesson.',
+                        'refund_amount' => 0.0,
+                        'instructor_retained_amount' => $retainedAmount,
+                    ]);
+
+                    DB::afterCommit(function () use ($booking, $retainedAmount) {
+                        $fresh = $booking->fresh(['student', 'instructor', 'surfSpot']);
+                        $fresh?->student?->notify(new \App\Notifications\BookingNoShowNotification($fresh, $retainedAmount));
+                    });
                 }
             }
 

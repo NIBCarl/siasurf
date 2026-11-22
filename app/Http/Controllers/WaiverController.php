@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Enums\WaiverType;
 use App\Models\Booking;
+use App\Models\BookingParticipant;
 use App\Models\Waiver;
 use App\Services\WaiverService;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -39,7 +41,13 @@ class WaiverController extends Controller
                 ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
         }
 
-        $booking->load(['instructor', 'surfSpot', 'participants']);
+        $booking->load(['student.studentProfile', 'instructor.instructorProfile', 'surfSpot', 'participants']);
+
+        $waiverDocument = [
+            'title' => config('waiver.title', 'SURF LESSON WAIVER, LIABILITY, AND INDEMNITY AGREEMENT'),
+            'clauses' => config('waiver.clauses', []),
+            'logo_url' => asset(config('waiver.logo_path', 'images/logo.png')),
+        ];
 
         if ($booking->participants->isNotEmpty()) {
             $participant = $this->waiverService->nextParticipantAwaitingLiability($booking);
@@ -54,6 +62,8 @@ class WaiverController extends Controller
                 'progress' => $this->waiverService->waiverProgress($booking),
                 'waiverType' => WaiverType::Liability->value,
                 'waiverTypeLabel' => WaiverType::Liability->label(),
+                'waiverPrefill' => $this->buildWaiverPrefill($booking, $participant),
+                'waiverDocument' => $waiverDocument,
                 'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
             ]);
         }
@@ -73,6 +83,8 @@ class WaiverController extends Controller
             'progress' => null,
             'waiverType' => WaiverType::Liability->value,
             'waiverTypeLabel' => WaiverType::Liability->label(),
+            'waiverPrefill' => $this->buildWaiverPrefill($booking, null),
+            'waiverDocument' => $waiverDocument,
             'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
         ]);
     }
@@ -93,11 +105,23 @@ class WaiverController extends Controller
         }
 
         $validated = $request->validate([
+            'emergency_contact' => 'required|string|max:255',
+            'medical_info' => 'nullable|string|max:1000',
             'signed_by' => 'required|string|max:255',
             'signature' => 'required|string', // base64 encoded signature
             'agreement' => 'required|accepted',
             'participant_id' => 'nullable|integer',
+            // Fallback fields when a legacy profile or companion lacks them.
+            'birthday' => ['nullable', 'date', 'after:1920-01-01', 'before_or_equal:'.now()->subYears(5)->toDateString()],
+            'country' => 'nullable|string|max:100',
+            'email' => 'nullable|email|max:255',
+        ], [
+            'emergency_contact.required' => 'Please enter an emergency contact name and number.',
+            'signed_by.required' => 'Please manually type your printed full name.',
+            'signature.required' => 'Please provide your signature.',
         ]);
+
+        $booking->loadMissing(['student.studentProfile', 'instructor', 'surfSpot']);
 
         $participant = null;
 
@@ -117,13 +141,106 @@ class WaiverController extends Controller
             return $this->continueFlow($booking);
         }
 
+        $isPrimary = $participant === null || $participant->isPrimary();
+        $student = $booking->student;
+        $studentProfile = $student?->studentProfile;
+
+        // Resolve profile-prefilled demographics authoritatively on the server.
+        // If a legacy student account or companion did not yet have birthday /
+        // country stored, persist what they supplied on the waiver back to
+        // their record so future bookings are prefilled automatically.
+        if ($isPrimary) {
+            $birthday = $studentProfile?->birthday?->format('Y-m-d') ?: ($validated['birthday'] ?? null);
+            $country = $studentProfile?->country ?: (isset($validated['country']) ? trim((string) $validated['country']) : null);
+            $email = $student?->email;
+            $participantName = $student?->name ?? $participant?->full_name ?? $validated['signed_by'];
+
+            if ($student && $student->isStudent()) {
+                $profileUpdates = [];
+                if (empty($studentProfile?->birthday) && ! empty($birthday)) {
+                    $profileUpdates['birthday'] = $birthday;
+                }
+                if (empty($studentProfile?->country) && ! empty($country)) {
+                    $profileUpdates['country'] = $country;
+                }
+                if (! empty($profileUpdates)) {
+                    if ($studentProfile) {
+                        $studentProfile->update($profileUpdates);
+                    } else {
+                        $studentProfile = $student->studentProfile()->create(array_merge([
+                            'skill_level' => 'beginner',
+                            'is_first_time' => true,
+                            'status' => 'active',
+                        ], $profileUpdates));
+                    }
+                }
+            }
+        } else {
+            $birthday = $participant->birthday?->format('Y-m-d') ?: ($validated['birthday'] ?? null);
+            $country = $participant->country ?: (isset($validated['country']) ? trim((string) $validated['country']) : null);
+            $email = $participant->email ?: ($validated['email'] ?? null);
+            $participantName = $participant->full_name ?? $validated['signed_by'];
+        }
+
+        $age = $birthday
+            ? Carbon::parse($birthday)->age
+            : ($participant?->age ?? $booking->student_age);
+
+        $emergencyContact = trim((string) $validated['emergency_contact']);
+        $medicalInfo = isset($validated['medical_info']) && trim((string) $validated['medical_info']) !== ''
+            ? trim((string) $validated['medical_info'])
+            : null;
+        $printedName = trim((string) $validated['signed_by']);
+
         try {
             $this->waiverService->createLiabilityWaiver(
                 $booking,
-                $validated['signed_by'],
+                $printedName,
                 $validated['signature'],
-                $participant
+                $participant,
+                [
+                    'participant_name' => $participantName,
+                    'birthday' => $birthday,
+                    'age' => $age,
+                    'email' => $email,
+                    'country' => $country,
+                    'hotel_name' => $booking->needs_hotel_pickup ? $booking->hotel_name : null,
+                    'emergency_contact' => $emergencyContact,
+                    'medical_info' => $medicalInfo,
+                    'surf_shop' => config('waiver.surf_shop', config('app.name', 'SiaSurf')),
+                    'instructor_name' => $booking->instructor?->name ?? '',
+                    'witness_name' => $booking->instructor?->name ?? '',
+                    'signed_by_guardian' => $age !== null && $age < 18,
+                ]
             );
+
+            // Sync the manually entered emergency contact, medical info, and any
+            // fallback demographics onto the participant so instructors see them
+            // on the session sheet and parental consent can reuse them if needed.
+            if ($participant) {
+                [$ecName, $ecPhone] = $this->splitEmergencyContact($emergencyContact);
+
+                $participantUpdates = [
+                    'emergency_contact_name' => $ecName,
+                    'emergency_contact_phone' => $ecPhone,
+                ];
+
+                if ($request->exists('medical_info')) {
+                    $participantUpdates['medical_info'] = $medicalInfo;
+                }
+
+                if (empty($participant->birthday) && ! empty($birthday)) {
+                    $participantUpdates['birthday'] = $birthday;
+                }
+                if (empty($participant->country) && ! empty($country)) {
+                    $participantUpdates['country'] = $country;
+                }
+                if (empty($participant->email) && ! empty($email)) {
+                    $participantUpdates['email'] = $email;
+                }
+
+                $participant->update($participantUpdates);
+            }
 
             return $this->continueFlow($booking)
                 ->with('success', 'Liability waiver signed successfully.');
@@ -131,6 +248,78 @@ class WaiverController extends Controller
             return redirect()->back()
                 ->with('error', 'Failed to save waiver: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Build the prefilled waiver payload matching the official SISA form.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildWaiverPrefill(Booking $booking, ?BookingParticipant $participant): array
+    {
+        $isPrimary = $participant === null || $participant->isPrimary();
+        $student = $booking->student;
+        $studentProfile = $student?->studentProfile;
+
+        $birthdayCarbon = $isPrimary
+            ? ($studentProfile?->birthday ?? $participant?->birthday)
+            : $participant?->birthday;
+
+        $age = $birthdayCarbon?->age
+            ?? $participant?->age
+            ?? $booking->student_age;
+
+        $country = $isPrimary
+            ? ($studentProfile?->country ?? $participant?->country)
+            : $participant?->country;
+
+        $email = $isPrimary
+            ? ($student?->email ?? $participant?->email)
+            : $participant?->email;
+
+        $name = $isPrimary
+            ? ($student?->name ?? $participant?->full_name ?? '')
+            : ($participant?->full_name ?? '');
+
+        $needsHotelPickup = (bool) $booking->needs_hotel_pickup;
+
+        return [
+            'is_primary' => $isPrimary,
+            'is_minor' => $age !== null && $age < 18,
+            'name' => $name,
+            'birthday' => $birthdayCarbon?->format('Y-m-d'),
+            'birthday_formatted' => $birthdayCarbon?->format('F d, Y'),
+            'age' => $age,
+            'email' => $email,
+            'country' => $country,
+            'needs_hotel_pickup' => $needsHotelPickup,
+            'hotel_name' => $needsHotelPickup ? $booking->hotel_name : null,
+            'medical_info' => $participant?->medical_info,
+            'surf_shop' => config('waiver.surf_shop', config('app.name', 'SiaSurf')),
+            'instructor_name' => $booking->instructor?->name ?? '',
+            'witness_name' => $booking->instructor?->name ?? '',
+            'date' => now()->format('F d, Y'),
+        ];
+    }
+
+    /**
+     * Split a combined "Name & Number" emergency contact string into name and
+     * phone pieces for display on instructor booking sheets.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function splitEmergencyContact(string $raw): array
+    {
+        $trimmed = trim($raw);
+
+        if (preg_match('/^(.*?)[\s,\-\/\|]+(\+?[0-9][0-9\s\-().]{5,})$/', $trimmed, $matches)) {
+            $name = trim($matches[1], " \t\n\r\0\x0B,-/|");
+            $phone = trim($matches[2]);
+
+            return [$name !== '' ? $name : 'Emergency Contact', $phone];
+        }
+
+        return [$trimmed, $trimmed];
     }
 
     /**
@@ -325,7 +514,7 @@ class WaiverController extends Controller
 
         return response()->file($path, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="SiaSurf_Waiver_' . $waiver->booking_id . '.pdf"'
+            'Content-Disposition' => 'inline; filename="SiaSurf_Waiver_' . $waiver->booking_id . '.pdf"',
         ]);
     }
 

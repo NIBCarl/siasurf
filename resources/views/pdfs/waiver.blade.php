@@ -1,182 +1,277 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Liability Waiver - {{ $waiver_id }}</title>
+    <title>{{ $waiver_title }} - {{ $waiver_id }}</title>
     <style>
+        @page {
+            size: A4 landscape;
+            margin: 10mm 12mm;
+        }
         body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .header {
-            text-align: center;
-            border-bottom: 3px solid #0891B2;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            color: #0891B2;
+            font-family: DejaVu Sans, Arial, Helvetica, sans-serif;
+            font-size: 9pt;
+            line-height: 1.32;
+            color: #111827;
             margin: 0;
-            font-size: 28px;
+            padding: 0;
         }
-        .warning-box {
-            background: #FEF3C7;
-            border: 2px solid #F59E0B;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 8px;
+        .sheet {
+            width: 100%;
         }
-        .warning-box h3 {
-            color: #92400E;
-            margin-top: 0;
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+            border-bottom: 1.5px solid #111827;
         }
-        .content {
+        .header-logo-cell {
+            width: 48px;
+            vertical-align: middle;
+            padding-bottom: 6px;
+        }
+        .header-logo {
+            width: 38px;
+            height: 38px;
+            object-fit: contain;
+        }
+        .header-title-cell {
+            vertical-align: bottom;
+            text-align: center;
+            padding-bottom: 6px;
+            padding-right: 48px;
+        }
+        .doc-title {
+            font-size: 13pt;
+            font-weight: bold;
+            letter-spacing: 0.4px;
+            margin: 0;
+            color: #111827;
+        }
+        .fields-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4px;
+        }
+        .fields-table td {
+            vertical-align: bottom;
+            padding: 3px 4px 3px 0;
+            font-size: 8.8pt;
+        }
+        .field-label {
+            font-weight: bold;
+            white-space: nowrap;
+            padding-right: 4px;
+        }
+        .field-value {
+            border-bottom: 1px solid #111827;
+            padding: 0 4px 1px 4px;
+            font-weight: normal;
+            color: #111827;
+        }
+        .intro-block {
+            border-top: 1px solid #111827;
+            padding-top: 7px;
+            margin-top: 6px;
+            margin-bottom: 8px;
+            font-size: 8.8pt;
+            line-height: 1.4;
+        }
+        .inline-blank {
+            display: inline-block;
+            border-bottom: 1px solid #111827;
+            padding: 0 12px 1px 12px;
+            font-weight: bold;
+            min-width: 130px;
+            text-align: center;
+        }
+        .clauses-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+        .clauses-table td {
+            vertical-align: top;
+            padding-bottom: 4px;
+            font-size: 8.2pt;
+            line-height: 1.3;
             text-align: justify;
         }
-        .content h2 {
-            color: #0E7490;
-            border-bottom: 2px solid #e5e7eb;
-            padding-bottom: 10px;
+        .clause-num {
+            width: 18px;
+            font-weight: bold;
+            text-align: left !important;
         }
-        .signature-box {
-            margin-top: 40px;
-            padding: 20px;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
+        .clause-heading {
+            font-weight: bold;
         }
-        .signature-line {
-            border-top: 1px solid #333;
-            margin-top: 60px;
-            padding-top: 10px;
+        .medical-info-line {
+            margin-top: 3px;
+            padding: 2px 5px;
+            border-bottom: 1px solid #111827;
+            background-color: #f9fafb;
+            font-size: 8pt;
+            text-align: left;
         }
-        .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin: 20px 0;
+        .sig-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
         }
-        .info-item {
-            margin-bottom: 10px;
+        .sig-table td {
+            vertical-align: bottom;
+            padding: 4px 6px 2px 0;
+            font-size: 8.8pt;
         }
-        .info-item strong {
-            color: #0E7490;
+        .sig-label {
+            white-space: nowrap;
+            font-weight: bold;
+            width: 1%;
         }
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 2px solid #e5e7eb;
+        .sig-line {
+            border-bottom: 1px solid #111827;
             text-align: center;
-            font-size: 12px;
-            color: #666;
+            padding: 0 6px 2px 6px;
         }
-        ul {
-            margin: 10px 0;
-            padding-left: 20px;
+        .sig-image-wrap {
+            height: 44px;
+            vertical-align: bottom;
+            text-align: center;
         }
-        li {
-            margin-bottom: 8px;
+        .sig-image {
+            max-height: 40px;
+            max-width: 210px;
+            vertical-align: bottom;
+        }
+        .sig-note {
+            white-space: nowrap;
+            font-size: 8.2pt;
+            color: #374151;
+            width: 1%;
+            padding-left: 4px;
+        }
+        .meta-footer {
+            margin-top: 10px;
+            padding-top: 4px;
+            border-top: 1px solid #d1d5db;
+            font-size: 7.2pt;
+            color: #6b7280;
+            width: 100%;
+        }
+        .meta-footer td {
+            padding: 0;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>{{ $company_name }} - LIABILITY WAIVER</h1>
-        <p style="font-size: 14px; color: #666;">Waiver ID: {{ $waiver_id }}</p>
-    </div>
+    <div class="sheet">
+        <!-- Header -->
+        <table class="header-table">
+            <tr>
+                <td class="header-logo-cell">
+                    @if(!empty($logo_data_uri))
+                        <img src="{{ $logo_data_uri }}" alt="Logo" class="header-logo">
+                    @endif
+                </td>
+                <td class="header-title-cell">
+                    <div class="doc-title">{{ $waiver_title }}</div>
+                </td>
+            </tr>
+        </table>
 
-    <div class="warning-box">
-        <h3>⚠️ IMPORTANT NOTICE</h3>
-        <p>Surfing is an inherently dangerous activity that involves significant risks including, but not limited to, drowning, collision with surfboards, marine life encounters, and injuries from waves and underwater obstacles. By signing this waiver, you acknowledge and accept these risks.</p>
-    </div>
+        <!-- Participant Info Row 1: Name, Birthday, Age, Email -->
+        <table class="fields-table">
+            <tr>
+                <td class="field-label" style="width: 5%;">Name:</td>
+                <td class="field-value" style="width: 31%;">{{ $participant_name }}</td>
+                <td class="field-label" style="width: 7%; padding-left: 10px;">Birthday:</td>
+                <td class="field-value" style="width: 17%;">{{ $birthday_formatted ?: 'N/A' }}</td>
+                <td class="field-label" style="width: 4%; padding-left: 10px;">Age:</td>
+                <td class="field-value" style="width: 6%; text-align: center;">{{ $age }}</td>
+                <td class="field-label" style="width: 5%; padding-left: 10px;">Email:</td>
+                <td class="field-value" style="width: 25%;">{{ $email ?: 'N/A' }}</td>
+            </tr>
+        </table>
 
-    <div class="info-grid">
-        <div>
-            <div class="info-item">
-                <strong>Student Name:</strong> {{ $booking->student->name }}
-            </div>
-            <div class="info-item">
-                <strong>Student Age:</strong> {{ $booking->student_age }}
-            </div>
-            <div class="info-item">
-                <strong>Booking Date:</strong> {{ $booking->date->format('F d, Y') }}
-            </div>
+        <!-- Participant Info Row 2: Country, Conditional Hotel, Emergency Contact -->
+        <table class="fields-table">
+            <tr>
+                <td class="field-label" style="width: 7%;">Country:</td>
+                @if($needs_hotel_pickup)
+                    <td class="field-value" style="width: 18%;">{{ $country ?: 'N/A' }}</td>
+                    <td class="field-label" style="width: 5%; padding-left: 10px;">Hotel:</td>
+                    <td class="field-value" style="width: 22%;">{{ $hotel_name }}</td>
+                    <td class="field-label" style="width: 25%; padding-left: 10px;">In Case Of Emergency Name &amp; Number:</td>
+                    <td class="field-value" style="width: 23%;">{{ $emergency_contact }}</td>
+                @else
+                    <td class="field-value" style="width: 28%;">{{ $country ?: 'N/A' }}</td>
+                    <td class="field-label" style="width: 26%; padding-left: 14px;">In Case Of Emergency Name &amp; Number:</td>
+                    <td class="field-value" style="width: 39%;">{{ $emergency_contact }}</td>
+                @endif
+            </tr>
+        </table>
+
+        <!-- Intro Undertaking -->
+        <div class="intro-block">
+            By fully volunteering myself to take a surf lesson from (surf shop / resort)
+            <span class="inline-blank">{{ $surf_shop }}</span>
+            with SISA certified instructor
+            <span class="inline-blank">{{ $instructor_name }}</span>,
+            I have read, understood, approved, and agree to the following terms and conditions:
         </div>
-        <div>
-            <div class="info-item">
-                <strong>Instructor:</strong> {{ $booking->instructor->name }}
-            </div>
-            <div class="info-item">
-                <strong>Location:</strong> {{ $booking->surfSpot->name }}
-            </div>
-            <div class="info-item">
-                <strong>Signed Date:</strong> {{ $signed_at_datetime }}
-            </div>
-        </div>
-    </div>
 
-    <div class="content">
-        <h2>ASSUMPTION OF RISK</h2>
-        <p>I, {{ $signed_by }}, understand and acknowledge that surfing and related water activities involve inherent risks, dangers, and hazards that can result in serious injury or death. These risks include, but are not limited to:</p>
-        
-        <ul>
-            <li>Drowning or near-drowning incidents</li>
-            <li>Impact injuries from surfboards (my own or others)</li>
-            <li>Collisions with other surfers, swimmers, or marine life</li>
-            <li>Injuries from underwater rocks, reefs, or sandbars</li>
-            <li>Wave-related injuries including hold-downs and impact with the ocean floor</li>
-            <li>Marine life encounters (jellyfish stings, sea urchins, etc.)</li>
-            <li>Sunburn, dehydration, and exhaustion</li>
-            <li>Weather and ocean condition changes</li>
-        </ul>
+        <!-- Numbered Legal Clauses 1-7 -->
+        <table class="clauses-table">
+            @foreach($clauses as $clause)
+                <tr>
+                    <td class="clause-num">{{ $clause['number'] }}.</td>
+                    <td>
+                        <span class="clause-heading">{{ $clause['heading'] }}</span>
+                        {{ $clause['body'] }}
+                        @if($clause['number'] === 1)
+                            <div class="medical-info-line">
+                                <span class="clause-heading">Medical Info / Allergies or Conditions:</span>
+                                {{ !empty($medical_info) ? $medical_info : 'None declared' }}
+                            </div>
+                        @endif
+                    </td>
+                </tr>
+            @endforeach
+        </table>
 
-        <h2>RELEASE OF LIABILITY</h2>
-        
-        <p>In consideration of being permitted to participate in surfing instruction and related activities provided by {{ $company_name }} and its instructors, I hereby:</p>
-        
-        <p><strong>1.</strong> Assume all risks associated with surfing activities, whether or not described above, even if arising from the negligence of the instructors, {{ $company_name }}, or their respective agents, employees, or representatives.</p>
-        
-        <p><strong>2.</strong> Release, waive, discharge, and covenant not to sue {{ $company_name }}, its instructors, agents, employees, officers, directors, and volunteers from any and all liability, claims, demands, actions, and causes of action whatsoever, directly or indirectly arising out of or related to any loss, damage, injury, or death, that may be sustained by me while participating in surfing activities.</p>
-        
-        <p><strong>3.</strong> Agree to indemnify, defend, and hold harmless {{ $company_name }} and its instructors from any loss, liability, damage, or cost they may incur due to my participation in surfing activities, whether caused by negligence or otherwise.</p>
+        <!-- Bottom Signature Block -->
+        <table class="sig-table">
+            <tr>
+                <td class="sig-label">Printed Name</td>
+                <td class="sig-line" style="width: 28%;">{{ $signed_by }}</td>
+                <td class="sig-label" style="padding-left: 18px;">Signature</td>
+                <td class="sig-line sig-image-wrap" style="width: 30%;">
+                    @if(!empty($signature_image))
+                        <img src="{{ $signature_image }}" alt="Signature" class="sig-image">
+                    @endif
+                </td>
+                <td class="sig-note">(Parent's / Guardian's Signature if under 18)</td>
+            </tr>
+            <tr>
+                <td class="sig-label" style="padding-top: 12px;">Date</td>
+                <td class="sig-line" style="padding-top: 12px;">{{ $signed_at }}</td>
+                <td class="sig-label" style="padding-left: 18px; padding-top: 12px;">In the presence of</td>
+                <td class="sig-line" style="padding-top: 12px;">{{ $witness_name }}</td>
+                <td class="sig-note" style="padding-top: 12px;">(Receptionist)/Staff</td>
+            </tr>
+        </table>
 
-        <h2>MEDICAL CONSENT</h2>
-        
-        <p>I certify that I am physically fit and have not been advised otherwise by a qualified medical professional. I have no physical or medical conditions that would endanger myself or others during surfing activities. I consent to receive emergency medical treatment if necessary and agree to pay all associated costs.</p>
-
-        <h2>PHOTO/VIDEO RELEASE</h2>
-        
-        <p>I grant {{ $company_name }} permission to use photographs or video recordings of me taken during surfing activities for promotional purposes, including but not limited to social media, website content, and marketing materials.</p>
-
-        <h2>ACKNOWLEDGMENT</h2>
-        
-        <p>I have read this waiver carefully, fully understand its contents, and sign it voluntarily. I understand that by signing this document, I am giving up substantial rights, including my right to sue. I acknowledge that I am signing this agreement with the intention of affecting a legal and binding change in my legal rights.</p>
-    </div>
-
-    <div class="signature-box">
-        <div class="info-grid">
-            <div>
-                <p><strong>Participant Signature:</strong></p>
-                <div class="signature-line">
-                    {{ $signed_by }}
-                </div>
-            </div>
-            <div>
-                <p><strong>Date Signed:</strong></p>
-                <div class="signature-line">
-                    {{ $signed_at }}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="footer">
-        <p>This waiver is legally binding and shall be governed by the laws of the Philippines.</p>
-        <p>Retention Period: 7 years from signing date (until {{ now()->addYears(7)->format('F d, Y') }})</p>
-        <p style="margin-top: 10px;">If you have any questions about this waiver, please contact us before signing.</p>
+        <!-- Audit / Retention Footer -->
+        <table class="meta-footer">
+            <tr>
+                <td style="text-align: left;">
+                    Waiver ID: {{ $waiver_id }} &bull; Booking #SURF-{{ str_pad((string) $booking->id, 5, '0', STR_PAD_LEFT) }} &bull; Signed: {{ $signed_at_datetime }}
+                </td>
+                <td style="text-align: right;">
+                    Retained electronically for 7 years (until {{ $retention_until }})
+                </td>
+            </tr>
+        </table>
     </div>
 </body>
 </html>

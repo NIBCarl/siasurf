@@ -34,12 +34,25 @@ interface Booking {
   created_at?: string | null
   status: string
   total_amount: number
+  lesson_price?: number | null
+  service_fee_amount?: number | null
+  refund_amount?: number | null
+  instructor_retained_amount?: number | null
+  latest_refund?: {
+    id: number
+    amount: number
+    status: string
+    status_label: string
+    basis_label: string
+  } | null
   skill_level: string
   student_age: number
   height: number | null
   weight: number | null
   student_count: number
   has_board: boolean
+  needs_hotel_pickup?: boolean
+  hotel_name?: string | null
   duration_hours: number
   started_at: string | null
   notes: string | null
@@ -321,6 +334,10 @@ const paymentStatusLabel = computed(() => {
       return 'Receipt to verify'
     case 'failed':
       return 'Failed'
+    case 'refund_requested':
+      return 'Refund requested'
+    case 'refund_processing':
+      return 'Refund processing'
     case 'refunded':
       return 'Refunded'
     default:
@@ -485,6 +502,7 @@ const submitDecline = () => {
 const showChangeModal = ref(false)
 const changeForm = useForm({
   type: 'reschedule' as 'reschedule' | 'cancellation',
+  cancellation_reason: 'instructor' as 'instructor' | 'weather',
   date: '',
   time_period: 'morning',
   start_time: '06:00',
@@ -496,6 +514,7 @@ const openChangeModal = (type: 'reschedule' | 'cancellation') => {
   changeForm.reset()
   changeForm.clearErrors()
   changeForm.type = type
+  changeForm.cancellation_reason = 'instructor'
   changeForm.date = props.booking.date
   showChangeModal.value = true
 }
@@ -940,14 +959,30 @@ const showPrimaryAttendance = computed(
                     <ExclamationTriangleIcon class="h-3.5 w-3.5" aria-hidden="true" />
                     Medical note: {{ participant.medical_info }}
                   </span>
-                  <span
-                    v-if="participant.emergency_contact_phone"
-                    class="chip chip-neutral"
-                  >
-                    <PhoneIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    {{ participant.emergency_contact_name ?? 'Emergency' }} · {{ participant.emergency_contact_phone }}
-                  </span>
-                </div>
+                    <span
+                      v-if="participant.emergency_contact_phone || participant.emergency_contact_name"
+                      class="chip chip-neutral"
+                    >
+                      <PhoneIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      <template v-if="participant.emergency_contact_name && participant.emergency_contact_phone && participant.emergency_contact_name !== participant.emergency_contact_phone">
+                        {{ participant.emergency_contact_name }} · {{ participant.emergency_contact_phone }}
+                      </template>
+                      <template v-else>
+                        {{ participant.emergency_contact_phone || participant.emergency_contact_name }}
+                      </template>
+                    </span>
+                    <a
+                      v-for="waiver in participant.waivers ?? []"
+                      :key="waiver.id"
+                      :href="route('waivers.view', waiver.id)"
+                      target="_blank"
+                      rel="noopener"
+                      class="chip chip-neutral hover:border-lagoon-600 hover:text-lagoon-700"
+                    >
+                      <DocumentCheckIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      View {{ waiver.type === 'parental_consent' ? 'Consent' : 'Waiver' }} PDF
+                    </a>
+                  </div>
               </div>
 
               <!-- Booking-level fallback for sessions recorded without a party list -->
@@ -978,6 +1013,26 @@ const showPrimaryAttendance = computed(
                   <span class="chip chip-neutral">{{ booking.board_recommendation.type }}</span>
                   <span class="chip chip-neutral">{{ booking.board_recommendation.volume_liters }}L</span>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            v-if="booking.needs_hotel_pickup && booking.hotel_name"
+            class="rounded-card border border-lagoon-200 bg-lagoon-50 p-4"
+          >
+            <div class="flex items-start gap-3">
+              <MapPinIcon class="mt-0.5 h-5 w-5 shrink-0 text-lagoon-700" aria-hidden="true" />
+              <div>
+                <p class="text-label font-bold uppercase tracking-[0.06em] text-lagoon-800">
+                  Hotel pickup requested
+                </p>
+                <p class="mt-1 text-body font-semibold text-deep-950">
+                  {{ booking.hotel_name }}
+                </p>
+                <p class="mt-0.5 text-body-sm text-lagoon-900">
+                  The student requested pickup from this accommodation before the surf lesson.
+                </p>
               </div>
             </div>
           </section>
@@ -1220,6 +1275,21 @@ const showPrimaryAttendance = computed(
                 <span class="chip" :class="`chip-${paymentTone}`">
                   {{ paymentChipText }}
                 </span>
+              </div>
+
+              <div
+                v-if="booking.latest_refund"
+                class="rounded-control border border-sand-200 bg-sand-50 p-3 text-body-sm text-deep-900"
+              >
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-600">
+                  {{ booking.latest_refund.status_label }}
+                </p>
+                <p class="mt-1 font-semibold">
+                  Student refund: {{ formatMoney(booking.latest_refund.amount) }}
+                </p>
+                <p class="mt-0.5 text-label text-stone-500">
+                  {{ booking.latest_refund.basis_label }}
+                </p>
               </div>
 
               <!-- Underpaid violation card -->
@@ -1505,6 +1575,44 @@ const showPrimaryAttendance = computed(
           <p v-else class="mt-3 rounded-control border border-lagoon-200 bg-lagoon-50 px-3 py-2 text-body-sm text-lagoon-800">
             More than 24 hours' notice, so the change applies immediately.
           </p>
+
+          <div v-if="changeForm.type === 'cancellation'" class="mt-4 space-y-2">
+            <p class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+              Cancellation cause
+            </p>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                class="rounded-control border px-3 py-2 text-left text-body-sm font-semibold transition-colors"
+                :class="
+                  changeForm.cancellation_reason === 'instructor'
+                    ? 'border-deep-950 bg-deep-950 text-white'
+                    : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                "
+                @click="changeForm.cancellation_reason = 'instructor'"
+              >
+                Instructor unavailable
+              </button>
+              <button
+                type="button"
+                class="rounded-control border px-3 py-2 text-left text-body-sm font-semibold transition-colors"
+                :class="
+                  changeForm.cancellation_reason === 'weather'
+                    ? 'border-deep-950 bg-deep-950 text-white'
+                    : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                "
+                @click="changeForm.cancellation_reason = 'weather'"
+              >
+                Unsafe weather / sea conditions
+              </button>
+            </div>
+            <p
+              v-if="booking.payment?.payment_method === 'gcash' && booking.payment?.status === 'completed'"
+              class="text-label text-stone-600"
+            >
+              Cancelling this paid GCash booking automatically triggers a 100% lesson-price refund to the student (the 7% platform fee is retained).
+            </p>
+          </div>
 
           <div v-if="changeForm.type === 'reschedule'" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div class="sm:col-span-2">

@@ -19,8 +19,10 @@ use App\Models\User;
 use App\Notifications\BookingCancelledNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
+use App\Services\BookingCancellationService;
 use App\Services\BookingRequestGuard;
 use App\Services\PricingService;
+use App\Services\RefundCalculatorService;
 use App\Services\SafetyService;
 use App\Services\StormglassService;
 use Carbon\Carbon;
@@ -125,12 +127,16 @@ class BookingController extends Controller
             ->orderBy('name')
             ->get();
 
+        $studentUser = auth()->user();
+        $studentProfile = $studentUser->studentProfile;
+
         return Inertia::render('Booking/Create', [
             'instructor' => $instructor,
             'surfSpots' => $surfSpots,
             'safetyRules' => $safetyRules,
             'serviceOptions' => $serviceOptions,
             'defaultSessionType' => $recommendedService->value,
+            'serviceFeePercent' => PricingService::serviceFeePercent(),
             // Explains why some breaks are not in the list.
             'surfSpotRule' => $studentSkill->surfSpotRuleLabel(),
             'allowedSurfSpotDifficulties' => $studentSkill->allowedSurfSpotDifficulties(),
@@ -141,11 +147,17 @@ class BookingController extends Controller
             'defaultDurationMinutes' => Booking::standardDurationMinutes(),
             // The account holder's level is the source of truth (set at signup
             // and maintained by the skill-upgrade flow) - not re-asked here.
-            'studentSkillLevel' => auth()->user()->studentProfile?->skill_level ?? SkillLevel::Beginner->value,
-            'studentName' => auth()->user()->name,
+            'studentSkillLevel' => $studentProfile?->skill_level ?? SkillLevel::Beginner->value,
+            'studentName' => $studentUser->name,
+            'studentProfile' => [
+                'email' => $studentUser->email,
+                'birthday' => ($studentProfile?->birthday ?? $studentProfile?->date_of_birth)?->format('Y-m-d'),
+                'age' => $studentProfile?->age,
+                'country' => $studentProfile?->country,
+            ],
             // Details captured during onboarding, so the student is not asked
             // for their height and weight on every booking.
-            'prefill' => auth()->user()->studentProfile?->bookingPrefill() ?? [],
+            'prefill' => $studentProfile?->bookingPrefill() ?? [],
             'step' => 1,
         ]);
     }
@@ -206,13 +218,20 @@ class BookingController extends Controller
             'student_count' => 'required|integer|min:1|max:10',
             'surf_spot_id' => 'required|exists:surf_spots,id',
             'has_board' => 'required|boolean',
+            'needs_hotel_pickup' => 'nullable|boolean',
+            'hotel_name' => 'nullable|required_if:needs_hotel_pickup,true,1|string|max:255',
+            'student_birthday' => ['nullable', 'date', 'after:1920-01-01', 'before_or_equal:'.now()->subYears(5)->toDateString()],
+            'student_country' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:1000',
 
             // Everyone surfing. When present the first entry is the account
             // holder; the rest are declared companions.
             'participants' => 'nullable|array|max:10',
             'participants.*.full_name' => 'required|string|max:255',
+            'participants.*.birthday' => ['nullable', 'date', 'after:1920-01-01', 'before_or_equal:'.now()->subYears(5)->toDateString()],
             'participants.*.age' => 'required|integer|min:5|max:100',
+            'participants.*.email' => 'nullable|email|max:255',
+            'participants.*.country' => 'nullable|string|max:100',
             'participants.*.height' => 'nullable|numeric|min:50|max:250',
             'participants.*.weight' => 'nullable|numeric|min:10|max:200',
             'participants.*.skill_level' => 'required|in:beginner,intermediate,advanced',
@@ -226,6 +245,7 @@ class BookingController extends Controller
             'end_time.after' => 'The end time must be after the start time.',
             'height.required' => 'Height is needed to recommend a board. Tick “I have my own board” if you do not need one.',
             'weight.required' => 'Weight is needed to recommend a board. Tick “I have my own board” if you do not need one.',
+            'hotel_name.required_if' => 'Please enter the hotel or accommodation name where the instructor will pick you up.',
         ]);
 
         // Per-participant board-size fields follow the same rule: only required
@@ -267,15 +287,53 @@ class BookingController extends Controller
 
         // Resolve who is surfing. The account holder's skill level always comes
         // from their profile (the source of truth) - never from the form.
-        $profileLevel = auth()->user()->studentProfile?->skill_level;
+        $studentUser = auth()->user();
+        $studentProfile = $studentUser->studentProfile;
+
+        // If a legacy student account supplied missing birthday/country on the
+        // booking form, persist them onto their student profile so future
+        // waivers are prefilled automatically.
+        if ($studentUser->isStudent() && (! empty($validated['student_birthday']) || ! empty($validated['student_country']))) {
+            $profileUpdates = [];
+            if (empty($studentProfile?->birthday) && ! empty($validated['student_birthday'])) {
+                $profileUpdates['birthday'] = $validated['student_birthday'];
+            }
+            if (empty($studentProfile?->country) && ! empty($validated['student_country'])) {
+                $profileUpdates['country'] = trim((string) $validated['student_country']);
+            }
+            if (! empty($profileUpdates)) {
+                if ($studentProfile) {
+                    $studentProfile->update($profileUpdates);
+                    $studentProfile->refresh();
+                } else {
+                    $studentProfile = $studentUser->studentProfile()->create(array_merge([
+                        'skill_level' => $validated['skill_level'] ?? SkillLevel::Beginner->value,
+                        'is_first_time' => true,
+                        'status' => 'active',
+                    ], $profileUpdates));
+                }
+            }
+        }
+
+        $profileLevel = $studentProfile?->skill_level;
         $primarySkill = $profileLevel instanceof SkillLevel
             ? $profileLevel->value
             : ($profileLevel ?: ($validated['skill_level'] ?? SkillLevel::Beginner->value));
+
+        $needsHotelPickup = (bool) ($validated['needs_hotel_pickup'] ?? false);
+        $validated['needs_hotel_pickup'] = $needsHotelPickup;
+        $validated['hotel_name'] = $needsHotelPickup && ! empty($validated['hotel_name'])
+            ? trim((string) $validated['hotel_name'])
+            : null;
 
         // Height/weight may be intentionally absent when the student brings a
         // board, so normalise them before the row is written.
         $validated['height'] = $validated['height'] ?? null;
         $validated['weight'] = $validated['weight'] ?? null;
+
+        $primaryBirthday = $studentProfile?->birthday?->format('Y-m-d');
+        $primaryCountry = $studentProfile?->country;
+        $primaryEmail = $studentUser->email;
 
         $participantsInput = $validated['participants'] ?? null;
         $hasExplicitParticipants = ! empty($participantsInput);
@@ -283,6 +341,12 @@ class BookingController extends Controller
         if ($hasExplicitParticipants) {
             // Index 0 is the account holder; override any client-supplied level.
             $participantsInput[0]['skill_level'] = $primarySkill;
+            $participantsInput[0]['birthday'] = $primaryBirthday ?? ($participantsInput[0]['birthday'] ?? null);
+            $participantsInput[0]['email'] = $primaryEmail;
+            $participantsInput[0]['country'] = $primaryCountry ?? ($participantsInput[0]['country'] ?? null);
+            if ($studentProfile?->age !== null) {
+                $participantsInput[0]['age'] = $studentProfile->age;
+            }
             $validated['student_count'] = count($participantsInput);
 
             $primary = $participantsInput[0];
@@ -293,9 +357,14 @@ class BookingController extends Controller
             $validated['has_board'] = $primary['has_board'];
         } else {
             // Legacy single-person payload: synthesise the primary participant.
+            $primaryAge = $studentProfile?->age ?? $validated['student_age'];
+            $validated['student_age'] = $primaryAge;
             $participantsInput = [[
-                'full_name' => auth()->user()->name,
-                'age' => $validated['student_age'],
+                'full_name' => $studentUser->name,
+                'birthday' => $primaryBirthday,
+                'age' => $primaryAge,
+                'email' => $primaryEmail,
+                'country' => $primaryCountry,
                 'height' => $validated['height'] ?? null,
                 'weight' => $validated['weight'] ?? null,
                 'skill_level' => $primarySkill,
@@ -434,11 +503,19 @@ class BookingController extends Controller
                     'time_period' => $validated['time_period'],
                 ]);
 
+                $tz = config('app.timezone', 'Asia/Manila');
+                $lessonDate = Carbon::parse($validated['date'], $tz)->startOfDay();
+                $bookingDate = now($tz)->startOfDay();
+                $leadDays = (int) round($bookingDate->diffInDays($lessonDate, false));
+                $isLongTerm = $leadDays > (int) config('siasurf.refunds.long_term_threshold_days', 30);
+
                 $booking = Booking::create([
                     'student_id' => auth()->id(),
                     'instructor_id' => $instructor->id,
                     'surf_spot_id' => $validated['surf_spot_id'],
                     'date' => $validated['date'],
+                    'original_date' => $validated['date'],
+                    'is_long_term' => $isLongTerm,
                     'time_period' => $validated['time_period'],
                     'start_time' => $validated['start_time'],
                     'end_time' => $validated['end_time'],
@@ -446,11 +523,16 @@ class BookingController extends Controller
                     'skill_level' => $validated['skill_level'],
                     'session_type' => $sessionType->value,
                     'hourly_rate' => $pricing['base_rate'],
+                    'lesson_price' => $pricing['lesson_price'],
+                    'service_fee_percent' => $pricing['service_fee_percent'],
+                    'service_fee_amount' => $pricing['service_fee_amount'],
                     'student_age' => $validated['student_age'],
                     'height' => $validated['height'],
                     'weight' => $validated['weight'],
                     'student_count' => $validated['student_count'],
                     'has_board' => $validated['has_board'],
+                    'needs_hotel_pickup' => $validated['needs_hotel_pickup'],
+                    'hotel_name' => $validated['hotel_name'],
                     'status' => BookingStatus::Pending,
                     'total_amount' => $pricing['total'],
                     'payment_status' => PaymentStatus::Pending,
@@ -463,7 +545,10 @@ class BookingController extends Controller
                             ? BookingParticipant::ROLE_PRIMARY
                             : BookingParticipant::ROLE_COMPANION,
                         'full_name' => $participant['full_name'] ?? null,
+                        'birthday' => $participant['birthday'] ?? null,
                         'age' => $participant['age'] ?? null,
+                        'email' => $participant['email'] ?? null,
+                        'country' => $participant['country'] ?? null,
                         'height' => $participant['height'] ?? null,
                         'weight' => $participant['weight'] ?? null,
                         'skill_level' => $participant['skill_level'] ?? SkillLevel::Beginner->value,
@@ -591,6 +676,8 @@ class BookingController extends Controller
             // Create or update payment record
             $booking->payment()->updateOrCreate([], [
                 'amount' => $booking->total_amount,
+                'lesson_price' => $booking->effectiveLessonPrice(),
+                'service_fee_amount' => $booking->effectiveServiceFeeAmount(),
                 'payment_method' => $validated['payment_method'],
                 'status' => $validated['payment_method'] === 'cash'
                     ? PaymentStatus::PendingCash
@@ -688,7 +775,7 @@ class BookingController extends Controller
     /**
      * Display user's bookings
      */
-    public function index(Request $request): Response
+    public function index(Request $request, RefundCalculatorService $refundCalculator): Response
     {
         $user = auth()->user();
         $filter = $request->query('status', 'all');
@@ -712,6 +799,7 @@ class BookingController extends Controller
             'instructor',
             'surfSpot',
             'payment',
+            'latestRefund',
             'conversation' => function ($query) use ($user) {
                 $query->withCount([
                     'messages as unread_count' => fn ($messages) => $messages
@@ -728,12 +816,15 @@ class BookingController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $bookings->through(function (Booking $booking) {
+        $bookings->through(function (Booking $booking) use ($refundCalculator) {
             return array_merge($booking->toArray(), [
                 'chat_unread_count' => (int) ($booking->conversation?->unread_count ?? 0),
-                // Once a GCash receipt has been uploaded (or the payment is
-                // already verified) the cancel action is no longer offered.
                 'can_be_cancelled' => $booking->canBeCancelled(),
+                'has_pending_receipt_verification' => $booking->hasPendingReceiptVerification(),
+                'has_pending_reschedule_response' => $booking->hasPendingRescheduleResponse(),
+                'refund_preview' => $booking->canBeCancelled()
+                    ? $refundCalculator->previewForStudent($booking)
+                    : null,
             ]);
         });
 
@@ -754,7 +845,7 @@ class BookingController extends Controller
     /**
      * Display single booking details
      */
-    public function show(Booking $booking): Response
+    public function show(Booking $booking, RefundCalculatorService $refundCalculator): Response
     {
         Gate::authorize('view', $booking);
 
@@ -762,8 +853,11 @@ class BookingController extends Controller
             'instructor',
             'surfSpot',
             'payment',
+            'latestRefund',
+            'refunds',
             'review',
             'waiver',
+            'waivers',
             'participants.waivers',
             // Latest first: the student should see SISA's note on the change
             // that cancelled or refused their lesson.
@@ -773,6 +867,12 @@ class BookingController extends Controller
         // Payment state decides whether cancellation is still allowed.
         $booking->setAttribute('can_be_cancelled', $booking->canBeCancelled());
         $booking->setAttribute('has_submitted_payment', $booking->hasSubmittedPayment());
+        $booking->setAttribute('has_pending_receipt_verification', $booking->hasPendingReceiptVerification());
+        $booking->setAttribute('has_pending_reschedule_response', $booking->hasPendingRescheduleResponse());
+        $booking->setAttribute(
+            'refund_preview',
+            $booking->canBeCancelled() ? $refundCalculator->previewForStudent($booking) : null
+        );
 
         $latestChange = $booking->changeRequests->first();
 
@@ -791,33 +891,62 @@ class BookingController extends Controller
     }
 
     /**
+     * Accept an instructor-initiated reschedule so standard cancellation terms resume.
+     */
+    public function acceptReschedule(Booking $booking): RedirectResponse
+    {
+        Gate::authorize('view', $booking);
+
+        if (auth()->id() !== $booking->student_id) {
+            abort(403);
+        }
+
+        if (! $booking->hasPendingRescheduleResponse()) {
+            return back()->with('info', 'There is no pending reschedule to confirm.');
+        }
+
+        $booking->update([
+            'student_accepted_reschedule_at' => now(),
+        ]);
+
+        return back()->with('success', 'New lesson schedule accepted.');
+    }
+
+    /**
      * Cancel a booking
      */
-    public function cancel(Request $request, Booking $booking, AvailabilityService $availabilityService): RedirectResponse
-    {
+    public function cancel(
+        Request $request,
+        Booking $booking,
+        BookingCancellationService $cancellationService
+    ): RedirectResponse {
         Gate::authorize('cancel', $booking);
 
         $validated = $request->validate([
             'reason' => 'required|string|max:500',
         ]);
 
-        // FR 1.8.3 - remember the slot before the booking loses its date.
-        $date = $availabilityService->dateOf($booking);
-        $period = $availabilityService->timePeriodOf($booking);
-        $instructorId = $booking->instructor_id;
+        try {
+            $result = $cancellationService->cancel(
+                $booking,
+                CancellationReason::Student,
+                $validated['reason'],
+                auth()->user()
+            );
+        } catch (\App\Exceptions\BookingChangeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
 
-        $booking->cancel($validated['reason'], CancellationReason::Student);
+        $refund = $result['refund'];
+        $calc = $result['calculation'];
 
-        // Hand the time slot back so the instructor can be booked again.
-        $availabilityService->releaseSlot($instructorId, $date, $period, $booking->id);
+        if ($refund) {
+            $amountLabel = '₱' . number_format((float) $refund->amount, 2);
+            $message = $refund->status === \App\Enums\RefundStatus::ManualRequired
+                ? "Booking cancelled. A {$calc->refundPercentage}% refund ({$amountLabel}) is queued for SISA processing."
+                : "Booking cancelled. A {$calc->refundPercentage}% refund ({$amountLabel}) has been initiated.";
 
-        broadcast(new BookingCancelled(
-            $booking->fresh(['student', 'instructor', 'surfSpot']),
-            $validated['reason']
-        ))->toOthers();
-
-        foreach ([$booking->student, $booking->instructor] as $party) {
-            $party?->notify(new BookingCancelledNotification($booking, $validated['reason']));
+            return back()->with('success', $message);
         }
 
         return back()->with('success', 'Booking cancelled successfully.');

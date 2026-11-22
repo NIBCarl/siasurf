@@ -91,6 +91,43 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Platform Service Fee (BR-PRC-03)
+    |--------------------------------------------------------------------------
+    |
+    | Charged on top of the instructor's lesson price (7% by default). Never
+    | deducted from the instructor's earnings and never refunded on
+    | cancellation.
+    |
+    */
+
+    'fees' => [
+        'service_fee_percent' => (float) env('SIASURF_SERVICE_FEE_PERCENT', 7.0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cancellation & Tiered Refund Policy (BR-CXL-01 to BR-CXL-10)
+    |--------------------------------------------------------------------------
+    |
+    | Long-term bookings (> 30 days ahead at booking time) allow free 100%
+    | lesson-price cancellation within 30 days of payment; after 30 days they
+    | fall through to the short-term sliding window (7+ days: 100%, 3-6 days:
+    | 50%, < 3 days / same day: 0%). Refunds beyond PayMongo's 30-day window
+    | are routed to manual SISA completion.
+    |
+    */
+
+    'refunds' => [
+        'long_term_threshold_days' => (int) env('SIASURF_REFUND_LONG_TERM_THRESHOLD_DAYS', 30),
+        'long_term_window_days' => (int) env('SIASURF_REFUND_LONG_TERM_WINDOW_DAYS', 30),
+        'max_days_from_payment' => (int) env('SIASURF_REFUND_MAX_DAYS_FROM_PAYMENT', 30),
+        'short_term_full_days' => (int) env('SIASURF_REFUND_SHORT_TERM_FULL_DAYS', 7),
+        'short_term_half_days' => (int) env('SIASURF_REFUND_SHORT_TERM_HALF_DAYS', 3),
+        'short_term_half_percent' => (int) env('SIASURF_REFUND_SHORT_TERM_HALF_PERCENT', 50),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Slot capacity per instructor level
     |--------------------------------------------------------------------------
     |

@@ -4,6 +4,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 defineProps<{
     mustVerifyEmail?: Boolean;
@@ -12,10 +13,52 @@ defineProps<{
 
 const user = usePage().props.auth.user;
 
+const maxBirthday = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 5);
+    return d.toISOString().split('T')[0];
+})();
+
+const commonCountries = [
+    'Philippines',
+    'Australia',
+    'United States',
+    'United Kingdom',
+    'Canada',
+    'France',
+    'Germany',
+    'Spain',
+    'Netherlands',
+    'Italy',
+    'Switzerland',
+    'Sweden',
+    'Japan',
+    'South Korea',
+    'Singapore',
+    'New Zealand',
+    'Israel',
+    'Brazil',
+];
+
 const form = useForm({
     name: user.name,
     email: user.email,
     phone: user.phone ?? '',
+    birthday: user.student_profile?.birthday ?? '',
+    country: user.student_profile?.country ?? '',
+});
+
+const computedAge = computed(() => {
+    if (!form.birthday) return null;
+    const birth = new Date(form.birthday);
+    if (Number.isNaN(birth.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+    }
+    return age >= 0 ? age : null;
 });
 </script>
 
@@ -84,6 +127,57 @@ const form = useForm({
 
                 <InputError class="mt-2" :message="form.errors.phone" />
             </div>
+
+            <template v-if="user.role === 'student'">
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <InputLabel for="birthday" value="Birthday" />
+                            <span v-if="computedAge !== null" class="text-xs font-semibold text-ocean-700">
+                                Age: {{ computedAge }}
+                            </span>
+                        </div>
+
+                        <TextInput
+                            id="birthday"
+                            type="date"
+                            class="mt-1 block w-full"
+                            v-model="form.birthday"
+                            :max="maxBirthday"
+                            min="1920-01-01"
+                        />
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Used to automatically prefill your birthday and age on surf lesson waivers.
+                        </p>
+
+                        <InputError class="mt-2" :message="form.errors.birthday" />
+                    </div>
+
+                    <div>
+                        <InputLabel for="country" value="Country" />
+
+                        <TextInput
+                            id="country"
+                            type="text"
+                            list="profile-country-options"
+                            class="mt-1 block w-full"
+                            v-model="form.country"
+                            autocomplete="country-name"
+                            placeholder="e.g. Philippines"
+                        />
+                        <datalist id="profile-country-options">
+                            <option v-for="country in commonCountries" :key="country" :value="country" />
+                        </datalist>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Prefilled on your surf lesson waiver.
+                        </p>
+
+                        <InputError class="mt-2" :message="form.errors.country" />
+                    </div>
+                </div>
+            </template>
 
             <div v-if="mustVerifyEmail && user.email_verified_at === null">
                 <p class="mt-2 text-sm text-slate-800">

@@ -56,9 +56,11 @@ interface Student {
   student_profile: {
       skill_level: string
       is_first_time: boolean
+      birthday?: string | null
+      country?: string | null
       status: string
-      // Derived from date_of_birth, so it is always current.
-      age: number | null
+      // Derived from date_of_birth / birthday, so it is always current.
+      age?: number | null
       height: string | null
       weight: string | null
       has_board: boolean
@@ -285,6 +287,24 @@ const toggleBanStatus = () => {
                                 <p class="font-bold text-slate-900">{{ student.phone || 'Not provided' }}</p>
                             </div>
                             
+                            <div v-if="student.student_profile">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Birthday &amp; Age</p>
+                                <p class="font-bold text-slate-900">
+                                    <template v-if="student.student_profile.birthday">
+                                        {{ student.student_profile.birthday }}
+                                        <span v-if="student.student_profile.age !== null && student.student_profile.age !== undefined" class="text-slate-500 font-semibold">
+                                            ({{ student.student_profile.age }} yrs)
+                                        </span>
+                                    </template>
+                                    <template v-else>Not provided</template>
+                                </p>
+                            </div>
+
+                            <div v-if="student.student_profile">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Country</p>
+                                <p class="font-bold text-slate-900">{{ student.student_profile.country || 'Not provided' }}</p>
+                            </div>
+
                             <div v-if="student.student_profile">
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">First Time Surfer?</p>
                                 <p class="font-bold text-slate-900">{{ student.student_profile.is_first_time ? 'Yes' : 'No' }}</p>
