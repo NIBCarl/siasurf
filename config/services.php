@@ -39,6 +39,13 @@ return [
         'key' => env('STORMGLASS_API_KEY'),
     ],
 
+    'paymongo' => [
+        'secret_key' => env('PAYMONGO_SECRET_KEY'),
+        'public_key' => env('PAYMONGO_PUBLIC_KEY'),
+        'webhook_secret' => env('PAYMONGO_WEBHOOK_SECRET'),
+        'mode' => env('PAYMONGO_MODE', 'test'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Upload malware scanning

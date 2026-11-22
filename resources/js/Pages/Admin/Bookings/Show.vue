@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
+import { computed, ref } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import Modal from '@/Components/Modal.vue'
 import { 
     ChevronLeftIcon,
     ArrowDownTrayIcon,
@@ -27,7 +28,12 @@ interface Booking {
   end_time?: string | null
   created_at?: string | null
   status: string
+  lesson_price?: number | null
+  service_fee_percent?: number | null
+  service_fee_amount?: number | null
   total_amount: number
+  refund_amount?: number | null
+  instructor_retained_amount?: number | null
   skill_level: string
   student_age: number
   student_count: number
@@ -35,11 +41,17 @@ interface Booking {
   hotel_name?: string | null
   notes: string
   decline_reason?: string | null
+  cancellation_reason?: string | null
+  cancellation_label?: string | null
+  cancellation_note?: string | null
+  cancelled_at?: string | null
   student: { id: number; name: string; email: string; phone: string; student_profile?: { status: string } | null }
   instructor: { name: string; email: string }
   surf_spot: { name: string }
   payment?: {
     amount: number
+    lesson_price?: number | null
+    service_fee_amount?: number | null
     payment_method: string
     status: string
     paid_at: string
@@ -51,6 +63,28 @@ interface Booking {
     receipt_note?: string | null
     verified_by?: { name: string } | null
   }
+  latest_refund?: {
+    id: number
+    amount: number
+    lesson_price: number
+    service_fee_retained: number
+    refund_percentage: number
+    status: string
+    status_label: string
+    basis_label: string
+    gateway: string
+    paymongo_refund_id?: string | null
+    failure_reason?: string | null
+  } | null
+  refunds?: Array<{
+    id: number
+    amount: number
+    status: string
+    status_label: string
+    basis_label: string
+    paymongo_refund_id?: string | null
+    created_at: string
+  }>
   waiver?: { id: number; signed_at: string; pdf_path: string }
   waivers?: Array<{ id: number; type: string; participant_name?: string | null; signed_by: string; signed_at: string }>
   review?: { id: number; rating: number | null; comment: string; photo_path: string | null; created_at: string }
@@ -79,7 +113,56 @@ const verifyReceipt = () => {
 const isUnderpaid = computed(() => props.booking.payment?.status === 'underpaid')
 const paidAmount = computed(() => Number(props.booking.payment?.amount ?? 0))
 const totalAmount = computed(() => Number(props.booking.total_amount ?? 0))
+const lessonPriceAmount = computed(() => {
+  if (props.booking.lesson_price !== null && props.booking.lesson_price !== undefined) {
+    return Number(props.booking.lesson_price)
+  }
+  return Math.max(0, totalAmount.value - Number(props.booking.service_fee_amount ?? 0))
+})
+const serviceFeeAmount = computed(() => Number(props.booking.service_fee_amount ?? 0))
 const shortfallAmount = computed(() => Math.max(0, Math.round((totalAmount.value - paidAmount.value) * 100) / 100))
+
+const canAdminRefund = computed(
+  () =>
+    props.booking.payment?.payment_method === 'gcash' &&
+    props.booking.payment?.status === 'completed' &&
+    !props.booking.latest_refund,
+)
+
+const showRefundModal = ref(false)
+const refundForm = useForm({
+  reason: '',
+  amount: lessonPriceAmount.value,
+})
+
+const openRefundModal = () => {
+  refundForm.reset()
+  refundForm.clearErrors()
+  refundForm.amount = lessonPriceAmount.value
+  showRefundModal.value = true
+}
+
+const submitAdminRefund = () => {
+  refundForm.post(route('payments.refund', props.booking.id), {
+    preserveScroll: true,
+    onSuccess: () => {
+      showRefundModal.value = false
+    },
+  })
+}
+
+const retryRefund = (refundId: number) => {
+  router.post(route('admin.refunds.retry', refundId), {}, { preserveScroll: true })
+}
+
+const completeManualRefund = (refundId: number) => {
+  const reference = window.prompt('Optional GCash refund reference number:') ?? ''
+  router.post(
+    route('admin.refunds.complete-manual', refundId),
+    { reference },
+    { preserveScroll: true },
+  )
+}
 
 const settleRemainingBalance = () => {
   if (confirm(`Mark the full balance of ₱${totalAmount.value.toLocaleString()} as settled in cash for ${props.booking.student.name}?`)) {
@@ -267,7 +350,12 @@ const getStatusVariant = (status: string) => {
                             <button class="w-full py-2.5 bg-slate-50 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-100 transition-colors">
                                 View Full Profile
                             </button>
-                            <p class="text-[10px] text-slate-400 font-bold italic uppercase tracking-tighter">Earnings Share: 70% (₱{{ (booking.total_amount * 0.7).toFixed(0) }})</p>
+                            <p class="text-[10px] text-slate-400 font-bold italic uppercase tracking-tighter">
+                                Lesson Price (100% Instructor): ₱{{ lessonPriceAmount.toLocaleString() }}
+                                <template v-if="serviceFeeAmount > 0">
+                                    · SISA Fee ({{ Number(booking.service_fee_percent ?? 7) }}%): ₱{{ serviceFeeAmount.toLocaleString() }}
+                                </template>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -435,6 +523,53 @@ const getStatusVariant = (status: string) => {
                                         Receipt verified
                                     </p>
                                 </div>
+
+                                <!-- Refund Oversight & Action -->
+                                <div v-if="booking.latest_refund" class="rounded-2xl bg-white/15 p-3.5 text-xs space-y-2">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <p class="text-[10px] font-black uppercase tracking-widest opacity-75">
+                                            Refund Record · {{ booking.latest_refund.status_label }}
+                                        </p>
+                                        <span class="font-black">₱{{ Number(booking.latest_refund.amount).toLocaleString() }}</span>
+                                    </div>
+                                    <p class="opacity-90">{{ booking.latest_refund.basis_label }} ({{ booking.latest_refund.refund_percentage }}%)</p>
+                                    <p v-if="Number(booking.latest_refund.service_fee_retained) > 0" class="opacity-75">
+                                        Retained Fee: ₱{{ Number(booking.latest_refund.service_fee_retained).toLocaleString() }}
+                                    </p>
+                                    <p v-if="booking.latest_refund.paymongo_refund_id" class="font-mono text-[10px] opacity-80">
+                                        Ref: {{ booking.latest_refund.paymongo_refund_id }}
+                                    </p>
+                                    <p v-if="booking.latest_refund.failure_reason" class="text-rose-200 font-semibold">
+                                        {{ booking.latest_refund.failure_reason }}
+                                    </p>
+                                    <div class="flex flex-wrap gap-2 pt-1">
+                                        <button
+                                            v-if="booking.latest_refund.status === 'failed' && booking.latest_refund.gateway !== 'manual_gcash'"
+                                            type="button"
+                                            class="rounded-lg bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-ocean-700"
+                                            @click="retryRefund(booking.latest_refund.id)"
+                                        >
+                                            Retry PayMongo Refund
+                                        </button>
+                                        <button
+                                            v-if="booking.latest_refund.status === 'manual_required' || booking.latest_refund.status === 'failed'"
+                                            type="button"
+                                            class="rounded-lg border border-white/40 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white"
+                                            @click="completeManualRefund(booking.latest_refund.id)"
+                                        >
+                                            Mark Manual Completed
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    v-if="canAdminRefund"
+                                    type="button"
+                                    class="w-full rounded-xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-ocean-700 transition hover:bg-ocean-50"
+                                    @click="openRefundModal"
+                                >
+                                    Issue SISA Refund
+                                </button>
                             </div>
                             <div v-else class="flex flex-col items-center justify-center py-8 opacity-40 italic">
                                 <p class="text-sm font-bold">Awaiting Transaction</p>
@@ -555,5 +690,44 @@ const getStatusVariant = (status: string) => {
 
         </div>
     </div>
+
+    <Modal :show="showRefundModal" @close="showRefundModal = false" maxWidth="md">
+        <div class="p-6 space-y-4">
+            <h2 class="text-lg font-extrabold text-slate-900">Issue SISA Refund</h2>
+            <p class="text-xs text-slate-500">
+                Max refundable amount (lesson price): ₱{{ lessonPriceAmount.toLocaleString() }}.
+                <template v-if="serviceFeeAmount > 0">
+                    Platform service fee (₱{{ serviceFeeAmount.toLocaleString() }}) is retained.
+                </template>
+            </p>
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Refund Amount (₱)</label>
+                <input
+                    v-model.number="refundForm.amount"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    :max="lessonPriceAmount"
+                    class="w-full rounded-xl border-slate-200 text-sm"
+                />
+                <p v-if="refundForm.errors.amount" class="mt-1 text-xs font-bold text-rose-600">{{ refundForm.errors.amount }}</p>
+            </div>
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Reason</label>
+                <textarea
+                    v-model="refundForm.reason"
+                    rows="3"
+                    maxlength="500"
+                    placeholder="Explain the admin cancellation or refund decision..."
+                    class="w-full rounded-xl border-slate-200 text-sm"
+                ></textarea>
+                <p v-if="refundForm.errors.reason" class="mt-1 text-xs font-bold text-rose-600">{{ refundForm.errors.reason }}</p>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <BaseButton variant="secondary" @click="showRefundModal = false" :disabled="refundForm.processing">Cancel</BaseButton>
+                <BaseButton variant="danger" @click="submitAdminRefund" :loading="refundForm.processing">Confirm Refund</BaseButton>
+            </div>
+        </div>
+    </Modal>
     </AppLayout>
 </template>

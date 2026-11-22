@@ -28,6 +28,9 @@ class ReceiptService
         $hasExternalRef = !empty($payment?->receipt_reference) || $hasRealGatewayTx;
 
         $pageHeight = 615;
+        if ($booking->effectiveServiceFeeAmount() > 0) {
+            $pageHeight += 42;
+        }
         if ($isUnderpaid) {
             $pageHeight += 85;
         }

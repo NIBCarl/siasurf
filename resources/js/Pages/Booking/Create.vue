@@ -66,6 +66,7 @@ interface Props {
   studentProfile?: StudentProfileInfo
   serviceOptions?: ServiceOption[]
   defaultSessionType?: string
+  serviceFeePercent?: number
   // Details captured at onboarding, so the student is not asked for their
   // height and weight on every booking.
   prefill?: {
@@ -580,17 +581,24 @@ const tideWarning = computed(() => {
   return null
 })
 
-// Client-side pricing calculation (service-based rate)
+// Client-side pricing calculation (service-based rate + 7% non-refundable platform service fee)
 const estimatedPrice = computed(() => {
   const baseRate = Number(activeService.value?.rate ?? props.instructor.instructor_profile.rate_per_hour ?? 600)
   const hours = lessonHours.value
   const studentCount = form.student_count || 1
-  
-  const basePrice = baseRate * hours * studentCount
+  const feePercent = Number(props.serviceFeePercent ?? 7)
+
+  const lessonPrice = Math.round(baseRate * hours * studentCount * 100) / 100
+  const serviceFee = Math.round(lessonPrice * (feePercent / 100) * 100) / 100
+  const total = Math.round((lessonPrice + serviceFee) * 100) / 100
+
   return {
-    basePrice,
-    total: basePrice,
-    rate: baseRate
+    basePrice: lessonPrice,
+    lessonPrice,
+    serviceFeePercent: feePercent,
+    serviceFee,
+    total,
+    rate: baseRate,
   }
 })
 
@@ -1518,7 +1526,17 @@ const submit = () => {
                   <span class="text-slate-500">Students</span>
                   <span class="font-medium text-slate-900">x {{ form.student_count }}</span>
                 </div>
-                
+                <div class="flex justify-between text-sm">
+                  <span class="text-slate-500">Lesson Price</span>
+                  <span class="font-medium text-slate-900">₱{{ estimatedPrice.lessonPrice.toLocaleString() }}</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                  <span class="text-slate-500">
+                    Service Fee ({{ estimatedPrice.serviceFeePercent }}% · non-refundable)
+                  </span>
+                  <span class="font-medium text-slate-900">₱{{ estimatedPrice.serviceFee.toLocaleString() }}</span>
+                </div>
+
                 <div class="pt-4 border-t border-slate-100 flex justify-between items-center">
                   <span class="text-base font-bold text-slate-900">Total Price</span>
                   <span class="text-2xl font-black text-ocean-600">₱{{ estimatedPrice.total.toLocaleString() }}</span>

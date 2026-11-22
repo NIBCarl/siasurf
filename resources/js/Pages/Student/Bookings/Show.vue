@@ -21,15 +21,57 @@ import {
   ShieldCheckIcon,
 } from '@heroicons/vue/24/outline'
 
+interface RefundPreview {
+  eligible: boolean
+  requires_refund_record: boolean
+  policy_type: string
+  basis: string
+  basis_label: string
+  basis_description: string
+  refund_percentage: number
+  lesson_price: number
+  service_fee_retained: number
+  refund_amount: number
+  instructor_retained_amount: number
+  days_before_session: number | null
+  days_since_payment: number | null
+  can_auto_dispatch: boolean
+  dispatch_mode: string
+  summary: string
+}
+
+interface RefundRecord {
+  id: number
+  amount: number
+  lesson_price: number
+  service_fee_retained: number
+  refund_percentage: number
+  status: string
+  status_label: string
+  basis: string
+  basis_label: string
+  gateway: string
+  paymongo_refund_id?: string | null
+  failure_reason?: string | null
+  requested_at?: string | null
+  processed_at?: string | null
+  completed_at?: string | null
+}
+
 interface Booking {
   id: number
   date: string
+  original_date?: string | null
   time_period: string
   start_time?: string | null
   end_time?: string | null
   created_at?: string | null
   status: string
+  lesson_price?: number | null
+  service_fee_percent?: number | null
+  service_fee_amount?: number | null
   total_amount: number
+  refund_amount?: number | null
   skill_level: string
   student_age: number
   height: number | null
@@ -45,6 +87,10 @@ interface Booking {
   cancelled_at?: string | null
   can_be_cancelled?: boolean
   has_submitted_payment?: boolean
+  has_pending_receipt_verification?: boolean
+  has_pending_reschedule_response?: boolean
+  refund_preview?: RefundPreview | null
+  latest_refund?: RefundRecord | null
   latest_change_request?: {
     id: number
     type: string | null
@@ -133,6 +179,7 @@ onMounted(() => {
       .listen('.booking.awaiting_payment', () => router.reload({ only: ['booking'] }))
       .listen('.booking.confirmed', () => router.reload({ only: ['booking'] }))
       .listen('.booking.cancelled', () => router.reload({ only: ['booking'] }))
+      .listen('.refund.updated', () => router.reload({ only: ['booking'] }))
   }
 })
 
@@ -214,9 +261,26 @@ const paymentLabel = (status?: string) => {
     pending_cash: 'Cash unpaid (Pay at beach)',
     pending_verification: 'Receipt awaiting verification',
     failed: 'Payment failed',
+    refund_requested: 'Refund requested',
+    refund_processing: 'Refund processing',
     refunded: 'Refunded',
   }
   return labels[status] ?? status.replace(/_/g, ' ')
+}
+
+const refundVariant = (status?: string): PillVariant => {
+  switch (status) {
+    case 'completed':
+      return 'verified'
+    case 'failed':
+      return 'critical'
+    case 'manual_required':
+    case 'requested':
+    case 'processing':
+      return 'pending'
+    default:
+      return 'neutral'
+  }
 }
 
 const formatDate = (date: string) =>
@@ -292,7 +356,41 @@ const receiptUrl = computed(() =>
     : null,
 )
 
-const paymentSubmitted = computed(() => props.booking.has_submitted_payment === true)
+const pendingReceiptVerification = computed(
+  () => props.booking.has_pending_receipt_verification === true
+    || props.booking.payment?.status === 'pending_verification',
+)
+
+const hasPendingReschedule = computed(
+  () => props.booking.has_pending_reschedule_response === true,
+)
+
+const acceptingReschedule = ref(false)
+const acceptReschedule = () => {
+  if (acceptingReschedule.value) return
+  acceptingReschedule.value = true
+  router.post(
+    route('student.bookings.accept-reschedule', props.booking.id),
+    {},
+    {
+      preserveScroll: true,
+      onFinish: () => {
+        acceptingReschedule.value = false
+      },
+    },
+  )
+}
+
+const refundPreview = computed(() => props.booking.refund_preview ?? null)
+const latestRefund = computed(() => props.booking.latest_refund ?? null)
+const lessonPriceAmount = computed(() => {
+  if (props.booking.lesson_price !== null && props.booking.lesson_price !== undefined) {
+    return Number(props.booking.lesson_price)
+  }
+  const fee = Number(props.booking.service_fee_amount ?? 0)
+  return Math.max(0, Number(props.booking.total_amount ?? 0) - fee)
+})
+const serviceFeeAmount = computed(() => Number(props.booking.service_fee_amount ?? 0))
 
 const isDeclined = computed(() => props.booking.status === 'declined')
 
@@ -413,6 +511,41 @@ const canChat = computed(() =>
                     SISA note on your change request
                 </p>
                 <p class="mt-1 text-body-sm text-amber-900">{{ adminChangeNote }}</p>
+            </div>
+
+            <!-- Instructor Rescheduled Banner: Student can accept new date or cancel for 100% lesson refund -->
+            <div
+                v-if="hasPendingReschedule && !isCancelled && !isDeclined"
+                class="rounded-card border border-amber-300 bg-amber-50 p-4"
+            >
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-800">
+                            Instructor Rescheduled Your Lesson
+                        </p>
+                        <p class="mt-1 text-body-sm text-amber-950">
+                            Your instructor moved this session to <strong>{{ formatDate(booking.date) }} · {{ scheduledSlot }}</strong>.
+                            If this new date does not work for you, you can decline and cancel for a <strong>100% refund of the lesson price</strong> (7% service fee retained).
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 shrink-0">
+                        <AppButton
+                            size="sm"
+                            :loading="acceptingReschedule"
+                            @click="acceptReschedule"
+                        >
+                            Accept new date
+                        </AppButton>
+                        <AppButton
+                            v-if="canCancel"
+                            size="sm"
+                            variant="danger"
+                            @click="openCancel"
+                        >
+                            Decline &amp; cancel (full refund)
+                        </AppButton>
+                    </div>
+                </div>
             </div>
 
             <!-- Session timeline -->
@@ -653,6 +786,9 @@ const canChat = computed(() =>
                                         ₱{{ formatAmount(booking.total_amount) }}
                                     </template>
                                 </p>
+                                <p v-if="serviceFeeAmount > 0" class="mt-1 text-label text-stone-500">
+                                    Lesson ₱{{ formatAmount(lessonPriceAmount) }} + Service Fee ₱{{ formatAmount(serviceFeeAmount) }} ({{ Number(booking.service_fee_percent ?? 7) }}%)
+                                </p>
                             </div>
                             <div>
                                 <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Method</p>
@@ -819,10 +955,39 @@ const canChat = computed(() =>
                             Upload GCash receipt
                         </a>
 
-                        <p v-if="paymentSubmitted" class="mt-3 rounded-control bg-amber-50 px-3 py-2 text-label text-amber-800">
-                            Payment has been submitted, so this booking can no longer be cancelled online.
-                            Contact SISA if you need to change it.
+                        <p v-if="pendingReceiptVerification" class="mt-3 rounded-control bg-amber-50 px-3 py-2 text-label text-amber-800">
+                            Your GCash receipt is currently awaiting verification. Online cancellation unlocks once the receipt is verified or rejected.
                         </p>
+
+                        <!-- Refund Status Card (ENT-12) -->
+                        <div
+                            v-if="latestRefund"
+                            class="mt-4 rounded-card border border-sand-200 bg-sand-50 p-4 space-y-2"
+                        >
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-600">
+                                    Refund Status
+                                </p>
+                                <StatusPill :variant="refundVariant(latestRefund.status)">
+                                    {{ latestRefund.status_label }}
+                                </StatusPill>
+                            </div>
+                            <p class="text-body-sm font-semibold text-deep-900">
+                                Refund amount: ₱{{ formatAmount(latestRefund.amount) }} ({{ latestRefund.refund_percentage }}% of ₱{{ formatAmount(latestRefund.lesson_price) }} lesson price)
+                            </p>
+                            <p class="text-label text-stone-600">
+                                Policy: {{ latestRefund.basis_label }}
+                            </p>
+                            <p v-if="Number(latestRefund.service_fee_retained) > 0" class="text-label text-stone-500">
+                                Retained service fee (non-refundable): ₱{{ formatAmount(latestRefund.service_fee_retained) }}
+                            </p>
+                            <p v-if="latestRefund.paymongo_refund_id" class="text-label text-stone-500">
+                                Reference: <span class="font-mono">{{ latestRefund.paymongo_refund_id }}</span>
+                            </p>
+                            <p v-if="latestRefund.failure_reason" class="text-label text-rose-700">
+                                Note: {{ latestRefund.failure_reason }}
+                            </p>
+                        </div>
                     </AppCard>
                 </div>
 
@@ -902,6 +1067,38 @@ const canChat = computed(() =>
                 <p class="mt-1 text-body-sm text-stone-600">
                     {{ booking.surf_spot.name }} with {{ booking.instructor.name }} on {{ formatDate(booking.date) }}.
                 </p>
+
+                <div
+                    v-if="refundPreview"
+                    class="mt-4 rounded-control border p-3 text-body-sm"
+                    :class="
+                        refundPreview.refund_amount > 0
+                            ? 'border-lagoon-200 bg-lagoon-50 text-lagoon-950'
+                            : 'border-amber-200 bg-amber-50 text-amber-950'
+                    "
+                >
+                    <p class="text-label font-semibold uppercase tracking-[0.06em]">
+                        {{ refundPreview.basis_label }}
+                    </p>
+                    <p class="mt-1">{{ refundPreview.summary }}</p>
+                    <div
+                        v-if="refundPreview.lesson_price > 0 && refundPreview.policy_type !== 'unpaid' && refundPreview.policy_type !== 'cash'"
+                        class="mt-2 space-y-1 border-t border-black/10 pt-2 text-label"
+                    >
+                        <div class="flex justify-between">
+                            <span>Lesson Price</span>
+                            <span class="font-semibold">₱{{ formatAmount(refundPreview.lesson_price) }}</span>
+                        </div>
+                        <div v-if="refundPreview.service_fee_retained > 0" class="flex justify-between">
+                            <span>Platform Service Fee (non-refundable)</span>
+                            <span class="font-semibold">₱{{ formatAmount(refundPreview.service_fee_retained) }}</span>
+                        </div>
+                        <div class="flex justify-between font-semibold">
+                            <span>Estimated Refund ({{ refundPreview.refund_percentage }}%)</span>
+                            <span>₱{{ formatAmount(refundPreview.refund_amount) }}</span>
+                        </div>
+                    </div>
+                </div>
 
                 <label for="cancel-reason" class="mt-4 block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
                     Reason <span class="text-rose-600">*</span>

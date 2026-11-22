@@ -18,7 +18,7 @@ class BookingController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = Booking::with(['student', 'instructor', 'surfSpot', 'payment'])
+        $query = Booking::with(['student', 'instructor', 'surfSpot', 'payment', 'latestRefund'])
             ->orderByDesc('created_at');
 
         // Simple status filter
@@ -49,6 +49,9 @@ class BookingController extends Controller
             'instructor',
             'surfSpot',
             'payment.verifiedBy',
+            'latestRefund',
+            'refunds.initiatedBy',
+            'changeRequests.reviewedBy',
             'waiver',
             'waivers',
             'participants.waivers',
@@ -71,6 +74,8 @@ class BookingController extends Controller
                 'booking.student',
                 'booking.instructor',
                 'booking.surfSpot',
+                'booking.payment',
+                'booking.latestRefund',
                 'requestedBy',
                 'reviewedBy',
             ])

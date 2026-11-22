@@ -321,10 +321,21 @@ class DashboardService
             ->where('status', BookingStatus::Completed)
             ->get();
 
-        $earningsTotal = $completedBookings->where('payment_status', PaymentStatus::Completed)->sum('total_amount');
+        $retainedCancelledBookings = $user->bookingsAsInstructor()
+            ->whereIn('status', [BookingStatus::Cancelled->value, BookingStatus::NoShow->value])
+            ->where('instructor_retained_amount', '>', 0)
+            ->get();
+
+        $earningsTotal = $completedBookings->where('payment_status', PaymentStatus::Completed)
+            ->sum(fn (Booking $b) => $b->effectiveLessonPrice())
+            + $retainedCancelledBookings->sum(fn (Booking $b) => (float) $b->instructor_retained_amount);
+
         $earningsThisMonth = $completedBookings->where('payment_status', PaymentStatus::Completed)
             ->where('completed_at', '>=', now()->startOfMonth())
-            ->sum('total_amount');
+            ->sum(fn (Booking $b) => $b->effectiveLessonPrice())
+            + $retainedCancelledBookings
+                ->filter(fn (Booking $b) => ($b->cancelled_at ?? $b->updated_at)?->greaterThanOrEqualTo(now()->startOfMonth()))
+                ->sum(fn (Booking $b) => (float) $b->instructor_retained_amount);
 
         $ongoingSession = $activeBookings->where('status', BookingStatus::InProgress)->first();
         

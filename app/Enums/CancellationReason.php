@@ -17,6 +17,7 @@ enum CancellationReason: string
     case InstructorNoShow = 'instructor_no_show';
     case StudentNoShow = 'student_no_show';
     case InstructorSuspended = 'instructor_suspended';
+    case RescheduleDeclined = 'reschedule_declined';
 
     public function label(): string
     {
@@ -29,16 +30,25 @@ enum CancellationReason: string
             self::InstructorNoShow => 'Instructor did not arrive',
             self::StudentNoShow => 'Student did not arrive',
             self::InstructorSuspended => 'Instructor account suspended',
+            self::RescheduleDeclined => 'Student declined rescheduled date',
         };
     }
 
     /**
-     * Safety and weather cancellations are nobody's fault, so the student is
-     * refunded in full. Everything else is a deliberate cancellation.
+     * Cancellations caused by safety, instructor action/suspension, or a
+     * declined instructor reschedule always qualify for a full lesson-price
+     * refund (retaining only the 7% service fee).
      */
     public function isRefundable(): bool
     {
-        return in_array($this, [self::Weather, self::InstructorNoShow, self::InstructorSuspended], true);
+        return in_array($this, [
+            self::Instructor,
+            self::Admin,
+            self::Weather,
+            self::InstructorNoShow,
+            self::InstructorSuspended,
+            self::RescheduleDeclined,
+        ], true);
     }
 
     /**

@@ -181,6 +181,9 @@
     @php
         $payment = $booking->payment;
         $totalDue = (float) $booking->total_amount;
+        $lessonPrice = $booking->effectiveLessonPrice();
+        $serviceFeeAmount = $booking->effectiveServiceFeeAmount();
+        $serviceFeePercent = (float) ($booking->service_fee_percent ?? 7.0);
         $paidAmount = (float) ($payment->amount ?? $booking->total_amount);
         $balanceDue = max(0, round($totalDue - $paidAmount, 2));
         $isUnderpaid = $balanceDue > 0 || ($payment && $payment->status?->value === 'underpaid');
@@ -287,6 +290,16 @@
                         <td class="detail-label">Amount Paid</td>
                         <td class="detail-value">PHP {{ number_format($paidAmount, 2) }}</td>
                     </tr>
+                    @if($serviceFeeAmount > 0)
+                        <tr>
+                            <td class="detail-label">Lesson Price</td>
+                            <td class="detail-value">PHP {{ number_format($lessonPrice, 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="detail-label">Service Fee ({{ rtrim(rtrim(number_format($serviceFeePercent, 2), '0'), '.') }}%)</td>
+                            <td class="detail-value">PHP {{ number_format($serviceFeeAmount, 2) }}</td>
+                        </tr>
+                    @endif
                     @if($isUnderpaid)
                         <tr>
                             <td class="detail-label">Lesson Total</td>

@@ -45,10 +45,17 @@ interface PaymentServiceInterface
      * Process refund
      *
      * @param Booking $booking
-     * @param float|null $amount Null for full refund
+     * @param float|null $amount Null for lesson price refund
+     * @param string $reason PayMongo reason enum
+     * @param array<string, mixed> $metadata
      * @return array
      */
-    public function processRefund(Booking $booking, ?float $amount = null): array;
+    public function processRefund(
+        Booking $booking,
+        ?float $amount = null,
+        string $reason = 'requested_by_customer',
+        array $metadata = []
+    ): array;
 
     /**
      * Simulate payment success/failure (for testing)

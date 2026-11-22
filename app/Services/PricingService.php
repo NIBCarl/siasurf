@@ -178,6 +178,14 @@ class PricingService
     }
 
     /**
+     * Platform service fee percentage (BR-PRC-03: 7% on top of lesson price).
+     */
+    public static function serviceFeePercent(): float
+    {
+        return max(0.0, (float) config('siasurf.fees.service_fee_percent', 7.0));
+    }
+
+    /**
      * Calculate price for a booking based on the service provided (Teaching,
      * Guiding, or Coaching), NOT the instructor's certification level.
      */
@@ -224,7 +232,10 @@ class PricingService
         }
 
         $subtotal = $basePrice + $addOnTotal;
-        $total = $subtotal - $discount;
+        $lessonPrice = round(max(0.0, $subtotal - $discount), 2);
+        $serviceFeePercent = self::serviceFeePercent();
+        $serviceFeeAmount = round($lessonPrice * ($serviceFeePercent / 100), 2);
+        $total = round($lessonPrice + $serviceFeeAmount, 2);
 
         return [
             'session_type' => $service->value,
@@ -237,6 +248,9 @@ class PricingService
             'discount_type' => $discountType,
             'discount' => $discount,
             'subtotal' => $subtotal,
+            'lesson_price' => $lessonPrice,
+            'service_fee_percent' => $serviceFeePercent,
+            'service_fee_amount' => $serviceFeeAmount,
             'total' => $total,
             'max_students' => $maxStudents,
         ];
@@ -282,11 +296,16 @@ class PricingService
      */
     public function getPriceBreakdown(array $priceData): array
     {
+        $feePct = $priceData['service_fee_percent'] ?? self::serviceFeePercent();
+        $feeAmount = $priceData['service_fee_amount'] ?? 0;
+
         return [
             'Base Rate' => '₱'.number_format($priceData['base_rate'], 2).' x '.$priceData['hours'].' hours x '.$priceData['student_count'].' students',
             'Base Price' => '₱'.number_format($priceData['base_price'], 2),
             'Add-ons' => $priceData['add_on_total'] > 0 ? '₱'.number_format($priceData['add_on_total'], 2) : null,
             'Discount' => $priceData['discount'] > 0 ? '-₱'.number_format($priceData['discount'], 2).' ('.($priceData['discount_type'] === 'weekly' ? '10%' : '20%').' off)' : null,
+            'Lesson Price' => '₱'.number_format($priceData['lesson_price'] ?? $priceData['subtotal'], 2),
+            "Service Fee ({$feePct}%)" => $feeAmount > 0 ? '₱'.number_format($feeAmount, 2) : null,
             'Total' => '₱'.number_format($priceData['total'], 2),
         ];
     }

@@ -22,9 +22,13 @@ interface ChangeRequest {
     id: number
     date: string
     status: string
+    lesson_price?: number | null
+    total_amount?: number
     student?: { name: string }
     instructor?: { name: string }
     surf_spot?: { name: string }
+    payment?: { payment_method: string; status: string } | null
+    latest_refund?: { id: number; amount: number; status: string; status_label: string } | null
   }
   requested_by?: { id: number; name: string }
   reviewed_by?: { id: number; name: string }
@@ -162,6 +166,13 @@ const submitDecision = () => {
                 <Badge variant="ocean" size="sm">{{ request.type }}</Badge>
                 <Badge v-if="request.requires_admin_approval" variant="warning" size="sm">
                   Under 24h
+                </Badge>
+                <Badge
+                  v-if="request.type === 'cancellation' && request.booking?.payment?.payment_method === 'gcash' && request.booking?.payment?.status === 'completed'"
+                  variant="info"
+                  size="sm"
+                >
+                  Paid GCash · Auto 100% Lesson Refund
                 </Badge>
               </div>
 

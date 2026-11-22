@@ -16,11 +16,13 @@ class BookingCancelled implements ShouldBroadcast
 
     public Booking $booking;
     public ?string $reason;
+    public ?array $refundSummary;
 
-    public function __construct(Booking $booking, ?string $reason = null)
+    public function __construct(Booking $booking, ?string $reason = null, ?array $refundSummary = null)
     {
         $this->booking = $booking;
         $this->reason = $reason;
+        $this->refundSummary = $refundSummary;
     }
 
     public function broadcastOn(): array
@@ -51,6 +53,7 @@ class BookingCancelled implements ShouldBroadcast
                 'name' => auth()->user()?->name ?? 'System',
             ],
             'reason' => $this->reason,
+            'refund_summary' => $this->refundSummary,
             'message' => 'A booking has been cancelled.',
             'timestamp' => now()->toIso8601String(),
         ];

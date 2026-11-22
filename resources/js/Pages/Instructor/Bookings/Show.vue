@@ -34,6 +34,17 @@ interface Booking {
   created_at?: string | null
   status: string
   total_amount: number
+  lesson_price?: number | null
+  service_fee_amount?: number | null
+  refund_amount?: number | null
+  instructor_retained_amount?: number | null
+  latest_refund?: {
+    id: number
+    amount: number
+    status: string
+    status_label: string
+    basis_label: string
+  } | null
   skill_level: string
   student_age: number
   height: number | null
@@ -323,6 +334,10 @@ const paymentStatusLabel = computed(() => {
       return 'Receipt to verify'
     case 'failed':
       return 'Failed'
+    case 'refund_requested':
+      return 'Refund requested'
+    case 'refund_processing':
+      return 'Refund processing'
     case 'refunded':
       return 'Refunded'
     default:
@@ -487,6 +502,7 @@ const submitDecline = () => {
 const showChangeModal = ref(false)
 const changeForm = useForm({
   type: 'reschedule' as 'reschedule' | 'cancellation',
+  cancellation_reason: 'instructor' as 'instructor' | 'weather',
   date: '',
   time_period: 'morning',
   start_time: '06:00',
@@ -498,6 +514,7 @@ const openChangeModal = (type: 'reschedule' | 'cancellation') => {
   changeForm.reset()
   changeForm.clearErrors()
   changeForm.type = type
+  changeForm.cancellation_reason = 'instructor'
   changeForm.date = props.booking.date
   showChangeModal.value = true
 }
@@ -1260,6 +1277,21 @@ const showPrimaryAttendance = computed(
                 </span>
               </div>
 
+              <div
+                v-if="booking.latest_refund"
+                class="rounded-control border border-sand-200 bg-sand-50 p-3 text-body-sm text-deep-900"
+              >
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-600">
+                  {{ booking.latest_refund.status_label }}
+                </p>
+                <p class="mt-1 font-semibold">
+                  Student refund: {{ formatMoney(booking.latest_refund.amount) }}
+                </p>
+                <p class="mt-0.5 text-label text-stone-500">
+                  {{ booking.latest_refund.basis_label }}
+                </p>
+              </div>
+
               <!-- Underpaid violation card -->
               <div
                 v-if="isUnderpaid"
@@ -1543,6 +1575,44 @@ const showPrimaryAttendance = computed(
           <p v-else class="mt-3 rounded-control border border-lagoon-200 bg-lagoon-50 px-3 py-2 text-body-sm text-lagoon-800">
             More than 24 hours' notice, so the change applies immediately.
           </p>
+
+          <div v-if="changeForm.type === 'cancellation'" class="mt-4 space-y-2">
+            <p class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+              Cancellation cause
+            </p>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                class="rounded-control border px-3 py-2 text-left text-body-sm font-semibold transition-colors"
+                :class="
+                  changeForm.cancellation_reason === 'instructor'
+                    ? 'border-deep-950 bg-deep-950 text-white'
+                    : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                "
+                @click="changeForm.cancellation_reason = 'instructor'"
+              >
+                Instructor unavailable
+              </button>
+              <button
+                type="button"
+                class="rounded-control border px-3 py-2 text-left text-body-sm font-semibold transition-colors"
+                :class="
+                  changeForm.cancellation_reason === 'weather'
+                    ? 'border-deep-950 bg-deep-950 text-white'
+                    : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                "
+                @click="changeForm.cancellation_reason = 'weather'"
+              >
+                Unsafe weather / sea conditions
+              </button>
+            </div>
+            <p
+              v-if="booking.payment?.payment_method === 'gcash' && booking.payment?.status === 'completed'"
+              class="text-label text-stone-600"
+            >
+              Cancelling this paid GCash booking automatically triggers a 100% lesson-price refund to the student (the 7% platform fee is retained).
+            </p>
+          </div>
 
           <div v-if="changeForm.type === 'reschedule'" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div class="sm:col-span-2">

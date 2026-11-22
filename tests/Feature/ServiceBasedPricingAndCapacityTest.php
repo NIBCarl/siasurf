@@ -115,7 +115,9 @@ class ServiceBasedPricingAndCapacityTest extends TestCase
 
         $this->assertSame(SessionType::Teaching, $booking->session_type);
         $this->assertSame('750.00', $booking->hourly_rate);
-        $this->assertSame('1500.00', $booking->total_amount); // 750 * 2 hrs
+        $this->assertSame('1500.00', $booking->lesson_price);
+        $this->assertSame('105.00', $booking->service_fee_amount);
+        $this->assertSame('1605.00', $booking->total_amount); // (750 * 2 hrs) + 7% service fee
     }
 
     public function test_child_aged_5_to_12_can_book_solo_level_3_teaching_at_teaching_rate(): void
@@ -139,7 +141,9 @@ class ServiceBasedPricingAndCapacityTest extends TestCase
 
         $this->assertSame(SessionType::Teaching, $booking->session_type);
         $this->assertSame('650.00', $booking->hourly_rate);
-        $this->assertSame('650.00', $booking->total_amount); // 1 hour Surf Experience
+        $this->assertSame('650.00', $booking->lesson_price);
+        $this->assertSame('45.50', $booking->service_fee_amount);
+        $this->assertSame('695.50', $booking->total_amount); // 1 hour Surf Experience + 7% service fee
     }
 
     public function test_instructor_can_edit_guiding_rate_within_800_to_1500_and_bookings_use_that_exact_rate(): void
@@ -190,7 +194,9 @@ class ServiceBasedPricingAndCapacityTest extends TestCase
         $booking = Booking::firstOrFail();
         $this->assertSame(SessionType::Guiding, $booking->session_type);
         $this->assertSame('1250.00', $booking->hourly_rate);
-        $this->assertSame('2500.00', $booking->total_amount);
+        $this->assertSame('2500.00', $booking->lesson_price);
+        $this->assertSame('175.00', $booking->service_fee_amount);
+        $this->assertSame('2675.00', $booking->total_amount);
     }
 
     public function test_level_3_instructor_can_edit_coaching_rate_within_1500_to_2000_only(): void
@@ -242,7 +248,9 @@ class ServiceBasedPricingAndCapacityTest extends TestCase
         $booking = Booking::firstOrFail();
         $this->assertSame(SessionType::Coaching, $booking->session_type);
         $this->assertSame('1850.00', $booking->hourly_rate);
-        $this->assertSame('3700.00', $booking->total_amount);
+        $this->assertSame('3700.00', $booking->lesson_price);
+        $this->assertSame('259.00', $booking->service_fee_amount);
+        $this->assertSame('3959.00', $booking->total_amount);
     }
 
     public function test_level_3_allows_three_separate_same_level_students_to_share_a_slot_and_blocks_different_level_or_service(): void

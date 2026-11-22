@@ -19,8 +19,10 @@ use App\Models\User;
 use App\Notifications\BookingCancelledNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
+use App\Services\BookingCancellationService;
 use App\Services\BookingRequestGuard;
 use App\Services\PricingService;
+use App\Services\RefundCalculatorService;
 use App\Services\SafetyService;
 use App\Services\StormglassService;
 use Carbon\Carbon;
@@ -134,6 +136,7 @@ class BookingController extends Controller
             'safetyRules' => $safetyRules,
             'serviceOptions' => $serviceOptions,
             'defaultSessionType' => $recommendedService->value,
+            'serviceFeePercent' => PricingService::serviceFeePercent(),
             // Explains why some breaks are not in the list.
             'surfSpotRule' => $studentSkill->surfSpotRuleLabel(),
             'allowedSurfSpotDifficulties' => $studentSkill->allowedSurfSpotDifficulties(),
@@ -500,11 +503,19 @@ class BookingController extends Controller
                     'time_period' => $validated['time_period'],
                 ]);
 
+                $tz = config('app.timezone', 'Asia/Manila');
+                $lessonDate = Carbon::parse($validated['date'], $tz)->startOfDay();
+                $bookingDate = now($tz)->startOfDay();
+                $leadDays = (int) round($bookingDate->diffInDays($lessonDate, false));
+                $isLongTerm = $leadDays > (int) config('siasurf.refunds.long_term_threshold_days', 30);
+
                 $booking = Booking::create([
                     'student_id' => auth()->id(),
                     'instructor_id' => $instructor->id,
                     'surf_spot_id' => $validated['surf_spot_id'],
                     'date' => $validated['date'],
+                    'original_date' => $validated['date'],
+                    'is_long_term' => $isLongTerm,
                     'time_period' => $validated['time_period'],
                     'start_time' => $validated['start_time'],
                     'end_time' => $validated['end_time'],
@@ -512,6 +523,9 @@ class BookingController extends Controller
                     'skill_level' => $validated['skill_level'],
                     'session_type' => $sessionType->value,
                     'hourly_rate' => $pricing['base_rate'],
+                    'lesson_price' => $pricing['lesson_price'],
+                    'service_fee_percent' => $pricing['service_fee_percent'],
+                    'service_fee_amount' => $pricing['service_fee_amount'],
                     'student_age' => $validated['student_age'],
                     'height' => $validated['height'],
                     'weight' => $validated['weight'],
@@ -662,6 +676,8 @@ class BookingController extends Controller
             // Create or update payment record
             $booking->payment()->updateOrCreate([], [
                 'amount' => $booking->total_amount,
+                'lesson_price' => $booking->effectiveLessonPrice(),
+                'service_fee_amount' => $booking->effectiveServiceFeeAmount(),
                 'payment_method' => $validated['payment_method'],
                 'status' => $validated['payment_method'] === 'cash'
                     ? PaymentStatus::PendingCash
@@ -759,7 +775,7 @@ class BookingController extends Controller
     /**
      * Display user's bookings
      */
-    public function index(Request $request): Response
+    public function index(Request $request, RefundCalculatorService $refundCalculator): Response
     {
         $user = auth()->user();
         $filter = $request->query('status', 'all');
@@ -783,6 +799,7 @@ class BookingController extends Controller
             'instructor',
             'surfSpot',
             'payment',
+            'latestRefund',
             'conversation' => function ($query) use ($user) {
                 $query->withCount([
                     'messages as unread_count' => fn ($messages) => $messages
@@ -799,12 +816,15 @@ class BookingController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $bookings->through(function (Booking $booking) {
+        $bookings->through(function (Booking $booking) use ($refundCalculator) {
             return array_merge($booking->toArray(), [
                 'chat_unread_count' => (int) ($booking->conversation?->unread_count ?? 0),
-                // Once a GCash receipt has been uploaded (or the payment is
-                // already verified) the cancel action is no longer offered.
                 'can_be_cancelled' => $booking->canBeCancelled(),
+                'has_pending_receipt_verification' => $booking->hasPendingReceiptVerification(),
+                'has_pending_reschedule_response' => $booking->hasPendingRescheduleResponse(),
+                'refund_preview' => $booking->canBeCancelled()
+                    ? $refundCalculator->previewForStudent($booking)
+                    : null,
             ]);
         });
 
@@ -825,7 +845,7 @@ class BookingController extends Controller
     /**
      * Display single booking details
      */
-    public function show(Booking $booking): Response
+    public function show(Booking $booking, RefundCalculatorService $refundCalculator): Response
     {
         Gate::authorize('view', $booking);
 
@@ -833,6 +853,8 @@ class BookingController extends Controller
             'instructor',
             'surfSpot',
             'payment',
+            'latestRefund',
+            'refunds',
             'review',
             'waiver',
             'waivers',
@@ -845,6 +867,12 @@ class BookingController extends Controller
         // Payment state decides whether cancellation is still allowed.
         $booking->setAttribute('can_be_cancelled', $booking->canBeCancelled());
         $booking->setAttribute('has_submitted_payment', $booking->hasSubmittedPayment());
+        $booking->setAttribute('has_pending_receipt_verification', $booking->hasPendingReceiptVerification());
+        $booking->setAttribute('has_pending_reschedule_response', $booking->hasPendingRescheduleResponse());
+        $booking->setAttribute(
+            'refund_preview',
+            $booking->canBeCancelled() ? $refundCalculator->previewForStudent($booking) : null
+        );
 
         $latestChange = $booking->changeRequests->first();
 
@@ -863,33 +891,62 @@ class BookingController extends Controller
     }
 
     /**
+     * Accept an instructor-initiated reschedule so standard cancellation terms resume.
+     */
+    public function acceptReschedule(Booking $booking): RedirectResponse
+    {
+        Gate::authorize('view', $booking);
+
+        if (auth()->id() !== $booking->student_id) {
+            abort(403);
+        }
+
+        if (! $booking->hasPendingRescheduleResponse()) {
+            return back()->with('info', 'There is no pending reschedule to confirm.');
+        }
+
+        $booking->update([
+            'student_accepted_reschedule_at' => now(),
+        ]);
+
+        return back()->with('success', 'New lesson schedule accepted.');
+    }
+
+    /**
      * Cancel a booking
      */
-    public function cancel(Request $request, Booking $booking, AvailabilityService $availabilityService): RedirectResponse
-    {
+    public function cancel(
+        Request $request,
+        Booking $booking,
+        BookingCancellationService $cancellationService
+    ): RedirectResponse {
         Gate::authorize('cancel', $booking);
 
         $validated = $request->validate([
             'reason' => 'required|string|max:500',
         ]);
 
-        // FR 1.8.3 - remember the slot before the booking loses its date.
-        $date = $availabilityService->dateOf($booking);
-        $period = $availabilityService->timePeriodOf($booking);
-        $instructorId = $booking->instructor_id;
+        try {
+            $result = $cancellationService->cancel(
+                $booking,
+                CancellationReason::Student,
+                $validated['reason'],
+                auth()->user()
+            );
+        } catch (\App\Exceptions\BookingChangeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
 
-        $booking->cancel($validated['reason'], CancellationReason::Student);
+        $refund = $result['refund'];
+        $calc = $result['calculation'];
 
-        // Hand the time slot back so the instructor can be booked again.
-        $availabilityService->releaseSlot($instructorId, $date, $period, $booking->id);
+        if ($refund) {
+            $amountLabel = '₱' . number_format((float) $refund->amount, 2);
+            $message = $refund->status === \App\Enums\RefundStatus::ManualRequired
+                ? "Booking cancelled. A {$calc->refundPercentage}% refund ({$amountLabel}) is queued for SISA processing."
+                : "Booking cancelled. A {$calc->refundPercentage}% refund ({$amountLabel}) has been initiated.";
 
-        broadcast(new BookingCancelled(
-            $booking->fresh(['student', 'instructor', 'surfSpot']),
-            $validated['reason']
-        ))->toOthers();
-
-        foreach ([$booking->student, $booking->instructor] as $party) {
-            $party?->notify(new BookingCancelledNotification($booking, $validated['reason']));
+            return back()->with('success', $message);
         }
 
         return back()->with('success', 'Booking cancelled successfully.');

@@ -93,10 +93,10 @@ class PaymentPolicy
 
     /**
      * Determine whether the user can delete the model.
+     * BR-PAY-05: Payment records are immutable.
      */
     public function delete(User $user, Payment $payment): bool
     {
-        // Only admin can delete payments
-        return $user->isAdmin();
+        return false;
     }
 }

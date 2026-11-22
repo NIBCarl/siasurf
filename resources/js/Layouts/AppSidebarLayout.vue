@@ -19,6 +19,7 @@ import {
     MagnifyingGlassIcon,
     MapPinIcon,
     QrCodeIcon,
+    ReceiptRefundIcon,
     Squares2X2Icon,
     UserGroupIcon,
     UserIcon,
@@ -95,6 +96,7 @@ const adminGroups: NavGroup[] = [
         items: [
             { name: 'Bookings', href: route('admin.bookings.index'), icon: CalendarDaysIcon, pattern: 'admin.bookings.*' },
             { name: 'Change requests', href: route('admin.change-requests.index'), icon: ClipboardDocumentCheckIcon, pattern: 'admin.change-requests.*' },
+            { name: 'Refunds', href: route('admin.refunds.index'), icon: ReceiptRefundIcon, pattern: 'admin.refunds.*' },
             { name: 'Surf spots', href: route('admin.surf-spots.index'), icon: MapPinIcon, pattern: 'admin.surf-spots.*' },
         ],
     },

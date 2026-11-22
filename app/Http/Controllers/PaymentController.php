@@ -485,32 +485,53 @@ class PaymentController extends Controller
     }
 
     /**
-     * Process refund
+     * Process refund (SISA Admin cancellation / override refund).
      */
-    public function refund(Request $request, Booking $booking): RedirectResponse
-    {
+    public function refund(
+        Request $request,
+        Booking $booking,
+        \App\Services\BookingCancellationService $cancellationService
+    ): RedirectResponse {
+        abort_if($booking->payment === null, 404, 'This booking has no payment record.');
+
         $this->authorize('refund', $booking->payment);
+
+        $maxRefundable = $booking->effectiveServiceFeeAmount() > 0
+            ? $booking->effectiveLessonPrice()
+            : (float) $booking->total_amount;
 
         $validated = $request->validate([
             'reason' => 'required|string|max:500',
-            'amount' => 'nullable|numeric|min:0|max:' . $booking->total_amount,
+            'amount' => 'nullable|numeric|min:0.01|max:' . $maxRefundable,
         ]);
 
-        try {
-            $refundData = $this->paymentService->processRefund(
-                $booking, 
-                $validated['amount'] ?? null
-            );
+        $overrideAmount = isset($validated['amount']) ? (float) $validated['amount'] : null;
 
-            // Update booking status
-            $booking->update([
-                'status' => 'cancelled',
-                'payment_status' => 'refunded',
-            ]);
+        try {
+            if ($booking->status === BookingStatus::Cancelled) {
+                $refund = $cancellationService->issueAdminRefund(
+                    $booking,
+                    auth()->user(),
+                    $overrideAmount ?? $maxRefundable,
+                    $validated['reason']
+                );
+            } else {
+                $result = $cancellationService->cancel(
+                    $booking,
+                    \App\Enums\CancellationReason::Admin,
+                    $validated['reason'],
+                    auth()->user(),
+                    $overrideAmount
+                );
+                $refund = $result['refund'];
+            }
+
+            if ($refund && $refund->status === \App\Enums\RefundStatus::ManualRequired) {
+                return back()->with('success', 'Refund recorded and queued for manual GCash completion.');
+            }
 
             return back()->with('success', 'Refund processed successfully.');
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Refund failed', [
                 'booking_id' => $booking->id,
                 'error' => $e->getMessage(),

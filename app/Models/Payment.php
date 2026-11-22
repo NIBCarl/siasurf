@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 
@@ -15,8 +17,11 @@ class Payment extends Model
     protected $fillable = [
         'booking_id',
         'amount',
+        'lesson_price',
+        'service_fee_amount',
         'payment_method',
         'transaction_id',
+        'gateway_payment_id',
         'checkout_url',
         'status',
         'paid_at',
@@ -34,6 +39,8 @@ class Payment extends Model
         'payment_method' => PaymentMethod::class,
         'status' => PaymentStatus::class,
         'amount' => 'decimal:2',
+        'lesson_price' => 'decimal:2',
+        'service_fee_amount' => 'decimal:2',
         'paid_at' => 'datetime',
         'refunded_at' => 'datetime',
         'receipt_uploaded_at' => 'datetime',
@@ -44,6 +51,16 @@ class Payment extends Model
     public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
+    public function latestRefund(): HasOne
+    {
+        return $this->hasOne(Refund::class)->latestOfMany();
     }
 
     /**
