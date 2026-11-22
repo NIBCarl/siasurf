@@ -65,6 +65,8 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
     switch (status) {
         case 'confirmed':
             return { label: 'Confirmed', variant: 'verified' }
+        case 'reserved':
+            return { label: 'Reserved', variant: 'pending' }
         case 'pending':
         case 'awaiting_payment':
             return { label: status.replace(/_/g, ' '), variant: 'pending' }

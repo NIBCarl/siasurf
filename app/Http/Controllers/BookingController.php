@@ -91,15 +91,15 @@ class BookingController extends Controller
             404
         );
 
-        $instructor->load(['instructorProfile', 'availabilities']);
+        $instructor->load(['instructorProfile.surfSpots', 'availabilities']);
 
-        // Get available surf spots based on the student's own level. An
-        // intermediate surfer may use beginner/intermediate breaks but never an
-        // advanced one; the front end narrows this further for the party.
-        // Outer/inner sections are separate records, so order the picker by
-        // entry difficulty and then by the name students will recognise.
+        $profile = $instructor->instructorProfile;
+
+        // Get available surf spots based on BOTH the instructor's selected surf zones
+        // and the student's own level. Outer/inner sections are separate records,
+        // ordered by entry difficulty then name.
         $studentSkill = $viewerSkill ?? SkillLevel::Beginner;
-        $instructorLevelValue = $instructor->instructorProfile->level->value;
+        $instructorLevelValue = $profile->level->value;
 
         // Get safety rules applicable to this instructor + student's skill level
         $safetyRules = $this->safetyService->getApplicableRules(
@@ -107,30 +107,30 @@ class BookingController extends Controller
             $studentSkill->value
         );
 
-        $recommendedService = SessionType::recommendedFor($studentSkill, $instructorLevelValue);
+        $recommendedService = $profile->recommendedServiceFor($studentSkill);
         $serviceOptions = array_map(
             fn (SessionType $service) => [
                 'type' => $service->value,
                 'label' => $service->label(),
                 'description' => $service->description(),
-                'rate' => $instructor->instructorProfile->rateForService($service),
+                'rate' => $profile->rateForService($service),
                 'recommended' => $service === $recommendedService,
             ],
-            SessionType::optionsFor($studentSkill, $instructorLevelValue)
+            $profile->serviceOptionsFor($studentSkill)
         );
 
-        $surfSpots = SurfSpot::where('is_active', true)
-            ->whereIn('difficulty', $studentSkill->allowedSurfSpotDifficulties())
-            ->orderByRaw("CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END")
-            ->orderBy('name')
-            ->get();
+        $surfSpots = $profile->bookableSurfSpotsFor($studentSkill)
+            ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+            ->values()
+            ->all();
 
         return Inertia::render('Booking/Create', [
             'instructor' => $instructor,
             'surfSpots' => $surfSpots,
+            'instructorHasCustomSpots' => $profile->hasConfiguredSurfSpots(),
             'safetyRules' => $safetyRules,
             'serviceOptions' => $serviceOptions,
-            'defaultSessionType' => $recommendedService->value,
+            'defaultSessionType' => $recommendedService?->value ?? '',
             // Explains why some breaks are not in the list.
             'surfSpotRule' => $studentSkill->surfSpotRuleLabel(),
             'allowedSurfSpotDifficulties' => $studentSkill->allowedSurfSpotDifficulties(),
@@ -316,15 +316,33 @@ class BookingController extends Controller
                 . '. This instructor is Level ' . $instructorLevelValue . '.');
         }
 
-        // Resolve service type (Teaching / Guiding / Coaching). Defaults to the
-        // natural service for this student + instructor pair so beginners pay
-        // the Teaching rate even when booking a Level 3 instructor.
+        // Resolve service type (Teaching / Guiding / Coaching) from what the
+        // instructor actually offers. Defaults to their recommended offered
+        // service for this student skill level.
+        $profile = $instructor->instructorProfile->loadMissing('surfSpots');
+
         $sessionType = ! empty($validated['session_type'])
             ? SessionType::from($validated['session_type'])
-            : SessionType::recommendedFor($studentSkill, $instructorLevelValue);
+            : $profile->recommendedServiceFor($studentSkill);
+
+        if ($sessionType === null) {
+            return back()->with('error', 'This instructor does not offer a lesson type available for your skill level.');
+        }
+
+        if (! $profile->offersService($sessionType)) {
+            return back()->with('error', "This instructor does not offer {$sessionType->label()} sessions.");
+        }
 
         // Get surf spot for validation
         $surfSpot = SurfSpot::findOrFail($validated['surf_spot_id']);
+
+        if (! $surfSpot->is_active) {
+            return back()->with('error', 'The selected surf spot is currently unavailable. Please choose another surf spot.');
+        }
+
+        if (! $profile->teachesAtSurfSpot($surfSpot)) {
+            return back()->with('error', "This instructor does not teach at {$surfSpot->name}. Please choose one of their available surf zones.");
+        }
 
         // Check tide conditions for the selected date/time
         $tideWarning = $this->stormglassService->getTideWarning(
@@ -451,7 +469,7 @@ class BookingController extends Controller
                     'weight' => $validated['weight'],
                     'student_count' => $validated['student_count'],
                     'has_board' => $validated['has_board'],
-                    'status' => BookingStatus::Pending,
+                    'status' => BookingStatus::Reserved,
                     'total_amount' => $pricing['total'],
                     'payment_status' => PaymentStatus::Pending,
                     'notes' => $validated['notes'] ?? null,
@@ -528,7 +546,7 @@ class BookingController extends Controller
                 ->with('info', 'Your instructor accepted this booking. Complete the GCash payment from this page before the hold expires.');
         }
 
-        if ($booking->status !== BookingStatus::Pending) {
+        if (! in_array($booking->status, [BookingStatus::Reserved, BookingStatus::Pending], true)) {
             return redirect()->route('student.bookings.show', $booking)
                 ->with('info', 'This booking has already moved past the payment-method step.');
         }
@@ -562,7 +580,7 @@ class BookingController extends Controller
                 ->with('info', 'Payment method is already set. Complete the GCash payment from the payment page.');
         }
 
-        if ($booking->status !== BookingStatus::Pending) {
+        if (! in_array($booking->status, [BookingStatus::Reserved, BookingStatus::Pending], true)) {
             return redirect()->route('student.bookings.show', $booking)
                 ->with('error', 'The payment method can no longer be changed for this booking.');
         }
@@ -628,7 +646,7 @@ class BookingController extends Controller
 
         $instructorId = $booking->instructor_id;
 
-        if ($booking->status === BookingStatus::Pending && ! $booking->hasSubmittedPayment()) {
+        if (($booking->isInStudentCheckout() || $booking->status === BookingStatus::Pending) && ! $booking->hasSubmittedPayment()) {
             $booking->cancel(
                 'Booking abandoned by student before completing waiver and payment selection.',
                 CancellationReason::Student
@@ -691,9 +709,12 @@ class BookingController extends Controller
     public function index(Request $request): Response
     {
         $user = auth()->user();
+        $this->availabilityService->releaseExpiredCheckoutHoldsForStudent($user->id);
+
         $filter = $request->query('status', 'all');
 
         $upcomingStatuses = [
+            BookingStatus::Reserved,
             BookingStatus::Pending,
             BookingStatus::AwaitingPayment,
             BookingStatus::Confirmed,
@@ -729,7 +750,13 @@ class BookingController extends Controller
             ->withQueryString();
 
         $bookings->through(function (Booking $booking) {
+            $isReserved = $booking->isInStudentCheckout();
+
             return array_merge($booking->toArray(), [
+                'status' => $isReserved ? BookingStatus::Reserved->value : $booking->status->value,
+                'is_reserved' => $isReserved,
+                'hold_remaining_seconds' => $isReserved ? $booking->getPaymentTimeRemaining() : 0,
+                'resume_url' => $isReserved ? route('bookings.waiver', $booking->id) : null,
                 'chat_unread_count' => (int) ($booking->conversation?->unread_count ?? 0),
                 // Once a GCash receipt has been uploaded (or the payment is
                 // already verified) the cancel action is no longer offered.
@@ -758,6 +785,12 @@ class BookingController extends Controller
     {
         Gate::authorize('view', $booking);
 
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            $this->availabilityService->releaseForBooking($booking);
+            $booking->refresh();
+        }
+
         $booking->load([
             'instructor',
             'surfSpot',
@@ -771,6 +804,10 @@ class BookingController extends Controller
         ]);
 
         // Payment state decides whether cancellation is still allowed.
+        $isReserved = $booking->isInStudentCheckout();
+        $booking->setAttribute('is_reserved', $isReserved);
+        $booking->setAttribute('hold_remaining_seconds', $isReserved ? $booking->getPaymentTimeRemaining() : 0);
+        $booking->setAttribute('resume_url', $isReserved ? route('bookings.waiver', $booking->id) : null);
         $booking->setAttribute('can_be_cancelled', $booking->canBeCancelled());
         $booking->setAttribute('has_submitted_payment', $booking->hasSubmittedPayment());
 

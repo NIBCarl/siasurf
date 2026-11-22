@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
@@ -12,6 +12,8 @@ interface Booking {
   id: number
   date: string
   time_period: string
+  start_time?: string | null
+  end_time?: string | null
   student_age: number
   student_count?: number
   skill_level: string
@@ -38,6 +40,7 @@ interface Props {
   waiverTypeLabel: string
   participant?: Participant | null
   progress?: { participants: number; signed: number; required: number } | null
+  holdRemainingSeconds?: number
 }
 
 const props = defineProps<Props>()
@@ -88,8 +91,49 @@ const submitWaiver = () => {
   })
 }
 
+const holdSeconds = ref<number>(Math.max(0, props.holdRemainingSeconds ?? 0))
+let holdTimer: ReturnType<typeof setInterval> | null = null
+
+watch(
+  () => props.holdRemainingSeconds,
+  (val) => {
+    holdSeconds.value = Math.max(0, val ?? 0)
+  }
+)
+
+onMounted(() => {
+  holdTimer = setInterval(() => {
+    if (holdSeconds.value > 0) {
+      holdSeconds.value -= 1
+    }
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (holdTimer) {
+    clearInterval(holdTimer)
+    holdTimer = null
+  }
+})
+
+const formatHoldTimer = (seconds: number): string => {
+  const safe = Math.max(0, Math.floor(seconds))
+  const mins = Math.floor(safe / 60)
+  const secs = safe % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+const parseLocalDate = (dateString: string): Date => {
+  const isoDay = dateString.slice(0, 10)
+  const parts = isoDay.split('-').map(Number)
+  if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
+    return new Date(parts[0], parts[1] - 1, parts[2])
+  }
+  return new Date(dateString)
+}
+
 const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  return parseLocalDate(dateString).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -97,12 +141,29 @@ const formatDate = (dateString: string): string => {
   })
 }
 
-const formatTimePeriod = (period: string): string => {
-  const periods: Record<string, string> = {
-    'morning': 'Morning (8:00 AM - 12:00 PM)',
-    'afternoon': 'Afternoon (1:00 PM - 5:00 PM)'
+const formatClockTime = (time?: string | null): string => {
+  if (!time) return ''
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return time
+  const hour24 = Number(match[1])
+  const minute = Number(match[2])
+  const period = hour24 >= 12 ? 'PM' : 'AM'
+  const hour12 = hour24 % 12 || 12
+  return `${hour12}:${String(minute).padStart(2, '0')} ${period}`
+}
+
+const formatBookingTime = (booking: Booking): string => {
+  if (booking.start_time && booking.end_time) {
+    return `${formatClockTime(booking.start_time)} – ${formatClockTime(booking.end_time)}`
   }
-  return periods[period] || period
+  if (booking.start_time) {
+    return formatClockTime(booking.start_time)
+  }
+  const periods: Record<string, string> = {
+    'morning': 'Morning (6:00 AM - 12:00 PM)',
+    'afternoon': 'Afternoon (1:00 PM - 6:00 PM)'
+  }
+  return periods[booking.time_period] || booking.time_period
 }
 
 const goBack = () => {
@@ -120,20 +181,29 @@ const goBack = () => {
         <BookingStepper :current="4" class="mt-6" />
 
         <!-- Exclusive Slot Hold Banner -->
-        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex items-center justify-between gap-4">
+        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-3">
-            <span class="flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+            <span class="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
             <p class="text-xs font-semibold text-emerald-900">
-              Seat(s) reserved for you! Your selected {{ booking.student_count === 1 ? 'seat' : `${booking.student_count} seats` }} and time slot with {{ booking.instructor?.name || 'your instructor' }} are held for 15 minutes while you complete this waiver and payment step.
+              Seat(s) reserved for you! Your selected {{ (booking.student_count ?? 1) === 1 ? 'seat' : `${booking.student_count} seats` }} and time slot with {{ booking.instructor?.name || 'your instructor' }} are held while you complete this waiver and payment step.
             </p>
           </div>
-          <button
-            type="button"
-            @click="goBack"
-            class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
-          >
-            Change Slot / Release Hold
-          </button>
+          <div class="flex items-center gap-3 shrink-0">
+            <span
+              v-if="holdRemainingSeconds !== undefined"
+              class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
+              :class="holdSeconds <= 180 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'"
+            >
+              Hold expires in {{ formatHoldTimer(holdSeconds) }}
+            </span>
+            <button
+              type="button"
+              @click="goBack"
+              class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
+            >
+              Change Slot / Release Hold
+            </button>
+          </div>
         </div>
 
         <!-- Header -->
@@ -200,7 +270,7 @@ const goBack = () => {
             </div>
             <div>
               <span class="text-slate-500">Time:</span>
-              <span class="ml-2 font-medium">{{ formatTimePeriod(booking.time_period) }}</span>
+              <span class="ml-2 font-medium">{{ formatBookingTime(booking) }}</span>
             </div>
           </div>
         </div>

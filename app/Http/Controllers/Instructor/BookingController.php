@@ -30,9 +30,11 @@ class BookingController extends Controller
     /**
      * Display a listing of bookings for the instructor.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, AvailabilityService $availabilityService): Response
     {
         $user = auth()->user();
+        $availabilityService->releaseExpiredCheckoutHolds($user->id);
+
         $status = $request->query('status');
 
         $bookings = Booking::with([
@@ -41,6 +43,7 @@ class BookingController extends Controller
             'changeRequests',
             'payment',
             'waiver',
+            'waivers',
             'conversation' => function ($query) use ($user) {
                 $query->withCount([
                     'messages as unread_count' => fn ($messages) => $messages
@@ -49,13 +52,21 @@ class BookingController extends Controller
                 ]);
             },
         ])
+            ->withCount('participants')
             ->where('instructor_id', $user->id)
-            ->submittedToInstructor()
             ->when(
-                $status && $status !== 'all',
-                fn ($query) => $query->where('status', $status)
+                $status === 'reserved',
+                fn ($query) => $query->inStudentCheckout(),
+                fn ($query) => $query->when(
+                    $status === 'pending',
+                    fn ($q) => $q->submittedToInstructor()->where('status', BookingStatus::Pending),
+                    fn ($q) => $q->when(
+                        $status && $status !== 'all',
+                        fn ($inner) => $inner->where('status', $status)
+                    )
+                )
             )
-            ->orderByRaw("FIELD(status, 'pending', 'awaiting_payment', 'confirmed', 'in_progress') DESC")
+            ->orderByRaw("FIELD(status, 'reserved', 'pending', 'awaiting_payment', 'confirmed', 'in_progress') DESC")
             ->orderByDesc('date')
             ->paginate(10)
             ->withQueryString();
@@ -63,16 +74,30 @@ class BookingController extends Controller
         // FR 1.9.3 - the accept countdown and FR 1.9.4 approval flag are computed
         // server side so the card renders correctly on first paint.
         $bookings->through(function (Booking $booking) {
+            $isReserved = $booking->isInStudentCheckout();
+            $requiredWaivers = max(1, (int) ($booking->participants_count ?? 1));
+            $liabilitySignedCount = $booking->waivers
+                ->where('type', \App\Enums\WaiverType::Liability)
+                ->count();
+            $hasWaiver = $liabilitySignedCount > 0
+                ? $liabilitySignedCount >= $requiredWaivers
+                : $booking->waiver !== null;
+
             return array_merge($booking->toArray(), [
-                'accept_time_remaining' => $booking->getAcceptTimeRemaining(),
+                'status' => $isReserved ? BookingStatus::Reserved->value : $booking->status->value,
+                'is_reserved' => $isReserved,
+                'hold_time_remaining' => $isReserved ? $booking->getPaymentTimeRemaining() : 0,
+                'accept_time_remaining' => $isReserved ? 0 : $booking->getAcceptTimeRemaining(),
                 'can_be_declined' => $booking->isAwaitingInstructorResponse() && !$booking->acceptDeadlinePassed(),
                 // Accepting has two extra guards on the service layer (window
                 // closed, lesson too close to run). Surface them so the roster
                 // never offers an action the server would refuse.
-                'can_be_accepted' => $booking->status === BookingStatus::Pending
+                'can_be_accepted' => !$isReserved
+                    && $booking->status === BookingStatus::Pending
                     && !$booking->acceptDeadlinePassed()
                     && !$booking->isTooCloseToStartToAccept(),
                 'accept_block' => match (true) {
+                    $isReserved => 'awaiting_waiver',
                     $booking->status !== BookingStatus::Pending => null,
                     $booking->acceptDeadlinePassed() => 'window_closed',
                     $booking->isTooCloseToStartToAccept() => 'too_close',
@@ -84,7 +109,7 @@ class BookingController extends Controller
                     ->isNotEmpty(),
                 'attendance_label' => $booking->attendance_status?->label(),
                 'attendance_status' => $booking->attendance_status?->value,
-                'has_waiver' => $booking->waiver !== null,
+                'has_waiver' => $hasWaiver,
                 'payment_method' => $booking->payment?->payment_method?->value,
                 // Only recommend a board when the student actually supplied the
                 // measurements; otherwise the model would fall back to defaults.
@@ -109,6 +134,8 @@ class BookingController extends Controller
             'filters' => ['status' => $status ?? 'all'],
             'attendanceDue' => $attendanceDue,
             'counts' => [
+                'all' => Booking::where('instructor_id', $user->id)->count(),
+                'reserved' => Booking::where('instructor_id', $user->id)->inStudentCheckout()->count(),
                 'pending' => Booking::where('instructor_id', $user->id)->submittedToInstructor()->where('status', BookingStatus::Pending)->count(),
                 'confirmed' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::Confirmed)->count(),
                 'in_progress' => Booking::where('instructor_id', $user->id)->where('status', BookingStatus::InProgress)->count(),
@@ -120,10 +147,16 @@ class BookingController extends Controller
     /**
      * Display single booking details for the instructor.
      */
-    public function show(Booking $booking): Response
+    public function show(Booking $booking, AvailabilityService $availabilityService): Response
     {
         if ($booking->instructor_id !== auth()->id()) {
             abort(403);
+        }
+
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after ' . Booking::CHECKOUT_HOLD_MINUTES . ' minutes.');
+            $availabilityService->releaseForBooking($booking);
+            $booking->refresh();
         }
 
         $booking->load([
@@ -159,17 +192,23 @@ class BookingController extends Controller
             ? app(\App\Services\SkillAssessmentService::class)->formatForDisplay($booking->student->latestSkillAssessment)
             : null;
 
+        $isReserved = $booking->isInStudentCheckout();
+
         return Inertia::render('Instructor/Bookings/Show', [
             'booking' => $booking,
             'studentAssessment' => $studentAssessment,
             'surfSpots' => $surfSpots,
-            'acceptTimeRemaining' => $booking->getAcceptTimeRemaining(),
+            'isReserved' => $isReserved,
+            'holdTimeRemaining' => $isReserved ? $booking->getPaymentTimeRemaining() : 0,
+            'acceptTimeRemaining' => $isReserved ? 0 : $booking->getAcceptTimeRemaining(),
             // Same guards as the roster: accepting is refused once the window
             // closes or the lesson is inside the pre-lesson buffer.
-            'canBeAccepted' => $booking->status === BookingStatus::Pending
+            'canBeAccepted' => !$isReserved
+                && $booking->status === BookingStatus::Pending
                 && !$booking->acceptDeadlinePassed()
                 && !$booking->isTooCloseToStartToAccept(),
             'acceptBlock' => match (true) {
+                $isReserved => 'awaiting_waiver',
                 $booking->status !== BookingStatus::Pending => null,
                 $booking->acceptDeadlinePassed() => 'window_closed',
                 $booking->isTooCloseToStartToAccept() => 'too_close',
@@ -182,7 +221,7 @@ class BookingController extends Controller
             'startBlockReason' => $booking->startSessionBlockReason(),
             'canStartSession' => $booking->canStartSession(),
             'paymentHoldMinutes' => Booking::PAYMENT_HOLD_MINUTES,
-            'paymentTimeRemaining' => $booking->getPaymentTimeRemaining(),
+            'paymentTimeRemaining' => $isReserved ? 0 : $booking->getPaymentTimeRemaining(),
         ]);
     }
 
@@ -357,6 +396,10 @@ class BookingController extends Controller
     {
         if ($booking->instructor_id !== auth()->id()) {
             abort(403);
+        }
+
+        if ($booking->isInStudentCheckout()) {
+            return back()->with('error', 'The student is still completing the waiver and payment step for this booking.');
         }
 
         if (!$booking->isAwaitingInstructorResponse()) {

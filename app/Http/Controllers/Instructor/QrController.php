@@ -46,7 +46,7 @@ class QrController extends Controller
                 'status_label' => $profile->status->label(),
                 'level' => $profile->level->value,
                 'level_label' => $profile->level->shortLabel(),
-                'rate_per_hour' => (float) $profile->rate_per_hour,
+                'rate_per_hour' => $profile->startingRate(),
             ],
             'verification' => $summary,
             'qrReady' => $qrReady,

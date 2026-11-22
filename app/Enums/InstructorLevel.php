@@ -88,6 +88,57 @@ enum InstructorLevel: int
     }
 
     /**
+     * String values for services this instructor certification level may offer.
+     *
+     * @return array<int, string>
+     */
+    public function allowedServiceValues(): array
+    {
+        return array_map(fn (SessionType $service) => $service->value, $this->allowedServices());
+    }
+
+    public function allowedServicesLabel(): string
+    {
+        return match ($this) {
+            self::Level1 => 'Teaching',
+            self::Level2 => 'Teaching and Guiding',
+            self::Level3 => 'Teaching, Guiding, and Coaching',
+        };
+    }
+
+    /**
+     * Surf-zone difficulty ratings this instructor level is permitted to select.
+     *
+     * @return array<int, string>
+     */
+    public function allowedSurfSpotDifficulties(): array
+    {
+        return match ($this) {
+            self::Level1 => [SkillLevel::Beginner->value],
+            self::Level2 => [SkillLevel::Beginner->value, SkillLevel::Intermediate->value],
+            self::Level3 => [
+                SkillLevel::Beginner->value,
+                SkillLevel::Intermediate->value,
+                SkillLevel::Advanced->value,
+            ],
+        };
+    }
+
+    public function canTeachAtDifficulty(string $difficulty): bool
+    {
+        return in_array(strtolower($difficulty), $this->allowedSurfSpotDifficulties(), true);
+    }
+
+    public function surfZoneRuleLabel(): string
+    {
+        return match ($this) {
+            self::Level1 => 'Level 1 instructors may select beginner surf zones only.',
+            self::Level2 => 'Level 2 instructors may select beginner and intermediate surf zones.',
+            self::Level3 => 'Level 3 instructors may select all surf zones (beginner, intermediate, and advanced).',
+        };
+    }
+
+    /**
      * How many students may share one time slot with this instructor.
      *
      * When `$skill` is supplied, returns the exact skill-dependent ceiling

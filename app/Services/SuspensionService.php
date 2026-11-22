@@ -232,6 +232,7 @@ class SuspensionService
     {
         $bookings = Booking::where('instructor_id', $instructor->id)
             ->whereIn('status', [
+                \App\Enums\BookingStatus::Reserved->value,
                 \App\Enums\BookingStatus::Pending->value,
                 \App\Enums\BookingStatus::AwaitingPayment->value,
                 \App\Enums\BookingStatus::Confirmed->value,

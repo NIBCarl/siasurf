@@ -4,6 +4,7 @@ namespace App\Enums;
 
 enum BookingStatus: string
 {
+    case Reserved = 'reserved';
     case Pending = 'pending';
     case AwaitingPayment = 'awaiting_payment';
     case Confirmed = 'confirmed';
@@ -18,7 +19,8 @@ enum BookingStatus: string
     public function label(): string
     {
         return match($this) {
-            self::Pending => 'Pending',
+            self::Reserved => 'Reserved',
+            self::Pending => 'Pending Approval',
             self::AwaitingPayment => 'Awaiting Payment',
             self::Confirmed => 'Confirmed',
             self::InProgress => 'In Progress',
@@ -34,6 +36,7 @@ enum BookingStatus: string
     public function color(): string
     {
         return match($this) {
+            self::Reserved => 'amber',
             self::Pending => 'yellow',
             self::AwaitingPayment => 'amber',
             self::Confirmed => 'green',
@@ -55,6 +58,7 @@ enum BookingStatus: string
     public static function slotHolding(): array
     {
         return [
+            self::Reserved,
             self::Pending,
             self::AwaitingPayment,
             self::Confirmed,

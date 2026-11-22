@@ -311,6 +311,8 @@ class DashboardService
      */
     public function getInstructorDashboardData(User $user): array
     {
+        app(AvailabilityService::class)->releaseExpiredCheckoutHolds($user->id);
+
         $profile = $user->instructorProfile;
         $activeBookings = $user->bookingsAsInstructor()
             ->submittedToInstructor()
@@ -334,6 +336,7 @@ class DashboardService
             ->take(5);
 
         $pendingRequests = $activeBookings->where('status', BookingStatus::Pending)->count();
+        $reservedHolds = $user->bookingsAsInstructor()->inStudentCheckout()->count();
 
         // FR 1.9.3 - the live request queue, inside the 2 hour response window.
         $pendingRequestList = $activeBookings->where('status', BookingStatus::Pending)
@@ -375,6 +378,7 @@ class DashboardService
                 'total_bookings' => $user->bookingsAsInstructor()->count(),
                 'completed_lessons' => $completedBookings->count(),
                 'pending_requests' => $pendingRequests,
+                'reserved_holds' => $reservedHolds,
                 'total_earnings' => $this->formatCurrency($earningsTotal),
                 'this_month_earnings' => $this->formatCurrency($earningsThisMonth),
             ],

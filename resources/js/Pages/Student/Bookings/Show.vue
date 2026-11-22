@@ -29,6 +29,9 @@ interface Booking {
   end_time?: string | null
   created_at?: string | null
   status: string
+  is_reserved?: boolean
+  hold_remaining_seconds?: number
+  resume_url?: string | null
   total_amount: number
   skill_level: string
   student_age: number
@@ -85,6 +88,11 @@ interface Props {
 
 const props = defineProps<Props>()
 
+const isReserved = computed(
+  () => props.booking.status === 'reserved' || props.booking.is_reserved === true,
+)
+
+const holdSeconds = ref(Math.max(0, props.booking.hold_remaining_seconds ?? 0))
 const paymentTimeRemaining = ref(0)
 const payingGCash = ref(false)
 
@@ -114,13 +122,16 @@ const startGCashCheckout = () => {
 onMounted(() => {
   calculatePaymentTimeRemaining()
   paymentTimer = setInterval(() => {
+    if (isReserved.value && holdSeconds.value > 0) {
+      holdSeconds.value = Math.max(0, holdSeconds.value - 1)
+    }
     if (props.booking.status === 'awaiting_payment' && props.booking.payment_deadline_at) {
       calculatePaymentTimeRemaining()
     }
   }, 1000)
 
   pollTimer = setInterval(() => {
-    if (['pending', 'awaiting_payment'].includes(props.booking.status)) {
+    if (['reserved', 'pending', 'awaiting_payment'].includes(props.booking.status)) {
       router.reload({ only: ['booking'] })
     }
   }, 4000)
@@ -145,10 +156,14 @@ onBeforeUnmount(() => {
 const checkoutUrl = computed(() => props.booking.payment?.checkout_url ?? null)
 
 const steps = computed(() => [
-  { name: 'Booked', status: 'completed', icon: CheckCircleIcon },
+  {
+    name: isReserved.value ? 'Reserved (Hold)' : 'Booked',
+    status: isReserved.value ? 'current' : 'completed',
+    icon: isReserved.value ? ClockIcon : CheckCircleIcon,
+  },
   {
     name: 'Confirmed',
-    status: ['pending', 'awaiting_payment'].includes(props.booking.status) ? 'upcoming' : 'completed',
+    status: ['reserved', 'pending', 'awaiting_payment'].includes(props.booking.status) ? 'upcoming' : 'completed',
     icon: ShieldCheckIcon,
   },
   {
@@ -172,6 +187,8 @@ type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | '
 
 const statusMeta = (status: string): { label: string; variant: PillVariant } => {
   switch (status) {
+    case 'reserved':
+      return { label: 'Reserved · Complete checkout', variant: 'pending' }
     case 'pending':
       return { label: 'Awaiting instructor', variant: 'pending' }
     case 'awaiting_payment':
@@ -216,8 +233,14 @@ const paymentLabel = (status?: string) => {
   return labels[status] ?? status.replace(/_/g, ' ')
 }
 
+const parseLocalDate = (date: string) => {
+  const [year, month, day] = String(date).slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return new Date(date)
+  return new Date(year, month - 1, day)
+}
+
 const formatDate = (date: string) =>
-  new Date(date).toLocaleDateString('en-US', {
+  parseLocalDate(date).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -277,9 +300,14 @@ const avatarUrl = computed(() => resolveAvatarUrl(props.booking.instructor))
 
 const canCancel = computed(
   () =>
-    props.booking.can_be_cancelled ??
-    ['pending', 'awaiting_payment'].includes(props.booking.status),
+    !isReserved.value &&
+    (props.booking.can_be_cancelled ??
+      ['pending', 'awaiting_payment'].includes(props.booking.status)),
 )
+
+const releaseHold = () => {
+  router.post(route('bookings.abandon', props.booking.id))
+}
 const canFeedback = computed(() => props.booking.status === 'completed')
 
 // The receipt is served through an authorised route, never a public URL.
@@ -355,8 +383,8 @@ const canChat = computed(() =>
                     :title="booking.surf_spot.name"
                     :description="`${formatDate(booking.date)} · ${timeLabel(booking.time_period)} session`"
                 />
-                <StatusPill :variant="statusMeta(booking.status).variant">
-                    {{ statusMeta(booking.status).label }}
+                <StatusPill :variant="statusMeta(isReserved ? 'reserved' : booking.status).variant">
+                    {{ statusMeta(isReserved ? 'reserved' : booking.status).label }}
                 </StatusPill>
             </div>
 
@@ -481,9 +509,40 @@ const canChat = computed(() =>
                     <!-- Live instructor location -->
                     <!-- Removed: SiaSurf does not use GPS tracking (see scope limitations). -->
 
+                    <!-- 15-minute checkout hold banner -->
+                    <AppCard
+                        v-if="isReserved"
+                        padding="md"
+                        class="border-amber-300 bg-amber-50"
+                    >
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-900">
+                                    15-Minute Reservation Hold
+                                </p>
+                                <h2 class="mt-1 text-title font-semibold text-amber-950">
+                                    Finish your waiver &amp; payment selection
+                                </h2>
+                                <p class="mt-1 text-body-sm text-amber-900">
+                                    Your slot with {{ booking.instructor.name }} is temporarily reserved for you. Complete the waiver and pick a payment method before the timer runs out so the request goes to your instructor.
+                                </p>
+                            </div>
+
+                            <div class="flex shrink-0 flex-wrap items-center gap-3">
+                                <Countdown v-if="holdSeconds > 0" :seconds="holdSeconds" label="Hold left" />
+                                <AppButton :href="booking.resume_url ?? route('bookings.waiver', booking.id)">
+                                    Continue Waiver / Payment →
+                                </AppButton>
+                                <AppButton variant="secondary" @click="releaseHold">
+                                    Release Hold
+                                </AppButton>
+                            </div>
+                        </div>
+                    </AppCard>
+
                     <!-- Waiting for instructor approval banner -->
                     <AppCard
-                        v-if="booking.status === 'pending'"
+                        v-else-if="booking.status === 'pending'"
                         padding="md"
                         class="border-amber-200 bg-amber-50"
                     >
@@ -839,7 +898,23 @@ const canChat = computed(() =>
                                 My bookings
                             </AppButton>
                             <AppButton
-                                v-if="canCancel"
+                                v-if="isReserved"
+                                :href="booking.resume_url ?? route('bookings.waiver', booking.id)"
+                                block
+                            >
+                                Continue Waiver / Payment →
+                            </AppButton>
+                            <AppButton
+                                v-if="isReserved"
+                                variant="ghost"
+                                block
+                                class="text-rose-700 hover:bg-rose-50"
+                                @click="releaseHold"
+                            >
+                                Release Hold
+                            </AppButton>
+                            <AppButton
+                                v-else-if="canCancel"
                                 variant="ghost"
                                 block
                                 class="text-rose-700 hover:bg-rose-50"

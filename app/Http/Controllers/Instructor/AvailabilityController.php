@@ -23,9 +23,21 @@ class AvailabilityController extends Controller
     /**
      * Display instructor's availability
      */
-    public function index(AvailabilityService $availabilityService): Response
+    public function index(Request $request, AvailabilityService $availabilityService): Response
     {
         $user = auth()->user();
+
+        $availabilityService->releaseExpiredCheckoutHolds($user->id);
+
+        $rawFocusDate = $request->query('date');
+        $focusDate = null;
+        if (is_string($rawFocusDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawFocusDate)) {
+            try {
+                $focusDate = \Carbon\Carbon::createFromFormat('Y-m-d', $rawFocusDate)->format('Y-m-d');
+            } catch (\Throwable) {
+                $focusDate = null;
+            }
+        }
 
         $availabilities = Availability::where('user_id', $user->id)
             ->orderBy('day_of_week')
@@ -35,6 +47,8 @@ class AvailabilityController extends Controller
 
         return Inertia::render('Instructor/Availability/Index', [
             'availabilities' => $availabilities,
+            'initialSchedule' => $availabilityService->instructorWeekSchedule($user->id, $focusDate),
+            'initialFocusDate' => $focusDate,
             'daysOfWeek' => collect(DayOfWeek::cases())->map(fn($day) => [
                 'name' => $day->name,
                 'value' => $day->value,
@@ -74,6 +88,20 @@ class AvailabilityController extends Controller
                 ])
                 ->values(),
         ]);
+    }
+
+    /**
+     * Dated weekly schedule JSON for the Instructor Booking Calendar.
+     */
+    public function schedule(Request $request, AvailabilityService $availabilityService): JsonResponse
+    {
+        $validated = $request->validate([
+            'week' => 'nullable|date',
+        ]);
+
+        return response()->json(
+            $availabilityService->instructorWeekSchedule(auth()->id(), $validated['week'] ?? null)
+        );
     }
 
     /**
@@ -353,16 +381,37 @@ class AvailabilityController extends Controller
             $sessionType,
         );
 
+        $candidateEnd = \Carbon\Carbon::createFromFormat('H:i', $validated['start_time'])
+            ->addHour()
+            ->format('H:i');
+        $probeEnd = $candidateEnd > $validated['start_time']
+            ? $candidateEnd
+            : $validated['start_time'];
+
+        $unavailable = empty($endTimes)
+            ? $availability->unavailableStartReason(
+                (int) $instructorId,
+                $validated['date'],
+                $validated['start_time'],
+                $students,
+                null,
+                $skill,
+                $sessionType,
+            )
+            : ['is_reserved' => false, 'reason' => null];
+
         return response()->json([
             'date' => $validated['date'],
             'start_time' => $validated['start_time'],
             'students' => $students,
             'end_times' => $endTimes,
+            'is_reserved' => $unavailable['is_reserved'],
+            'reason' => $unavailable['reason'],
             'remaining_capacity' => $availability->remainingCapacity(
                 (int) $instructorId,
                 $validated['date'],
                 $validated['start_time'],
-                $endTimes[0] ?? $validated['start_time'],
+                $endTimes[0] ?? $probeEnd,
                 null,
                 $skill,
                 $sessionType,

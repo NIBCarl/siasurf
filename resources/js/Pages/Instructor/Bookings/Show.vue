@@ -129,9 +129,11 @@ interface Props {
   booking: Booking
   studentAssessment?: StudentAssessment | null
   surfSpots?: Array<{ id: number; name: string; difficulty: string }>
+  isReserved?: boolean
+  holdTimeRemaining?: number
   acceptTimeRemaining?: number
   canBeAccepted?: boolean
-  acceptBlock?: 'window_closed' | 'too_close' | null
+  acceptBlock?: 'awaiting_waiver' | 'window_closed' | 'too_close' | null
   requiresAdminApprovalForChange?: boolean
   hoursUntilLesson?: number | null
   changeApprovalThresholdHours?: number
@@ -173,7 +175,24 @@ const acceptCountdown = computed(() => {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
 })
 
-const isAwaitingResponse = computed(() => props.booking.status === 'pending')
+const isReservedHold = computed(() => Boolean(props.isReserved) || props.booking.status === 'reserved')
+
+const holdSecondsLeft = computed(() => {
+  const base = props.holdTimeRemaining ?? 0
+  if (base <= 0) return 0
+  const elapsed = Math.floor((nowTick.value - mountedAt) / 1000)
+  return Math.max(0, base - elapsed)
+})
+
+const holdCountdown = computed(() => {
+  const seconds = holdSecondsLeft.value
+  if (seconds <= 0) return '0m'
+  const minutes = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return minutes > 0 ? `${minutes}m ${String(secs).padStart(2, '0')}s` : `${secs}s`
+})
+
+const isAwaitingResponse = computed(() => !isReservedHold.value && props.booking.status === 'pending')
 
 const updateTimer = () => {
   if (props.booking.status !== 'in_progress' || !props.booking.started_at) {
@@ -211,8 +230,10 @@ type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | '
 
 const statusMeta = (status: string): { label: string; variant: PillVariant } => {
   switch (status?.toLowerCase()) {
+    case 'reserved':
+      return { label: 'Reserved (Hold)', variant: 'pending' }
     case 'pending':
-      return { label: 'Pending request', variant: 'pending' }
+      return { label: 'Pending approval', variant: 'pending' }
     case 'awaiting_payment':
       return { label: 'Awaiting payment', variant: 'pending' }
     case 'confirmed':
@@ -389,6 +410,7 @@ const submitRejectReceipt = () => {
 // ---- Actions -------------------------------------------------------------
 
 const canAccept = computed(() => {
+  if (isReservedHold.value) return false
   if (props.canBeAccepted === false) return false
   // The countdown may run out while this page stays open.
   if ((props.acceptTimeRemaining ?? 0) > 0) return acceptSecondsLeft.value > 0
@@ -396,12 +418,15 @@ const canAccept = computed(() => {
 })
 
 const canDecline = computed(() => {
-  if (!isAwaitingResponse.value) return false
+  if (isReservedHold.value || !isAwaitingResponse.value) return false
   if ((props.acceptTimeRemaining ?? 0) > 0) return acceptSecondsLeft.value > 0
   return false
 })
 
 const acceptBlockLabel = computed(() => {
+  if (props.acceptBlock === 'awaiting_waiver' || isReservedHold.value) {
+    return 'This slot is held for 15 minutes while the tourist completes the liability waiver and selects a payment method. You can accept or decline once they finish.'
+  }
   if (props.acceptBlock === 'window_closed') return 'Response window closed · request released'
   if (props.acceptBlock === 'too_close') return 'Starts too soon to accept · ask the student to reschedule'
   return null
@@ -518,7 +543,7 @@ const withdrawChange = () => {
 }
 
 const canChangeBooking = computed(() =>
-  ['pending', 'confirmed', 'awaiting_payment'].includes(props.booking.status),
+  !isReservedHold.value && ['pending', 'confirmed', 'awaiting_payment'].includes(props.booking.status),
 )
 
 // Attendance modal
@@ -628,11 +653,14 @@ const showPrimaryAttendance = computed(
                 <h1 class="text-headline font-semibold tracking-tight text-deep-950">
                   Session #SURF-{{ booking.id.toString().padStart(5, '0') }}
                 </h1>
-                <StatusPill :variant="statusMeta(booking.status).variant">
-                  {{ statusMeta(booking.status).label }}
+                <StatusPill :variant="statusMeta(isReservedHold ? 'reserved' : booking.status).variant">
+                  {{ statusMeta(isReservedHold ? 'reserved' : booking.status).label }}
+                </StatusPill>
+                <StatusPill v-if="isReservedHold" variant="pending">
+                  {{ holdSecondsLeft > 0 ? `Hold · ${holdCountdown} left` : 'Hold expiring' }}
                 </StatusPill>
                 <StatusPill
-                  v-if="isAwaitingResponse"
+                  v-else-if="isAwaitingResponse"
                   :variant="acceptSecondsLeft <= 1800 ? 'critical' : 'pending'"
                   :aria-label="
                     acceptSecondsLeft > 0
@@ -676,15 +704,42 @@ const showPrimaryAttendance = computed(
           </div>
 
           <div class="flex flex-wrap items-center gap-2 lg:justify-end">
-            <AppButton v-if="canAccept" size="sm" @click="confirmBooking">Accept request</AppButton>
-            <AppButton
-              v-if="canDecline"
-              size="sm"
-              variant="secondary"
-              @click="showDeclineModal = true"
-            >
-              Decline
-            </AppButton>
+            <template v-if="isReservedHold">
+              <AppButton
+                size="sm"
+                variant="secondary"
+                disabled
+                title="Available once the tourist completes the waiver and payment selection"
+              >
+                Accept request
+              </AppButton>
+              <AppButton
+                size="sm"
+                variant="secondary"
+                disabled
+                title="Available once the tourist completes the waiver and payment selection"
+              >
+                Decline
+              </AppButton>
+              <AppButton
+                :href="route('instructor.availability.index', { date: String(booking.date).slice(0, 10) })"
+                size="sm"
+                variant="secondary"
+              >
+                View on calendar
+              </AppButton>
+            </template>
+            <template v-else>
+              <AppButton v-if="canAccept" size="sm" @click="confirmBooking">Accept request</AppButton>
+              <AppButton
+                v-if="canDecline"
+                size="sm"
+                variant="secondary"
+                @click="showDeclineModal = true"
+              >
+                Decline
+              </AppButton>
+            </template>
 
             <AppButton
               v-if="booking.status === 'confirmed'"
@@ -730,6 +785,12 @@ const showPrimaryAttendance = computed(
                 </AppButton>
               </template>
               <template #content>
+                <Link
+                  :href="route('instructor.availability.index', { date: String(booking.date).slice(0, 10) })"
+                  class="menu-item"
+                >
+                  View on calendar
+                </Link>
                 <button
                   v-if="canRecordCash"
                   type="button"

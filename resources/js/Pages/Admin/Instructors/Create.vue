@@ -1,21 +1,30 @@
 <script setup lang="ts">
 import { Head, useForm, Link, usePage } from '@inertiajs/vue3'
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import TextInput from '@/Components/TextInput.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
 import RateCapDialog from '@/Components/Molecules/RateCapDialog.vue'
+import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
+
+const props = defineProps<{
+  availableSurfSpots?: SurfZoneSpot[]
+}>()
 
 const page = usePage()
 
 // Published hourly-rate bands, shared from the server.
-const teachingBand = computed(() => (page.props as any).pricing?.services?.teaching ?? { min: 600, max: 1000, default: 600 })
-const guidingBand = computed(() => (page.props as any).pricing?.services?.guiding ?? { min: 800, max: 1500, default: 800 })
-const coachingBand = computed(() => (page.props as any).pricing?.services?.coaching ?? { min: 1500, max: 2000, default: 1500 })
-const rateMin = computed(() => Number(teachingBand.value.min ?? 600))
-const rateMax = computed(() => Number(teachingBand.value.max ?? 1000))
+const teachingBand = computed(() => (page.props as any).pricing?.services?.teaching ?? { min: 600, max: 1000, default: 600, rangeLabel: '₱600–₱1,000' })
+const guidingBand = computed(() => (page.props as any).pricing?.services?.guiding ?? { min: 800, max: 1500, default: 800, rangeLabel: '₱800–₱1,500' })
+const coachingBand = computed(() => (page.props as any).pricing?.services?.coaching ?? { min: 1500, max: 2000, default: 1500, rangeLabel: '₱1,500–₱2,000' })
+
+const allowedForLevel = (level: number): string[] => {
+  if (level >= 3) return ['teaching', 'guiding', 'coaching']
+  if (level === 2) return ['teaching', 'guiding']
+  return ['teaching']
+}
 
 const form = useForm({
   name: '',
@@ -24,38 +33,122 @@ const form = useForm({
   phone: '',
   bio: '',
   level: 1,
+  offered_services: ['teaching'] as string[],
   rate_per_hour: 600,
   guiding_rate: 800,
   coaching_rate: 1500,
+  surf_spot_ids: [] as number[],
   area: '',
   meeting_point: '',
   latitude: '',
   longitude: '',
 })
 
+const allowedServicesForLevel = computed(() => allowedForLevel(Number(form.level)))
+
+const allowedDifficultiesForLevel = computed(() => {
+  const level = Number(form.level)
+  if (level >= 3) return ['beginner', 'intermediate', 'advanced']
+  if (level === 2) return ['beginner', 'intermediate']
+  return ['beginner']
+})
+
+const eligibleSpotsForLevel = computed<SurfZoneSpot[]>(() =>
+  (props.availableSurfSpots ?? []).filter((spot) =>
+    allowedDifficultiesForLevel.value.includes((spot.difficulty ?? '').toLowerCase()),
+  ),
+)
+
+const serviceCards = computed(() => {
+  const all = [
+    {
+      type: 'teaching' as const,
+      field: 'rate_per_hour' as const,
+      inputId: 'rate_per_hour',
+      label: 'Teaching Rate (₱/hr)',
+      name: 'Teaching',
+      band: teachingBand.value,
+    },
+    {
+      type: 'guiding' as const,
+      field: 'guiding_rate' as const,
+      inputId: 'guiding_rate',
+      label: 'Guiding Rate (₱/hr)',
+      name: 'Guiding',
+      band: guidingBand.value,
+    },
+    {
+      type: 'coaching' as const,
+      field: 'coaching_rate' as const,
+      inputId: 'coaching_rate',
+      label: 'Coaching Rate (₱/hr)',
+      name: 'Coaching',
+      band: coachingBand.value,
+    },
+  ]
+
+  return all.filter((card) => allowedServicesForLevel.value.includes(card.type))
+})
+
+const isServiceOffered = (type: string) => form.offered_services.includes(type)
+
+const toggleService = (type: string) => {
+  if (Number(form.level) === 1) return
+  const idx = form.offered_services.indexOf(type)
+  if (idx === -1) {
+    form.offered_services.push(type)
+  } else {
+    form.offered_services.splice(idx, 1)
+  }
+}
+
+watch(() => form.level, (newLevel) => {
+  const allowed = allowedForLevel(Number(newLevel))
+  const pruned = form.offered_services.filter((s) => allowed.includes(s))
+  form.offered_services = pruned.length > 0 ? pruned : ['teaching']
+
+  const eligibleIds = new Set(eligibleSpotsForLevel.value.map((spot) => spot.id))
+  form.surf_spot_ids = form.surf_spot_ids.filter((id) => eligibleIds.has(id))
+
+  if (newLevel >= 2 && (!form.guiding_rate || Number(form.guiding_rate) < guidingBand.value.min)) {
+    form.guiding_rate = guidingBand.value.default
+  }
+  if (newLevel >= 3 && (!form.coaching_rate || Number(form.coaching_rate) < coachingBand.value.min)) {
+    form.coaching_rate = coachingBand.value.default
+  }
+})
+
 const rateDialogOpen = ref(false)
 const lastOverCapValue = ref<number | null>(null)
-
-const rateOverCap = computed(() => Number(form.rate_per_hour) > rateMax.value)
+const overCapField = ref<'rate_per_hour' | 'guiding_rate' | 'coaching_rate'>('rate_per_hour')
+const overCapMin = ref<number>(600)
+const overCapMax = ref<number>(1000)
 
 const checkRate = () => {
-  if (rateOverCap.value) {
-    lastOverCapValue.value = Number(form.rate_per_hour)
-    rateDialogOpen.value = true
-    return false
+  for (const card of serviceCards.value) {
+    if (!isServiceOffered(card.type)) continue
+    const val = Number(form[card.field])
+    if (val > Number(card.band.max)) {
+      overCapField.value = card.field
+      overCapMin.value = Number(card.band.min)
+      overCapMax.value = Number(card.band.max)
+      lastOverCapValue.value = val
+      rateDialogOpen.value = true
+      return false
+    }
   }
 
   return true
 }
 
 const useCapRate = () => {
-  form.rate_per_hour = rateMax.value
+  form[overCapField.value] = overCapMax.value
   rateDialogOpen.value = false
 }
 
 const dismissRateDialog = () => {
   rateDialogOpen.value = false
-  nextTick(() => document.getElementById('rate_per_hour')?.focus())
+  nextTick(() => document.getElementById(overCapField.value)?.focus())
 }
 
 const submit = () => {
@@ -63,9 +156,16 @@ const submit = () => {
     return
   }
 
-  form.post(route('admin.instructors.store'), {
-    onSuccess: () => form.reset(),
-  })
+  form
+    .transform((data) => ({
+      ...data,
+      rate_per_hour: data.offered_services.includes('teaching') ? data.rate_per_hour : null,
+      guiding_rate: data.offered_services.includes('guiding') ? data.guiding_rate : null,
+      coaching_rate: data.offered_services.includes('coaching') ? data.coaching_rate : null,
+    }))
+    .post(route('admin.instructors.store'), {
+      onSuccess: () => form.reset(),
+    })
 }
 </script>
 
@@ -112,8 +212,8 @@ const submit = () => {
             </div>
          </div>
 
-         <!-- Professional Info -->
-         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-slate-50">
+         <!-- Level & Lesson Types -->
+         <div class="space-y-6 pt-8 border-t border-slate-50">
             <div>
                <InputLabel value="Teaching Level" class="mb-2" />
                <select v-model="form.level" class="w-full border-slate-100 rounded-2xl focus:ring-ocean-500 focus:border-ocean-500 font-bold">
@@ -124,62 +224,50 @@ const submit = () => {
                <InputError :message="form.errors.level" />
             </div>
 
-            <div>
-               <InputLabel value="Teaching Rate (₱/hr)" class="mb-2" />
-               <TextInput
-                  id="rate_per_hour"
-                  v-model="form.rate_per_hour"
-                  type="number"
-                  class="w-full font-black text-ocean-600"
-                  :min="rateMin"
-                  :max="rateMax"
-                  step="50"
-                  required
-                  @blur="checkRate"
-               />
-               <p v-if="rateOverCap" class="mt-1 text-xs font-bold text-rose-600">
-                  Teaching rate cannot exceed ₱{{ rateMax.toLocaleString() }} per hour.
-               </p>
-               <p v-else class="mt-1 text-xs text-slate-500">
-                  Allowed range: ₱{{ rateMin.toLocaleString() }} – ₱{{ rateMax.toLocaleString() }} per hour.
-               </p>
-               <InputError :message="form.errors.rate_per_hour" />
-            </div>
+            <div class="space-y-3">
+               <InputLabel value="Lesson Types &amp; Hourly Rates" />
+               <InputError :message="form.errors.offered_services || (form.errors as any)['offered_services.0']" />
 
-            <div v-if="form.level >= 2">
-               <InputLabel value="Guiding Rate (₱/hr)" class="mb-2" />
-               <TextInput
-                  id="guiding_rate"
-                  v-model="form.guiding_rate"
-                  type="number"
-                  class="w-full font-black text-ocean-600"
-                  :min="guidingBand.min"
-                  :max="guidingBand.max"
-                  step="50"
-                  required
-               />
-               <p class="mt-1 text-xs text-slate-500">
-                  Allowed range: ₱{{ Number(guidingBand.min).toLocaleString() }} – ₱{{ Number(guidingBand.max).toLocaleString() }} per hour.
-               </p>
-               <InputError :message="form.errors.guiding_rate" />
-            </div>
+               <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div
+                     v-for="card in serviceCards"
+                     :key="card.type"
+                     class="rounded-2xl border p-4 transition"
+                     :class="isServiceOffered(card.type) ? 'border-ocean-500 bg-ocean-50/30' : 'border-slate-200 opacity-75'"
+                  >
+                     <label class="flex cursor-pointer items-center justify-between gap-2">
+                        <span class="flex items-center gap-2 text-sm font-bold text-slate-900">
+                           <input
+                              type="checkbox"
+                              :checked="isServiceOffered(card.type)"
+                              :disabled="Number(form.level) === 1"
+                              class="rounded border-slate-300 text-ocean-600 focus:ring-ocean-500"
+                              @change="toggleService(card.type)"
+                           />
+                           {{ card.name }}
+                        </span>
+                        <span class="text-[11px] font-semibold text-slate-500">{{ card.band.rangeLabel }}</span>
+                     </label>
 
-            <div v-if="form.level >= 3">
-               <InputLabel value="Coaching Rate (₱/hr)" class="mb-2" />
-               <TextInput
-                  id="coaching_rate"
-                  v-model="form.coaching_rate"
-                  type="number"
-                  class="w-full font-black text-ocean-600"
-                  :min="coachingBand.min"
-                  :max="coachingBand.max"
-                  step="50"
-                  required
-               />
-               <p class="mt-1 text-xs text-slate-500">
-                  Allowed range: ₱{{ Number(coachingBand.min).toLocaleString() }} – ₱{{ Number(coachingBand.max).toLocaleString() }} per hour.
-               </p>
-               <InputError :message="form.errors.coaching_rate" />
+                     <div v-if="isServiceOffered(card.type)" class="mt-3">
+                        <TextInput
+                           :id="card.inputId"
+                           v-model="form[card.field]"
+                           type="number"
+                           class="w-full font-black text-ocean-600"
+                           :min="card.band.min"
+                           :max="card.band.max"
+                           step="50"
+                           required
+                           @blur="checkRate"
+                        />
+                        <p v-if="Number(form[card.field]) > Number(card.band.max) || Number(form[card.field]) < Number(card.band.min)" class="mt-1 text-xs font-bold text-rose-600">
+                           Must be between ₱{{ Number(card.band.min).toLocaleString() }} and ₱{{ Number(card.band.max).toLocaleString() }}.
+                        </p>
+                        <InputError :message="form.errors[card.field]" />
+                     </div>
+                  </div>
+               </div>
             </div>
          </div>
 
@@ -193,35 +281,44 @@ const submit = () => {
             <InputError :message="form.errors.bio" />
          </div>
 
-         <!-- Directory location -->
-         <div class="grid grid-cols-1 gap-8 border-t border-slate-50 pt-8 md:grid-cols-2">
-            <div>
-               <InputLabel value="Teaching area" class="mb-2" />
-               <TextInput v-model="form.area" type="text" class="w-full" placeholder="General Luna" />
-               <InputError :message="form.errors.area" />
+         <!-- Surf Zones & Directory Location -->
+         <div class="space-y-6 border-t border-slate-50 pt-8">
+            <div v-if="(props.availableSurfSpots ?? []).length > 0" class="space-y-3">
+               <InputLabel value="Assigned Surf Zones (Click spots on map)" />
+               <SurfZoneMap
+                  mode="multi"
+                  :spots="eligibleSpotsForLevel"
+                  v-model="form.surf_spot_ids"
+                  height="320px"
+               />
+               <InputError :message="form.errors.surf_spot_ids || (form.errors as any)['surf_spot_ids.0']" />
             </div>
 
-            <div>
-               <InputLabel value="Meeting point" class="mb-2" />
-               <TextInput v-model="form.meeting_point" type="text" class="w-full" placeholder="Cloud 9 tower" />
-               <InputError :message="form.errors.meeting_point" />
-            </div>
+            <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
+               <div>
+                  <InputLabel value="Teaching area" class="mb-2" />
+                  <TextInput v-model="form.area" type="text" class="w-full" placeholder="General Luna" />
+                  <InputError :message="form.errors.area" />
+               </div>
 
-            <div>
-               <InputLabel value="Latitude" class="mb-2" />
-               <TextInput v-model="form.latitude" type="number" step="0.0000001" class="w-full" placeholder="9.8000000" />
-               <InputError :message="form.errors.latitude" />
-            </div>
+               <div>
+                  <InputLabel value="Meeting point" class="mb-2" />
+                  <TextInput v-model="form.meeting_point" type="text" class="w-full" placeholder="Cloud 9 tower" />
+                  <InputError :message="form.errors.meeting_point" />
+               </div>
 
-            <div>
-               <InputLabel value="Longitude" class="mb-2" />
-               <TextInput v-model="form.longitude" type="number" step="0.0000001" class="w-full" placeholder="126.1600000" />
-               <InputError :message="form.errors.longitude" />
-            </div>
+               <div>
+                  <InputLabel value="Latitude (optional override)" class="mb-2" />
+                  <TextInput v-model="form.latitude" type="number" step="0.0000001" class="w-full" placeholder="9.8000000" />
+                  <InputError :message="form.errors.latitude" />
+               </div>
 
-            <p class="text-xs text-slate-500 md:col-span-2">
-               Coordinates place the instructor on the public directory map. Leave both blank if they should only appear in the list.
-            </p>
+               <div>
+                  <InputLabel value="Longitude (optional override)" class="mb-2" />
+                  <TextInput v-model="form.longitude" type="number" step="0.0000001" class="w-full" placeholder="126.1600000" />
+                  <InputError :message="form.errors.longitude" />
+               </div>
+            </div>
          </div>
 
          <div class="pt-8 flex items-center justify-between">
@@ -231,7 +328,7 @@ const submit = () => {
                </svg>
                <span>Registration generates a secure instructor profile</span>
             </div>
-            <BaseButton variant="primary" size="lg" :loading="form.processing" class="px-12 shadow-xl shadow-ocean-200">
+            <BaseButton variant="primary" size="lg" :loading="form.processing" :disabled="form.processing || form.offered_services.length === 0" class="px-12 shadow-xl shadow-ocean-200">
                Confirm Registration &rarr;
             </BaseButton>
          </div>
@@ -243,8 +340,8 @@ const submit = () => {
     <RateCapDialog
       :show="rateDialogOpen"
       :entered="lastOverCapValue"
-      :min="rateMin"
-      :max="rateMax"
+      :min="overCapMin"
+      :max="overCapMax"
       @close="dismissRateDialog"
       @use-max="useCapRate"
     />

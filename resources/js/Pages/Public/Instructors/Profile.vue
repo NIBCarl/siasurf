@@ -2,6 +2,7 @@
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import InstructorDirectoryMap from '@/Components/Organisms/InstructorDirectoryMap.vue';
+import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue';
 import { 
     StarIcon, 
     CheckBadgeIcon, 
@@ -30,6 +31,9 @@ const props = defineProps<{
         min: number;
         max: number;
     }>;
+    startingRate?: number;
+    surfSpots?: SurfZoneSpot[];
+    studentBookingBlockReason?: string | null;
     weeklyAvailability?: Array<{
         value: number;
         label: string;
@@ -113,12 +117,19 @@ const instructorLevelDescription: Record<number, string> = {
             </Link>
             
             <div v-if="canBook" class="flex items-center gap-4">
-                <Link 
+                <Link
+                    v-if="!studentBookingBlockReason"
                     :href="route('bookings.create', instructor.id)" 
                     class="rounded-2xl bg-ocean-600 px-8 py-3.5 text-sm font-black text-white shadow-xl shadow-ocean-100 transition-all hover:bg-ocean-700 active:scale-95"
                 >
                     Book This Expert
                 </Link>
+                <span
+                    v-else
+                    class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-2.5 text-xs font-bold text-amber-800"
+                >
+                    Unavailable for your skill level
+                </span>
             </div>
         </div>
 
@@ -242,8 +253,43 @@ const instructorLevelDescription: Record<number, string> = {
                     </p>
                 </div>
 
-                <!-- Teaching location -->
-                <div v-if="mapInstructors.length" class="rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm">
+                <!-- Surf zones & teaching location -->
+                <div v-if="(props.surfSpots ?? []).length > 0" class="rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm">
+                    <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-[0.2em] text-ocean-500">Where you can surf</p>
+                            <h2 class="mt-1 text-xl font-extrabold uppercase tracking-widest text-slate-900">Surf zones</h2>
+                            <p class="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-600">
+                                <MapPinIcon class="h-4 w-4 text-ocean-500" />
+                                {{ instructor.instructor_profile.area || 'Siargao Island' }}
+                                <span v-if="instructor.instructor_profile.meeting_point">· {{ instructor.instructor_profile.meeting_point }}</span>
+                            </p>
+                        </div>
+                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                            {{ props.surfSpots!.length }} selected surf zone{{ props.surfSpots!.length === 1 ? '' : 's' }}
+                        </span>
+                    </div>
+
+                    <div class="mb-5 flex flex-wrap gap-2">
+                        <span
+                            v-for="spot in props.surfSpots"
+                            :key="spot.id"
+                            class="inline-flex items-center gap-1.5 rounded-full border border-ocean-200 bg-ocean-50 px-3 py-1 text-xs font-bold text-ocean-800"
+                        >
+                            {{ spot.name }}
+                            <span class="text-[10px] uppercase text-ocean-600">({{ spot.difficulty }})</span>
+                        </span>
+                    </div>
+
+                    <SurfZoneMap
+                        mode="view"
+                        :spots="props.surfSpots!"
+                        height="320px"
+                    />
+                </div>
+
+                <!-- Teaching location fallback when no surf zones configured -->
+                <div v-else-if="mapInstructors.length" class="rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm">
                     <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                         <div>
                             <p class="text-[10px] font-black uppercase tracking-[0.2em] text-ocean-500">Find your coach</p>
@@ -337,7 +383,7 @@ const instructorLevelDescription: Record<number, string> = {
                                     </div>
                                     <div class="flex items-baseline gap-2">
                                         <span class="text-[10px] font-black text-slate-400">PHP</span>
-                                        <span class="text-5xl font-black tracking-tight italic">₱{{ Number(instructor.instructor_profile.rate_per_hour).toLocaleString() }}</span>
+                                        <span class="text-5xl font-black tracking-tight italic">₱{{ Number(startingRate ?? instructor.instructor_profile.rate_per_hour ?? 600).toLocaleString() }}</span>
                                     </div>
                                 </div>
                                 <div class="h-16 w-16 rounded-3xl bg-white/10 flex items-center justify-center backdrop-blur-xl border border-white/10 group-hover:rotate-12 transition-transform duration-500">
@@ -379,8 +425,15 @@ const instructorLevelDescription: Record<number, string> = {
                                 </div>
                             </div>
 
+                            <div
+                                v-if="isStudent && studentBookingBlockReason"
+                                class="rounded-2xl border border-amber-400/30 bg-amber-500/15 px-4 py-4 text-center text-xs font-semibold text-amber-200"
+                            >
+                                {{ studentBookingBlockReason }}
+                            </div>
+
                             <Link
-                                v-if="isStudent"
+                                v-else-if="isStudent"
                                 :href="route('bookings.create', instructor.id)"
                                 class="flex h-16 w-full items-center justify-center rounded-2xl bg-ocean-500 text-sm font-black text-white shadow-2xl shadow-ocean-900/40 transition-all hover:bg-ocean-400 active:scale-95 group/btn"
                             >

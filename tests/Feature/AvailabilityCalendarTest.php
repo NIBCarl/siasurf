@@ -305,4 +305,155 @@ class AvailabilityCalendarTest extends TestCase
         // The guard must not have truncated the caller's Carbon to midnight.
         $this->assertSame('15:30', $date->format('H:i'));
     }
+
+    /** @test */
+    public function a_partially_booked_morning_stays_open_on_the_student_calendar()
+    {
+        $l1 = User::factory()->create(['role' => 'instructor']);
+        $l1->assignRole('instructor');
+        $l1->instructorProfile()->create([
+            'level' => InstructorLevel::Level1,
+            'status' => 'active',
+            'rate_per_hour' => 1000,
+        ]);
+
+        foreach (range(0, 6) as $dayOfWeek) {
+            Availability::create([
+                'user_id' => $l1->id,
+                'day_of_week' => $dayOfWeek,
+                'time_period' => 'morning',
+                'is_available' => true,
+                'start_time' => '06:00',
+                'end_time' => '12:00',
+                'slot_duration_minutes' => 60,
+            ]);
+            Availability::create([
+                'user_id' => $l1->id,
+                'day_of_week' => $dayOfWeek,
+                'time_period' => 'afternoon',
+                'is_available' => true,
+                'start_time' => '13:00',
+                'end_time' => '18:00',
+                'slot_duration_minutes' => 60,
+            ]);
+        }
+
+        $student = User::factory()->create(['role' => 'student']);
+        $student->assignRole('student');
+
+        $day = now()->addDays(4)->startOfDay();
+        $dateKey = $day->format('Y-m-d');
+
+        Booking::factory()->create([
+            'student_id' => $student->id,
+            'instructor_id' => $l1->id,
+            'surf_spot_id' => $this->surfSpot->id,
+            'date' => $dateKey,
+            'time_period' => 'morning',
+            'start_time' => '07:00',
+            'end_time' => '09:00',
+            'duration_hours' => 2,
+            'student_count' => 1,
+            'student_age' => 25,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+            'status' => BookingStatus::Reserved,
+            'payment_deadline_at' => now()->addMinutes(15),
+        ]);
+
+        $calendar = $this->service()->availabilityByDay($l1->id, $day, 1, 1);
+        $periods = $this->service()->periodsFor($l1->id, $day, 1);
+
+        $this->assertTrue($calendar[$dateKey]['morning']['available']);
+        $this->assertTrue($periods['morning']['available']);
+
+        Booking::factory()->create([
+            'student_id' => $student->id,
+            'instructor_id' => $l1->id,
+            'surf_spot_id' => $this->surfSpot->id,
+            'date' => $dateKey,
+            'time_period' => 'morning',
+            'start_time' => '06:00',
+            'end_time' => '07:00',
+            'duration_hours' => 1,
+            'student_count' => 1,
+            'student_age' => 25,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+            'status' => BookingStatus::Confirmed,
+        ]);
+
+        Booking::factory()->create([
+            'student_id' => $student->id,
+            'instructor_id' => $l1->id,
+            'surf_spot_id' => $this->surfSpot->id,
+            'date' => $dateKey,
+            'time_period' => 'morning',
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'duration_hours' => 3,
+            'student_count' => 1,
+            'student_age' => 25,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+            'status' => BookingStatus::Confirmed,
+        ]);
+
+        $fullCalendar = $this->service()->availabilityByDay($l1->id, $day, 1, 1);
+
+        $this->assertFalse($fullCalendar[$dateKey]['morning']['available']);
+    }
+
+    /** @test */
+    public function availability_by_day_releases_expired_checkout_holds()
+    {
+        $l1 = User::factory()->create(['role' => 'instructor']);
+        $l1->assignRole('instructor');
+        $l1->instructorProfile()->create([
+            'level' => InstructorLevel::Level1,
+            'status' => 'active',
+            'rate_per_hour' => 1000,
+        ]);
+
+        foreach (range(0, 6) as $dayOfWeek) {
+            Availability::create([
+                'user_id' => $l1->id,
+                'day_of_week' => $dayOfWeek,
+                'time_period' => 'morning',
+                'is_available' => true,
+                'start_time' => '06:00',
+                'end_time' => '12:00',
+                'slot_duration_minutes' => 60,
+            ]);
+        }
+
+        $student = User::factory()->create(['role' => 'student']);
+        $student->assignRole('student');
+
+        $day = now()->addDays(5)->startOfDay();
+        $dateKey = $day->format('Y-m-d');
+
+        $booking = Booking::factory()->create([
+            'student_id' => $student->id,
+            'instructor_id' => $l1->id,
+            'surf_spot_id' => $this->surfSpot->id,
+            'date' => $dateKey,
+            'time_period' => 'morning',
+            'start_time' => '06:00',
+            'end_time' => '12:00',
+            'duration_hours' => 6,
+            'student_count' => 1,
+            'student_age' => 25,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+            'status' => BookingStatus::Reserved,
+            'payment_deadline_at' => now()->subMinute(),
+            'accept_deadline_at' => null,
+        ]);
+
+        $calendar = $this->service()->availabilityByDay($l1->id, $day, 1, 1);
+
+        $this->assertSame(BookingStatus::Expired, $booking->fresh()->status);
+        $this->assertTrue($calendar[$dateKey]['morning']['available']);
+    }
 }

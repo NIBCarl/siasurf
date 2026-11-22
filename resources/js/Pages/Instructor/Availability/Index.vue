@@ -7,6 +7,7 @@ import AppCard from '@/Components/UI/AppCard.vue'
 import AppSwitch from '@/Components/UI/AppSwitch.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
+import InstructorScheduleCalendar, { type WeekSchedule } from '@/Components/UI/InstructorScheduleCalendar.vue'
 import {
   ArrowPathIcon,
   CloudIcon,
@@ -44,6 +45,8 @@ interface BlockSummary {
 
 interface Props {
   availabilities: Record<number, Availability[]>
+  initialSchedule: WeekSchedule
+  initialFocusDate?: string | null
   daysOfWeek: { name: string; value: number; label: string }[]
   timePeriods: { name: string; value: string; label: string }[]
   profile: {
@@ -98,6 +101,8 @@ const generateSlots = (start: string, end: string) => {
 
 const settingKey = (dayValue: number, periodValue: string) => `${dayValue}-${periodValue}`
 
+// Top-level view switch: Booking Calendar vs Weekly Rules & Blocks
+const activeTab = ref<'calendar' | 'rules'>('calendar')
 // Mobile Segmented Tab
 const activeMobileTab = ref<'weekly' | 'exceptions'>('weekly')
 
@@ -413,7 +418,9 @@ const manualBlockCount = computed(() => props.manualBlocks?.length ?? 0)
  */
 const isInstantBook = computed(() => props.autoAcceptBookings === true)
 
-const bookingBlockCount = computed(() => props.bookingBlocks?.length ?? 0)
+const calendarHoldAndRequestCount = computed(
+  () => (props.initialSchedule?.summary?.reserved ?? 0) + (props.initialSchedule?.summary?.pending ?? 0),
+)
 
 // Presets & Bulk Actions
 const setAllAvailable = (periodValue?: string) => {
@@ -459,20 +466,24 @@ const isOpen = (dayValue: number, periodValue: string) =>
 </script>
 
 <template>
-    <Head title="Weekly schedule" />
+    <Head title="Schedule & availability" />
 
     <AppLayout>
-        <template #header>Weekly schedule</template>
+        <template #header>Schedule &amp; availability</template>
 
         <div class="space-y-6 pb-24">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <SectionHeader
-                    eyebrow="Availability"
-                    title="Weekly schedule builder"
-                    description="Set recurring morning and afternoon windows. Tourists and walk-ins can only book published slots."
+                    eyebrow="Schedule management"
+                    :title="activeTab === 'calendar' ? 'Booking calendar' : 'Weekly schedule builder'"
+                    :description="
+                        activeTab === 'calendar'
+                            ? 'See reserved holds, pending requests, confirmed lessons, and open slots across the week.'
+                            : 'Set recurring morning and afternoon windows. Tourists and walk-ins can only book published slots.'
+                    "
                 />
 
-                <div class="flex flex-wrap items-center gap-2">
+                <div v-if="activeTab === 'rules'" class="flex flex-wrap items-center gap-2">
                     <StatusPill :variant="bookableSlotsCount > 0 ? 'verified' : 'pending'">
                         {{ bookableSlotsCount }} bookable hours
                     </StatusPill>
@@ -493,6 +504,57 @@ const isOpen = (dayValue: number, periodValue: string) =>
                 </div>
             </div>
 
+            <!-- View switcher -->
+            <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Schedule sections">
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeTab === 'calendar'"
+                    class="inline-flex h-10 items-center gap-2 rounded-full border px-4 text-body-sm font-semibold transition-colors"
+                    :class="
+                        activeTab === 'calendar'
+                            ? 'border-deep-950 bg-deep-950 text-white'
+                            : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                    "
+                    @click="activeTab = 'calendar'"
+                >
+                    Booking calendar
+                    <span
+                        v-if="calendarHoldAndRequestCount > 0"
+                        class="rounded-full px-1.5 py-0.5 text-label font-semibold tabular-nums"
+                        :class="activeTab === 'calendar' ? 'bg-amber-400 text-deep-950' : 'bg-amber-100 text-amber-900'"
+                    >
+                        {{ calendarHoldAndRequestCount }}
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="activeTab === 'rules'"
+                    class="inline-flex h-10 items-center gap-2 rounded-full border px-4 text-body-sm font-semibold transition-colors"
+                    :class="
+                        activeTab === 'rules'
+                            ? 'border-deep-950 bg-deep-950 text-white'
+                            : 'border-sand-200 bg-white text-stone-700 hover:border-lagoon-600'
+                    "
+                    @click="activeTab = 'rules'"
+                >
+                    Weekly rules &amp; blocks
+                    <span
+                        v-if="hasUnsavedChanges"
+                        class="h-2 w-2 rounded-full bg-amber-400"
+                        aria-label="Unsaved changes"
+                    />
+                </button>
+            </div>
+
+            <InstructorScheduleCalendar
+                v-if="activeTab === 'calendar'"
+                :initial-schedule="initialSchedule"
+                :focus-date="initialFocusDate"
+            />
+
+            <template v-else>
             <!-- Presets -->
             <AppCard padding="md">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -820,26 +882,20 @@ const isOpen = (dayValue: number, periodValue: string) =>
                         </div>
                         <p v-else class="mt-4 text-body-sm text-stone-600">No personal date blocks.</p>
 
-                        <div v-if="bookingBlocks?.length" class="mt-4 space-y-2">
+                        <div class="mt-4 rounded-control border border-sand-200 bg-sand-50 px-3.5 py-3">
                             <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                                Locked by confirmed lessons
+                                Booked &amp; reserved slots
                             </p>
-                            <div
-                                v-for="block in bookingBlocks"
-                                :key="block.id"
-                                class="flex items-center justify-between gap-3 rounded-control border border-sand-300 bg-sand-50 px-3 py-2.5"
+                            <p class="mt-1 text-body-sm text-stone-600">
+                                Live lesson bookings and temporary 15-minute Reserved holds appear directly on the Booking calendar tab.
+                            </p>
+                            <button
+                                type="button"
+                                class="mt-2 text-body-sm font-semibold text-lagoon-700 hover:underline"
+                                @click="activeTab = 'calendar'"
                             >
-                                <div class="min-w-0">
-                                    <p class="truncate text-body-sm font-semibold text-deep-900">
-                                        {{ block.date_label }}
-                                    </p>
-                                    <p class="truncate text-label text-stone-500">
-                                        {{ block.time_period_label ?? 'Full day' }}
-                                        <span v-if="block.booking_ref"> · {{ block.booking_ref }}</span>
-                                    </p>
-                                </div>
-                                <StatusPill variant="completed" :dot="false">Locked</StatusPill>
-                            </div>
+                                Open Booking calendar →
+                            </button>
                         </div>
                     </AppCard>
                 </div>
@@ -983,6 +1039,7 @@ const isOpen = (dayValue: number, periodValue: string) =>
                     </AppCard>
                 </div>
             </div>
+            </template>
 
             <!-- Sticky publish bar: only while there is something to publish -->
             <div

@@ -22,13 +22,19 @@ class ExpireStaleBookingRequests extends Command
         $expired = 0;
 
         Booking::query()
-            ->where('status', BookingStatus::Pending)
+            ->whereIn('status', [BookingStatus::Reserved, BookingStatus::Pending])
             ->where(function ($query) {
                 $query->where(function ($q) {
-                    $q->whereNotNull('accept_deadline_at')
+                    $q->where('status', BookingStatus::Reserved)
+                        ->whereNotNull('payment_deadline_at')
+                        ->where('payment_deadline_at', '<', now());
+                })->orWhere(function ($q) {
+                    $q->where('status', BookingStatus::Pending)
+                        ->whereNotNull('accept_deadline_at')
                         ->where('accept_deadline_at', '<', now());
                 })->orWhere(function ($q) {
-                    $q->whereNull('accept_deadline_at')
+                    $q->where('status', BookingStatus::Pending)
+                        ->whereNull('accept_deadline_at')
                         ->whereNotNull('payment_deadline_at')
                         ->where('payment_deadline_at', '<', now());
                 });

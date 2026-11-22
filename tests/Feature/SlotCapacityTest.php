@@ -139,7 +139,7 @@ class SlotCapacityTest extends TestCase
 
         $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
 
-        $this->assertSame(BookingStatus::Pending, $booking->status);
+        $this->assertSame(BookingStatus::Reserved, $booking->status);
 
         // The system lock exists before the instructor has answered.
         $this->assertDatabaseHas('availabilities', [
@@ -588,5 +588,259 @@ class SlotCapacityTest extends TestCase
             ->assertSessionHasErrors(['height', 'weight']);
 
         $this->assertSame(0, Booking::count());
+    }
+
+    /** @test */
+    public function end_times_endpoint_warns_that_a_time_slot_is_already_reserved_when_another_student_holds_it(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level1);
+        $studentB = $this->anotherStudent('beginner');
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'start_time' => '06:00',
+                'end_time' => '08:00',
+                'session_type' => 'teaching',
+            ]))
+            ->assertRedirect();
+
+        $response = $this->actingAs($studentB)->getJson(route('api.availability.end-times', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'start_time' => '06:00',
+            'students' => 1,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+        ]))->assertOk();
+
+        $this->assertSame([], $response->json('end_times'));
+        $this->assertTrue($response->json('is_reserved'));
+        $this->assertSame(0, $response->json('remaining_capacity'));
+        $this->assertStringContainsString('already reserved', (string) $response->json('reason'));
+    }
+
+    /** @test */
+    public function end_times_endpoint_explains_partial_reservation_and_skill_service_mismatch(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level2);
+        $studentA = $this->anotherStudent('intermediate');
+        $studentB = $this->anotherStudent('intermediate');
+        $studentC = $this->anotherStudent('beginner');
+
+        $this->actingAs($studentA)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'start_time' => '07:00',
+                'end_time' => '09:00',
+                'student_count' => 1,
+                'session_type' => 'guiding',
+            ]))
+            ->assertRedirect();
+
+        $partial = $this->actingAs($studentB)->getJson(route('api.availability.end-times', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'start_time' => '07:00',
+            'students' => 2,
+            'skill_level' => 'intermediate',
+            'session_type' => 'guiding',
+        ]))->assertOk();
+
+        $this->assertSame([], $partial->json('end_times'));
+        $this->assertTrue($partial->json('is_reserved'));
+        $this->assertSame(1, $partial->json('remaining_capacity'));
+        $this->assertStringContainsString('partially reserved', (string) $partial->json('reason'));
+
+        $mismatch = $this->actingAs($studentC)->getJson(route('api.availability.end-times', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'start_time' => '07:00',
+            'students' => 1,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+        ]))->assertOk();
+
+        $this->assertSame([], $mismatch->json('end_times'));
+        $this->assertTrue($mismatch->json('is_reserved'));
+        $this->assertSame(0, $mismatch->json('remaining_capacity'));
+        $this->assertStringContainsString('already reserved', (string) $mismatch->json('reason'));
+    }
+
+    /** @test */
+    public function availability_endpoint_lists_reserved_slots_separately_and_never_flags_unbooked_slots_as_reserved(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level1);
+        $studentB = $this->anotherStudent('beginner');
+
+        // Unbooked Level 1 instructor queried for 2 students must not mark empty slots as reserved.
+        $unbookedResponse = $this->actingAs($studentB)->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 2,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+        ]))->assertOk();
+
+        $this->assertSame([], $unbookedResponse->json('periods.morning.reserved_slots'));
+
+        // Student A reserves 07:00-09:00 -> 07:00 and 08:00 move to reserved_slots; 09:00 stays open.
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'start_time' => '07:00',
+                'end_time' => '09:00',
+                'session_type' => 'teaching',
+            ]))
+            ->assertRedirect();
+
+        $partialDay = $this->actingAs($studentB)->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 1,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+        ]))->assertOk();
+
+        $openSlots = $partialDay->json('periods.morning.slots');
+        $reservedSlots = $partialDay->json('periods.morning.reserved_slots');
+
+        $this->assertNotContains('07:00', $openSlots);
+        $this->assertNotContains('08:00', $openSlots);
+        $this->assertContains('09:00', $openSlots);
+        $this->assertContains('07:00', $reservedSlots);
+        $this->assertContains('08:00', $reservedSlots);
+        $this->assertNotContains('09:00', $reservedSlots);
+
+        // When all morning slots (06:00-12:00) are reserved on another Level 1 instructor.
+        $fullInstructor = $this->instructor(InstructorLevel::Level1);
+        $this->bookingFor($fullInstructor, [
+            'start_time' => '06:00',
+            'end_time' => '12:00',
+            'duration_hours' => 6,
+            'status' => BookingStatus::Confirmed,
+        ]);
+
+        $fullMorning = $this->actingAs($studentB)->getJson(route('api.availability', [
+            'instructor' => $fullInstructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'students' => 1,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+        ]))->assertOk();
+
+        $this->assertFalse($fullMorning->json('periods.morning.available'));
+        $this->assertNotEmpty($fullMorning->json('periods.morning.reserved_slots'));
+        $this->assertStringContainsString('already reserved', (string) $fullMorning->json('periods.morning.reason'));
+    }
+
+    /** @test */
+    public function instructor_schedule_calendar_and_bookings_show_reserved_holds_without_allowing_accept_or_inflating_pending_badge(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level1);
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'start_time' => '07:00',
+                'end_time' => '09:00',
+                'session_type' => 'teaching',
+            ]))
+            ->assertRedirect();
+
+        $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+        $this->assertSame(BookingStatus::Reserved, $booking->status);
+
+        $date = $this->day->format('Y-m-d');
+
+        $this->actingAs($instructor)
+            ->get(route('instructor.availability.index', ['date' => $date]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('initialSchedule.summary.reserved', 1)
+                ->where('initialSchedule.summary.pending', 0)
+                ->where('nav.pendingRequests', 0));
+
+        $schedule = $this->actingAs($instructor)
+            ->getJson(route('instructor.availability.schedule', ['week' => $date]))
+            ->assertOk();
+
+        $dayEntry = collect($schedule->json('days'))->firstWhere('date', $date);
+        $this->assertNotNull($dayEntry);
+        $this->assertCount(1, $dayEntry['bookings']);
+
+        $slotBooking = $dayEntry['bookings'][0];
+        $this->assertSame('reserved', $slotBooking['status']);
+        $this->assertTrue($slotBooking['is_reserved']);
+        $this->assertFalse($slotBooking['can_accept']);
+        $this->assertFalse($slotBooking['waiver_signed']);
+        $this->assertSame('07:00', $slotBooking['start_time']);
+        $this->assertSame('09:00', $slotBooking['end_time']);
+        $this->assertGreaterThan(0, $slotBooking['hold_remaining_seconds']);
+
+        $this->actingAs($instructor)
+            ->get(route('instructor.bookings.index', ['status' => 'reserved']))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('counts.reserved', 1)
+                ->where('counts.pending', 0)
+                ->where('nav.pendingRequests', 0)
+                ->where('bookings.data.0.status', 'reserved')
+                ->where('bookings.data.0.is_reserved', true)
+                ->where('bookings.data.0.can_be_accepted', false)
+                ->where('bookings.data.0.can_be_declined', false)
+                ->where('bookings.data.0.accept_block', 'awaiting_waiver'));
+
+        $this->actingAs($instructor)
+            ->get(route('instructor.bookings.show', $booking->id))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('isReserved', true)
+                ->where('canBeAccepted', false)
+                ->where('acceptBlock', 'awaiting_waiver'));
+
+        $this->actingAs($instructor)
+            ->patch(route('instructor.bookings.confirm', $booking->id))
+            ->assertSessionHas('error');
+        $this->assertSame(BookingStatus::Reserved, $booking->fresh()->status);
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.bookings.decline', $booking->id))
+            ->assertSessionHas('error');
+        $this->assertSame(BookingStatus::Reserved, $booking->fresh()->status);
+    }
+
+    /** @test */
+    public function student_bookings_exposes_reserved_hold_with_resume_url_and_exact_local_date(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level1);
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'start_time' => '07:00',
+                'end_time' => '09:00',
+                'session_type' => 'teaching',
+            ]))
+            ->assertRedirect();
+
+        $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+        $date = $this->day->format('Y-m-d');
+        $waiverUrl = route('bookings.waiver', $booking->id);
+
+        $this->actingAs($this->student)
+            ->get(route('student.bookings.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('counts.upcoming', 1)
+                ->where('nav.upcomingBookings', 1)
+                ->where('bookings.data.0.status', 'reserved')
+                ->where('bookings.data.0.is_reserved', true)
+                ->where('bookings.data.0.date', $date)
+                ->where('bookings.data.0.resume_url', $waiverUrl)
+                ->where('bookings.data.0.hold_remaining_seconds', fn ($seconds) => $seconds > 0));
+
+        $this->actingAs($this->student)
+            ->get(route('student.bookings.show', $booking->id))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('booking.date', $date)
+                ->where('booking.is_reserved', true)
+                ->where('booking.resume_url', $waiverUrl));
     }
 }

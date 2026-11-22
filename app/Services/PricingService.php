@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\InstructorLevel;
 use App\Enums\SessionType;
 use App\Enums\SkillLevel;
 use App\Models\Booking;
 use App\Models\InstructorProfile;
+use Illuminate\Validation\Rule;
 
 class PricingService
 {
@@ -174,6 +176,116 @@ class PricingService
             'rate_per_hour' => $teachingRate,
             'guiding_rate' => $guidingRate,
             'coaching_rate' => $coachingRate,
+        ];
+    }
+
+    /**
+     * Validation rules for lesson types (`offered_services`) and per-type rates.
+     *
+     * When `offered_services` is omitted (legacy requests and tests), falls back
+     * to `rateValidationRulesForLevel()` so existing clients stay compatible.
+     *
+     * @return array<string, mixed>
+     */
+    public static function offeringValidationRules(
+        int $level,
+        mixed $submittedOfferedServices,
+        bool $hasOfferedServices
+    ): array {
+        if (! $hasOfferedServices) {
+            return self::rateValidationRulesForLevel($level);
+        }
+
+        $levelEnum = InstructorLevel::tryFrom($level) ?? InstructorLevel::Level1;
+        $allowedValues = $levelEnum->allowedServiceValues();
+        $selected = is_array($submittedOfferedServices) ? $submittedOfferedServices : [];
+
+        $rules = [
+            'offered_services' => ['required', 'array', 'min:1'],
+            'offered_services.*' => ['required', 'string', 'distinct', Rule::in($allowedValues)],
+        ];
+
+        foreach ($levelEnum->allowedServices() as $service) {
+            $column = $service->profileColumn();
+            $rules[$column] = in_array($service->value, $selected, true)
+                ? 'required|numeric|'.$service->rateRangeRule()
+                : 'nullable';
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Validation messages covering both lesson-type selection and rate bounds.
+     *
+     * @return array<string, string>
+     */
+    public static function offeringValidationMessages(int $level): array
+    {
+        $levelEnum = InstructorLevel::tryFrom($level) ?? InstructorLevel::Level1;
+
+        return array_merge(self::rateValidationMessages(), [
+            'offered_services.required' => 'Select at least one lesson type you offer.',
+            'offered_services.min' => 'Select at least one lesson type you offer.',
+            'offered_services.*.in' => "{$levelEnum->shortLabel()} instructors may only offer {$levelEnum->allowedServicesLabel()}.",
+            'rate_per_hour.required' => 'Enter an hourly rate for Teaching ('.SessionType::Teaching->rateRangeLabel().').',
+            'guiding_rate.required' => 'Enter an hourly rate for Guiding ('.SessionType::Guiding->rateRangeLabel().').',
+            'coaching_rate.required' => 'Enter an hourly rate for Coaching ('.SessionType::Coaching->rateRangeLabel().').',
+        ]);
+    }
+
+    /**
+     * Normalize `offered_services` and per-service hourly rates for persistence.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array{offered_services: ?array<int, string>, rate_per_hour: ?float, guiding_rate: ?float, coaching_rate: ?float}
+     */
+    public static function normalizeOfferingsForLevel(
+        int $level,
+        array $validated,
+        bool $hasOfferedServices,
+        ?InstructorProfile $existing = null
+    ): array {
+        $levelEnum = InstructorLevel::tryFrom($level) ?? InstructorLevel::Level1;
+
+        if (! $hasOfferedServices) {
+            $rates = self::normalizeRatesForLevel($level, $validated, $existing);
+            $preserved = null;
+
+            if ($existing?->offered_services !== null) {
+                $allowedValues = $levelEnum->allowedServiceValues();
+                $preserved = array_values(array_intersect($existing->offered_services, $allowedValues));
+                if ($preserved === []) {
+                    $preserved = [SessionType::Teaching->value];
+                }
+            }
+
+            return [
+                'offered_services' => $preserved,
+                ...$rates,
+            ];
+        }
+
+        $submitted = $validated['offered_services'] ?? [];
+        $offeredValues = [];
+
+        foreach ($levelEnum->allowedServices() as $service) {
+            if (in_array($service->value, $submitted, true)) {
+                $offeredValues[] = $service->value;
+            }
+        }
+
+        return [
+            'offered_services' => $offeredValues,
+            'rate_per_hour' => in_array(SessionType::Teaching->value, $offeredValues, true)
+                ? (float) $validated['rate_per_hour']
+                : null,
+            'guiding_rate' => in_array(SessionType::Guiding->value, $offeredValues, true)
+                ? (float) $validated['guiding_rate']
+                : null,
+            'coaching_rate' => in_array(SessionType::Coaching->value, $offeredValues, true)
+                ? (float) $validated['coaching_rate']
+                : null,
         ];
     }
 

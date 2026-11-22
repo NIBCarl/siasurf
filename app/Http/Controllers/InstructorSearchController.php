@@ -23,7 +23,7 @@ class InstructorSearchController extends Controller
      */
     public function index(Request $request, AvailabilityService $availabilityService): Response
     {
-        $query = User::with('instructorProfile')
+        $query = User::with('instructorProfile.surfSpots')
             ->where('role', 'instructor')
             ->whereHas('instructorProfile', function ($q) {
                 $q->where('status', InstructorStatus::Active->value)
@@ -42,8 +42,8 @@ class InstructorSearchController extends Controller
                     });
             });
 
-        // Skill Level Matching - show only the instructors whose certification
-        // covers this student's level (BR-3.6 / FR-2.x):
+        // Skill Level Matching - show only the instructors whose certification,
+        // offered lesson types, and configured surf zones cover this student's level:
         //   Beginner     -> Levels 1, 2 and 3
         //   Intermediate -> Levels 2 and 3 (Level 1 is beginner-only)
         //   Advanced     -> Level 3 only
@@ -65,9 +65,27 @@ class InstructorSearchController extends Controller
 
         if ($skillLevel) {
             $allowedInstructorLevels = $skillLevel->instructorLevels();
+            $bookableValues = array_map(
+                fn (SessionType $service): string => $service->value,
+                SessionType::bookableBy($skillLevel)
+            );
+            $allowedDifficulties = $skillLevel->allowedSurfSpotDifficulties();
 
-            $query->whereHas('instructorProfile', function ($q) use ($allowedInstructorLevels) {
-                $q->whereIn('level', $allowedInstructorLevels);
+            $query->whereHas('instructorProfile', function ($q) use ($allowedInstructorLevels, $bookableValues, $allowedDifficulties) {
+                $q->whereIn('level', $allowedInstructorLevels)
+                    ->where(function ($serviceQ) use ($bookableValues) {
+                        $serviceQ->whereNull('offered_services');
+                        foreach ($bookableValues as $serviceValue) {
+                            $serviceQ->orWhereJsonContains('offered_services', $serviceValue);
+                        }
+                    })
+                    ->where(function ($spotQ) use ($allowedDifficulties) {
+                        $spotQ->whereDoesntHave('surfSpots')
+                            ->orWhereHas('surfSpots', function ($spot) use ($allowedDifficulties) {
+                                $spot->where('is_active', true)
+                                    ->whereIn('difficulty', $allowedDifficulties);
+                            });
+                    });
             });
         }
 
@@ -90,16 +108,17 @@ class InstructorSearchController extends Controller
 
         // Applicable service for price display/filtering/sorting:
         // Beginner -> Teaching (rate_per_hour), Intermediate -> Guiding, Advanced -> Coaching.
+        // Fall back across other rate columns when an instructor opted out of Teaching.
         $viewerService = $skillLevel ? SessionType::recommendedFor($skillLevel, 3) : null;
         $priceExpr = match ($viewerService) {
-            SessionType::Guiding => 'COALESCE(guiding_rate, '.SessionType::Guiding->defaultRate().')',
-            SessionType::Coaching => 'COALESCE(coaching_rate, '.SessionType::Coaching->defaultRate().')',
-            default => 'rate_per_hour',
+            SessionType::Guiding => 'COALESCE(guiding_rate, coaching_rate, rate_per_hour, '.SessionType::Guiding->defaultRate().')',
+            SessionType::Coaching => 'COALESCE(coaching_rate, guiding_rate, rate_per_hour, '.SessionType::Coaching->defaultRate().')',
+            default => 'COALESCE(rate_per_hour, guiding_rate, coaching_rate, '.SessionType::Teaching->defaultRate().')',
         };
         $qualifiedPriceExpr = match ($viewerService) {
-            SessionType::Guiding => 'COALESCE(instructor_profiles.guiding_rate, '.SessionType::Guiding->defaultRate().')',
-            SessionType::Coaching => 'COALESCE(instructor_profiles.coaching_rate, '.SessionType::Coaching->defaultRate().')',
-            default => 'instructor_profiles.rate_per_hour',
+            SessionType::Guiding => 'COALESCE(instructor_profiles.guiding_rate, instructor_profiles.coaching_rate, instructor_profiles.rate_per_hour, '.SessionType::Guiding->defaultRate().')',
+            SessionType::Coaching => 'COALESCE(instructor_profiles.coaching_rate, instructor_profiles.guiding_rate, instructor_profiles.rate_per_hour, '.SessionType::Coaching->defaultRate().')',
+            default => 'COALESCE(instructor_profiles.rate_per_hour, instructor_profiles.guiding_rate, instructor_profiles.coaching_rate, '.SessionType::Teaching->defaultRate().')',
         };
 
         // Filter by price range (against the service this student actually books)
@@ -114,11 +133,15 @@ class InstructorSearchController extends Controller
             });
         }
 
-        // Directory location filter. The map and the list use the same filter,
-        // so selecting "General Luna" never leaves pins from another area.
+        // Directory location filter. Matches the instructor's base area or any
+        // active surf zone they selected in that municipality.
         if ($request->filled('area')) {
-            $query->whereHas('instructorProfile', function ($q) use ($request) {
-                $q->where('area', $request->area);
+            $areaFilter = $request->area;
+            $query->whereHas('instructorProfile', function ($q) use ($areaFilter) {
+                $q->where('area', $areaFilter)
+                    ->orWhereHas('surfSpots', function ($spotQ) use ($areaFilter) {
+                        $spotQ->where('is_active', true)->where('area', $areaFilter);
+                    });
             });
         }
 
@@ -172,7 +195,7 @@ class InstructorSearchController extends Controller
         $mapInstructors = (clone $query)
             ->limit(200)
             ->get()
-            ->map(fn (User $instructor) => $this->transformInstructor($instructor, [], $viewerService))
+            ->map(fn (User $instructor) => $this->transformInstructor($instructor, [], $viewerService, $skillLevel))
             ->values();
 
         $instructors = $query->paginate(12)
@@ -189,6 +212,7 @@ class InstructorSearchController extends Controller
             $instructor,
             $openPeriods[$instructor->id] ?? [],
             $viewerService,
+            $skillLevel,
         ));
 
         // Get surf spots for filtering
@@ -196,12 +220,22 @@ class InstructorSearchController extends Controller
             ->select('id', 'name', 'difficulty')
             ->get();
 
-        $areas = InstructorProfile::query()
+        $profileAreas = InstructorProfile::query()
             ->whereNotNull('area')
             ->where('area', '!=', '')
-            ->distinct()
-            ->orderBy('area')
-            ->pluck('area')
+            ->pluck('area');
+
+        $spotAreas = SurfSpot::query()
+            ->active()
+            ->whereNotNull('area')
+            ->where('area', '!=', '')
+            ->whereHas('instructorProfiles', fn ($q) => $q->where('status', InstructorStatus::Active->value))
+            ->pluck('area');
+
+        $areas = $profileAreas
+            ->merge($spotAreas)
+            ->unique()
+            ->sort()
             ->values();
 
         return Inertia::render('Public/Instructors/Search', [
@@ -235,7 +269,8 @@ class InstructorSearchController extends Controller
     private function transformInstructor(
         User $instructor,
         array $openPeriods = [],
-        ?SessionType $viewerService = null
+        ?SessionType $viewerService = null,
+        ?SkillLevel $skillLevel = null
     ): array {
         $profile = $instructor->instructorProfile;
 
@@ -244,8 +279,21 @@ class InstructorSearchController extends Controller
             ? $level
             : ($level !== null ? InstructorLevel::tryFrom((int) $level) : null);
 
-        $activeService = $viewerService ?? SessionType::Teaching;
+        $activeService = ($skillLevel ? $profile?->recommendedServiceFor($skillLevel) : null)
+            ?? ($profile?->offeredServices()[0] ?? $viewerService ?? SessionType::Teaching);
         $displayRate = $profile ? $profile->rateForService($activeService) : 600.0;
+
+        $selectedSpots = $profile
+            ? $profile->activeAllowedSurfSpots()
+                ->map(fn (SurfSpot $spot): array => [
+                    'id' => $spot->id,
+                    'name' => $spot->name,
+                    'area' => $spot->area,
+                    'difficulty' => $spot->difficulty,
+                ])
+                ->values()
+                ->all()
+            : [];
 
         return array_merge($instructor->toArray(), [
             'total_reviews' => (int) ($instructor->reviews_as_instructor_count ?? 0),
@@ -258,6 +306,8 @@ class InstructorSearchController extends Controller
             'display_rate' => $displayRate,
             'display_service_label' => $activeService->label(),
             'service_rates' => $profile ? $profile->serviceRates() : [],
+            'offered_services' => $profile ? $profile->offeredServiceValues() : [],
+            'surf_spots' => $selectedSpots,
             'teaches_all_levels' => $levelEnum
                 ? count($levelEnum->allowedSkillLevels()) === count(SkillLevel::cases())
                 : null,
@@ -291,6 +341,7 @@ class InstructorSearchController extends Controller
         // A student may only open the profile of an instructor whose level can
         // actually teach them. Guests and admins are unaffected.
         $viewer = auth()->user();
+        $viewerSkill = null;
 
         if ($viewer && $viewer->isStudent() && $viewer->studentProfile) {
             $viewerSkill = $viewer->studentProfile->skill_level;
@@ -310,7 +361,7 @@ class InstructorSearchController extends Controller
         }
 
         $instructor->load([
-            'instructorProfile',
+            'instructorProfile.surfSpots',
             'certificates' => function ($q) {
                 $q->where('status', 'verified');
             },
@@ -331,9 +382,26 @@ class InstructorSearchController extends Controller
         $averageRating = $instructor->reviewsAsInstructor()->visible()->avg('rating') ?? 0;
         $totalReviews = $instructor->reviewsAsInstructor()->visible()->count();
 
+        $profile = $instructor->instructorProfile;
+        $studentBookingBlockReason = null;
+
+        if ($viewerSkill !== null && $profile !== null) {
+            if ($profile->serviceOptionsFor($viewerSkill) === []) {
+                $studentBookingBlockReason = 'This instructor does not currently offer a lesson type available for your '.$viewerSkill->label().' skill level.';
+            } elseif ($profile->bookableSurfSpotsFor($viewerSkill)->isEmpty()) {
+                $studentBookingBlockReason = 'This instructor does not currently teach in any surf zones permitted for your '.$viewerSkill->label().' skill level.';
+            }
+        }
+
         return Inertia::render('Public/Instructors/Profile', [
             'instructor' => $instructor,
-            'serviceRates' => $instructor->instructorProfile?->serviceRates() ?? [],
+            'serviceRates' => $profile?->serviceRates() ?? [],
+            'startingRate' => $profile?->startingRate() ?? 0,
+            'surfSpots' => $profile?->activeAllowedSurfSpots()
+                ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+                ->values()
+                ->all() ?? [],
+            'studentBookingBlockReason' => $studentBookingBlockReason,
             'averageRating' => round($averageRating, 1),
             'totalReviews' => $totalReviews,
             // FR 1.8.2 - show the weekly schedule up front so students do not

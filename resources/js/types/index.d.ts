@@ -11,12 +11,19 @@ export interface User {
     instructor_profile?: {
         bio: string;
         level: number;
+        offered_services?: string[] | null;
         status: string;
-        rate_per_hour: number;
+        rate_per_hour: number | null;
         guiding_rate?: number | null;
         coaching_rate?: number | null;
         strike_count: number;
         qr_code_path: string;
+        surf_spots?: Array<{
+            id: number;
+            name: string;
+            area?: string | null;
+            difficulty: string;
+        }>;
     };
     student_profile?: {
         skill_level: string;

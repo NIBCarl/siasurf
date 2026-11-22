@@ -36,8 +36,8 @@ class ExpireBookingAcceptanceJob implements ShouldQueue
             return;
         }
 
-        // The instructor answered in time - nothing to do.
-        if ($booking->status !== BookingStatus::Pending) {
+        // Only active checkout holds and pending requests can expire here.
+        if (! in_array($booking->status, [BookingStatus::Reserved, BookingStatus::Pending], true)) {
             return;
         }
 
