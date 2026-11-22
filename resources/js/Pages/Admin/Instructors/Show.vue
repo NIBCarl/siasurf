@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, useForm, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/Modal.vue'
@@ -69,7 +69,27 @@ interface Props {
 const props = defineProps<Props>()
 
 const verifyForm = useForm({
-  certificate_ids: [] as number[]
+  certificate_ids: props.instructor.certificates
+    .filter(c => c.status === 'pending_verification')
+    .map(c => c.id),
+})
+
+const hasVerifiedCertificate = computed(() =>
+  props.instructor.certificates.some(
+    c => c.status === 'verified' && (!c.expires_at || new Date(c.expires_at) >= new Date())
+  )
+)
+
+const isActiveButHidden = computed(
+  () => props.instructor.instructor_profile?.status === 'active' && !hasVerifiedCertificate.value
+)
+
+const accountStatusLabel = computed(() => {
+  const status = props.instructor.instructor_profile?.status
+  if (status === 'active') {
+    return hasVerifiedCertificate.value ? 'Verified & Visible' : 'Hidden (Unverified Cert)'
+  }
+  return status ? status.replace(/_/g, ' ') : 'Unknown'
 })
 
 const showVerifyModal = ref(false)
@@ -143,6 +163,13 @@ const getStatusVariant = (status: string) => {
             <p class="mt-2 text-sm font-semibold text-rose-900">{{ instructor.instructor_profile?.suspension_reason ?? 'Suspended by SISA.' }}</p>
             <p class="mt-2 text-xs text-rose-700">
                 Started {{ instructor.instructor_profile?.suspended_at ?? '—' }} · Ends {{ instructor.instructor_profile?.suspended_until ?? '—' }}
+            </p>
+        </div>
+
+        <div v-if="isActiveButHidden" class="rounded-3xl border border-amber-300 bg-amber-50 p-6">
+            <p class="text-xs font-black uppercase tracking-[0.2em] text-amber-800">Hidden from Find Instructor</p>
+            <p class="mt-2 text-sm font-semibold text-amber-950">
+                This instructor's profile is Active, but tourists cannot see them in Find Instructor because no current certificate has been verified yet. Click <strong>Sign Final Audit</strong> on a certificate below to make them discoverable.
             </p>
         </div>
         <!-- Dashboard Header -->
@@ -289,7 +316,18 @@ const getStatusVariant = (status: string) => {
                             </div>
                             <div>
                                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Account Status</p>
-                                <p class="text-sm font-black text-emerald-600 uppercase tracking-tighter">Verified & Active</p>
+                                <p
+                                    class="text-sm font-black uppercase tracking-tighter"
+                                    :class="
+                                        instructor.instructor_profile.status === 'active' && hasVerifiedCertificate
+                                            ? 'text-emerald-600'
+                                            : isActiveButHidden || instructor.instructor_profile.status === 'pending_verification'
+                                              ? 'text-amber-600'
+                                              : 'text-rose-600'
+                                    "
+                                >
+                                    {{ accountStatusLabel }}
+                                </p>
                             </div>
                         </div>
                     </div>

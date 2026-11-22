@@ -11,6 +11,16 @@ import StatusPill from '@/Components/UI/StatusPill.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { CalendarDaysIcon, ChatBubbleLeftRightIcon, MapPinIcon } from '@heroicons/vue/24/outline'
 
+interface RefundPreview {
+  policy_type: string
+  basis_label: string
+  refund_percentage: number
+  lesson_price: number
+  service_fee_retained: number
+  refund_amount: number
+  summary: string
+}
+
 interface Booking {
   id: number
   date: string
@@ -25,6 +35,14 @@ interface Booking {
   total_amount: number
   payment_status: string
   can_be_cancelled?: boolean
+  has_pending_reschedule_response?: boolean
+  refund_preview?: RefundPreview | null
+  latest_refund?: {
+    id: number
+    amount: number
+    status: string
+    status_label: string
+  } | null
   decline_reason?: string | null
   cancellation_note?: string | null
   cancellation_label?: string | null
@@ -126,6 +144,8 @@ const paymentLabel = (status?: string) => {
     pending_cash: 'Cash unpaid (Pay at beach)',
     pending_verification: 'Receipt awaiting verification',
     failed: 'Payment failed',
+    refund_requested: 'Refund requested',
+    refund_processing: 'Refund processing',
     refunded: 'Refunded',
   }
   return labels[status] ?? status.replace(/_/g, ' ')
@@ -337,6 +357,14 @@ const submitCancel = () => {
                                         {{ booking.cancellation_note }}
                                     </p>
 
+                                    <p
+                                        v-if="booking.latest_refund"
+                                        class="mt-2 rounded-control border border-lagoon-200 bg-lagoon-50 px-3 py-2 text-label text-lagoon-900"
+                                    >
+                                        <span class="font-semibold">{{ booking.latest_refund.status_label }}:</span>
+                                        ₱{{ formatAmount(booking.latest_refund.amount) }}
+                                    </p>
+
                                     <div class="mt-3 flex items-center gap-3">
                                         <img
                                             v-if="avatarUrl(booking)"
@@ -464,6 +492,27 @@ const submitCancel = () => {
                     {{ cancelTarget?.surf_spot.name }} with {{ cancelTarget?.instructor.name }} on
                     {{ cancelTarget ? formatDate(cancelTarget.date) : '' }}.
                 </p>
+
+                <div
+                    v-if="cancelTarget?.refund_preview"
+                    class="mt-4 rounded-control border p-3 text-body-sm"
+                    :class="
+                        cancelTarget.refund_preview.refund_amount > 0
+                            ? 'border-lagoon-200 bg-lagoon-50 text-lagoon-950'
+                            : 'border-amber-200 bg-amber-50 text-amber-950'
+                    "
+                >
+                    <p class="text-label font-semibold uppercase tracking-[0.06em]">
+                        {{ cancelTarget.refund_preview.basis_label }}
+                    </p>
+                    <p class="mt-1">{{ cancelTarget.refund_preview.summary }}</p>
+                    <p
+                        v-if="cancelTarget.refund_preview.lesson_price > 0 && cancelTarget.refund_preview.policy_type !== 'unpaid' && cancelTarget.refund_preview.policy_type !== 'cash'"
+                        class="mt-1.5 text-label font-semibold"
+                    >
+                        Estimated refund: ₱{{ formatAmount(cancelTarget.refund_preview.refund_amount) }} ({{ cancelTarget.refund_preview.refund_percentage }}%) · Retained fee: ₱{{ formatAmount(cancelTarget.refund_preview.service_fee_retained) }}
+                    </p>
+                </div>
 
                 <label for="cancel-reason" class="mt-4 block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
                     Reason <span class="text-rose-600">*</span>

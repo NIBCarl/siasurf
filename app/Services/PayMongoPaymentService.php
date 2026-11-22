@@ -3,10 +3,16 @@
 namespace App\Services;
 
 use App\Contracts\PaymentServiceInterface;
+use App\Enums\PaymentStatus;
+use App\Enums\RefundStatus;
+use App\Events\RefundStatusUpdated;
 use App\Models\Booking;
 use App\Models\Payment;
-use App\Enums\PaymentStatus;
+use App\Models\Refund;
+use App\Models\User;
+use App\Notifications\RefundStatusNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -14,12 +20,14 @@ class PayMongoPaymentService implements PaymentServiceInterface
 {
     protected string $secretKey;
     protected string $webhookSecret;
+    protected string $mode;
     protected string $baseUrl = 'https://api.paymongo.com/v1';
 
     public function __construct()
     {
-        $this->secretKey = config('services.paymongo.secret_key', '');
-        $this->webhookSecret = config('services.paymongo.webhook_secret', '');
+        $this->secretKey = (string) config('services.paymongo.secret_key', '');
+        $this->webhookSecret = (string) config('services.paymongo.webhook_secret', '');
+        $this->mode = (string) config('services.paymongo.mode', 'test');
     }
 
     /**
@@ -109,38 +117,73 @@ class PayMongoPaymentService implements PaymentServiceInterface
     public function handleWebhook(Request $request): void
     {
         $payload = $request->getContent();
-        $signature = $request->header('Paymongo-Signature');
+        $signature = (string) $request->header('Paymongo-Signature', '');
 
         // Verify webhook signature
-        if (!$this->verifySignature($signature, $payload)) {
+        if (! $this->verifySignature($signature, $payload)) {
             Log::warning('Invalid PayMongo webhook signature');
             abort(401, 'Invalid signature');
         }
 
-        $event = $request->input('data.attributes');
+        $event = $request->input('data.attributes', []);
+        $eventType = $event['type'] ?? null;
 
-        if ($event['type'] === 'checkout.session.completed') {
-            $bookingId = $event['data']['attributes']['metadata']['booking_id'] ?? null;
-            $transactionId = $event['data']['id'];
+        if ($eventType === 'checkout.session.completed') {
+            $sessionData = $event['data'] ?? [];
+            $bookingId = $sessionData['attributes']['metadata']['booking_id'] ?? null;
+            $transactionId = $sessionData['id'] ?? null;
+            $payments = $sessionData['attributes']['payments'] ?? [];
+            $gatewayPaymentId = $payments[0]['id'] ?? null;
 
-            if ($bookingId) {
-                $this->processSuccessfulPayment($bookingId, $transactionId);
+            if ($bookingId && $transactionId) {
+                $this->processSuccessfulPayment(
+                    (int) $bookingId,
+                    (string) $transactionId,
+                    $gatewayPaymentId ? (string) $gatewayPaymentId : null
+                );
             }
+
+            return;
+        }
+
+        if (in_array($eventType, ['payment.refund.updated', 'payment.refunded'], true)) {
+            $this->handleRefundWebhook($event['data'] ?? []);
         }
     }
 
     /**
-     * Verify PayMongo webhook signature
+     * Verify PayMongo webhook signature (`t=...,te=...,li=...`).
      */
     public function verifySignature(string $signature, string $payload): bool
     {
-        if (empty($this->webhookSecret)) {
+        if (empty($this->webhookSecret) || empty($signature)) {
             return false;
         }
 
-        $expectedSignature = hash_hmac('sha256', $payload, $this->webhookSecret);
-        
-        return hash_equals($expectedSignature, $signature);
+        $parts = [];
+        foreach (explode(',', $signature) as $segment) {
+            $pair = explode('=', trim($segment), 2);
+            if (count($pair) === 2) {
+                $parts[trim($pair[0])] = trim($pair[1]);
+            }
+        }
+
+        $timestamp = $parts['t'] ?? '';
+        if ($timestamp === '') {
+            return false;
+        }
+
+        $expectedSignature = $this->mode === 'live'
+            ? ($parts['li'] ?? $parts['te'] ?? '')
+            : ($parts['te'] ?? $parts['li'] ?? '');
+
+        if ($expectedSignature === '') {
+            return false;
+        }
+
+        $computed = hash_hmac('sha256', "{$timestamp}.{$payload}", $this->webhookSecret);
+
+        return hash_equals($expectedSignature, $computed);
     }
 
     /**
@@ -166,45 +209,56 @@ class PayMongoPaymentService implements PaymentServiceInterface
     /**
      * Process refund via PayMongo
      */
-    public function processRefund(Booking $booking, ?float $amount = null): array
-    {
+    public function processRefund(
+        Booking $booking,
+        ?float $amount = null,
+        string $reason = 'requested_by_customer',
+        array $metadata = []
+    ): array {
         if (empty($this->secretKey)) {
             throw new \RuntimeException('PayMongo secret key not configured');
         }
 
         $payment = $booking->payment;
-        if (!$payment || !$payment->transaction_id) {
-            throw new \RuntimeException('No payment found for this booking');
+        $paymentId = $payment?->gateway_payment_id ?: $payment?->transaction_id;
+
+        if (! $payment || ! $paymentId) {
+            throw new \RuntimeException('No PayMongo payment reference found for this booking');
         }
 
-        $refundAmount = $amount ?? $booking->total_amount;
+        $refundAmount = $amount ?? $booking->effectiveLessonPrice();
+        $allowedReasons = ['requested_by_customer', 'duplicate', 'fraudulent', 'others'];
+        $paymongoReason = in_array($reason, $allowedReasons, true) ? $reason : 'requested_by_customer';
+
+        $attributes = [
+            'amount' => (int) round($refundAmount * 100),
+            'payment_id' => $paymentId,
+            'reason' => $paymongoReason,
+        ];
+
+        if (! empty($metadata)) {
+            $attributes['metadata'] = $metadata;
+        }
 
         $response = Http::withBasicAuth($this->secretKey, '')
             ->post("{$this->baseUrl}/refunds", [
                 'data' => [
-                    'attributes' => [
-                        'amount' => (int) ($refundAmount * 100),
-                        'payment_id' => $payment->transaction_id,
-                        'reason' => 'Requested by customer',
-                    ],
+                    'attributes' => $attributes,
                 ],
             ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             Log::error('PayMongo refund failed', [
                 'booking_id' => $booking->id,
+                'status' => $response->status(),
                 'response' => $response->json(),
             ]);
-            throw new \RuntimeException('Failed to process refund');
+
+            $detail = $response->json('errors.0.detail') ?? 'Failed to process PayMongo refund';
+            throw new \RuntimeException($detail);
         }
 
-        // Update local payment record
-        $payment->update([
-            'status' => PaymentStatus::Refunded,
-            'refunded_at' => now(),
-        ]);
-
-        return $response->json()['data'];
+        return $response->json('data') ?? [];
     }
 
     /**
@@ -240,19 +294,21 @@ class PayMongoPaymentService implements PaymentServiceInterface
     /**
      * Process successful payment
      */
-    private function processSuccessfulPayment(int $bookingId, string $transactionId): void
+    private function processSuccessfulPayment(int $bookingId, string $transactionId, ?string $gatewayPaymentId = null): void
     {
         $booking = Booking::findOrFail($bookingId);
-        
+
         $booking->update([
             'status' => 'confirmed',
             'payment_status' => PaymentStatus::Completed,
+            'payment_deadline_at' => null,
         ]);
 
         if ($booking->payment) {
             $booking->payment->update([
                 'status' => PaymentStatus::Completed,
                 'transaction_id' => $transactionId,
+                'gateway_payment_id' => $gatewayPaymentId ?? $booking->payment->gateway_payment_id,
                 'paid_at' => now(),
             ]);
         }
@@ -270,6 +326,138 @@ class PayMongoPaymentService implements PaymentServiceInterface
                 'booking_id' => $booking->id,
                 'error' => $exception->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Transition a Refund record idempotently when PayMongo confirms or fails a refund.
+     *
+     * @param array<string, mixed> $refundData
+     */
+    private function handleRefundWebhook(array $refundData): void
+    {
+        $paymongoRefundId = $refundData['id'] ?? null;
+        $attributes = $refundData['attributes'] ?? [];
+        $status = strtolower((string) ($attributes['status'] ?? ''));
+        $refundIdMeta = $attributes['metadata']['refund_id'] ?? null;
+
+        $refund = null;
+        if ($paymongoRefundId) {
+            $refund = Refund::where('paymongo_refund_id', $paymongoRefundId)->first();
+        }
+        if (! $refund && $refundIdMeta) {
+            $refund = Refund::find((int) $refundIdMeta);
+        }
+
+        if (! $refund) {
+            Log::warning('PayMongo refund webhook received for unknown refund.', [
+                'paymongo_refund_id' => $paymongoRefundId,
+                'metadata_refund_id' => $refundIdMeta,
+            ]);
+
+            return;
+        }
+
+        $changed = DB::transaction(function () use ($refund, $refundData, $paymongoRefundId, $attributes, $status) {
+            $locked = Refund::with(['booking', 'payment'])
+                ->whereKey($refund->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $locked) {
+                return false;
+            }
+
+            $now = now();
+
+            if ($status === 'succeeded') {
+                if ($locked->isCompleted()) {
+                    return false;
+                }
+
+                $locked->update([
+                    'status' => RefundStatus::Completed,
+                    'paymongo_refund_id' => $paymongoRefundId ?: $locked->paymongo_refund_id,
+                    'gateway_payload' => $refundData,
+                    'processed_at' => $locked->processed_at ?? $now,
+                    'completed_at' => $now,
+                    'failure_reason' => null,
+                ]);
+
+                $locked->payment?->update([
+                    'status' => PaymentStatus::Refunded,
+                    'refunded_at' => $now,
+                ]);
+
+                $locked->booking?->update([
+                    'payment_status' => PaymentStatus::Refunded,
+                ]);
+
+                return true;
+            }
+
+            if (in_array($status, ['pending', 'processing'], true)) {
+                if (in_array($locked->status, [RefundStatus::Processing, RefundStatus::Completed], true)) {
+                    return false;
+                }
+
+                $locked->update([
+                    'status' => RefundStatus::Processing,
+                    'paymongo_refund_id' => $paymongoRefundId ?: $locked->paymongo_refund_id,
+                    'gateway_payload' => $refundData,
+                    'processed_at' => $locked->processed_at ?? $now,
+                ]);
+
+                $locked->payment?->update([
+                    'status' => PaymentStatus::RefundProcessing,
+                ]);
+
+                $locked->booking?->update([
+                    'payment_status' => PaymentStatus::RefundProcessing,
+                ]);
+
+                return true;
+            }
+
+            if ($status === 'failed' && ! $locked->isCompleted()) {
+                $locked->update([
+                    'status' => RefundStatus::Failed,
+                    'paymongo_refund_id' => $paymongoRefundId ?: $locked->paymongo_refund_id,
+                    'gateway_payload' => $refundData,
+                    'failed_at' => $now,
+                    'failure_reason' => (string) ($attributes['failure_reason'] ?? 'PayMongo refund failed.'),
+                ]);
+
+                return true;
+            }
+
+            return false;
+        });
+
+        if (! $changed) {
+            return;
+        }
+
+        $fresh = $refund->fresh(['booking.student', 'booking.instructor', 'booking.surfSpot']);
+        if (! $fresh) {
+            return;
+        }
+
+        try {
+            broadcast(new RefundStatusUpdated($fresh))->toOthers();
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to broadcast refund webhook update.', [
+                'refund_id' => $fresh->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        $fresh->booking?->student?->notify(new RefundStatusNotification($fresh));
+
+        if ($fresh->status === RefundStatus::Failed) {
+            User::query()->admins()->get()->each(
+                fn (User $admin) => $admin->notify(new RefundStatusNotification($fresh))
+            );
         }
     }
 }

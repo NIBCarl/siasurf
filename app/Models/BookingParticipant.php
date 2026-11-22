@@ -20,7 +20,10 @@ class BookingParticipant extends Model
         'booking_id',
         'role',
         'full_name',
+        'birthday',
         'age',
+        'email',
+        'country',
         'height',
         'weight',
         'skill_level',
@@ -33,6 +36,7 @@ class BookingParticipant extends Model
     ];
 
     protected $casts = [
+        'birthday' => 'date:Y-m-d',
         'age' => 'integer',
         'height' => 'decimal:2',
         'weight' => 'decimal:2',

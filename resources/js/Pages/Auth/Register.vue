@@ -10,12 +10,41 @@ const props = defineProps<{
     defaultRole?: 'student' | 'instructor';
 }>();
 
+const maxBirthday = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 5);
+    return d.toISOString().split('T')[0];
+})();
+
+const commonCountries = [
+    'Philippines',
+    'Australia',
+    'United States',
+    'United Kingdom',
+    'Canada',
+    'France',
+    'Germany',
+    'Spain',
+    'Netherlands',
+    'Italy',
+    'Switzerland',
+    'Sweden',
+    'Japan',
+    'South Korea',
+    'Singapore',
+    'New Zealand',
+    'Israel',
+    'Brazil',
+];
+
 const form = useForm({
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
     role: props.defaultRole === 'instructor' ? 'instructor' : 'student',
+    birthday: '',
+    country: '',
 });
 
 const submit = () => {
@@ -93,12 +122,52 @@ const submit = () => {
                 <InputError class="mt-2" :message="form.errors.role" />
             </div>
 
-            <!-- Student Onboarding Notice -->
-            <div v-if="form.role === 'student'" class="mt-6 rounded-md border border-slate-200 bg-slate-50 p-3.5">
-                <h3 class="text-sm font-medium text-slate-900">Skill Pre-Assessment</h3>
-                <p class="mt-1 text-xs text-slate-600">
-                    Right after signing up, you'll complete a quick skill &amp; water-safety pre-assessment to set your surf level and matching breaks.
-                </p>
+            <!-- Student Profile Fields (for waiver prefill) -->
+            <div v-if="form.role === 'student'" class="mt-6 border-t border-slate-200 pt-4">
+                <h3 class="text-sm font-medium text-slate-900">Student Profile</h3>
+                <p class="text-xs text-slate-500 mb-4">Used to prefill your surf lesson waiver.</p>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <InputLabel for="birthday" value="Birthday" />
+                        <TextInput
+                            id="birthday"
+                            type="date"
+                            class="mt-1 block w-full"
+                            v-model="form.birthday"
+                            :max="maxBirthday"
+                            min="1920-01-01"
+                            required
+                        />
+                        <InputError class="mt-2" :message="form.errors.birthday" />
+                    </div>
+
+                    <div>
+                        <InputLabel for="country" value="Country" />
+                        <TextInput
+                            id="country"
+                            type="text"
+                            list="register-country-options"
+                            class="mt-1 block w-full"
+                            v-model="form.country"
+                            placeholder="e.g. Philippines"
+                            autocomplete="country-name"
+                            required
+                        />
+                        <datalist id="register-country-options">
+                            <option v-for="country in commonCountries" :key="country" :value="country" />
+                        </datalist>
+                        <InputError class="mt-2" :message="form.errors.country" />
+                    </div>
+                </div>
+
+                <!-- Student Onboarding Notice -->
+                <div class="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3.5">
+                    <h3 class="text-sm font-medium text-slate-900">Skill Pre-Assessment</h3>
+                    <p class="mt-1 text-xs text-slate-600">
+                        Right after signing up, you'll complete a quick skill &amp; water-safety pre-assessment to set your surf level and matching breaks.
+                    </p>
+                </div>
             </div>
 
             <div class="mt-4">

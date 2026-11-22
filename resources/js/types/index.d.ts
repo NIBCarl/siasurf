@@ -29,6 +29,10 @@ export interface User {
         skill_level: string;
         skill_assessed_at?: string | null;
         is_first_time: boolean;
+        birthday?: string | null;
+        age?: number | null;
+        country?: string | null;
+        status?: string;
     };
     skill_upgrade_requests?: Array<{
         id: number;
@@ -59,6 +63,8 @@ export interface Booking {
     status: string;
     skill_level: string;
     student_age: number;
+    needs_hotel_pickup?: boolean;
+    hotel_name?: string | null;
     instructor: {
         id: number;
         name: string;

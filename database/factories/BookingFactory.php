@@ -49,6 +49,9 @@ class BookingFactory extends Factory
             'student_age' => fake()->numberBetween(13, 50),
             'student_count' => $studentCount,
             'status' => BookingStatus::Pending->value,
+            'lesson_price' => $totalAmount,
+            'service_fee_percent' => 7.00,
+            'service_fee_amount' => 0.00,
             'total_amount' => $totalAmount,
             'payment_status' => PaymentStatus::Pending->value,
             'notes' => fake()->optional()->sentence(),
@@ -66,6 +69,18 @@ class BookingFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'student_count' => $count,
             'total_amount' => $ratePerHour * 2 * $count,
+        ]);
+    }
+
+    public function withServiceFee(float $lessonPrice = 1200.00, float $feePercent = 7.00): static
+    {
+        $feeAmount = round($lessonPrice * ($feePercent / 100), 2);
+
+        return $this->state(fn (array $attributes) => [
+            'lesson_price' => $lessonPrice,
+            'service_fee_percent' => $feePercent,
+            'service_fee_amount' => $feeAmount,
+            'total_amount' => round($lessonPrice + $feeAmount, 2),
         ]);
     }
 

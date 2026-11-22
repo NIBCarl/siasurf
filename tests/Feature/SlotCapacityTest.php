@@ -465,11 +465,13 @@ class SlotCapacityTest extends TestCase
         $participant = $booking->participants()->first();
         $this->actingAs($this->student)
             ->post(route('bookings.store-waiver', $booking->id), [
+                'emergency_contact' => 'Jane Doe - +63 917 000 0000',
                 'signed_by' => 'Student A',
                 'signature' => 'data:image/png;base64,AAAA',
                 'agreement' => true,
                 'participant_id' => $participant?->id,
-            ]);
+            ])
+            ->assertRedirect(route('bookings.payment', $booking->id));
 
         $this->actingAs($this->student)
             ->post(route('bookings.store-payment', $booking->id), [

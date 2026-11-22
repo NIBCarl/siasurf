@@ -121,6 +121,8 @@ export function useNotifications() {
                     toNotification(e, 'Attendance Recorded', 'info'))
                 .listen('.payment.received', (e: any) =>
                     toNotification(e, 'Payment Received', 'success'))
+                .listen('.refund.updated', (e: any) =>
+                    toNotification(e, 'Refund Update', 'info'))
                 .listen('.chat.message', (e: any) => {
                     toNotification(
                         {
@@ -156,6 +158,8 @@ export function useNotifications() {
                     toNotification(e, 'Attendance Recorded', 'info'))
                 .listen('.payment.received', (e: any) =>
                     toNotification(e, 'Payment Received', 'success'))
+                .listen('.refund.updated', (e: any) =>
+                    toNotification(e, 'Refund Update', 'info'))
                 .listen('.chat.message', (e: any) => {
                     toNotification(
                         {
@@ -192,6 +196,8 @@ export function useNotifications() {
                     toNotification(e, 'Attendance Recorded', 'info'))
                 .listen('.payment.received', (e: any) =>
                     toNotification(e, 'Payment Received', 'success'))
+                .listen('.refund.updated', (e: any) =>
+                    toNotification(e, 'Refund Update', 'info'))
                 .listen('.incident.reported', (e: any) =>
                     toNotification(e, 'Safety Incident Reported', 'error'))
                 .listen('.instructor.status.changed', (e: any) =>

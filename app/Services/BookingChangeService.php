@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Enums\BookingStatus;
+use App\Enums\CancellationReason;
 use App\Enums\ChangeRequestStatus;
 use App\Enums\ChangeRequestType;
-use App\Events\BookingCancelled;
 use App\Events\BookingChangeRequested;
 use App\Events\BookingChangeResolved;
 use App\Exceptions\BookingChangeException;
@@ -14,8 +14,8 @@ use App\Models\Availability;
 use App\Models\Booking;
 use App\Models\BookingChangeRequest;
 use App\Models\User;
-use App\Notifications\BookingCancelledNotification;
 use App\Notifications\BookingChangeRequestedNotification;
+use App\Notifications\BookingRescheduledNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -27,24 +27,35 @@ use Illuminate\Support\Facades\DB;
 class BookingChangeService
 {
     public function __construct(
-        protected AvailabilityService $availabilityService
+        protected AvailabilityService $availabilityService,
+        protected BookingCancellationService $cancellationService,
     ) {
     }
 
     /**
      * File a cancellation request.
      */
-    public function requestCancellation(Booking $booking, User $requester, ?string $reason = null): BookingChangeRequest
-    {
+    public function requestCancellation(
+        Booking $booking,
+        User $requester,
+        ?string $reason = null,
+        CancellationReason $cancellationReason = CancellationReason::Instructor
+    ): BookingChangeRequest {
         $this->assertChangeable($booking);
 
-        return DB::transaction(function () use ($booking, $requester, $reason) {
+        $allowedCause = in_array($cancellationReason, [
+            CancellationReason::Instructor,
+            CancellationReason::Weather,
+        ], true) ? $cancellationReason : CancellationReason::Instructor;
+
+        return DB::transaction(function () use ($booking, $requester, $reason, $allowedCause) {
             $changeRequest = $booking->changeRequests()->create([
                 'requested_by' => $requester->id,
                 'type' => ChangeRequestType::Cancellation,
                 'status' => ChangeRequestStatus::Pending,
                 'requires_admin_approval' => $booking->changeRequiresAdminApproval(),
                 'reason' => $reason,
+                'cancellation_reason' => $allowedCause,
                 'original_date' => $booking->date,
                 'original_time_period' => $booking->time_period?->value,
                 'original_start_time' => $booking->start_time,
@@ -196,9 +207,6 @@ class BookingChangeService
         }
 
         if ($changeRequest->isCancellation()) {
-            $oldDate = $this->availabilityService->dateOf($booking);
-            $oldPeriod = $this->availabilityService->timePeriodOf($booking);
-
             // The student must see the instructor's explanation, plus any note
             // SISA added when approving the late cancellation.
             $note = trim((string) $changeRequest->reason);
@@ -215,19 +223,10 @@ class BookingChangeService
                 $note = 'The instructor cancelled this lesson without providing a reason.';
             }
 
-            $booking->cancel($note, \App\Enums\CancellationReason::Instructor);
+            $reason = $changeRequest->cancellation_reason ?? CancellationReason::Instructor;
+            $actor = $changeRequest->reviewedBy ?? $changeRequest->requestedBy;
 
-            // FR 1.8.3 - hand the slot back now that the lesson is gone.
-            $this->availabilityService->releaseSlot($booking->instructor_id, $oldDate, $oldPeriod, $booking->id);
-
-            $booking->refresh();
-
-            broadcast(new BookingCancelled($booking->load(['student', 'instructor', 'surfSpot']), $note))
-                ->toOthers();
-
-            foreach ([$booking->student, $booking->instructor] as $party) {
-                $party?->notify(new BookingCancelledNotification($booking, $note));
-            }
+            $this->cancellationService->cancel($booking, $reason, $note, $actor);
         } else {
             $this->applyReschedule($changeRequest, $booking);
         }
@@ -244,16 +243,28 @@ class BookingChangeService
         $oldPeriod = $this->availabilityService->timePeriodOf($booking);
 
         $booking->update([
+            'original_date' => $booking->original_date ?? $booking->date,
             'date' => $changeRequest->new_date,
             'time_period' => $changeRequest->new_time_period,
             'start_time' => $changeRequest->new_start_time?->format('H:i'),
             'end_time' => $changeRequest->new_end_time?->format('H:i'),
+            'rescheduled_by_instructor_at' => now(),
+            'student_accepted_reschedule_at' => null,
         ]);
 
         $booking->refresh();
 
         // FR 1.8.3 - old slot is freed, new slot is locked.
         $this->availabilityService->moveBookingSlot($booking, $oldDate, $oldPeriod);
+
+        DB::afterCommit(function () use ($booking, $changeRequest) {
+            $fresh = $booking->fresh(['instructor', 'surfSpot', 'student']);
+            $fresh?->student?->notify(new BookingRescheduledNotification(
+                $fresh,
+                $changeRequest->reason,
+                $changeRequest->admin_note
+            ));
+        });
     }
 
     /**

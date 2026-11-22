@@ -104,13 +104,16 @@ class BookingControllerTest extends TestCase
         $this->assertSame(2, $booking->duration_hours);
         $this->assertSame('11:00', $booking->end_time->format('H:i'));
 
-        // Price is rate (₱1,000) x 2 hours x 1 student, i.e. exactly what the
-        // booking form estimates. This is the bug that displayed 2h but charged 1h.
-        $this->assertEquals(2000.0, (float) $booking->total_amount);
+        // Lesson price is rate (₱1,000) x 2 hours x 1 student, plus 7% SISA service fee (₱140).
+        $this->assertEquals(2000.0, (float) $booking->lesson_price);
+        $this->assertEquals(140.0, (float) $booking->service_fee_amount);
+        $this->assertEquals(2140.0, (float) $booking->total_amount);
 
-        // The acceptance clock starts at creation so an abandoned pre-payment
-        // booking can be swept and its slot released.
-        $this->assertNotNull($booking->accept_deadline_at);
+        // The 15-minute checkout hold clock starts at creation so an abandoned
+        // pre-payment booking can be swept and its slot released; the 2-hour
+        // instructor acceptance clock starts only after payment selection.
+        $this->assertNotNull($booking->payment_deadline_at);
+        $this->assertNull($booking->accept_deadline_at);
     }
 
     /** @test */

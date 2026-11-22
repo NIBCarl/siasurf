@@ -23,7 +23,8 @@ use Illuminate\Support\Facades\Log;
 class SuspensionService
 {
     public function __construct(
-        protected AvailabilityService $availabilityService
+        protected AvailabilityService $availabilityService,
+        protected BookingCancellationService $cancellationService,
     ) {
     }
 
@@ -242,32 +243,14 @@ class SuspensionService
 
         foreach ($bookings as $booking) {
             try {
-                $date = $this->availabilityService->dateOf($booking);
-                $period = $this->availabilityService->timePeriodOf($booking);
-
-                $booking->cancel(
+                $this->cancellationService->cancel(
+                    $booking,
+                    CancellationReason::InstructorSuspended,
                     'Instructor account suspended: ' . $reason,
-                    CancellationReason::InstructorSuspended
+                    null,
+                    null,
+                    'The instructor account was suspended. SISA will assist with rebooking or a full lesson refund.'
                 );
-
-                $this->availabilityService->releaseSlot(
-                    $instructor->id,
-                    $date,
-                    $period,
-                    $booking->id
-                );
-
-                $fresh = $booking->fresh(['student', 'instructor', 'surfSpot']);
-
-                broadcast(new BookingCancelled(
-                    $fresh,
-                    'Instructor account suspended.'
-                ))->toOthers();
-
-                $fresh->student?->notify(new BookingCancelledNotification(
-                    $fresh,
-                    'The instructor account was suspended. SISA will assist with rebooking or a refund.'
-                ));
             } catch (\Throwable $exception) {
                 Log::warning('Failed to cancel a booking during suspension.', [
                     'booking_id' => $booking->id,

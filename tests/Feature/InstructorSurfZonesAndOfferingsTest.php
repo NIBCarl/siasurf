@@ -635,7 +635,9 @@ class InstructorSurfZonesAndOfferingsTest extends TestCase
         $booking = Booking::firstOrFail();
         $this->assertSame(SessionType::Coaching, $booking->session_type);
         $this->assertSame('1850.00', $booking->hourly_rate);
-        $this->assertSame('3700.00', $booking->total_amount);
+        $this->assertSame('3700.00', $booking->lesson_price);
+        $this->assertSame('259.00', $booking->service_fee_amount);
+        $this->assertSame('3959.00', $booking->total_amount);
     }
 
     // ---------------------------------------------------------------------
@@ -726,6 +728,8 @@ class InstructorSurfZonesAndOfferingsTest extends TestCase
 
         $booking = Booking::firstOrFail();
         $this->assertSame('2000.00', $booking->hourly_rate);
-        $this->assertSame('4000.00', $booking->total_amount);
+        $this->assertSame('4000.00', $booking->lesson_price);
+        $this->assertSame('280.00', $booking->service_fee_amount);
+        $this->assertSame('4280.00', $booking->total_amount);
     }
 }

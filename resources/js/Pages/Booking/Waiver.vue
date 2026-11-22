@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
-import Badge from '@/Components/Atoms/Badge.vue'
-import { WaiverType } from '@/types'
 
 interface Booking {
   id: number
@@ -17,6 +15,8 @@ interface Booking {
   student_age: number
   student_count?: number
   skill_level: string
+  needs_hotel_pickup?: boolean
+  hotel_name?: string | null
   instructor: {
     id: number
     name: string
@@ -29,9 +29,40 @@ interface Booking {
 
 interface Participant {
   id: number
+  role?: string
   full_name: string | null
   age: number | null
   skill_level: string
+}
+
+interface WaiverPrefill {
+  is_primary: boolean
+  is_minor: boolean
+  name: string
+  birthday: string | null
+  birthday_formatted: string | null
+  age: number | null
+  email: string | null
+  country: string | null
+  needs_hotel_pickup: boolean
+  hotel_name: string | null
+  medical_info?: string | null
+  surf_shop: string
+  instructor_name: string
+  witness_name: string
+  date: string
+}
+
+interface WaiverClause {
+  number: number
+  heading: string
+  body: string
+}
+
+interface WaiverDocument {
+  title: string
+  clauses: WaiverClause[]
+  logo_url: string
 }
 
 interface Props {
@@ -41,53 +72,112 @@ interface Props {
   participant?: Participant | null
   progress?: { participants: number; signed: number; required: number } | null
   holdRemainingSeconds?: number
+  waiverPrefill: WaiverPrefill
+  waiverDocument: WaiverDocument
 }
 
 const props = defineProps<Props>()
 
 const signaturePadRef = ref<InstanceType<typeof SignaturePad> | null>(null)
-const showAgreement = ref(false)
+const hasDrawnSignature = ref(false)
 
+const maxBirthday = (() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 5)
+  return d.toISOString().split('T')[0]
+})()
+
+// Printed Name (signed_by) and Emergency Contact are ALWAYS manually entered
+// by the student (or parent/guardian) and never prefilled.
 const form = useForm({
-  signed_by: props.participant?.full_name ?? '',
+  emergency_contact: '',
+  medical_info: props.waiverPrefill?.medical_info ?? '',
+  signed_by: '',
   signature: '',
   agreement: false,
   participant_id: props.participant?.id ?? null,
+  // Fallback inputs only sent when profile/companion lacks these values.
+  birthday: props.waiverPrefill?.birthday ?? '',
+  country: props.waiverPrefill?.country ?? '',
+  email: props.waiverPrefill?.email ?? '',
 })
 
-// The guided flow advances by redirecting to this same page for the next
-// participant. Inertia reuses the component instance across that redirect, so
-// useForm() is not re-run and its state would stay bound to the previous
-// participant. Reset the form (and the pad) whenever the participant changes.
-const resetForParticipant = (participant: Participant | null) => {
-  form.participant_id = participant?.id ?? null
-  form.signed_by = participant?.full_name ?? ''
+const hasPrefilledBirthday = computed(() => Boolean(props.waiverPrefill?.birthday))
+const hasPrefilledCountry = computed(() => Boolean(props.waiverPrefill?.country))
+const hasPrefilledEmail = computed(() => Boolean(props.waiverPrefill?.email))
+
+const displayAge = computed(() => {
+  if (form.birthday && !hasPrefilledBirthday.value) {
+    const birth = new Date(form.birthday)
+    if (!Number.isNaN(birth.getTime())) {
+      const today = new Date()
+      let age = today.getFullYear() - birth.getFullYear()
+      const m = today.getMonth() - birth.getMonth()
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--
+      }
+      if (age >= 0) return age
+    }
+  }
+  return props.waiverPrefill?.age ?? props.participant?.age ?? props.booking.student_age
+})
+
+const isMinor = computed(() => {
+  const age = Number(displayAge.value)
+  return !Number.isNaN(age) && age < 18
+})
+
+const resetForParticipant = () => {
+  form.participant_id = props.participant?.id ?? null
+  form.emergency_contact = ''
+  form.medical_info = props.waiverPrefill?.medical_info ?? ''
+  form.signed_by = ''
   form.signature = ''
   form.agreement = false
+  form.birthday = props.waiverPrefill?.birthday ?? ''
+  form.country = props.waiverPrefill?.country ?? ''
+  form.email = props.waiverPrefill?.email ?? ''
   form.clearErrors()
+  hasDrawnSignature.value = false
   signaturePadRef.value?.clearSignature()
 }
 
 watch(
   () => props.participant?.id,
-  () => resetForParticipant(props.participant ?? null)
+  () => resetForParticipant(),
 )
 
+const onSignatureChange = (data: string) => {
+  hasDrawnSignature.value = Boolean(data)
+  form.clearErrors('signature')
+}
+
+const onSignatureCleared = () => {
+  hasDrawnSignature.value = false
+  form.signature = ''
+}
+
 const submitWaiver = () => {
-  if (!signaturePadRef.value || !signaturePadRef.value.hasSignature) {
-    form.errors.signature = 'Please provide your signature'
+  if (!form.emergency_contact.trim()) {
+    form.setError('emergency_contact', 'Please enter an emergency contact name and number.')
     return
   }
 
-  // Always send the participant currently shown, never a stale one.
+  if (!form.signed_by.trim()) {
+    form.setError('signed_by', 'Please manually type the printed full name.')
+    return
+  }
+
+  if (!signaturePadRef.value || !signaturePadRef.value.hasSignature) {
+    form.setError('signature', 'Please draw your signature above.')
+    return
+  }
+
   form.participant_id = props.participant?.id ?? null
   form.signature = signaturePadRef.value.getSignatureData()
 
   form.post(route('bookings.store-waiver', props.booking.id), {
     preserveScroll: true,
-    onError: () => {
-      form.errors.signature = 'Failed to save signature'
-    }
   })
 }
 
@@ -137,7 +227,7 @@ const formatDate = (dateString: string): string => {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
   })
 }
 
@@ -172,20 +262,20 @@ const goBack = () => {
 </script>
 
 <template>
-  <Head title="Sign Waiver" />
+  <Head title="Surf Lesson Waiver" />
 
-  <AppSidebarLayout title="Liability Waiver">
-    <div class="py-12">
-      <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+  <AppSidebarLayout title="Surf Lesson Waiver">
+    <div class="py-10 bg-slate-50 min-h-screen">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Progress Stepper -->
-        <BookingStepper :current="4" class="mt-6" />
+        <BookingStepper :current="4" class="mt-4" />
 
         <!-- Exclusive Slot Hold Banner -->
         <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-3">
             <span class="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
             <p class="text-xs font-semibold text-emerald-900">
-              Seat(s) reserved for you! Your selected {{ (booking.student_count ?? 1) === 1 ? 'seat' : `${booking.student_count} seats` }} and time slot with {{ booking.instructor?.name || 'your instructor' }} are held while you complete this waiver and payment step.
+              Seat(s) reserved for you! Your selected {{ (booking.student_count ?? 1) === 1 ? 'seat' : `${booking.student_count} seats` }} and time slot with {{ booking.instructor?.name || 'your instructor' }} are held for 15 minutes while you complete this waiver and payment step.
             </p>
           </div>
           <div class="flex items-center gap-3 shrink-0">
@@ -206,195 +296,365 @@ const goBack = () => {
           </div>
         </div>
 
-        <!-- Header -->
-        <div class="mb-8 text-center">
-          <h1 class="text-3xl font-bold text-slate-900">Sign {{ waiverTypeLabel }}</h1>
-          <p class="mt-2 text-slate-600">
-            Please read and sign the liability waiver for your surfing lesson
-          </p>
+        <!-- Flash Error -->
+        <div v-if="$page.props.flash.error" class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-medium text-rose-800">
+          {{ $page.props.flash.error }}
         </div>
 
-        <!-- Who is signing / progress -->
+        <!-- Multi-participant Progress -->
         <div
-          v-if="participant"
-          class="mb-8 rounded-xl border border-ocean-100 bg-ocean-50/60 px-5 py-4"
+          v-if="participant && progress && progress.participants > 1"
+          class="mb-6 rounded-xl border border-ocean-100 bg-ocean-50/60 px-5 py-4"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p class="text-[10px] font-bold uppercase tracking-widest text-ocean-600">Signing for</p>
               <p class="text-base font-bold text-slate-900">{{ participant.full_name || 'Participant' }}</p>
             </div>
-            <span
-              v-if="progress"
-              class="rounded-full bg-white px-3 py-1 text-xs font-bold text-ocean-700 border border-ocean-100"
-            >
+            <span class="rounded-full bg-white px-3 py-1 text-xs font-bold text-ocean-700 border border-ocean-100">
               {{ progress.signed }} / {{ progress.required }} signatures
             </span>
           </div>
-          <p class="mt-2 text-xs text-slate-600">
+          <p class="mt-1.5 text-xs text-slate-600">
             Each participant must sign their own waiver. You'll be guided through the rest of the party next.
           </p>
         </div>
 
+        <!-- Minor Notice -->
+        <div
+          v-if="isMinor"
+          class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3.5 text-xs font-medium text-amber-900"
+        >
+          <strong>Minor Participant (Under 18):</strong> A parent or legal guardian must type their Printed Name and sign on the signature line at the bottom of this waiver.
+        </div>
+
         <!-- Tide Warning -->
-        <div v-if="$page.props.flash.tideWarning" class="mb-8 bg-amber-50 border border-amber-200 p-4 rounded-lg">
-          <div class="flex">
-            <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-              </svg>
+        <div v-if="$page.props.flash.tideWarning" class="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-xl">
+          <p class="text-sm text-amber-800 font-medium">
+            {{ $page.props.flash.tideWarning }}
+          </p>
+        </div>
+
+        <!-- Compact Booking Context Bar -->
+        <div v-if="booking && booking.instructor" class="mb-6 bg-white rounded-xl shadow-sm border border-slate-200 px-5 py-3.5">
+          <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-slate-600">
+            <div>
+              <span class="font-semibold text-slate-400 uppercase tracking-wider mr-1.5">Spot:</span>
+              <span class="font-bold text-slate-800">{{ booking.surf_spot ? booking.surf_spot.name : 'TBD' }}</span>
             </div>
-            <div class="ml-3">
-              <p class="text-sm text-amber-700 font-medium">
-                {{ $page.props.flash.tideWarning }}
-              </p>
+            <div>
+              <span class="font-semibold text-slate-400 uppercase tracking-wider mr-1.5">Lesson Date:</span>
+              <span class="font-bold text-slate-800">{{ formatDate(booking.date) }}</span>
+            </div>
+            <div>
+              <span class="font-semibold text-slate-400 uppercase tracking-wider mr-1.5">Session:</span>
+              <span class="font-bold text-slate-800">{{ formatBookingTime(booking) }}</span>
+            </div>
+            <div>
+              <span class="font-semibold text-slate-400 uppercase tracking-wider mr-1.5">Pickup:</span>
+              <span class="font-bold" :class="waiverPrefill.needs_hotel_pickup ? 'text-ocean-700' : 'text-slate-800'">
+                {{ waiverPrefill.needs_hotel_pickup ? `Hotel Pickup (${waiverPrefill.hotel_name})` : 'Meet at surf spot' }}
+              </span>
             </div>
           </div>
         </div>
 
-        <!-- Booking Summary -->
-        <div v-if="booking && booking.instructor" class="mb-8 bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-          <h2 class="text-lg font-semibold text-slate-900 mb-4">Booking Details</h2>
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span class="text-slate-500">Instructor:</span>
-              <span class="ml-2 font-medium">{{ booking.instructor.name }}</span>
-            </div>
-            <div>
-              <span class="text-slate-500">Location:</span>
-              <span class="ml-2 font-medium">{{ booking.surf_spot ? booking.surf_spot.name : 'TBD' }}</span>
-            </div>
-            <div>
-              <span class="text-slate-500">Date:</span>
-              <span class="ml-2 font-medium">{{ formatDate(booking.date) }}</span>
-            </div>
-            <div>
-              <span class="text-slate-500">Time:</span>
-              <span class="ml-2 font-medium">{{ formatBookingTime(booking) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Waiver Form -->
+        <!-- Official SISA Waiver Document Form -->
         <form @submit.prevent="submitWaiver" class="space-y-6">
-          <!-- Waiver Text -->
-          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <h2 class="text-lg font-semibold text-slate-900 mb-4">Liability Waiver</h2>
-            
-            <div class="prose max-w-none text-slate-700 space-y-4">
-              <p class="font-medium">
-                PLEASE READ CAREFULLY - THIS IS A LEGAL DOCUMENT
-              </p>
-              
-              <p>
-                In consideration of being allowed to participate in surfing activities 
-                organized by {{ $page.props.appName || 'SiaSurf' }} and its instructors, 
-                I hereby acknowledge, agree, and represent:
-              </p>
-              
-              <p>
-                1. I understand that surfing is an inherently dangerous activity that 
-                involves risk of serious injury or death. I voluntarily assume all risks 
-                associated with participation.
-              </p>
-              
-              <p>
-                2. I certify that I am physically fit and have no medical conditions 
-                that would prevent me from safely participating in surfing activities.
-              </p>
-              
-              <p>
-                3. I agree to follow all safety instructions provided by the instructor 
-                and to use all safety equipment provided.
-              </p>
-              
-              <p>
-                4. I hereby release, waive, discharge, and covenant not to sue 
-                {{ $page.props.appName || 'SiaSurf' }}, its instructors, agents, and 
-                employees from any and all liability, claims, demands, actions, and causes 
-                of action whatsoever arising out of or related to any loss, damage, or 
-                injury that may be sustained by me while participating in surfing activities.
-              </p>
-              
-              <p>
-                5. I understand that this waiver is binding on my heirs, executors, 
-                administrators, and assigns.
-              </p>
-              
-              <p class="font-medium">
-                I HAVE READ THIS RELEASE OF LIABILITY AND ASSUMPTION OF RISK AGREEMENT, 
-                FULLY UNDERSTAND ITS TERMS, UNDERSTAND THAT I HAVE GIVEN UP SUBSTANTIAL 
-                RIGHTS BY SIGNING IT, AND SIGN IT FREELY AND VOLUNTARILY WITHOUT ANY 
-                INDUCEMENT.
-              </p>
-            </div>
-          </div>
-
-          <!-- Signature Section -->
-          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <h2 class="text-lg font-semibold text-slate-900 mb-4">Electronic Signature</h2>
-            
-            <!-- Name Input -->
-            <div class="mb-6">
-              <label for="signed_by" class="block text-sm font-medium text-slate-700 mb-2">
-                Full Name *
-              </label>
-              <input
-                id="signed_by"
-                v-model="form.signed_by"
-                type="text"
-                required
-                class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
-                placeholder="Enter your full legal name"
-              />
-              <p v-if="form.errors.signed_by" class="mt-1 text-sm text-rose-600">
-                {{ form.errors.signed_by }}
-              </p>
-            </div>
-
-            <!-- Signature Pad -->
-            <div class="mb-6">
-              <label class="block text-sm font-medium text-slate-700 mb-2">
-                Draw Your Signature *
-              </label>
-              <SignaturePad
-                ref="signaturePadRef"
-                :width="600"
-                :height="200"
-                class="mx-auto"
-              />
-              <p v-if="form.errors.signature" class="mt-1 text-sm text-rose-600 text-center">
-                {{ form.errors.signature }}
-              </p>
-            </div>
-
-            <!-- Agreement Checkbox -->
-            <div class="mb-6">
-              <div class="flex items-start">
-                <div class="flex items-center">
-                  <input
-                    id="agreement"
-                    v-model="form.agreement"
-                    type="checkbox"
-                    required
-                    class="min-h-[44px] min-w-[44px] text-ocean-600 focus:ring-ocean-500 border-slate-300 rounded cursor-pointer"
+          <div class="rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 p-2 sm:p-3 shadow-lg">
+            <div class="rounded-xl bg-white border border-sky-200 px-5 py-6 sm:px-10 sm:py-8 text-slate-900">
+              <!-- Document Header: Logo + Title -->
+              <div class="flex flex-col sm:flex-row sm:items-end gap-4 pb-3 border-b-2 border-slate-800">
+                <div class="shrink-0">
+                  <img
+                    :src="waiverDocument.logo_url"
+                    alt="SISA / SiaSurf Logo"
+                    class="h-12 w-12 object-contain rounded border border-slate-200 p-0.5 bg-white"
                   />
                 </div>
-                <div class="ml-3">
-                  <label for="agreement" class="text-sm text-slate-700">
-                    I have read and agree to the Liability Waiver and Release of Liability 
-                    Agreement above. I understand that by signing electronically, I am 
-                    entering into a legally binding contract. *
-                  </label>
+                <div class="flex-1 sm:text-center sm:pr-12">
+                  <h1 class="text-base sm:text-xl font-extrabold tracking-wide text-slate-950 uppercase">
+                    {{ waiverDocument.title }}
+                  </h1>
                 </div>
               </div>
+
+              <!-- Header Fill-In Fields: Row 1 (Prefilled from Profile) -->
+              <div class="mt-5 grid grid-cols-1 sm:grid-cols-12 gap-x-5 gap-y-3 text-xs sm:text-sm">
+                <!-- Name -->
+                <div class="sm:col-span-4 flex items-baseline gap-2">
+                  <span class="font-bold text-slate-800 shrink-0">Name:</span>
+                  <div
+                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    title="Prefilled from student profile"
+                  >
+                    {{ waiverPrefill.name || '—' }}
+                  </div>
+                </div>
+
+                <!-- Birthday -->
+                <div class="sm:col-span-3 flex items-baseline gap-2">
+                  <span class="font-bold text-slate-800 shrink-0">Birthday:</span>
+                  <div
+                    v-if="hasPrefilledBirthday"
+                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    title="Prefilled from student profile"
+                  >
+                    {{ waiverPrefill.birthday_formatted }}
+                  </div>
+                  <div v-else class="flex-1">
+                    <input
+                      v-model="form.birthday"
+                      type="date"
+                      :max="maxBirthday"
+                      min="1920-01-01"
+                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                    />
+                  </div>
+                </div>
+
+                <!-- Age -->
+                <div class="sm:col-span-1 flex items-baseline gap-1.5">
+                  <span class="font-bold text-slate-800 shrink-0">Age:</span>
+                  <div
+                    class="flex-1 border-b border-slate-800 pb-0.5 px-1 text-center font-medium text-slate-900 bg-slate-50/70 rounded-t"
+                    title="Calculated from birthday"
+                  >
+                    {{ displayAge ?? '—' }}
+                  </div>
+                </div>
+
+                <!-- Email -->
+                <div class="sm:col-span-4 flex items-baseline gap-2">
+                  <span class="font-bold text-slate-800 shrink-0">Email:</span>
+                  <div
+                    v-if="hasPrefilledEmail"
+                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    title="Prefilled from student profile"
+                  >
+                    {{ waiverPrefill.email }}
+                  </div>
+                  <div v-else class="flex-1">
+                    <input
+                      v-model="form.email"
+                      type="email"
+                      placeholder="Enter email"
+                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Header Fill-In Fields: Row 2 (Country, Conditional Hotel, Manual Emergency Contact) -->
+              <div class="mt-3.5 grid grid-cols-1 sm:grid-cols-12 gap-x-5 gap-y-3 text-xs sm:text-sm">
+                <!-- Country -->
+                <div :class="waiverPrefill.needs_hotel_pickup ? 'sm:col-span-3' : 'sm:col-span-4'" class="flex items-baseline gap-2">
+                  <span class="font-bold text-slate-800 shrink-0">Country:</span>
+                  <div
+                    v-if="hasPrefilledCountry"
+                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    title="Prefilled from student profile"
+                  >
+                    {{ waiverPrefill.country }}
+                  </div>
+                  <div v-else class="flex-1">
+                    <input
+                      v-model="form.country"
+                      type="text"
+                      placeholder="Enter country"
+                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                    />
+                  </div>
+                </div>
+
+                <!-- Hotel (ONLY shown when hotel pickup was selected before the waiver page) -->
+                <div
+                  v-if="waiverPrefill.needs_hotel_pickup"
+                  class="sm:col-span-3 flex items-baseline gap-2"
+                >
+                  <span class="font-bold text-slate-800 shrink-0">Hotel:</span>
+                  <div
+                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    title="Prefilled from hotel pickup option"
+                  >
+                    {{ waiverPrefill.hotel_name }}
+                  </div>
+                </div>
+
+                <!-- Emergency Contact (ALWAYS manually entered) -->
+                <div :class="waiverPrefill.needs_hotel_pickup ? 'sm:col-span-6' : 'sm:col-span-8'" class="flex flex-col">
+                  <div class="flex flex-col sm:flex-row sm:items-baseline gap-1.5 sm:gap-2">
+                    <label for="emergency_contact" class="font-bold text-slate-800 shrink-0">
+                      In Case Of Emergency Name &amp; Number: <span class="text-rose-600">*</span>
+                    </label>
+                    <input
+                      id="emergency_contact"
+                      v-model="form.emergency_contact"
+                      type="text"
+                      required
+                      placeholder="e.g. Maria Santos — +63 917 000 0000"
+                      class="flex-1 border-0 border-b-2 border-ocean-500 bg-ocean-50/40 px-2 py-1 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 rounded-t"
+                    />
+                  </div>
+                  <p v-if="form.errors.emergency_contact" class="mt-1 text-xs font-semibold text-rose-600">
+                    {{ form.errors.emergency_contact }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Intro Statement -->
+              <div class="mt-5 pt-4 border-t border-slate-800 text-xs sm:text-sm leading-relaxed text-slate-800">
+                <p>
+                  By fully volunteering myself to take a surf lesson from (surf shop / resort)
+                  <span class="inline-block min-w-[140px] border-b border-slate-800 px-3 text-center font-bold text-slate-950">
+                    {{ waiverPrefill.surf_shop }}
+                  </span>
+                  with SISA certified instructor
+                  <span class="inline-block min-w-[160px] border-b border-slate-800 px-3 text-center font-bold text-slate-950">
+                    {{ waiverPrefill.instructor_name }}
+                  </span>,
+                  I have read, understood, approved, and agree to the following terms and conditions:
+                </p>
+              </div>
+
+              <!-- Clauses 1 to 7 (Exact SISA Agreement Text) -->
+              <ol class="mt-5 space-y-2.5 text-xs sm:text-[13px] leading-relaxed text-slate-800 text-justify">
+                <li
+                  v-for="clause in waiverDocument.clauses"
+                  :key="clause.number"
+                  class="flex items-start gap-2.5"
+                >
+                  <span class="font-bold text-slate-900 shrink-0 w-4">{{ clause.number }}.</span>
+                  <div class="flex-1">
+                    <p>
+                      <strong class="font-bold text-slate-950">{{ clause.heading }}</strong>
+                      {{ ' ' + clause.body }}
+                    </p>
+
+                    <!-- Medical Info declared directly under 1. PERSONAL HEALTH -->
+                    <div v-if="clause.number === 1" class="mt-2.5 mb-1.5 text-left">
+                      <label for="medical_info" class="block text-xs font-bold text-slate-800 mb-1">
+                        Medical Info / Allergies or Physical Conditions
+                        <span class="font-normal text-slate-500">(Optional)</span>
+                      </label>
+                      <textarea
+                        id="medical_info"
+                        v-model="form.medical_info"
+                        rows="2"
+                        maxlength="1000"
+                        placeholder="List any allergies, medical conditions, injuries, or medications your instructor should know about (leave blank if none)..."
+                        class="w-full rounded-md border border-ocean-200 border-b-2 border-b-ocean-500 bg-ocean-50/40 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0"
+                      ></textarea>
+                      <p v-if="form.errors.medical_info" class="mt-1 text-xs font-semibold text-rose-600">
+                        {{ form.errors.medical_info }}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              </ol>
+
+              <!-- Bottom Signature Block -->
+              <div class="mt-8 pt-6 border-t border-slate-300 space-y-6 text-xs sm:text-sm">
+                <!-- Row 1: Manual Printed Name + Manual Signature -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+                  <!-- Printed Full Name (manually typed by student or parent) -->
+                  <div class="lg:col-span-5 flex flex-col">
+                    <label for="signed_by" class="font-bold text-slate-800 mb-1">
+                      Printed Name <span class="text-rose-600">*</span>
+                    </label>
+                    <input
+                      id="signed_by"
+                      v-model="form.signed_by"
+                      type="text"
+                      required
+                      autocomplete="off"
+                      :placeholder="isMinor ? 'Type Parent / Guardian full name' : 'Type your full printed name'"
+                      class="w-full border-0 border-b-2 border-ocean-500 bg-ocean-50/40 px-2.5 py-2 text-sm font-semibold text-slate-950 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 rounded-t"
+                    />
+                    <p class="mt-1 text-[11px] text-slate-500">
+                      {{ isMinor ? 'Manually typed by parent or legal guardian.' : 'Manually typed by the student (or parent/guardian).' }}
+                    </p>
+                    <p v-if="form.errors.signed_by" class="mt-1 text-xs font-semibold text-rose-600">
+                      {{ form.errors.signed_by }}
+                    </p>
+                  </div>
+
+                  <!-- Signature Pad (manually signed by student or parent) -->
+                  <div class="lg:col-span-7 flex flex-col">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+                      <label class="font-bold text-slate-800">
+                        Signature <span class="text-rose-600">*</span>
+                      </label>
+                      <span class="text-[11px] font-medium text-slate-600">
+                        (Parent's / Guardian's Signature if under 18)
+                      </span>
+                    </div>
+                    <SignaturePad
+                      ref="signaturePadRef"
+                      :width="480"
+                      :height="135"
+                      compact
+                      :placeholder="isMinor ? 'Parent / Guardian sign here' : 'Draw your signature here'"
+                      @signature="onSignatureChange"
+                      @cleared="onSignatureCleared"
+                    />
+                    <p v-if="form.errors.signature" class="mt-1 text-xs font-semibold text-rose-600">
+                      {{ form.errors.signature }}
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Row 2: Prefilled Date + Prefilled Instructor at (Receptionist)/Staff -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-6 pt-2">
+                  <!-- Date (prefilled) -->
+                  <div class="md:col-span-5 flex items-baseline gap-2.5">
+                    <span class="font-bold text-slate-800 shrink-0">Date</span>
+                    <div
+                      class="flex-1 border-b border-slate-800 pb-1 px-2 text-center font-semibold text-slate-900 bg-slate-50/70 rounded-t"
+                      title="Prefilled with today's date"
+                    >
+                      {{ waiverPrefill.date }}
+                    </div>
+                  </div>
+
+                  <!-- In the presence of (Receptionist)/Staff (prefilled with instructor's name) -->
+                  <div class="md:col-span-7 flex flex-wrap sm:flex-nowrap items-baseline gap-2">
+                    <span class="font-bold text-slate-800 shrink-0">In the presence of</span>
+                    <div
+                      class="flex-1 min-w-[160px] border-b border-slate-800 pb-1 px-2 text-center font-semibold text-slate-900 bg-slate-50/70 rounded-t"
+                      title="Prefilled with your surf instructor's name"
+                    >
+                      {{ waiverPrefill.witness_name }}
+                    </div>
+                    <span class="text-xs text-slate-600 shrink-0">(Receptionist)/Staff</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Confirmation Checkbox & Action Buttons -->
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="mb-6">
+              <label for="agreement" class="flex items-start gap-3 cursor-pointer">
+                <input
+                  id="agreement"
+                  v-model="form.agreement"
+                  type="checkbox"
+                  required
+                  class="mt-0.5 h-5 w-5 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500 cursor-pointer"
+                />
+                <span class="text-sm text-slate-700 leading-relaxed">
+                  I confirm that the details above are accurate and that I have read, understood, and voluntarily signed the
+                  <strong>{{ waiverDocument.title }}</strong>. I understand this electronic signature is legally binding. *
+                </span>
+              </label>
               <p v-if="form.errors.agreement" class="mt-1 text-sm text-rose-600">
                 {{ form.errors.agreement }}
               </p>
             </div>
 
-            <!-- Submit Buttons -->
-            <div class="flex justify-between items-center">
+            <div class="flex flex-wrap justify-between items-center gap-4">
               <BaseButton
                 type="button"
                 @click="goBack"
@@ -402,7 +662,7 @@ const goBack = () => {
               >
                 ← Back &amp; Release Slot
               </BaseButton>
-              
+
               <BaseButton
                 type="submit"
                 :disabled="form.processing || !form.agreement"
@@ -410,20 +670,16 @@ const goBack = () => {
                 variant="primary"
                 size="lg"
               >
-                Sign Waiver & Continue →
+                Sign Waiver &amp; Continue →
               </BaseButton>
             </div>
           </div>
         </form>
 
         <!-- Footer Note -->
-        <div class="mt-8 text-center text-sm text-slate-500">
-          <p>
-            Your signature and agreement will be stored securely for 7 years as required by law.
-          </p>
-          <p class="mt-1">
-            A PDF copy of this waiver will be available for download after signing.
-          </p>
+        <div class="mt-6 text-center text-xs text-slate-500">
+          <p>Your signed waiver and electronic signature are stored securely for 7 years.</p>
+          <p class="mt-1">A PDF copy of this signed SISA waiver will be available in your booking details.</p>
         </div>
       </div>
     </div>

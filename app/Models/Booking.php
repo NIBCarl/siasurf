@@ -93,13 +93,24 @@ class Booking extends Model
         'skill_level',
         'session_type',
         'hourly_rate',
+        'lesson_price',
+        'service_fee_percent',
+        'service_fee_amount',
         'student_age',
         'student_count',
         'status',
         'total_amount',
+        'refund_amount',
+        'instructor_retained_amount',
         'payment_status',
+        'original_date',
+        'is_long_term',
+        'rescheduled_by_instructor_at',
+        'student_accepted_reschedule_at',
         'notes',
         'has_board',
+        'needs_hotel_pickup',
+        'hotel_name',
         'started_at',
         'attendance_status',
         'attendance_marked_at',
@@ -127,11 +138,21 @@ class Booking extends Model
         'skill_level' => SkillLevel::class,
         'session_type' => SessionType::class,
         'hourly_rate' => 'decimal:2',
+        'lesson_price' => 'decimal:2',
+        'service_fee_percent' => 'decimal:2',
+        'service_fee_amount' => 'decimal:2',
         'status' => BookingStatus::class,
         'payment_status' => PaymentStatus::class,
         'has_board' => 'boolean',
+        'needs_hotel_pickup' => 'boolean',
         'duration_hours' => 'integer',
         'total_amount' => 'decimal:2',
+        'refund_amount' => 'decimal:2',
+        'instructor_retained_amount' => 'decimal:2',
+        'original_date' => 'date',
+        'is_long_term' => 'boolean',
+        'rescheduled_by_instructor_at' => 'datetime',
+        'student_accepted_reschedule_at' => 'datetime',
         'student_age' => 'integer',
         'student_count' => 'integer',
         'started_at' => 'datetime',
@@ -182,6 +203,16 @@ class Booking extends Model
     public function payment(): HasOne
     {
         return $this->hasOne(Payment::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class)->latest('id');
+    }
+
+    public function latestRefund(): HasOne
+    {
+        return $this->hasOne(Refund::class)->latestOfMany();
     }
 
     public function waiver(): HasOne
@@ -383,9 +414,60 @@ class Booking extends Model
     }
 
     /**
+     * Whether a GCash receipt screenshot is currently awaiting verification.
+     */
+    public function hasPendingReceiptVerification(): bool
+    {
+        $payment = $this->payment;
+
+        return $payment !== null && $payment->status === PaymentStatus::PendingVerification;
+    }
+
+    /**
+     * Whether the instructor rescheduled this booking and the student has not
+     * yet accepted the new date (which entitles the student to a full refund
+     * of the lesson price if they decline or cancel).
+     */
+    public function hasPendingRescheduleResponse(): bool
+    {
+        return $this->rescheduled_by_instructor_at !== null
+            && $this->student_accepted_reschedule_at === null;
+    }
+
+    /**
+     * Effective lesson price (excluding the non-refundable 7% service fee).
+     */
+    public function effectiveLessonPrice(): float
+    {
+        if ($this->lesson_price !== null) {
+            return round((float) $this->lesson_price, 2);
+        }
+
+        $fee = (float) ($this->service_fee_amount ?? 0);
+
+        return round(max(0.0, (float) $this->total_amount - $fee), 2);
+    }
+
+    /**
+     * Effective platform service fee retained on cancellations.
+     */
+    public function effectiveServiceFeeAmount(): float
+    {
+        return round((float) ($this->service_fee_amount ?? 0), 2);
+    }
+
+    /**
+     * Original scheduled date locked at booking creation for long-term vs.
+     * short-term refund policy classification.
+     */
+    public function effectiveOriginalDate(): ?\Carbon\Carbon
+    {
+        return $this->original_date ?? $this->date;
+    }
+
+    /**
      * Whether the student has already handed over money or a GCash proof of
-     * payment. Once that happens the booking can no longer be self-cancelled:
-     * the instructor/SISA has to refund or reject it instead.
+     * payment.
      */
     public function hasSubmittedPayment(): bool
     {
@@ -403,9 +485,19 @@ class Booking extends Model
             || $payment->receipt_path !== null;
     }
 
+    /**
+     * Students may withdraw pending/awaiting-payment requests OR cancel
+     * confirmed paid bookings under the tiered refund policy. Unverified
+     * GCash screenshots (`pending_verification`) and underpaid balances remain
+     * blocked until verified/settled.
+     */
     public function canBeCancelled(): bool
     {
-        if ($this->hasSubmittedPayment()) {
+        if ($this->hasPendingReceiptVerification()) {
+            return false;
+        }
+
+        if ($this->payment_status === PaymentStatus::Underpaid || $this->payment?->status === PaymentStatus::Underpaid) {
             return false;
         }
 
@@ -730,16 +822,28 @@ class Booking extends Model
      */
     public function cancel(
         ?string $reason = null,
-        ?CancellationReason $cancellationReason = null
+        ?CancellationReason $cancellationReason = null,
+        ?float $refundAmount = null,
+        ?float $instructorRetainedAmount = null,
     ): void {
-        $this->update([
+        $attributes = [
             'status' => BookingStatus::Cancelled,
             'cancelled_at' => now(),
             'cancellation_reason' => $cancellationReason,
             // Kept separate from `notes` (the student's special requests) so the
             // student can actually read why the lesson was cancelled.
             'cancellation_note' => $reason ? trim($reason) : null,
-        ]);
+        ];
+
+        if ($refundAmount !== null) {
+            $attributes['refund_amount'] = round($refundAmount, 2);
+        }
+
+        if ($instructorRetainedAmount !== null) {
+            $attributes['instructor_retained_amount'] = round($instructorRetainedAmount, 2);
+        }
+
+        $this->update($attributes);
     }
 
     /**

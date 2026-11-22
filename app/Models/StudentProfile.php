@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
 
 class StudentProfile extends Model
 {
@@ -19,6 +18,8 @@ class StudentProfile extends Model
         'emergency_contact_phone',
         'medical_info',
         'is_first_time',
+        'birthday',
+        'country',
         'status',
         'onboarding_completed_at',
         'onboarding_skipped_at',
@@ -26,6 +27,7 @@ class StudentProfile extends Model
 
     protected $casts = [
         'is_first_time' => 'boolean',
+        'birthday' => 'date:Y-m-d',
         'has_board' => 'boolean',
         'skill_assessed_at' => 'datetime',
         'date_of_birth' => 'date',
@@ -33,6 +35,10 @@ class StudentProfile extends Model
         'weight' => 'decimal:2',
         'onboarding_completed_at' => 'datetime',
         'onboarding_skipped_at' => 'datetime',
+    ];
+
+    protected $appends = [
+        'age',
     ];
 
     /**
@@ -45,11 +51,9 @@ class StudentProfile extends Model
      */
     public function getAgeAttribute(): ?int
     {
-        if ($this->date_of_birth === null) {
-            return null;
-        }
+        $dob = $this->date_of_birth ?? $this->birthday;
 
-        return $this->date_of_birth->age;
+        return $dob?->age;
     }
 
     /**
@@ -60,7 +64,7 @@ class StudentProfile extends Model
      */
     public function hasBookingDetails(): bool
     {
-        if ($this->date_of_birth === null) {
+        if (($this->date_of_birth ?? $this->birthday) === null) {
             return false;
         }
 

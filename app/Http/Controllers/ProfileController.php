@@ -32,13 +32,36 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $validated = $request->validated();
+        $user = $request->user();
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        $user->fill(collect($validated)->only(['name', 'email', 'phone'])->all());
+
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
+        $user->save();
+
+        if ($user->isStudent() && (array_key_exists('birthday', $validated) || array_key_exists('country', $validated))) {
+            $profileData = [];
+            if (array_key_exists('birthday', $validated)) {
+                $profileData['birthday'] = $validated['birthday'] ?: null;
+            }
+            if (array_key_exists('country', $validated)) {
+                $profileData['country'] = filled($validated['country']) ? trim((string) $validated['country']) : null;
+            }
+
+            if ($user->studentProfile) {
+                $user->studentProfile->update($profileData);
+            } else {
+                $user->studentProfile()->create(array_merge([
+                    'skill_level' => 'beginner',
+                    'is_first_time' => true,
+                    'status' => 'active',
+                ], $profileData));
+            }
+        }
 
         return Redirect::route('profile.edit');
     }

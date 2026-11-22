@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Head, router, useForm, Link } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import Modal from '@/Components/Modal.vue'
 
 interface Booking {
   id: number
@@ -14,6 +15,9 @@ interface Booking {
   end_time?: string | null
   duration_hours?: number | null
   student_count: number
+  lesson_price?: number | null
+  service_fee_percent?: number | null
+  service_fee_amount?: number | null
   total_amount: number
   instructor: {
     id: number
@@ -60,6 +64,17 @@ const formatHoldTimer = (seconds: number): string => {
   const secs = safe % 60
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
+
+const showRefundPolicyModal = ref(false)
+const lessonPrice = computed(() => {
+  if (props.booking.lesson_price !== null && props.booking.lesson_price !== undefined) {
+    return Number(props.booking.lesson_price)
+  }
+  const fee = Number(props.booking.service_fee_amount ?? 0)
+  return Math.max(0, Number(props.booking.total_amount) - fee)
+})
+const serviceFeeAmount = computed(() => Number(props.booking.service_fee_amount ?? 0))
+const serviceFeePercent = computed(() => Number(props.booking.service_fee_percent ?? 7))
 
 const form = useForm({
   payment_method: 'gcash'
@@ -261,8 +276,9 @@ const goBack = () => {
                  </div>
                  <p class="text-center text-xs text-slate-500 mt-1">
                    By submitting this booking request, you agree to our 
-                   <a href="#" class="text-ocean-600 underline">Terms of Service</a> and 
-                   <a href="#" class="text-ocean-600 underline">Refund Policy</a>.
+                   <button type="button" @click="showRefundPolicyModal = true" class="text-ocean-600 underline hover:text-ocean-800">
+                     Cancellation &amp; Refund Policy
+                   </button>.
                  </p>
               </div>
             </div>
@@ -292,7 +308,11 @@ const goBack = () => {
               <div class="p-6 space-y-4">
                 <div class="flex justify-between text-sm">
                   <span class="text-slate-500">{{ lessonDurationHours() }}-Hour Surfing Lesson</span>
-                  <span class="font-medium text-slate-900">₱{{ booking.total_amount.toLocaleString() }}</span>
+                  <span class="font-medium text-slate-900">₱{{ lessonPrice.toLocaleString() }}</span>
+                </div>
+                <div v-if="serviceFeeAmount > 0" class="flex justify-between text-sm">
+                  <span class="text-slate-500">Service Fee ({{ serviceFeePercent }}% · non-refundable)</span>
+                  <span class="font-medium text-slate-900">₱{{ serviceFeeAmount.toLocaleString() }}</span>
                 </div>
                 <div class="flex justify-between text-sm">
                   <span class="text-slate-500">Group Size</span>
@@ -302,7 +322,7 @@ const goBack = () => {
                 <div class="pt-6 border-t border-slate-100">
                   <div class="flex justify-between items-end">
                     <span class="text-base font-bold text-slate-900">Total Amount</span>
-                    <span class="text-3xl font-black text-ocean-600">₱{{ booking.total_amount.toLocaleString() }}</span>
+                    <span class="text-3xl font-black text-ocean-600">₱{{ Number(booking.total_amount).toLocaleString() }}</span>
                   </div>
                 </div>
               </div>
@@ -328,5 +348,39 @@ const goBack = () => {
         </div>
       </div>
     </div>
+
+    <Modal :show="showRefundPolicyModal" @close="showRefundPolicyModal = false" maxWidth="lg">
+      <div class="p-6 space-y-4">
+        <h3 class="text-xl font-bold text-slate-900">Cancellation &amp; Refund Policy</h3>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          All refund percentages apply to the <strong>lesson price only</strong>. The {{ serviceFeePercent }}% platform service fee is non-refundable. Cash bookings collect no money online and carry no refund or fee on cancellation.
+        </p>
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2 text-xs text-slate-700">
+          <p class="font-bold text-slate-900">Long-Term GCash Bookings (&gt; 30 days ahead at booking)</p>
+          <ul class="list-disc pl-4 space-y-1">
+            <li>Within 30 days of payment: <strong>100% of lesson price</strong> (auto-refund via PayMongo).</li>
+            <li>After 30 days from payment: falls through to the Short-Term sliding window below (processed by SISA).</li>
+          </ul>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2 text-xs text-slate-700">
+          <p class="font-bold text-slate-900">Short-Term GCash Bookings (&le; 30 days ahead at booking)</p>
+          <ul class="list-disc pl-4 space-y-1">
+            <li><strong>7+ days</strong> before session: <strong>100% of lesson price</strong> refunded.</li>
+            <li><strong>3–6 days</strong> before session: <strong>50% of lesson price</strong> refunded.</li>
+            <li><strong>Under 3 days / Same day / No-show</strong>: <strong>No refund</strong>.</li>
+          </ul>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900">
+          <strong>Instructor / Weather / Reschedule Protection:</strong> If your instructor cancels, cancels due to unsafe weather/sea conditions, or reschedules and you decline the new date, you receive a <strong>100% refund of the lesson price</strong>.
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <BaseButton variant="primary" @click="showRefundPolicyModal = false">Got it</BaseButton>
+        </div>
+      </div>
+    </Modal>
   </AppSidebarLayout>
 </template>

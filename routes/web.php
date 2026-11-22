@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\BookingController as AdminBookingController;
 use App\Http\Controllers\Admin\CertificateController;
 use App\Http\Controllers\Admin\IncidentController;
 use App\Http\Controllers\Admin\InstructorController;
+use App\Http\Controllers\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Admin\SkillUpgradeController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SurfSpotController as AdminSurfSpotController;
@@ -138,6 +139,7 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->as('
     Route::get('/bookings', [BookingController::class, 'index'])->name('bookings.index');
     Route::get('/bookings/{booking}', [BookingController::class, 'show'])->name('bookings.show');
     Route::post('/bookings/{booking}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
+    Route::post('/bookings/{booking}/accept-reschedule', [BookingController::class, 'acceptReschedule'])->name('bookings.accept-reschedule');
 
     // Student reviews
     Route::get('/reviews', [ReviewController::class, 'index'])->name('reviews.index');
@@ -327,6 +329,11 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
     Route::get('/change-requests', [AdminBookingController::class, 'changeRequests'])->name('change-requests.index');
     Route::post('/change-requests/{changeRequest}/approve', [AdminBookingController::class, 'approveChangeRequest'])->name('change-requests.approve');
     Route::post('/change-requests/{changeRequest}/reject', [AdminBookingController::class, 'rejectChangeRequest'])->name('change-requests.reject');
+
+    // Refund & cancellation oversight (ENT-12)
+    Route::get('/refunds', [AdminRefundController::class, 'index'])->name('refunds.index');
+    Route::post('/refunds/{refund}/retry', [AdminRefundController::class, 'retry'])->name('refunds.retry');
+    Route::post('/refunds/{refund}/complete-manual', [AdminRefundController::class, 'completeManual'])->name('refunds.complete-manual');
 
     // Student Management
     Route::get('/students', [StudentController::class, 'index'])->name('students.index');

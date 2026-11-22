@@ -4,21 +4,26 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\CertificateStatus;
 use App\Enums\InstructorStatus;
+use App\Enums\SuspensionStatus;
+use App\Enums\SuspensionType;
 use App\Events\InstructorStatusChanged;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\InstructorProfile;
+use App\Models\InstructorStatusLog;
+use App\Models\InstructorSuspension;
 use App\Models\SurfSpot;
 use App\Models\User;
 use App\Notifications\InstructorReactivated;
 use App\Notifications\InstructorRejected;
-use App\Notifications\InstructorSuspended;
 use App\Notifications\InstructorVerified;
 use App\Services\PricingService;
 use App\Services\QRCodeService;
+use App\Services\SuspensionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -165,7 +170,7 @@ class InstructorController extends Controller
         $profile = $instructor->instructorProfile;
         if ($profile && $profile->status === InstructorStatus::Active) {
             $path = $profile->qr_code_path;
-            if (!$path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+            if (! $path || ! Storage::disk('local')->exists($path)) {
                 $this->qrCodeService->ensureInstructorQR($profile);
                 $instructor->load('instructorProfile.surfSpots');
                 $profile = $instructor->instructorProfile;
@@ -205,9 +210,20 @@ class InstructorController extends Controller
 
         $oldStatus = $profile->status;
 
-        // Update certificates status if provided
-        if ($request->has('certificate_ids') && ! empty($request->certificate_ids)) {
-            Certificate::whereIn('id', $request->certificate_ids)
+        // Verify explicitly selected certificates (scoped to this instructor).
+        if ($request->filled('certificate_ids') && is_array($request->certificate_ids)) {
+            $instructor->certificates()
+                ->whereIn('id', $request->certificate_ids)
+                ->update([
+                    'status' => CertificateStatus::Verified->value,
+                    'verified_at' => now(),
+                ]);
+        } elseif (! $instructor->hasVerifiedCertificate()) {
+            // If the admin clicked Verify & License without ticking individual
+            // boxes, approve the instructor's pending certificates so they are
+            // immediately discoverable in Find Instructor (BR-2.1).
+            $instructor->certificates()
+                ->where('status', CertificateStatus::PendingVerification->value)
                 ->update([
                     'status' => CertificateStatus::Verified->value,
                     'verified_at' => now(),
@@ -278,7 +294,7 @@ class InstructorController extends Controller
     /**
      * Suspend an instructor.
      */
-    public function suspend(Request $request, User $instructor, \App\Services\SuspensionService $suspensionService): RedirectResponse
+    public function suspend(Request $request, User $instructor, SuspensionService $suspensionService): RedirectResponse
     {
         $this->authorize('suspend', $instructor->instructorProfile);
 
@@ -306,7 +322,7 @@ class InstructorController extends Controller
     /**
      * Reactivate a suspended instructor.
      */
-    public function reactivate(User $instructor, \App\Services\SuspensionService $suspensionService): RedirectResponse
+    public function reactivate(User $instructor, SuspensionService $suspensionService): RedirectResponse
     {
         $this->authorize('suspend', $instructor->instructorProfile);
 
@@ -316,21 +332,21 @@ class InstructorController extends Controller
             return back()->with('error', 'Instructor profile not found.');
         }
 
-        $suspension = \App\Models\InstructorSuspension::where('instructor_id', $instructor->id)
-            ->where('status', \App\Enums\SuspensionStatus::Active->value)
+        $suspension = InstructorSuspension::where('instructor_id', $instructor->id)
+            ->where('status', SuspensionStatus::Active->value)
             ->latest()
             ->first();
 
         if ($suspension) {
             // Automatic/legacy suspensions clear the served strike slate;
             // a manual suspension does not change the strike ledger.
-            $resetStrikes = $suspension->type !== \App\Enums\SuspensionType::Manual;
+            $resetStrikes = $suspension->type !== SuspensionType::Manual;
 
             $suspensionService->lift(
                 $suspension,
                 'Reactivated by SISA.',
                 request()->user(),
-                \App\Enums\SuspensionStatus::RevokedByAdmin,
+                SuspensionStatus::RevokedByAdmin,
                 $resetStrikes
             );
         } else {
@@ -344,7 +360,7 @@ class InstructorController extends Controller
                 'strike_count' => 0,
             ]);
 
-            \App\Models\InstructorStatusLog::create([
+            InstructorStatusLog::create([
                 'instructor_id' => $instructor->id,
                 'from_status' => $oldStatus?->value,
                 'to_status' => InstructorStatus::Active->value,
@@ -443,6 +459,31 @@ class InstructorController extends Controller
             'longitude' => 'nullable|numeric|between:125.8,126.5',
         ], PricingService::offeringValidationMessages($level));
 
+        $profile = $instructor->instructorProfile;
+        $wasActive = $profile->status === InstructorStatus::Active;
+        $becomingActive = $validated['status'] === InstructorStatus::Active->value;
+
+        // BR-2.1: Find Instructor only lists active instructors who also have at
+        // least one verified certificate. When an admin sets status to "Active
+        // (Verified)" from Edit Dossier, approve any pending certificates so
+        // the instructor does not end up active-but-hidden from tourists.
+        if ($becomingActive && ! $instructor->hasVerifiedCertificate()) {
+            $verifiedPending = $instructor->certificates()
+                ->where('status', CertificateStatus::PendingVerification->value)
+                ->update([
+                    'status' => CertificateStatus::Verified->value,
+                    'verified_at' => now(),
+                ]);
+
+            if (! $wasActive && $verifiedPending === 0) {
+                return back()
+                    ->withErrors([
+                        'status' => 'Cannot mark an instructor Active (Verified) without at least one uploaded certificate.',
+                    ])
+                    ->withInput();
+            }
+        }
+
         // Update user
         $instructor->update([
             'name' => $validated['name'],
@@ -480,6 +521,11 @@ class InstructorController extends Controller
         }
 
         $profile->pruneForCurrentLevel();
+
+        if ($becomingActive && empty($profile->qr_code_path)) {
+            $qrPath = $this->qrCodeService->generateInstructorQR($profile->fresh());
+            $profile->update(['qr_code_path' => $qrPath]);
+        }
 
         return redirect()
             ->route('admin.instructors.show', $instructor->id)

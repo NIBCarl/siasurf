@@ -8,6 +8,8 @@ enum PaymentStatus: string
     case Completed = 'completed';
     case Underpaid = 'underpaid';
     case Failed = 'failed';
+    case RefundRequested = 'refund_requested';
+    case RefundProcessing = 'refund_processing';
     case Refunded = 'refunded';
     case PendingCash = 'pending_cash';
 
@@ -25,6 +27,8 @@ enum PaymentStatus: string
             self::Completed => 'Completed',
             self::Underpaid => 'Underpaid',
             self::Failed => 'Failed',
+            self::RefundRequested => 'Refund Requested',
+            self::RefundProcessing => 'Refund Processing',
             self::Refunded => 'Refunded',
             self::PendingCash => 'Pending Cash Payment',
             self::PendingVerification => 'Awaiting Receipt Verification',
@@ -38,6 +42,8 @@ enum PaymentStatus: string
             self::Completed => 'green',
             self::Underpaid => 'red',
             self::Failed => 'red',
+            self::RefundRequested => 'amber',
+            self::RefundProcessing => 'blue',
             self::Refunded => 'gray',
             self::PendingCash => 'orange',
             self::PendingVerification => 'blue',
