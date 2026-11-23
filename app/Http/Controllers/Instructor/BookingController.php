@@ -625,6 +625,8 @@ class BookingController extends Controller
     {
         $settlement = [
             'amount' => $booking->total_amount,
+            'lesson_price' => $booking->effectiveLessonPrice(),
+            'service_fee_amount' => $booking->effectiveServiceFeeAmount(),
             'status' => PaymentStatus::Completed,
             'paid_at' => now(),
             'receipt_verified_by' => auth()->id(),

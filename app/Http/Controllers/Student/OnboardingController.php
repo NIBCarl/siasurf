@@ -25,7 +25,7 @@ class OnboardingController extends Controller
         $user = auth()->user();
         $profile = $user->studentProfile;
         $latestAssessment = $user->latestSkillAssessment;
-        $dob = ($profile?->birthday ?? $profile?->date_of_birth)?->format('Y-m-d');
+        $dob = $profile?->birthday?->format('Y-m-d');
 
         return Inertia::render('Student/Onboarding', [
             'profile' => [
@@ -141,7 +141,6 @@ class OnboardingController extends Controller
             : null;
 
         $profile->fill([
-            'date_of_birth' => $dob,
             'birthday' => $dob,
             'country' => $country,
             'height' => $validated['height'] ?? null,

@@ -93,7 +93,6 @@ class SisaWaiverAndHotelPickupTest extends TestCase
 
         $registered = User::where('email', 'maya@example.com')->with('studentProfile')->firstOrFail();
         $this->assertNull($registered->studentProfile->birthday);
-        $this->assertNull($registered->studentProfile->date_of_birth);
         $this->assertNull($registered->studentProfile->country);
 
         $registered->markEmailAsVerified();
@@ -110,7 +109,6 @@ class SisaWaiverAndHotelPickupTest extends TestCase
 
         $registered->studentProfile->refresh();
         $this->assertSame('2001-08-20', $registered->studentProfile->birthday->format('Y-m-d'));
-        $this->assertSame('2001-08-20', $registered->studentProfile->date_of_birth->format('Y-m-d'));
         $this->assertSame('Philippines', $registered->studentProfile->country);
         $this->assertSame(Carbon::parse('2001-08-20')->age, $registered->studentProfile->age);
 
@@ -127,7 +125,6 @@ class SisaWaiverAndHotelPickupTest extends TestCase
 
         $this->student->studentProfile->refresh();
         $this->assertSame('1998-03-10', $this->student->studentProfile->birthday->format('Y-m-d'));
-        $this->assertSame('1998-03-10', $this->student->studentProfile->date_of_birth->format('Y-m-d'));
         $this->assertSame('Canada', $this->student->studentProfile->country);
         $this->assertSame(Carbon::parse('1998-03-10')->age, $this->student->studentProfile->age);
     }

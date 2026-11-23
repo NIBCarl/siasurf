@@ -34,13 +34,11 @@ class DashboardService
                 'pending_verification' => InstructorProfile::where('status', InstructorStatus::PendingVerification->value)->count(),
             ],
             'revenue' => [
-                'total' => $this->formatCurrency(Payment::where('status', PaymentStatus::Completed->value)->sum('amount')),
+                'total' => $this->formatCurrency($this->sumServiceFeeRevenue()),
                 'this_month' => $this->formatCurrency(
-                    Payment::where('status', PaymentStatus::Completed->value)
-                        ->whereMonth('created_at', now()->month)
-                        ->whereYear('created_at', now()->year)
-                        ->sum('amount')
+                    $this->sumServiceFeeRevenue(now()->startOfMonth(), now()->endOfMonth())
                 ),
+                'service_fee_percent' => PricingService::serviceFeePercent(),
             ],
             'incidents' => [
                 'total' => SafetyIncident::count(),
@@ -60,14 +58,15 @@ class DashboardService
     {
         $data = [];
         $labels = [];
+        $anchor = now()->startOfMonth();
 
         for ($i = $months - 1; $i >= 0; $i--) {
-            $date = now()->subMonths($i);
-            
-            $revenue = Payment::where('status', PaymentStatus::Completed->value)
-                ->whereMonth('created_at', $date->month)
-                ->whereYear('created_at', $date->year)
-                ->sum('amount');
+            $date = $anchor->copy()->subMonths($i);
+
+            $revenue = $this->sumServiceFeeRevenue(
+                $date->copy()->startOfMonth(),
+                $date->copy()->endOfMonth()
+            );
 
             $labels[] = $date->format('M Y');
             $data[] = round($revenue, 2);
@@ -77,6 +76,33 @@ class DashboardService
             'labels' => $labels,
             'data' => $data,
         ];
+    }
+
+    /**
+     * Sum the non-refundable tourist service fee collected by the platform
+     * across settled and refunded payments (BR-PRC-03, BR-CXL-05).
+     */
+    private function sumServiceFeeRevenue(?Carbon $start = null, ?Carbon $end = null): float
+    {
+        $collectedStatuses = array_map(
+            fn (PaymentStatus $status) => $status->value,
+            PaymentStatus::serviceFeeCollected()
+        );
+
+        $query = Payment::query()
+            ->leftJoin('bookings', 'bookings.id', '=', 'payments.booking_id')
+            ->whereIn('payments.status', $collectedStatuses);
+
+        if ($start !== null && $end !== null) {
+            $query->whereRaw(
+                'COALESCE(payments.paid_at, payments.created_at) BETWEEN ? AND ?',
+                [$start->toDateTimeString(), $end->toDateTimeString()]
+            );
+        }
+
+        return round((float) $query->sum(DB::raw(
+            'CASE WHEN payments.service_fee_amount > 0 THEN payments.service_fee_amount ELSE COALESCE(bookings.service_fee_amount, 0) END'
+        )), 2);
     }
 
     /**

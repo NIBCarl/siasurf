@@ -60,7 +60,6 @@ class StudentOnboardingTest extends TestCase
         $profile = $this->profile();
 
         $this->assertSame('+63 917 000 9999', $this->student->fresh()->phone);
-        $this->assertSame($dob, $profile->date_of_birth->format('Y-m-d'));
         $this->assertSame($dob, $profile->birthday->format('Y-m-d'));
         $this->assertSame('Philippines', $profile->country);
         $this->assertSame(28, $profile->age);
@@ -73,11 +72,11 @@ class StudentOnboardingTest extends TestCase
     }
 
     /** @test */
-    public function age_is_derived_from_date_of_birth_and_does_not_go_stale()
+    public function age_is_derived_from_birthday_and_does_not_go_stale()
     {
         // Born exactly 10 years ago: still a minor under the 5-12 safety rule.
         $profile = $this->profile();
-        $profile->forceFill(['date_of_birth' => now()->subYears(10)])->save();
+        $profile->forceFill(['birthday' => now()->subYears(10)])->save();
 
         $this->assertSame(10, $profile->fresh()->age);
 
@@ -357,11 +356,10 @@ class StudentOnboardingTest extends TestCase
     }
 
     /** @test */
-    public function onboarding_exposes_profile_birthday_fallback_and_country()
+    public function onboarding_exposes_profile_birthday_and_country()
     {
         $this->student->studentProfile->update([
             'birthday' => '1999-05-15',
-            'date_of_birth' => null,
             'country' => 'Australia',
         ]);
 
