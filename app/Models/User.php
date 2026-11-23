@@ -152,6 +152,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(InstructorAppeal::class, 'instructor_id');
     }
 
+    public function dailyEarningsLedgers(): HasMany
+    {
+        return $this->hasMany(InstructorDailyLedger::class, 'instructor_id');
+    }
+
+    public function instructorPayouts(): HasMany
+    {
+        return $this->hasMany(InstructorPayout::class, 'instructor_id');
+    }
+
     public function activeInstructorSuspension(): ?InstructorSuspension
     {
         return $this->instructorSuspensions()

@@ -47,3 +47,9 @@ Schedule::command(\App\Console\Commands\ExpireCertificates::class)
     ->dailyAt('00:15')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/certificate-expiry.log'));
+
+// FR 1.16 - flag cash service fee remittances past their 7-day due date as overdue.
+Schedule::command(\App\Console\Commands\CheckOverdueCashRemittances::class)
+    ->dailyAt('00:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/cash-remittances.log'));

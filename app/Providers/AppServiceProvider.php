@@ -54,6 +54,7 @@ class AppServiceProvider extends ServiceProvider
         // the model/policy naming ever changes.
         Gate::policy(\App\Models\Conversation::class, \App\Policies\ConversationPolicy::class);
         Gate::policy(\App\Models\Refund::class, \App\Policies\RefundPolicy::class);
+        Gate::policy(\App\Models\InstructorPayout::class, \App\Policies\InstructorPayoutPolicy::class);
 
         // Define gates for role-based access
         Gate::define('admin', function (User $user) {

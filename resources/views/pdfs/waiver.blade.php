@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{ $waiver_title }} - {{ $waiver_id }}</title>
+    <title>{{ $waiver_title }} - {{ $waiver_id ?? ('SURF-' . str_pad((string) $booking->id, 5, '0', STR_PAD_LEFT)) }}</title>
     <style>
         @page {
-            size: A4 landscape;
-            margin: 10mm 12mm;
+            size: A4 portrait;
+            margin: 9mm 12mm;
         }
         body {
             font-family: DejaVu Sans, Arial, Helvetica, sans-serif;
-            font-size: 9pt;
-            line-height: 1.32;
+            font-size: 8.5pt;
+            line-height: 1.28;
             color: #111827;
             margin: 0;
             padding: 0;
@@ -22,43 +22,45 @@
         .header-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             border-bottom: 1.5px solid #111827;
         }
         .header-logo-cell {
-            width: 48px;
+            width: 40px;
             vertical-align: middle;
-            padding-bottom: 6px;
+            padding-bottom: 4px;
         }
         .header-logo {
-            width: 38px;
-            height: 38px;
+            width: 34px;
+            height: 34px;
             object-fit: contain;
         }
         .header-title-cell {
-            vertical-align: bottom;
+            vertical-align: middle;
             text-align: center;
-            padding-bottom: 6px;
-            padding-right: 48px;
+            padding-bottom: 4px;
+            padding-right: 40px;
         }
         .doc-title {
-            font-size: 13pt;
+            font-size: 12pt;
             font-weight: bold;
-            letter-spacing: 0.4px;
+            letter-spacing: 0.3px;
+            line-height: 1.2;
             margin: 0;
             color: #111827;
         }
         .fields-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
         }
         .fields-table td {
             vertical-align: bottom;
-            padding: 3px 4px 3px 0;
-            font-size: 8.8pt;
+            padding: 2px 4px 2px 0;
+            font-size: 8.3pt;
         }
         .field-label {
+            width: 1%;
             font-weight: bold;
             white-space: nowrap;
             padding-right: 4px;
@@ -71,34 +73,34 @@
         }
         .intro-block {
             border-top: 1px solid #111827;
-            padding-top: 7px;
-            margin-top: 6px;
-            margin-bottom: 8px;
-            font-size: 8.8pt;
-            line-height: 1.4;
+            padding-top: 5px;
+            margin-top: 5px;
+            margin-bottom: 6px;
+            font-size: 8.3pt;
+            line-height: 1.32;
         }
         .inline-blank {
             display: inline-block;
             border-bottom: 1px solid #111827;
-            padding: 0 12px 1px 12px;
+            padding: 0 10px 1px 10px;
             font-weight: bold;
-            min-width: 130px;
+            min-width: 110px;
             text-align: center;
         }
         .clauses-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 12px;
+            margin-bottom: 7px;
         }
         .clauses-table td {
             vertical-align: top;
-            padding-bottom: 4px;
-            font-size: 8.2pt;
-            line-height: 1.3;
+            padding-bottom: 3px;
+            font-size: 7.9pt;
+            line-height: 1.26;
             text-align: justify;
         }
         .clause-num {
-            width: 18px;
+            width: 16px;
             font-weight: bold;
             text-align: left !important;
         }
@@ -106,22 +108,22 @@
             font-weight: bold;
         }
         .medical-info-line {
-            margin-top: 3px;
+            margin-top: 2px;
             padding: 2px 5px;
             border-bottom: 1px solid #111827;
             background-color: #f9fafb;
-            font-size: 8pt;
+            font-size: 7.8pt;
             text-align: left;
         }
         .sig-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            margin-top: 4px;
         }
         .sig-table td {
             vertical-align: bottom;
-            padding: 4px 6px 2px 0;
-            font-size: 8.8pt;
+            padding: 3px 6px 2px 0;
+            font-size: 8.3pt;
         }
         .sig-label {
             white-space: nowrap;
@@ -134,25 +136,31 @@
             padding: 0 6px 2px 6px;
         }
         .sig-image-wrap {
-            height: 44px;
+            height: 36px;
             vertical-align: bottom;
             text-align: center;
         }
         .sig-image {
-            max-height: 40px;
-            max-width: 210px;
+            max-height: 34px;
+            max-width: 190px;
             vertical-align: bottom;
+        }
+        .sig-subnote {
+            font-size: 7.3pt;
+            color: #374151;
+            text-align: center;
+            padding-top: 1px;
         }
         .sig-note {
             white-space: nowrap;
-            font-size: 8.2pt;
+            font-size: 7.6pt;
             color: #374151;
             width: 1%;
             padding-left: 4px;
         }
         .meta-footer {
-            margin-top: 10px;
-            padding-top: 4px;
+            margin-top: 7px;
+            padding-top: 3px;
             border-top: 1px solid #d1d5db;
             font-size: 7.2pt;
             color: #6b7280;
@@ -182,34 +190,43 @@
         <!-- Participant Info Row 1: Name, Birthday, Age, Email -->
         <table class="fields-table">
             <tr>
-                <td class="field-label" style="width: 5%;">Name:</td>
-                <td class="field-value" style="width: 31%;">{{ $participant_name }}</td>
-                <td class="field-label" style="width: 7%; padding-left: 10px;">Birthday:</td>
-                <td class="field-value" style="width: 17%;">{{ $birthday_formatted ?: 'N/A' }}</td>
-                <td class="field-label" style="width: 4%; padding-left: 10px;">Age:</td>
-                <td class="field-value" style="width: 6%; text-align: center;">{{ $age }}</td>
-                <td class="field-label" style="width: 5%; padding-left: 10px;">Email:</td>
-                <td class="field-value" style="width: 25%;">{{ $email ?: 'N/A' }}</td>
+                <td class="field-label">Name:</td>
+                <td class="field-value" style="width: 27%;">{{ !empty($participant_name) ? $participant_name : (!empty($is_preview) ? "\u{00A0}" : 'N/A') }}</td>
+                <td class="field-label" style="padding-left: 8px;">Birthday:</td>
+                <td class="field-value" style="width: 23%;">{{ !empty($birthday_formatted) ? $birthday_formatted : (!empty($is_preview) ? "\u{00A0}" : 'N/A') }}</td>
+                <td class="field-label" style="padding-left: 8px;">Age:</td>
+                <td class="field-value" style="width: 7%; text-align: center;">{{ ($age !== null && $age !== '') ? $age : (!empty($is_preview) ? "\u{00A0}" : 'N/A') }}</td>
+                <td class="field-label" style="padding-left: 8px;">Email:</td>
+                <td class="field-value" style="width: 37%;">{{ !empty($email) ? $email : (!empty($is_preview) ? "\u{00A0}" : 'N/A') }}</td>
             </tr>
         </table>
 
         <!-- Participant Info Row 2: Country, Conditional Hotel, Emergency Contact -->
-        <table class="fields-table">
-            <tr>
-                <td class="field-label" style="width: 7%;">Country:</td>
-                @if($needs_hotel_pickup)
-                    <td class="field-value" style="width: 18%;">{{ $country ?: 'N/A' }}</td>
-                    <td class="field-label" style="width: 5%; padding-left: 10px;">Hotel:</td>
-                    <td class="field-value" style="width: 22%;">{{ $hotel_name }}</td>
-                    <td class="field-label" style="width: 25%; padding-left: 10px;">In Case Of Emergency Name &amp; Number:</td>
-                    <td class="field-value" style="width: 23%;">{{ $emergency_contact }}</td>
-                @else
-                    <td class="field-value" style="width: 28%;">{{ $country ?: 'N/A' }}</td>
-                    <td class="field-label" style="width: 26%; padding-left: 14px;">In Case Of Emergency Name &amp; Number:</td>
-                    <td class="field-value" style="width: 39%;">{{ $emergency_contact }}</td>
-                @endif
-            </tr>
-        </table>
+        @if($needs_hotel_pickup)
+            <table class="fields-table">
+                <tr>
+                    <td class="field-label">Country:</td>
+                    <td class="field-value" style="width: 40%;">{{ !empty($country) ? $country : (!empty($is_preview) ? "\u{00A0}" : 'N/A') }}</td>
+                    <td class="field-label" style="padding-left: 10px;">Hotel:</td>
+                    <td class="field-value" style="width: 55%;">{{ !empty($hotel_name) ? $hotel_name : "\u{00A0}" }}</td>
+                </tr>
+            </table>
+            <table class="fields-table">
+                <tr>
+                    <td class="field-label">In Case Of Emergency Name &amp; Number:</td>
+                    <td class="field-value">{{ !empty($emergency_contact) ? $emergency_contact : "\u{00A0}" }}</td>
+                </tr>
+            </table>
+        @else
+            <table class="fields-table">
+                <tr>
+                    <td class="field-label">Country:</td>
+                    <td class="field-value" style="width: 28%;">{{ !empty($country) ? $country : (!empty($is_preview) ? "\u{00A0}" : 'N/A') }}</td>
+                    <td class="field-label" style="padding-left: 10px;">In Case Of Emergency Name &amp; Number:</td>
+                    <td class="field-value">{{ !empty($emergency_contact) ? $emergency_contact : "\u{00A0}" }}</td>
+                </tr>
+            </table>
+        @endif
 
         <!-- Intro Undertaking -->
         <div class="intro-block">
@@ -231,7 +248,13 @@
                         @if($clause['number'] === 1)
                             <div class="medical-info-line">
                                 <span class="clause-heading">Medical Info / Allergies or Conditions:</span>
-                                {{ !empty($medical_info) ? $medical_info : 'None declared' }}
+                                @if(!empty($medical_info))
+                                    {{ $medical_info }}
+                                @elseif(!empty($is_preview))
+                                    &nbsp;
+                                @else
+                                    None declared
+                                @endif
                             </div>
                         @endif
                     </td>
@@ -243,33 +266,55 @@
         <table class="sig-table">
             <tr>
                 <td class="sig-label">Printed Name</td>
-                <td class="sig-line" style="width: 28%;">{{ $signed_by }}</td>
-                <td class="sig-label" style="padding-left: 18px;">Signature</td>
-                <td class="sig-line sig-image-wrap" style="width: 30%;">
+                <td class="sig-line" style="width: 36%;">{{ !empty($signed_by) ? $signed_by : "\u{00A0}" }}</td>
+                <td class="sig-label" style="padding-left: 14px;">Signature</td>
+                <td class="sig-line sig-image-wrap" style="width: 46%;">
                     @if(!empty($signature_image))
                         <img src="{{ $signature_image }}" alt="Signature" class="sig-image">
+                    @else
+                        &nbsp;
                     @endif
                 </td>
-                <td class="sig-note">(Parent's / Guardian's Signature if under 18)</td>
             </tr>
             <tr>
-                <td class="sig-label" style="padding-top: 12px;">Date</td>
-                <td class="sig-line" style="padding-top: 12px;">{{ $signed_at }}</td>
-                <td class="sig-label" style="padding-left: 18px; padding-top: 12px;">In the presence of</td>
-                <td class="sig-line" style="padding-top: 12px;">{{ $witness_name }}</td>
-                <td class="sig-note" style="padding-top: 12px;">(Receptionist)/Staff</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td class="sig-subnote" style="padding: 2px 0 0 0;">(Parent's / Guardian's Signature if under 18)</td>
+            </tr>
+            <tr>
+                <td class="sig-label" style="padding-top: 8px;">Date</td>
+                <td class="sig-line" style="padding-top: 8px;">{{ $signed_at }}</td>
+                <td class="sig-label" style="padding-left: 14px; padding-top: 8px;">In the presence of</td>
+                <td style="padding: 8px 0 0 0;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td class="sig-line" style="padding-bottom: 2px;">{{ $witness_name }}</td>
+                            <td class="sig-note" style="padding-bottom: 2px;">(Receptionist)/Staff</td>
+                        </tr>
+                    </table>
+                </td>
             </tr>
         </table>
 
         <!-- Audit / Retention Footer -->
         <table class="meta-footer">
             <tr>
-                <td style="text-align: left;">
-                    Waiver ID: {{ $waiver_id }} &bull; Booking #SURF-{{ str_pad((string) $booking->id, 5, '0', STR_PAD_LEFT) }} &bull; Signed: {{ $signed_at_datetime }}
-                </td>
-                <td style="text-align: right;">
-                    Retained electronically for 7 years (until {{ $retention_until }})
-                </td>
+                @if(!empty($is_preview))
+                    <td style="text-align: left;">
+                        Booking #SURF-{{ str_pad((string) $booking->id, 5, '0', STR_PAD_LEFT) }} &bull; Spot: {{ $booking->surfSpot?->name ?? 'TBD' }}@if(!empty($lesson_date)) &bull; {{ $lesson_date }}@endif
+                    </td>
+                    <td style="text-align: right;">
+                        SiaSurf / SISA Official Waiver
+                    </td>
+                @else
+                    <td style="text-align: left;">
+                        Waiver ID: {{ $waiver_id }} &bull; Booking #SURF-{{ str_pad((string) $booking->id, 5, '0', STR_PAD_LEFT) }} &bull; Signed: {{ $signed_at_datetime }}
+                    </td>
+                    <td style="text-align: right;">
+                        Retained electronically for 7 years (until {{ $retention_until }})
+                    </td>
+                @endif
             </tr>
         </table>
     </div>

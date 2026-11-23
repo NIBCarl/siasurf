@@ -453,6 +453,8 @@ class DashboardService
                 'pending_request_list' => $pendingRequestList,
                 'attendance_due' => $attendanceDue,
             ],
+            // FR 1.16 - daily ledger summary, cash fees owed, and net payable.
+            'earnings' => app(EarningsLedgerService::class)->getInstructorSummary($user),
         ];
     }
 

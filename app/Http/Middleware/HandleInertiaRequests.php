@@ -114,6 +114,13 @@ class HandleInertiaRequests extends Middleware
                         ->count(),
                     'status' => $user->instructorProfile?->status?->value,
                     'chatUnread' => app(ConversationService::class)->unreadCountForUser($user),
+                    'overdueRemittances' => \App\Models\InstructorDailyLedger::forInstructor($user->id)
+                        ->overdueRemittance()
+                        ->count(),
+                    'unsettledCashFeesCount' => \App\Models\InstructorDailyLedger::forInstructor($user->id)
+                        ->unsettled()
+                        ->withCashFeesOwed()
+                        ->count(),
                 ];
             },
         ];

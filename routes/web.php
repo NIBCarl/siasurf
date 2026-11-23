@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\BookingController as AdminBookingController;
 use App\Http\Controllers\Admin\CertificateController;
 use App\Http\Controllers\Admin\IncidentController;
 use App\Http\Controllers\Admin\InstructorController;
+use App\Http\Controllers\Admin\PayoutController as AdminPayoutController;
 use App\Http\Controllers\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Admin\SkillUpgradeController;
 use App\Http\Controllers\Admin\StudentController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Instructor\AvailabilityController;
 use App\Http\Controllers\Instructor\BookingController as InstructorBookingController;
 use App\Http\Controllers\Instructor\DashboardController as InstructorDashboardController;
+use App\Http\Controllers\Instructor\EarningsController as InstructorEarningsController;
 use App\Http\Controllers\Instructor\OnboardingController;
 use App\Http\Controllers\Instructor\ProfileController as InstructorProfileController;
 use App\Http\Controllers\Instructor\QrController as InstructorQrController;
@@ -160,6 +162,7 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('bookings')->as(
     // Step 4: Sign waiver
     Route::get('/{booking}/waiver', [WaiverController::class, 'showLiability'])->name('waiver');
     Route::post('/{booking}/waiver', [WaiverController::class, 'storeLiability'])->name('store-waiver');
+    Route::post('/{booking}/waiver/download-pdf', [WaiverController::class, 'downloadPreviewPdf'])->name('waiver.download-pdf');
 
     // Step 4b: Parental consent (if needed)
     Route::get('/{booking}/parental-consent', [WaiverController::class, 'showParentalConsent'])->name('parental-consent');
@@ -196,6 +199,9 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
     Route::middleware('verified.instructor')->group(function () {
         // Instructor Dashboard
         Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');
+
+        // FR 1.16 - Daily earnings ledger, cash service fees owed, and payout history
+        Route::get('/earnings', [InstructorEarningsController::class, 'index'])->name('earnings.index');
 
         // Instructor profile management
         Route::get('/profile', [InstructorProfileController::class, 'edit'])->name('profile.edit');
@@ -334,6 +340,11 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
     Route::get('/refunds', [AdminRefundController::class, 'index'])->name('refunds.index');
     Route::post('/refunds/{refund}/retry', [AdminRefundController::class, 'retry'])->name('refunds.retry');
     Route::post('/refunds/{refund}/complete-manual', [AdminRefundController::class, 'completeManual'])->name('refunds.complete-manual');
+
+    // Earnings ledger & in-person payout recording (FR 1.16, FR 1.22)
+    Route::get('/payouts', [AdminPayoutController::class, 'index'])->name('payouts.index');
+    Route::get('/payouts/instructors/{instructor}', [AdminPayoutController::class, 'show'])->name('payouts.show');
+    Route::post('/payouts/instructors/{instructor}/settle', [AdminPayoutController::class, 'store'])->name('payouts.store');
 
     // Student Management
     Route::get('/students', [StudentController::class, 'index'])->name('students.index');

@@ -393,6 +393,8 @@ class PaymentController extends Controller
             'payment_status' => $targetStatus,
         ]);
 
+        app(\App\Services\EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
+
         // Generate receipt reflecting actual amount paid and any balance due
         try {
             $this->receiptService->generateReceipt($booking);

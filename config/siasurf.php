@@ -102,6 +102,7 @@ return [
 
     'fees' => [
         'service_fee_percent' => (float) env('SIASURF_SERVICE_FEE_PERCENT', 7.0),
+        'cash_remittance_days' => (int) env('SIASURF_CASH_REMITTANCE_DAYS', 7),
     ],
 
     /*

@@ -31,6 +31,7 @@ class BookingCancellationService
     public function __construct(
         protected AvailabilityService $availabilityService,
         protected RefundCalculatorService $calculator,
+        protected ?EarningsLedgerService $earningsLedger = null,
     ) {
     }
 
@@ -92,6 +93,9 @@ class BookingCancellationService
             $this->availabilityService->releaseSlot($instructorId, $date, $period, $locked->id);
 
             $refund = $this->createRefundRecordIfEligible($locked, $calculation, $note, $actor);
+
+            ($this->earningsLedger ?? app(EarningsLedgerService::class))
+                ->syncBookingToLedger($locked->fresh(['payment']));
 
             $refundSummary = $this->buildRefundSummary($calculation, $refund);
             $freshBooking = $locked->fresh(['student', 'instructor', 'surfSpot', 'payment', 'latestRefund']);
@@ -156,6 +160,9 @@ class BookingCancellationService
                 'refund_amount' => $calculation->refundAmount,
                 'instructor_retained_amount' => $calculation->instructorRetainedAmount,
             ]);
+
+            ($this->earningsLedger ?? app(EarningsLedgerService::class))
+                ->syncBookingToLedger($locked->fresh(['payment']));
 
             $refund = $this->createRefundRecordIfEligible($locked, $calculation, $reason, $admin);
 

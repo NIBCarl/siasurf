@@ -173,12 +173,12 @@ defineExpose({
         @mouseup="stopDrawing"
         @mouseleave="stopDrawing"
       />
-      <div v-if="!hasSignature" class="signature-placeholder">
+      <div v-if="!hasSignature" class="signature-placeholder print:hidden">
         <span class="placeholder-text" :class="{ 'text-sm': compact }">{{ placeholder }}</span>
       </div>
     </div>
 
-    <div class="signature-actions" :style="{ maxWidth: width + 'px' }">
+    <div class="signature-actions print:hidden" :style="{ maxWidth: width + 'px' }">
       <button
         type="button"
         @click="clearSignature"
@@ -229,5 +229,34 @@ defineExpose({
   @apply px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded-md;
   @apply hover:bg-slate-50 hover:text-slate-700 transition-colors duration-200;
   @apply focus:outline-none focus:ring-2 focus:ring-ocean-500 focus:ring-offset-2;
+}
+
+@media print {
+  .signature-pad-container {
+    gap: 0 !important;
+  }
+
+  .signature-pad,
+  .signature-pad-compact {
+    border: 0 !important;
+    border-bottom: 1px solid #111827 !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    padding-bottom: 2px !important;
+    background: transparent !important;
+  }
+
+  .signature-canvas {
+    max-height: 52px !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    mix-blend-mode: multiply;
+  }
+
+  .signature-placeholder,
+  .signature-actions {
+    display: none !important;
+  }
 }
 </style>

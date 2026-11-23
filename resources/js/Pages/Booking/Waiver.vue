@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
+import axios from 'axios'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
+import { ArrowDownTrayIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 
 interface Booking {
   id: number
@@ -256,6 +258,64 @@ const formatBookingTime = (booking: Booking): string => {
   return periods[booking.time_period] || booking.time_period
 }
 
+const bookingReference = computed(() => `#SURF-${String(props.booking.id).padStart(5, '0')}`)
+
+const downloadingPdf = ref(false)
+const downloadError = ref<string | null>(null)
+
+const formattedFormBirthday = computed(() => {
+  if (!form.birthday) return ''
+  const parsed = parseLocalDate(form.birthday)
+  if (Number.isNaN(parsed.getTime())) return form.birthday
+  return parsed.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+})
+
+const printWaiver = () => {
+  window.print()
+}
+
+const downloadWaiverPdf = async () => {
+  downloadingPdf.value = true
+  downloadError.value = null
+
+  try {
+    const response = await axios.post(
+      route('bookings.waiver.download-pdf', props.booking.id),
+      {
+        participant_id: props.participant?.id ?? null,
+        emergency_contact: form.emergency_contact,
+        medical_info: form.medical_info,
+        signed_by: form.signed_by,
+        signature: signaturePadRef.value?.hasSignature ? signaturePadRef.value.getSignatureData() : '',
+        birthday: hasPrefilledBirthday.value ? null : (form.birthday || null),
+        country: hasPrefilledCountry.value ? null : (form.country || null),
+        email: hasPrefilledEmail.value ? null : (form.email || null),
+      },
+      {
+        responseType: 'blob',
+      },
+    )
+
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `SiaSurf_Waiver_${bookingReference.value.replace('#', '')}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch {
+    downloadError.value = 'Unable to download waiver PDF right now. Please try again.'
+  } finally {
+    downloadingPdf.value = false
+  }
+}
+
 const goBack = () => {
   router.post(route('bookings.abandon', props.booking.id))
 }
@@ -265,13 +325,13 @@ const goBack = () => {
   <Head title="Surf Lesson Waiver" />
 
   <AppSidebarLayout title="Surf Lesson Waiver">
-    <div class="py-10 bg-slate-50 min-h-screen">
-      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="waiver-page-outer py-10 bg-slate-50 min-h-screen print:py-0 print:bg-white print:min-h-0">
+      <div class="waiver-page-container max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 print:max-w-none print:px-0">
         <!-- Progress Stepper -->
-        <BookingStepper :current="4" class="mt-4" />
+        <BookingStepper :current="4" class="mt-4 waiver-no-print print:hidden" />
 
         <!-- Exclusive Slot Hold Banner -->
-        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
+        <div class="waiver-no-print mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 print:hidden">
           <div class="flex items-center gap-3">
             <span class="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
             <p class="text-xs font-semibold text-emerald-900">
@@ -297,14 +357,19 @@ const goBack = () => {
         </div>
 
         <!-- Flash Error -->
-        <div v-if="$page.props.flash.error" class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-medium text-rose-800">
+        <div v-if="$page.props.flash.error" class="waiver-no-print mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-medium text-rose-800 print:hidden">
           {{ $page.props.flash.error }}
+        </div>
+
+        <!-- PDF Download Error -->
+        <div v-if="downloadError" class="waiver-no-print mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-3.5 text-sm font-medium text-rose-800 print:hidden">
+          {{ downloadError }}
         </div>
 
         <!-- Multi-participant Progress -->
         <div
           v-if="participant && progress && progress.participants > 1"
-          class="mb-6 rounded-xl border border-ocean-100 bg-ocean-50/60 px-5 py-4"
+          class="waiver-no-print mb-6 rounded-xl border border-ocean-100 bg-ocean-50/60 px-5 py-4 print:hidden"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -323,20 +388,20 @@ const goBack = () => {
         <!-- Minor Notice -->
         <div
           v-if="isMinor"
-          class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3.5 text-xs font-medium text-amber-900"
+          class="waiver-no-print mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3.5 text-xs font-medium text-amber-900 print:hidden"
         >
           <strong>Minor Participant (Under 18):</strong> A parent or legal guardian must type their Printed Name and sign on the signature line at the bottom of this waiver.
         </div>
 
         <!-- Tide Warning -->
-        <div v-if="$page.props.flash.tideWarning" class="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-xl">
+        <div v-if="$page.props.flash.tideWarning" class="waiver-no-print mb-6 bg-amber-50 border border-amber-200 p-4 rounded-xl print:hidden">
           <p class="text-sm text-amber-800 font-medium">
             {{ $page.props.flash.tideWarning }}
           </p>
         </div>
 
         <!-- Compact Booking Context Bar -->
-        <div v-if="booking && booking.instructor" class="mb-6 bg-white rounded-xl shadow-sm border border-slate-200 px-5 py-3.5">
+        <div v-if="booking && booking.instructor" class="waiver-no-print mb-6 bg-white rounded-xl shadow-sm border border-slate-200 px-5 py-3.5 print:hidden">
           <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-slate-600">
             <div>
               <span class="font-semibold text-slate-400 uppercase tracking-wider mr-1.5">Spot:</span>
@@ -360,32 +425,44 @@ const goBack = () => {
         </div>
 
         <!-- Official SISA Waiver Document Form -->
-        <form @submit.prevent="submitWaiver" class="space-y-6">
-          <div class="rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 p-2 sm:p-3 shadow-lg">
-            <div class="rounded-xl bg-white border border-sky-200 px-5 py-6 sm:px-10 sm:py-8 text-slate-900">
+        <form @submit.prevent="submitWaiver" class="waiver-form space-y-6 print:space-y-0">
+          <div class="waiver-print-frame rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 p-2 sm:p-3 shadow-lg print:bg-none print:p-0 print:shadow-none print:rounded-none">
+            <div class="waiver-print-sheet relative rounded-xl bg-white border border-sky-200 px-5 py-6 sm:px-10 sm:py-8 text-slate-900 print:rounded-none print:border-0 print:px-0 print:py-0">
+              <!-- Download A4 PDF button in top-right corner of the waiver sheet -->
+              <button
+                type="button"
+                @click="downloadWaiverPdf"
+                :disabled="downloadingPdf"
+                title="Download A4 Waiver PDF"
+                class="waiver-no-print absolute top-3 right-3 sm:top-4 sm:right-5 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60"
+              >
+                <ArrowDownTrayIcon class="h-4 w-4" aria-hidden="true" />
+                <span>{{ downloadingPdf ? 'Downloading...' : 'Download' }}</span>
+              </button>
+
               <!-- Document Header: Logo + Title -->
-              <div class="flex flex-col sm:flex-row sm:items-end gap-4 pb-3 border-b-2 border-slate-800">
+              <div class="waiver-doc-header flex flex-col sm:flex-row sm:items-end gap-4 pb-3 border-b-2 border-slate-800 print:flex-row print:items-end print:pb-2">
                 <div class="shrink-0">
                   <img
                     :src="waiverDocument.logo_url"
                     alt="SISA / SiaSurf Logo"
-                    class="h-12 w-12 object-contain rounded border border-slate-200 p-0.5 bg-white"
+                    class="waiver-doc-logo h-12 w-12 object-contain rounded border border-slate-200 p-0.5 bg-white"
                   />
                 </div>
-                <div class="flex-1 sm:text-center sm:pr-12">
-                  <h1 class="text-base sm:text-xl font-extrabold tracking-wide text-slate-950 uppercase">
+                <div class="waiver-doc-title-wrap flex-1 sm:text-center sm:pl-4 sm:pr-28 print:text-center print:pr-12">
+                  <h1 class="waiver-doc-title text-base sm:text-xl font-extrabold tracking-wide text-slate-950 uppercase print:text-base">
                     {{ waiverDocument.title }}
                   </h1>
                 </div>
               </div>
 
               <!-- Header Fill-In Fields: Row 1 (Prefilled from Profile) -->
-              <div class="mt-5 grid grid-cols-1 sm:grid-cols-12 gap-x-5 gap-y-3 text-xs sm:text-sm">
+              <div class="waiver-fields-row-1 mt-5 flex flex-col sm:flex-row sm:items-baseline gap-x-4 gap-y-3 text-xs sm:text-sm">
                 <!-- Name -->
-                <div class="sm:col-span-4 flex items-baseline gap-2">
+                <div class="waiver-field-name sm:flex-[1.15] min-w-0 flex items-baseline gap-2">
                   <span class="font-bold text-slate-800 shrink-0">Name:</span>
                   <div
-                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    class="waiver-field-val flex-1 min-w-0 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
                     title="Prefilled from student profile"
                   >
                     {{ waiverPrefill.name || '—' }}
@@ -393,31 +470,34 @@ const goBack = () => {
                 </div>
 
                 <!-- Birthday -->
-                <div class="sm:col-span-3 flex items-baseline gap-2">
+                <div class="waiver-field-birthday sm:flex-[1.15] min-w-0 flex items-baseline gap-2">
                   <span class="font-bold text-slate-800 shrink-0">Birthday:</span>
                   <div
                     v-if="hasPrefilledBirthday"
-                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    class="waiver-field-val flex-1 min-w-0 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
                     title="Prefilled from student profile"
                   >
                     {{ waiverPrefill.birthday_formatted }}
                   </div>
-                  <div v-else class="flex-1">
+                  <div v-else class="flex-1 min-w-0">
                     <input
                       v-model="form.birthday"
                       type="date"
                       :max="maxBirthday"
                       min="1920-01-01"
-                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                      class="waiver-no-print w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
                     />
+                    <div class="waiver-print-only waiver-print-value">
+                      {{ formattedFormBirthday || '\u00A0' }}
+                    </div>
                   </div>
                 </div>
 
                 <!-- Age -->
-                <div class="sm:col-span-1 flex items-baseline gap-1.5">
+                <div class="waiver-field-age sm:flex-none sm:w-[76px] flex items-baseline gap-1.5">
                   <span class="font-bold text-slate-800 shrink-0">Age:</span>
                   <div
-                    class="flex-1 border-b border-slate-800 pb-0.5 px-1 text-center font-medium text-slate-900 bg-slate-50/70 rounded-t"
+                    class="waiver-field-val flex-1 border-b border-slate-800 pb-0.5 px-1 text-center font-medium text-slate-900 bg-slate-50/70 rounded-t"
                     title="Calculated from birthday"
                   >
                     {{ displayAge ?? '—' }}
@@ -425,56 +505,65 @@ const goBack = () => {
                 </div>
 
                 <!-- Email -->
-                <div class="sm:col-span-4 flex items-baseline gap-2">
+                <div class="waiver-field-email sm:flex-[1.45] min-w-0 flex items-baseline gap-2">
                   <span class="font-bold text-slate-800 shrink-0">Email:</span>
                   <div
                     v-if="hasPrefilledEmail"
-                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    class="waiver-field-val flex-1 min-w-0 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
                     title="Prefilled from student profile"
                   >
                     {{ waiverPrefill.email }}
                   </div>
-                  <div v-else class="flex-1">
+                  <div v-else class="flex-1 min-w-0">
                     <input
                       v-model="form.email"
                       type="email"
                       placeholder="Enter email"
-                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                      class="waiver-no-print w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
                     />
+                    <div class="waiver-print-only waiver-print-value">
+                      {{ form.email.trim() || '\u00A0' }}
+                    </div>
                   </div>
                 </div>
               </div>
 
               <!-- Header Fill-In Fields: Row 2 (Country, Conditional Hotel, Manual Emergency Contact) -->
-              <div class="mt-3.5 grid grid-cols-1 sm:grid-cols-12 gap-x-5 gap-y-3 text-xs sm:text-sm">
+              <div
+                class="waiver-fields-row-2 mt-3.5 grid grid-cols-1 sm:grid-cols-12 gap-x-5 gap-y-3 text-xs sm:text-sm"
+                :class="{ 'waiver-fields-row-2-hotel': waiverPrefill.needs_hotel_pickup }"
+              >
                 <!-- Country -->
-                <div :class="waiverPrefill.needs_hotel_pickup ? 'sm:col-span-3' : 'sm:col-span-4'" class="flex items-baseline gap-2">
+                <div :class="waiverPrefill.needs_hotel_pickup ? 'sm:col-span-3' : 'sm:col-span-4'" class="waiver-field-country min-w-0 flex items-baseline gap-2">
                   <span class="font-bold text-slate-800 shrink-0">Country:</span>
                   <div
                     v-if="hasPrefilledCountry"
-                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    class="waiver-field-val flex-1 min-w-0 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
                     title="Prefilled from student profile"
                   >
                     {{ waiverPrefill.country }}
                   </div>
-                  <div v-else class="flex-1">
+                  <div v-else class="flex-1 min-w-0">
                     <input
                       v-model="form.country"
                       type="text"
                       placeholder="Enter country"
-                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                      class="waiver-no-print w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
                     />
+                    <div class="waiver-print-only waiver-print-value">
+                      {{ form.country.trim() || '\u00A0' }}
+                    </div>
                   </div>
                 </div>
 
                 <!-- Hotel (ONLY shown when hotel pickup was selected before the waiver page) -->
                 <div
                   v-if="waiverPrefill.needs_hotel_pickup"
-                  class="sm:col-span-3 flex items-baseline gap-2"
+                  class="waiver-field-hotel sm:col-span-3 min-w-0 flex items-baseline gap-2"
                 >
                   <span class="font-bold text-slate-800 shrink-0">Hotel:</span>
                   <div
-                    class="flex-1 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
+                    class="waiver-field-val flex-1 min-w-0 border-b border-slate-800 pb-0.5 px-1.5 font-medium text-slate-900 bg-slate-50/70 rounded-t truncate"
                     title="Prefilled from hotel pickup option"
                   >
                     {{ waiverPrefill.hotel_name }}
@@ -482,10 +571,10 @@ const goBack = () => {
                 </div>
 
                 <!-- Emergency Contact (ALWAYS manually entered) -->
-                <div :class="waiverPrefill.needs_hotel_pickup ? 'sm:col-span-6' : 'sm:col-span-8'" class="flex flex-col">
-                  <div class="flex flex-col sm:flex-row sm:items-baseline gap-1.5 sm:gap-2">
+                <div :class="waiverPrefill.needs_hotel_pickup ? 'sm:col-span-6' : 'sm:col-span-8'" class="waiver-field-emergency min-w-0 flex flex-col">
+                  <div class="flex flex-col sm:flex-row sm:items-baseline gap-1.5 sm:gap-2 min-w-0">
                     <label for="emergency_contact" class="font-bold text-slate-800 shrink-0">
-                      In Case Of Emergency Name &amp; Number: <span class="text-rose-600">*</span>
+                      In Case Of Emergency Name &amp; Number: <span class="text-rose-600 waiver-no-print print:hidden">*</span>
                     </label>
                     <input
                       id="emergency_contact"
@@ -493,17 +582,20 @@ const goBack = () => {
                       type="text"
                       required
                       placeholder="e.g. Maria Santos — +63 917 000 0000"
-                      class="flex-1 border-0 border-b-2 border-ocean-500 bg-ocean-50/40 px-2 py-1 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 rounded-t"
+                      class="waiver-no-print w-full min-w-0 flex-1 border-0 border-b-2 border-ocean-500 bg-ocean-50/40 px-2 py-1 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 rounded-t"
                     />
+                    <div class="waiver-print-only waiver-print-value flex-1 min-w-0">
+                      {{ form.emergency_contact.trim() || '\u00A0' }}
+                    </div>
                   </div>
-                  <p v-if="form.errors.emergency_contact" class="mt-1 text-xs font-semibold text-rose-600">
+                  <p v-if="form.errors.emergency_contact" class="waiver-no-print mt-1 text-xs font-semibold text-rose-600 print:hidden">
                     {{ form.errors.emergency_contact }}
                   </p>
                 </div>
               </div>
 
               <!-- Intro Statement -->
-              <div class="mt-5 pt-4 border-t border-slate-800 text-xs sm:text-sm leading-relaxed text-slate-800">
+              <div class="waiver-intro mt-5 pt-4 border-t border-slate-800 text-xs sm:text-sm leading-relaxed text-slate-800">
                 <p>
                   By fully volunteering myself to take a surf lesson from (surf shop / resort)
                   <span class="inline-block min-w-[140px] border-b border-slate-800 px-3 text-center font-bold text-slate-950">
@@ -518,24 +610,24 @@ const goBack = () => {
               </div>
 
               <!-- Clauses 1 to 7 (Exact SISA Agreement Text) -->
-              <ol class="mt-5 space-y-2.5 text-xs sm:text-[13px] leading-relaxed text-slate-800 text-justify">
+              <ol class="waiver-clauses mt-5 space-y-2.5 text-xs sm:text-[13px] leading-relaxed text-slate-800 text-justify">
                 <li
                   v-for="clause in waiverDocument.clauses"
                   :key="clause.number"
-                  class="flex items-start gap-2.5"
+                  class="waiver-clause-item flex items-start gap-2.5"
                 >
                   <span class="font-bold text-slate-900 shrink-0 w-4">{{ clause.number }}.</span>
-                  <div class="flex-1">
+                  <div class="flex-1 min-w-0">
                     <p>
                       <strong class="font-bold text-slate-950">{{ clause.heading }}</strong>
                       {{ ' ' + clause.body }}
                     </p>
 
                     <!-- Medical Info declared directly under 1. PERSONAL HEALTH -->
-                    <div v-if="clause.number === 1" class="mt-2.5 mb-1.5 text-left">
+                    <div v-if="clause.number === 1" class="waiver-medical-wrap mt-2.5 mb-1.5 text-left">
                       <label for="medical_info" class="block text-xs font-bold text-slate-800 mb-1">
                         Medical Info / Allergies or Physical Conditions
-                        <span class="font-normal text-slate-500">(Optional)</span>
+                        <span class="font-normal text-slate-500 waiver-no-print print:hidden">(Optional)</span>
                       </label>
                       <textarea
                         id="medical_info"
@@ -543,9 +635,12 @@ const goBack = () => {
                         rows="2"
                         maxlength="1000"
                         placeholder="List any allergies, medical conditions, injuries, or medications your instructor should know about (leave blank if none)..."
-                        class="w-full rounded-md border border-ocean-200 border-b-2 border-b-ocean-500 bg-ocean-50/40 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0"
+                        class="waiver-no-print w-full rounded-md border border-ocean-200 border-b-2 border-b-ocean-500 bg-ocean-50/40 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 print:hidden"
                       ></textarea>
-                      <p v-if="form.errors.medical_info" class="mt-1 text-xs font-semibold text-rose-600">
+                      <div class="waiver-print-only waiver-print-medical min-h-[1.25rem] border-b border-slate-800 px-1 py-0.5 text-[11px] text-slate-900 whitespace-pre-wrap">
+                        {{ form.medical_info.trim() || '\u00A0' }}
+                      </div>
+                      <p v-if="form.errors.medical_info" class="waiver-no-print mt-1 text-xs font-semibold text-rose-600 print:hidden">
                         {{ form.errors.medical_info }}
                       </p>
                     </div>
@@ -554,13 +649,13 @@ const goBack = () => {
               </ol>
 
               <!-- Bottom Signature Block -->
-              <div class="mt-8 pt-6 border-t border-slate-300 space-y-6 text-xs sm:text-sm">
+              <div class="waiver-signature-block mt-8 pt-6 border-t border-slate-300 space-y-6 text-xs sm:text-sm">
                 <!-- Row 1: Manual Printed Name + Manual Signature -->
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+                <div class="waiver-sig-row-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
                   <!-- Printed Full Name (manually typed by student or parent) -->
                   <div class="lg:col-span-5 flex flex-col">
                     <label for="signed_by" class="font-bold text-slate-800 mb-1">
-                      Printed Name <span class="text-rose-600">*</span>
+                      Printed Name <span class="text-rose-600 waiver-no-print print:hidden">*</span>
                     </label>
                     <input
                       id="signed_by"
@@ -569,12 +664,15 @@ const goBack = () => {
                       required
                       autocomplete="off"
                       :placeholder="isMinor ? 'Type Parent / Guardian full name' : 'Type your full printed name'"
-                      class="w-full border-0 border-b-2 border-ocean-500 bg-ocean-50/40 px-2.5 py-2 text-sm font-semibold text-slate-950 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 rounded-t"
+                      class="waiver-no-print w-full border-0 border-b-2 border-ocean-500 bg-ocean-50/40 px-2.5 py-2 text-sm font-semibold text-slate-950 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 rounded-t"
                     />
-                    <p class="mt-1 text-[11px] text-slate-500">
+                    <div class="waiver-print-only waiver-print-value font-semibold">
+                      {{ form.signed_by.trim() || '\u00A0' }}
+                    </div>
+                    <p class="waiver-no-print mt-1 text-[11px] text-slate-500 print:hidden">
                       {{ isMinor ? 'Manually typed by parent or legal guardian.' : 'Manually typed by the student (or parent/guardian).' }}
                     </p>
-                    <p v-if="form.errors.signed_by" class="mt-1 text-xs font-semibold text-rose-600">
+                    <p v-if="form.errors.signed_by" class="waiver-no-print mt-1 text-xs font-semibold text-rose-600 print:hidden">
                       {{ form.errors.signed_by }}
                     </p>
                   </div>
@@ -583,7 +681,7 @@ const goBack = () => {
                   <div class="lg:col-span-7 flex flex-col">
                     <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
                       <label class="font-bold text-slate-800">
-                        Signature <span class="text-rose-600">*</span>
+                        Signature <span class="text-rose-600 waiver-no-print print:hidden">*</span>
                       </label>
                       <span class="text-[11px] font-medium text-slate-600">
                         (Parent's / Guardian's Signature if under 18)
@@ -598,19 +696,19 @@ const goBack = () => {
                       @signature="onSignatureChange"
                       @cleared="onSignatureCleared"
                     />
-                    <p v-if="form.errors.signature" class="mt-1 text-xs font-semibold text-rose-600">
+                    <p v-if="form.errors.signature" class="waiver-no-print mt-1 text-xs font-semibold text-rose-600 print:hidden">
                       {{ form.errors.signature }}
                     </p>
                   </div>
                 </div>
 
                 <!-- Row 2: Prefilled Date + Prefilled Instructor at (Receptionist)/Staff -->
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-6 pt-2">
+                <div class="waiver-sig-row-2 grid grid-cols-1 md:grid-cols-12 gap-6 pt-2">
                   <!-- Date (prefilled) -->
                   <div class="md:col-span-5 flex items-baseline gap-2.5">
                     <span class="font-bold text-slate-800 shrink-0">Date</span>
                     <div
-                      class="flex-1 border-b border-slate-800 pb-1 px-2 text-center font-semibold text-slate-900 bg-slate-50/70 rounded-t"
+                      class="waiver-field-val flex-1 border-b border-slate-800 pb-1 px-2 text-center font-semibold text-slate-900 bg-slate-50/70 rounded-t"
                       title="Prefilled with today's date"
                     >
                       {{ waiverPrefill.date }}
@@ -618,10 +716,10 @@ const goBack = () => {
                   </div>
 
                   <!-- In the presence of (Receptionist)/Staff (prefilled with instructor's name) -->
-                  <div class="md:col-span-7 flex flex-wrap sm:flex-nowrap items-baseline gap-2">
+                  <div class="md:col-span-7 flex flex-wrap sm:flex-nowrap items-baseline gap-2 waiver-witness-row">
                     <span class="font-bold text-slate-800 shrink-0">In the presence of</span>
                     <div
-                      class="flex-1 min-w-[160px] border-b border-slate-800 pb-1 px-2 text-center font-semibold text-slate-900 bg-slate-50/70 rounded-t"
+                      class="waiver-field-val flex-1 min-w-[140px] border-b border-slate-800 pb-1 px-2 text-center font-semibold text-slate-900 bg-slate-50/70 rounded-t"
                       title="Prefilled with your surf instructor's name"
                     >
                       {{ waiverPrefill.witness_name }}
@@ -630,11 +728,19 @@ const goBack = () => {
                   </div>
                 </div>
               </div>
+
+              <!-- Print-only metadata footer -->
+              <div class="waiver-print-only-flex waiver-print-footer items-center justify-between border-t border-slate-300 mt-4 pt-2 text-[9px] text-slate-600">
+                <span>
+                  Booking {{ bookingReference }} &middot; Spot: {{ booking.surf_spot?.name || 'TBD' }} &middot; {{ formatDate(booking.date) }} ({{ formatBookingTime(booking) }})
+                </span>
+                <span>SiaSurf / SISA Official Waiver</span>
+              </div>
             </div>
           </div>
 
           <!-- Confirmation Checkbox & Action Buttons -->
-          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div class="waiver-no-print bg-white rounded-xl shadow-sm border border-slate-200 p-6 print:hidden">
             <div class="mb-6">
               <label for="agreement" class="flex items-start gap-3 cursor-pointer">
                 <input
@@ -655,13 +761,24 @@ const goBack = () => {
             </div>
 
             <div class="flex flex-wrap justify-between items-center gap-4">
-              <BaseButton
-                type="button"
-                @click="goBack"
-                variant="secondary"
-              >
-                ← Back &amp; Release Slot
-              </BaseButton>
+              <div class="flex flex-wrap items-center gap-3">
+                <BaseButton
+                  type="button"
+                  @click="goBack"
+                  variant="secondary"
+                >
+                  ← Back &amp; Release Slot
+                </BaseButton>
+
+                <BaseButton
+                  type="button"
+                  @click="printWaiver"
+                  variant="outline"
+                >
+                  <PrinterIcon class="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Print Waiver
+                </BaseButton>
+              </div>
 
               <BaseButton
                 type="submit"
@@ -677,7 +794,7 @@ const goBack = () => {
         </form>
 
         <!-- Footer Note -->
-        <div class="mt-6 text-center text-xs text-slate-500">
+        <div class="waiver-no-print mt-6 text-center text-xs text-slate-500 print:hidden">
           <p>Your signed waiver and electronic signature are stored securely for 7 years.</p>
           <p class="mt-1">A PDF copy of this signed SISA waiver will be available in your booking details.</p>
         </div>
@@ -685,3 +802,247 @@ const goBack = () => {
     </div>
   </AppSidebarLayout>
 </template>
+
+<style>
+.waiver-print-only,
+.waiver-print-only-flex {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .waiver-no-print {
+    display: none !important;
+  }
+
+  .waiver-print-only {
+    display: block !important;
+  }
+
+  .waiver-print-only-flex {
+    display: flex !important;
+  }
+
+  .waiver-page-outer,
+  .waiver-page-container,
+  .waiver-form,
+  .waiver-print-frame {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+    background-image: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .waiver-print-sheet {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    margin: 0 auto !important;
+    padding: 11mm 14mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: #111827 !important;
+  }
+
+  .waiver-doc-header {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding-bottom: 6px !important;
+    border-bottom: 1.5px solid #111827 !important;
+  }
+
+  .waiver-doc-logo {
+    height: 38px !important;
+    width: 38px !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  .waiver-doc-title-wrap {
+    padding: 0 38px 0 0 !important;
+    text-align: center !important;
+  }
+
+  .waiver-doc-title {
+    font-size: 12.5pt !important;
+    line-height: 1.25 !important;
+  }
+
+  .waiver-fields-row-1 {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: baseline !important;
+    gap: 10px !important;
+    margin-top: 8px !important;
+    font-size: 9pt !important;
+  }
+
+  .waiver-field-name {
+    flex: 1.15 1 0 !important;
+    min-width: 0 !important;
+  }
+
+  .waiver-field-birthday {
+    flex: 1.15 1 0 !important;
+    min-width: 0 !important;
+  }
+
+  .waiver-field-age {
+    flex: 0 0 auto !important;
+    width: auto !important;
+  }
+
+  .waiver-field-email {
+    flex: 1.5 1 0 !important;
+    min-width: 0 !important;
+  }
+
+  .waiver-fields-row-2 {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: baseline !important;
+    gap: 10px !important;
+    margin-top: 6px !important;
+    font-size: 9pt !important;
+  }
+
+  .waiver-fields-row-2 .waiver-field-country {
+    flex: 0 0 32% !important;
+  }
+
+  .waiver-fields-row-2 .waiver-field-emergency {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+  }
+
+  .waiver-fields-row-2 .waiver-field-emergency > div {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: baseline !important;
+    gap: 6px !important;
+  }
+
+  .waiver-fields-row-2-hotel {
+    flex-wrap: wrap !important;
+    row-gap: 5px !important;
+  }
+
+  .waiver-fields-row-2-hotel .waiver-field-country {
+    flex: 1 1 42% !important;
+  }
+
+  .waiver-fields-row-2-hotel .waiver-field-hotel {
+    flex: 1 1 52% !important;
+  }
+
+  .waiver-fields-row-2-hotel .waiver-field-emergency {
+    flex: 1 0 100% !important;
+  }
+
+  .waiver-field-val,
+  .waiver-print-value {
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 1px solid #111827 !important;
+    border-radius: 0 !important;
+    padding: 0 4px 1px 4px !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    color: #111827 !important;
+    font-size: 9pt !important;
+    line-height: 1.25 !important;
+    min-height: 14px !important;
+  }
+
+  .waiver-intro {
+    margin-top: 8px !important;
+    padding-top: 6px !important;
+    border-top: 1px solid #111827 !important;
+    font-size: 8.8pt !important;
+    line-height: 1.35 !important;
+  }
+
+  .waiver-clauses {
+    margin-top: 8px !important;
+    font-size: 8.3pt !important;
+    line-height: 1.32 !important;
+    color: #111827 !important;
+  }
+
+  .waiver-clauses > li + li {
+    margin-top: 4px !important;
+  }
+
+  .waiver-medical-wrap {
+    margin-top: 4px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .waiver-print-medical {
+    border-bottom: 1px solid #111827 !important;
+    padding: 1px 4px !important;
+    font-size: 8.3pt !important;
+    min-height: 15px !important;
+    white-space: pre-wrap !important;
+  }
+
+  .waiver-signature-block {
+    margin-top: 12px !important;
+    padding-top: 10px !important;
+    border-top: 1px solid #cbd5e1 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    font-size: 8.8pt !important;
+  }
+
+  .waiver-sig-row-1,
+  .waiver-sig-row-2 {
+    display: grid !important;
+    grid-template-columns: 44% 1fr !important;
+    gap: 16px !important;
+    align-items: end !important;
+  }
+
+  .waiver-sig-row-2 {
+    margin-top: 10px !important;
+    padding-top: 0 !important;
+  }
+
+  .waiver-witness-row {
+    flex-wrap: nowrap !important;
+  }
+
+  .waiver-print-footer {
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-top: 10px !important;
+    padding-top: 5px !important;
+    border-top: 1px solid #d1d5db !important;
+    font-size: 7.5pt !important;
+    color: #6b7280 !important;
+  }
+}
+</style>

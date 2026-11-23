@@ -102,6 +102,8 @@ class Booking extends Model
         'total_amount',
         'refund_amount',
         'instructor_retained_amount',
+        'daily_ledger_id',
+        'ledger_entry_type',
         'payment_status',
         'original_date',
         'is_long_term',
@@ -271,6 +273,11 @@ class Booking extends Model
     public function attendanceMarkedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'attendance_marked_by');
+    }
+
+    public function dailyLedger(): BelongsTo
+    {
+        return $this->belongsTo(InstructorDailyLedger::class, 'daily_ledger_id');
     }
 
     // Scopes

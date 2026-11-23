@@ -251,6 +251,84 @@ class WaiverController extends Controller
     }
 
     /**
+     * Download an A4 portrait PDF copy of the waiver currently shown in the waiver window.
+     */
+    public function downloadPreviewPdf(Request $request, Booking $booking)
+    {
+        $this->authorize('view', $booking);
+
+        $validated = $request->validate([
+            'participant_id' => 'nullable|integer',
+            'emergency_contact' => 'nullable|string|max:255',
+            'medical_info' => 'nullable|string|max:1000',
+            'signed_by' => 'nullable|string|max:255',
+            'signature' => 'nullable|string',
+            'birthday' => ['nullable', 'date', 'after:1920-01-01', 'before_or_equal:'.now()->subYears(5)->toDateString()],
+            'country' => 'nullable|string|max:100',
+            'email' => 'nullable|email|max:255',
+        ]);
+
+        $booking->load(['student.studentProfile', 'instructor.instructorProfile', 'surfSpot', 'participants']);
+
+        $participant = null;
+        if ($booking->participants->isNotEmpty()) {
+            $participant = isset($validated['participant_id'])
+                ? $booking->participants->firstWhere('id', (int) $validated['participant_id'])
+                : $this->waiverService->nextParticipantAwaitingLiability($booking);
+        }
+
+        $prefill = $this->buildWaiverPrefill($booking, $participant);
+
+        $birthdayFormatted = $prefill['birthday_formatted'];
+        $age = $prefill['age'];
+        if (empty($prefill['birthday']) && ! empty($validated['birthday'])) {
+            $parsedBirthday = Carbon::parse($validated['birthday']);
+            $birthdayFormatted = $parsedBirthday->format('F d, Y');
+            $age = $parsedBirthday->age;
+        }
+
+        $country = ! empty($prefill['country'])
+            ? $prefill['country']
+            : (isset($validated['country']) ? trim((string) $validated['country']) : '');
+
+        $email = ! empty($prefill['email'])
+            ? $prefill['email']
+            : (isset($validated['email']) ? trim((string) $validated['email']) : '');
+
+        $medicalInfo = $request->exists('medical_info')
+            ? (trim((string) ($validated['medical_info'] ?? '')) ?: null)
+            : $prefill['medical_info'];
+
+        $snapshot = [
+            'participant_name' => $prefill['name'],
+            'birthday_formatted' => $birthdayFormatted ?? '',
+            'age' => $age,
+            'email' => $email,
+            'country' => $country,
+            'needs_hotel_pickup' => $prefill['needs_hotel_pickup'],
+            'hotel_name' => $prefill['hotel_name'],
+            'emergency_contact' => trim((string) ($validated['emergency_contact'] ?? '')),
+            'medical_info' => $medicalInfo,
+            'surf_shop' => $prefill['surf_shop'],
+            'instructor_name' => $prefill['instructor_name'],
+            'witness_name' => $prefill['witness_name'],
+            'signed_by_guardian' => $age !== null && $age < 18,
+            'signature_data' => $validated['signature'] ?? null,
+            'lesson_date' => $booking->date ? Carbon::parse($booking->date)->format('F d, Y') : '',
+        ];
+
+        $signedBy = trim((string) ($validated['signed_by'] ?? ''));
+        $pdfBytes = $this->waiverService->renderLiabilityWaiverPdf($booking, $snapshot, $signedBy, now(), true);
+
+        $filename = 'SiaSurf_Waiver_SURF-' . str_pad((string) $booking->id, 5, '0', STR_PAD_LEFT) . '.pdf';
+
+        return response($pdfBytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
      * Build the prefilled waiver payload matching the official SISA form.
      *
      * @return array<string, mixed>

@@ -327,4 +327,44 @@ class SisaWaiverAndHotelPickupTest extends TestCase
         $this->assertStringNotContainsString('Hotel:', $htmlWithoutHotel);
         $this->assertStringContainsString('None declared', $htmlWithoutHotel);
     }
+
+    /** @test */
+    public function student_can_download_a4_waiver_pdf_preview_from_waiver_window(): void
+    {
+        $this->actingAs($this->student)
+            ->post(
+                route('bookings.store-details', $this->instructor->id),
+                $this->baseBookingPayload([
+                    'needs_hotel_pickup' => false,
+                ])
+            )
+            ->assertRedirect();
+
+        $booking = Booking::latest('id')->firstOrFail();
+
+        $response = $this->actingAs($this->student)
+            ->post(route('bookings.waiver.download-pdf', $booking), [
+                'emergency_contact' => 'Elena Rivera - +61 412 345 678',
+                'medical_info' => 'None',
+                'signed_by' => 'Alex Rivera',
+                'signature' => $this->validPngDataUri,
+            ]);
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('attachment;', (string) $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('.pdf', (string) $response->headers->get('Content-Disposition'));
+
+        $pdfBytes = $response->getContent();
+        $this->assertIsString($pdfBytes);
+        $this->assertStringStartsWith('%PDF-', $pdfBytes);
+        $this->assertSame(1, preg_match('/\/Count\s+1\b/', $pdfBytes));
+
+        $otherStudent = User::factory()->create(['role' => 'student']);
+        $otherStudent->assignRole('student');
+
+        $this->actingAs($otherStudent)
+            ->post(route('bookings.waiver.download-pdf', $booking), [])
+            ->assertForbidden();
+    }
 }

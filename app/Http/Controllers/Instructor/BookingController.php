@@ -17,6 +17,7 @@ use App\Notifications\BookingDeclinedNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
 use App\Services\BookingChangeService;
+use App\Services\EarningsLedgerService;
 use App\Services\ReceiptService;
 use App\Events\SessionAttendanceMarked;
 use Illuminate\Http\RedirectResponse;
@@ -305,6 +306,8 @@ class BookingController extends Controller
         if ($request->boolean('cash_received') && $booking->canRecordCashPayment()) {
             $this->recordCashPayment($booking);
         }
+
+        app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
 
         // Skill Progression Logic
         if ($request->boolean('upgrade_student') && $booking->student->studentProfile) {
@@ -604,6 +607,8 @@ class BookingController extends Controller
             if ($cashReceived && $booking->canRecordCashPayment()) {
                 $this->recordCashPayment($booking);
             }
+
+            app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
 
             broadcast(new SessionAttendanceMarked(
                 $booking->fresh(['student', 'instructor']),

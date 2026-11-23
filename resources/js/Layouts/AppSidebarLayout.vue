@@ -8,6 +8,7 @@ import DropdownLink from '@/Components/DropdownLink.vue';
 import { resolveAvatarUrl } from '@/utils/avatar';
 import {
     AcademicCapIcon,
+    BanknotesIcon,
     Bars3Icon,
     CalendarDaysIcon,
     ChartBarIcon,
@@ -97,6 +98,7 @@ const adminGroups: NavGroup[] = [
             { name: 'Bookings', href: route('admin.bookings.index'), icon: CalendarDaysIcon, pattern: 'admin.bookings.*' },
             { name: 'Change requests', href: route('admin.change-requests.index'), icon: ClipboardDocumentCheckIcon, pattern: 'admin.change-requests.*' },
             { name: 'Refunds', href: route('admin.refunds.index'), icon: ReceiptRefundIcon, pattern: 'admin.refunds.*' },
+            { name: 'Payouts & ledger', href: route('admin.payouts.index'), icon: BanknotesIcon, pattern: 'admin.payouts.*' },
             { name: 'Surf spots', href: route('admin.surf-spots.index'), icon: MapPinIcon, pattern: 'admin.surf-spots.*' },
         ],
     },
@@ -166,6 +168,7 @@ const instructorGroups = computed<NavGroup[]>(() => {
     const openSlots = Number(badges?.openSlots ?? 0)
     const totalSlots = Number(badges?.totalSlots ?? 14)
     const pendingRequests = Number(badges?.pendingRequests ?? 0)
+    const overdueRemittances = Number(badges?.overdueRemittances ?? 0)
     const status = badges?.status as string | undefined
 
     return [
@@ -193,6 +196,14 @@ const instructorGroups = computed<NavGroup[]>(() => {
                     pattern: 'instructor.bookings.*',
                     badge: pendingRequests > 0 ? pendingRequests : null,
                     tone: 'amber',
+                },
+                {
+                    name: 'Earnings & payouts',
+                    href: route('instructor.earnings.index'),
+                    icon: BanknotesIcon,
+                    pattern: 'instructor.earnings.*',
+                    badge: overdueRemittances > 0 ? `${overdueRemittances} due` : null,
+                    tone: 'rose',
                 },
                 {
                     name: 'Public profile',
@@ -282,13 +293,13 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
 </script>
 
 <template>
-    <div class="min-h-screen bg-sand-50">
-        <a href="#main-content" class="skip-link">Skip to content</a>
+    <div class="app-shell-print-root min-h-screen bg-sand-50 print:min-h-0 print:bg-white">
+        <a href="#main-content" class="skip-link app-shell-no-print print:hidden">Skip to content</a>
 
         <!-- Mobile scrim -->
         <div
             v-if="isSidebarOpen"
-            class="fixed inset-0 z-40 bg-deep-950/60 backdrop-blur-sm lg:hidden"
+            class="app-shell-no-print fixed inset-0 z-40 bg-deep-950/60 backdrop-blur-sm lg:hidden print:hidden"
             aria-hidden="true"
             @click="isSidebarOpen = false"
         />
@@ -297,7 +308,7 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
         <aside
             v-if="shouldShowSidebar"
             :class="[
-                'fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col bg-deep-950 text-white transition-transform duration-300 ease-out lg:translate-x-0',
+                'app-shell-no-print fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col bg-deep-950 text-white transition-transform duration-300 ease-out lg:translate-x-0 print:hidden',
                 isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
             ]"
         >
@@ -425,8 +436,8 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
         </aside>
 
         <!-- Workspace -->
-        <div :class="shouldShowSidebar ? 'lg:pl-[264px]' : ''" class="flex min-h-screen flex-col">
-            <header class="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-sand-200 bg-white/90 px-4 shadow-sm backdrop-blur-md sm:px-6 lg:px-8">
+        <div :class="shouldShowSidebar ? 'lg:pl-[264px] print:pl-0' : ''" class="app-shell-workspace flex min-h-screen flex-col print:min-h-0">
+            <header class="app-shell-no-print sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-sand-200 bg-white/90 px-4 shadow-sm backdrop-blur-md sm:px-6 lg:px-8 print:hidden">
                 <div class="flex min-w-0 items-center gap-3">
                     <button
                         v-if="shouldShowSidebar"
@@ -496,13 +507,13 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
                 </div>
             </header>
 
-            <main id="main-content" class="flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-10">
-                <div class="mx-auto w-full max-w-shell">
+            <main id="main-content" class="app-shell-main flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-10 print:p-0">
+                <div class="app-shell-main-inner mx-auto w-full max-w-shell print:max-w-none">
                     <slot />
                 </div>
             </main>
 
-            <footer class="border-t border-sand-200 px-4 py-5 text-center text-body-sm text-stone-500 sm:px-6 lg:px-8 lg:text-left">
+            <footer class="app-shell-no-print border-t border-sand-200 px-4 py-5 text-center text-body-sm text-stone-500 sm:px-6 lg:px-8 lg:text-left print:hidden">
                 &copy; {{ new Date().getFullYear() }} SiaSurf &middot; Siargao Island, Philippines
             </footer>
         </div>
@@ -510,7 +521,7 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
         <!-- Role-specific mobile navigation: same chrome as the desktop sidebar -->
         <nav
             v-if="shouldShowSidebar"
-            class="fixed inset-x-0 bottom-0 z-30 border-t border-deep-800 bg-deep-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+            class="app-shell-no-print fixed inset-x-0 bottom-0 z-30 border-t border-deep-800 bg-deep-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden print:hidden"
             aria-label="Quick navigation"
         >
             <ul class="flex items-stretch justify-around">
@@ -536,4 +547,30 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
         </nav>
     </div>
 </template>
+
+<style scoped>
+@media print {
+    .app-shell-print-root {
+        min-height: 0 !important;
+        background: #ffffff !important;
+    }
+
+    .app-shell-no-print {
+        display: none !important;
+    }
+
+    .app-shell-workspace {
+        padding-left: 0 !important;
+        min-height: 0 !important;
+    }
+
+    .app-shell-main {
+        padding: 0 !important;
+    }
+
+    .app-shell-main-inner {
+        max-width: none !important;
+    }
+}
+</style>
 

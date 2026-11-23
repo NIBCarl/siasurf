@@ -91,6 +91,17 @@ interface Props {
     pending_request_list?: PendingRequest[]
     attendance_due?: number
   }
+  earnings?: {
+    unsettled_days_count: number
+    unsettled_gcash_earnings: number
+    unsettled_cash_fees_owed: number
+    net_payable: number
+    settlement_direction: 'payout' | 'remittance' | 'offset' | 'clear'
+    earliest_remittance_due_date: string | null
+    has_overdue_remittance: boolean
+    overdue_cash_fees_amount: number
+    remittance_days: number
+  }
 }
 
 const props = defineProps<Props>()
@@ -119,6 +130,12 @@ const pendingRequests = computed(() => props.activities.pending_request_list ?? 
 const attendanceDue = computed(() => props.activities.attendance_due ?? 0)
 const upcomingBookings = computed(() => props.activities.upcoming_bookings ?? [])
 const recentReviews = computed(() => props.activities.recent_reviews ?? [])
+
+const formatPeso = (amount: number | string | null | undefined) => {
+  const num = Number(amount ?? 0)
+  const prefix = num < 0 ? '-₱' : '₱'
+  return `${prefix}${Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 
 /**
  * "9:00 AM – 11:00 AM" for the queue/upcoming cards, so the exact lesson time is
@@ -316,6 +333,31 @@ const quickActions = computed<QuickAction[]>(() => [
                         </div>
                     </li>
                 </ul>
+            </AppCard>
+
+            <!-- Overdue cash fee remittance -->
+            <AppCard v-if="earnings?.has_overdue_remittance" padding="md" class="border-rose-300 bg-rose-50">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-start gap-3">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-rose-600 text-white">
+                            <ExclamationTriangleIcon class="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <div>
+                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-rose-800">
+                                Cash fee remittance overdue
+                            </p>
+                            <h2 class="mt-1 text-title font-semibold text-rose-950">
+                                {{ formatPeso(earnings.overdue_cash_fees_amount) }} due to SISA
+                            </h2>
+                            <p class="mt-1 text-body-sm text-rose-900">
+                                Cash service fees must be remitted within {{ earnings.remittance_days }} days. Review your daily ledger to settle in person.
+                            </p>
+                        </div>
+                    </div>
+                    <AppButton :href="route('instructor.earnings.index')" variant="secondary" size="md">
+                        View daily ledger
+                    </AppButton>
+                </div>
             </AppCard>
 
             <!-- Attendance due -->
@@ -517,7 +559,17 @@ const quickActions = computed<QuickAction[]>(() => [
                 </section>
 
                 <section class="lg:col-span-5">
-                    <SectionHeader eyebrow="Record" title="Earnings & standing" />
+                    <SectionHeader eyebrow="Record" title="Earnings & standing">
+                        <template #action>
+                            <Link
+                                :href="route('instructor.earnings.index')"
+                                class="inline-flex items-center gap-1 text-body-sm font-semibold text-lagoon-700 hover:text-lagoon-800"
+                            >
+                                Daily ledger
+                                <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                            </Link>
+                        </template>
+                    </SectionHeader>
 
                     <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <StatCard
@@ -539,6 +591,31 @@ const quickActions = computed<QuickAction[]>(() => [
                             :meta="`Level ${profile.level} certified`"
                         />
                     </div>
+
+                    <AppCard v-if="earnings" padding="md" class="mt-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                    Unsettled Net Payable
+                                </p>
+                                <p
+                                    class="mt-1 text-title font-bold"
+                                    :class="earnings.net_payable < 0 ? 'text-rose-700' : 'text-deep-950'"
+                                >
+                                    {{ formatPeso(earnings.net_payable) }}
+                                </p>
+                            </div>
+                            <AppButton :href="route('instructor.earnings.index')" variant="secondary" size="sm">
+                                Open ledger
+                            </AppButton>
+                        </div>
+                        <p class="mt-2 text-body-sm text-stone-600">
+                            GCash {{ formatPeso(earnings.unsettled_gcash_earnings) }} − Cash fees {{ formatPeso(earnings.unsettled_cash_fees_owed) }}
+                            <span v-if="earnings.earliest_remittance_due_date">
+                                · Earliest due {{ earnings.earliest_remittance_due_date }}
+                            </span>
+                        </p>
+                    </AppCard>
 
                     <AppCard padding="md" class="mt-3">
                         <div class="flex items-center justify-between gap-3">

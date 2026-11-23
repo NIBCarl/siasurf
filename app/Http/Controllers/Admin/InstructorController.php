@@ -188,6 +188,7 @@ class InstructorController extends Controller
                 ? route('qr.image', $instructor->id)
                 : null,
             'verificationUrl' => route('walkin.scan', $instructor->id),
+            'ledgerSummary' => app(\App\Services\EarningsLedgerService::class)->getInstructorSummary($instructor),
         ]);
     }
 

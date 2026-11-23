@@ -64,6 +64,13 @@ interface Props {
   surfSpots?: SurfZoneSpot[]
   qrImageUrl: string | null
   verificationUrl: string
+  ledgerSummary?: {
+    unsettled_days_count: number
+    unsettled_gcash_earnings: number
+    unsettled_cash_fees_owed: number
+    net_payable: number
+    has_overdue_remittance: boolean
+  }
 }
 
 const props = defineProps<Props>()
@@ -498,6 +505,34 @@ const getStatusVariant = (status: string) => {
 
                 <!-- Risk Management & Surveillance Activity -->
                 <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8 space-y-8">
+                    <div v-if="ledgerSummary" class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-[10px] font-black uppercase text-slate-500 tracking-widest">Earnings &amp; Payouts</p>
+                            <Badge v-if="ledgerSummary.has_overdue_remittance" variant="danger" size="sm">Overdue Fee</Badge>
+                        </div>
+                        <div class="space-y-1 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Open GCash</span>
+                                <span class="font-bold text-emerald-700">₱{{ Number(ledgerSummary.unsettled_gcash_earnings).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Cash Fees Owed</span>
+                                <span class="font-bold text-amber-700">₱{{ Number(ledgerSummary.unsettled_cash_fees_owed).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</span>
+                            </div>
+                            <div class="flex justify-between pt-1 border-t border-slate-200 font-extrabold text-slate-900">
+                                <span>Net Payable</span>
+                                <span :class="ledgerSummary.net_payable < 0 ? 'text-rose-600' : ''">
+                                    {{ ledgerSummary.net_payable < 0 ? '-₱' : '₱' }}{{ Math.abs(Number(ledgerSummary.net_payable)).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}
+                                </span>
+                            </div>
+                        </div>
+                        <Link :href="route('admin.payouts.show', instructor.id)" class="block">
+                            <BaseButton variant="secondary" size="sm" class="w-full justify-center rounded-xl">
+                                Open Daily Ledger &amp; Settle
+                            </BaseButton>
+                        </Link>
+                    </div>
+
                     <div>
                         <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-6">Security Intelligence</h3>
                         <div class="space-y-4">

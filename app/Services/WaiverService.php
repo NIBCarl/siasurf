@@ -279,23 +279,26 @@ class WaiverService
     }
 
     /**
-     * Generate liability waiver PDF matching the SISA Surf Lesson Waiver form.
+     * Render liability waiver PDF bytes matching the SISA Surf Lesson Waiver form.
      *
      * @param  array<string, mixed>  $snapshot
      */
-    private function generateWaiverPDF(
+    public function renderLiabilityWaiverPdf(
         Booking $booking,
-        WaiverType $type,
-        string $signedBy,
-        $signedAt,
-        array $snapshot = []
+        array $snapshot = [],
+        string $signedBy = '',
+        ?Carbon $signedAt = null,
+        bool $isPreview = false
     ): string {
+        $booking->loadMissing(['student', 'instructor', 'surfSpot']);
+
+        $resolvedSignedAt = $signedAt ?? now();
         $signatureImage = $this->validImageDataUri($snapshot['signature_data'] ?? null);
         $logoDataUri = $this->logoDataUri();
 
         $data = [
             'booking' => $booking,
-            'waiver_type' => $type->label(),
+            'waiver_type' => WaiverType::Liability->label(),
             'waiver_title' => config('waiver.title', 'SURF LESSON WAIVER, LIABILITY, AND INDEMNITY AGREEMENT'),
             'clauses' => config('waiver.clauses', []),
             'logo_data_uri' => $logoDataUri,
@@ -314,20 +317,44 @@ class WaiverService
             'signed_by' => $signedBy,
             'signed_by_guardian' => (bool) ($snapshot['signed_by_guardian'] ?? false),
             'signature_image' => $signatureImage,
-            'signed_at' => $signedAt->format('F d, Y'),
-            'signed_at_datetime' => $signedAt->format('F d, Y h:i A'),
-            'retention_until' => $signedAt->copy()->addYears(7)->format('F d, Y'),
+            'signed_at' => $resolvedSignedAt->format('F d, Y'),
+            'signed_at_datetime' => $resolvedSignedAt->format('F d, Y h:i A'),
+            'retention_until' => $resolvedSignedAt->copy()->addYears(7)->format('F d, Y'),
             'company_name' => config('app.name', 'SiaSurf'),
             'waiver_id' => 'WVR-' . str_pad((string) $booking->id, 6, '0', STR_PAD_LEFT),
+            'is_preview' => $isPreview,
+            'lesson_date' => $snapshot['lesson_date'] ?? ($booking->date ? Carbon::parse($booking->date)->format('F d, Y') : ''),
         ];
 
         $pdf = Pdf::loadView('pdfs.waiver', $data);
-        $pdf->setPaper('A4', 'landscape');
+        $pdf->setPaper('A4', 'portrait');
+
+        return $pdf->output();
+    }
+
+    /**
+     * Generate liability waiver PDF matching the SISA Surf Lesson Waiver form.
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function generateWaiverPDF(
+        Booking $booking,
+        WaiverType $type,
+        string $signedBy,
+        $signedAt,
+        array $snapshot = []
+    ): string {
+        $content = $this->renderLiabilityWaiverPdf(
+            $booking,
+            $snapshot,
+            $signedBy,
+            $signedAt instanceof Carbon ? $signedAt : Carbon::parse($signedAt),
+            false
+        );
 
         $participantKey = $snapshot['participant_id'] ?? 'primary';
         $uniqueSuffix = substr(md5((string) microtime(true) . mt_rand()), 0, 6);
         $filename = "waivers/liability_booking_{$booking->id}_p{$participantKey}_" . time() . "_{$uniqueSuffix}.pdf";
-        $content = $pdf->output();
 
         Storage::disk('local')->put($filename, $content);
 
