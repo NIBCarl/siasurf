@@ -33,12 +33,8 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        if ($guard = $this->guardActiveCheckoutBooking($booking)) {
+            return $guard;
         }
 
         $booking->load(['student.studentProfile', 'instructor.instructorProfile', 'surfSpot', 'participants']);
@@ -98,12 +94,8 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        if ($guard = $this->guardActiveCheckoutBooking($booking)) {
+            return $guard;
         }
 
         $validated = $request->validate([
@@ -409,12 +401,8 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        if ($guard = $this->guardActiveCheckoutBooking($booking)) {
+            return $guard;
         }
 
         $booking->load(['instructor', 'surfSpot', 'participants']);
@@ -470,12 +458,8 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        if ($guard = $this->guardActiveCheckoutBooking($booking)) {
+            return $guard;
         }
 
         $validated = $request->validate([
@@ -545,6 +529,33 @@ class WaiverController extends Controller
             return redirect()->back()
                 ->with('error', 'Failed to save consent: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Ensure the booking is still in active student checkout (or legacy pending
+     * before payment) rather than already cancelled, expired, or submitted.
+     */
+    private function guardActiveCheckoutBooking(Booking $booking): ?RedirectResponse
+    {
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
+
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
+
+        if ($booking->isCancelled() || $booking->isExpired()) {
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('info', 'Your temporary slot hold was released or expired. Please select your time slot again.');
+        }
+
+        if (! $booking->isInStudentCheckout() && ! $booking->isPending()) {
+            return redirect()->route('student.bookings.show', $booking)
+                ->with('info', 'This booking has already moved past the waiver step.');
+        }
+
+        return null;
     }
 
     /**

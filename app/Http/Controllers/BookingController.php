@@ -743,8 +743,23 @@ class BookingController extends Controller
             $this->availabilityService->releaseForBooking($booking);
         }
 
+        $redirectTo = $request->input('redirect_to');
+        $waiverPath = parse_url(route('bookings.waiver', $booking->id, false), PHP_URL_PATH);
+        $isSafeRelativeRedirect = is_string($redirectTo)
+            && $redirectTo !== ''
+            && str_starts_with($redirectTo, '/')
+            && ! str_starts_with($redirectTo, '//')
+            && ! preg_match('/[\r\n]/', $redirectTo)
+            && parse_url($redirectTo, PHP_URL_PATH) !== $waiverPath;
+
+        $infoMessage = 'Your temporary slot hold has been released. You may update your details or select another time.';
+
+        if ($isSafeRelativeRedirect) {
+            return redirect()->to($redirectTo)->with('info', $infoMessage);
+        }
+
         return redirect()->route('bookings.create', $instructorId)
-            ->with('info', 'Your temporary slot hold has been released. You may update your details or select another time.');
+            ->with('info', $infoMessage);
     }
 
     /**

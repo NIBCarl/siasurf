@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Head, router, useForm } from '@inertiajs/vue3'
+import { Head, useForm } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
+import LeaveCheckoutModal from '@/Components/Molecules/LeaveCheckoutModal.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
+import { useCheckoutHoldGuard } from '@/Composables/useCheckoutHoldGuard'
 import { ArrowDownTrayIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 
 interface Booking {
@@ -179,13 +181,33 @@ const submitWaiver = () => {
   form.participant_id = props.participant?.id ?? null
   form.signature = signaturePadRef.value.getSignatureData()
 
+  beginAllowedNavigation()
+
   form.post(route('bookings.store-waiver', props.booking.id), {
     preserveScroll: true,
+    onFinish: () => endAllowedNavigation(),
   })
 }
 
 const holdSeconds = ref<number>(Math.max(0, props.holdRemainingSeconds ?? 0))
 let holdTimer: ReturnType<typeof setInterval> | null = null
+
+const {
+  showLeaveModal,
+  isReleasing,
+  requestLeave,
+  stayOnPage,
+  confirmLeaveAndRelease,
+  beginAllowedNavigation,
+  endAllowedNavigation,
+} = useCheckoutHoldGuard({
+  bookingId: () => props.booking.id,
+  isHoldActive: () => props.holdRemainingSeconds === undefined || holdSeconds.value > 0,
+  allowedPostPaths: () => [
+    new URL(route('bookings.store-waiver', props.booking.id), window.location.origin).pathname,
+    new URL(route('bookings.abandon', props.booking.id), window.location.origin).pathname,
+  ],
+})
 
 watch(
   () => props.holdRemainingSeconds,
@@ -208,13 +230,6 @@ onUnmounted(() => {
     holdTimer = null
   }
 })
-
-const formatHoldTimer = (seconds: number): string => {
-  const safe = Math.max(0, Math.floor(seconds))
-  const mins = Math.floor(safe / 60)
-  const secs = safe % 60
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-}
 
 const parseLocalDate = (dateString: string): Date => {
   const isoDay = dateString.slice(0, 10)
@@ -318,7 +333,7 @@ const downloadWaiverPdf = async () => {
 }
 
 const goBack = () => {
-  router.post(route('bookings.abandon', props.booking.id))
+  requestLeave(null)
 }
 </script>
 
@@ -330,32 +345,6 @@ const goBack = () => {
       <div class="waiver-page-container max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 print:max-w-none print:px-0">
         <!-- Progress Stepper -->
         <BookingStepper :current="step ?? 2" class="mt-4 waiver-no-print print:hidden" />
-
-        <!-- Exclusive Slot Hold Banner -->
-        <div class="waiver-no-print mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 print:hidden">
-          <div class="flex items-center gap-3">
-            <span class="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
-            <p class="text-xs font-semibold text-emerald-900">
-              Seat(s) reserved for you! Your selected {{ (booking.student_count ?? 1) === 1 ? 'seat' : `${booking.student_count} seats` }} and time slot with {{ booking.instructor?.name || 'your instructor' }} are held for 15 minutes while you complete this waiver and payment step.
-            </p>
-          </div>
-          <div class="flex items-center gap-3 shrink-0">
-            <span
-              v-if="holdRemainingSeconds !== undefined"
-              class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
-              :class="holdSeconds <= 180 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'"
-            >
-              Hold expires in {{ formatHoldTimer(holdSeconds) }}
-            </span>
-            <button
-              type="button"
-              @click="goBack"
-              class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
-            >
-              Change Slot / Release Hold
-            </button>
-          </div>
-        </div>
 
         <!-- Flash Error -->
         <div v-if="$page.props.flash.error" class="waiver-no-print mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-medium text-rose-800 print:hidden">
@@ -801,6 +790,14 @@ const goBack = () => {
         </div>
       </div>
     </div>
+
+    <LeaveCheckoutModal
+      class="waiver-no-print print:hidden"
+      :show="showLeaveModal"
+      :loading="isReleasing"
+      @stay="stayOnPage"
+      @confirm="confirmLeaveAndRelease"
+    />
   </AppSidebarLayout>
 </template>
 

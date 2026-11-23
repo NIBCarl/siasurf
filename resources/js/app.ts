@@ -5,8 +5,11 @@ import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createApp, DefineComponent, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
+import { installCheckoutPopstateGuard } from './utils/checkoutNavigationGuard';
 
 const appName = import.meta.env.VITE_APP_NAME || 'SiaSurf';
+
+installCheckoutPopstateGuard();
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

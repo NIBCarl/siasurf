@@ -845,4 +845,109 @@ class SlotCapacityTest extends TestCase
                 ->where('booking.is_reserved', true)
                 ->where('booking.resume_url', $waiverUrl));
     }
+
+    /** @test */
+    public function abandoning_waiver_with_safe_relative_redirect_releases_slot_and_redirects_there(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level2);
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 1,
+                'session_type' => 'teaching',
+            ]))
+            ->assertRedirect();
+
+        $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.abandon', $booking->id), [
+                'redirect_to' => '/student/dashboard',
+            ])
+            ->assertRedirect('/student/dashboard')
+            ->assertSessionHas('info');
+
+        $this->assertSame(BookingStatus::Cancelled, $booking->fresh()->status);
+
+        $slotsAfterAbandon = $this->actingAs($this->student)->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $this->day->format('Y-m-d'),
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+        ]))->assertOk()->json('periods.morning.slots');
+
+        $this->assertContains('07:00', $slotsAfterAbandon);
+    }
+
+    /** @test */
+    public function abandoning_waiver_ignores_external_redirect_urls(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level2);
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 1,
+                'session_type' => 'teaching',
+            ]))
+            ->assertRedirect();
+
+        $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.abandon', $booking->id), [
+                'redirect_to' => 'https://evil.example.com/phish',
+            ])
+            ->assertRedirect(route('bookings.create', $instructor->id));
+
+        $this->assertSame(BookingStatus::Cancelled, $booking->fresh()->status);
+
+        // Also reject protocol-relative URLs on a second booking
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 1,
+                'session_type' => 'teaching',
+            ]))
+            ->assertRedirect();
+
+        $secondBooking = Booking::where('instructor_id', $instructor->id)
+            ->where('id', '!=', $booking->id)
+            ->firstOrFail();
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.abandon', $secondBooking->id), [
+                'redirect_to' => '//evil.example.com/phish',
+            ])
+            ->assertRedirect(route('bookings.create', $instructor->id));
+
+        $this->assertSame(BookingStatus::Cancelled, $secondBooking->fresh()->status);
+    }
+
+    /** @test */
+    public function visiting_waiver_after_abandonment_redirects_back_to_booking_create(): void
+    {
+        $instructor = $this->instructor(InstructorLevel::Level2);
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'student_count' => 1,
+                'session_type' => 'teaching',
+            ]))
+            ->assertRedirect();
+
+        $booking = Booking::where('instructor_id', $instructor->id)->firstOrFail();
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.abandon', $booking->id))
+            ->assertRedirect(route('bookings.create', $instructor->id));
+
+        $this->actingAs($this->student)
+            ->get(route('bookings.waiver', $booking->id))
+            ->assertRedirect(route('bookings.create', $instructor->id))
+            ->assertSessionHas('info');
+
+        $this->actingAs($this->student)
+            ->get(route('bookings.parental-consent', $booking->id))
+            ->assertRedirect(route('bookings.create', $instructor->id))
+            ->assertSessionHas('info');
+    }
 }
