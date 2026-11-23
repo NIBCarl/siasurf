@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Head, router, useForm, Link } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
@@ -11,6 +11,9 @@ interface Booking {
   id: number
   date: string
   time_period: string
+  start_time?: string | null
+  end_time?: string | null
+  duration_hours?: number | null
   student_count: number
   lesson_price?: number | null
   service_fee_percent?: number | null
@@ -25,9 +28,42 @@ interface Booking {
 interface Props {
   booking: Booking
   step: number
+  holdRemainingSeconds?: number
 }
 
 const props = defineProps<Props>()
+
+const holdSeconds = ref<number>(Math.max(0, props.holdRemainingSeconds ?? 0))
+let holdTimer: ReturnType<typeof setInterval> | null = null
+
+watch(
+  () => props.holdRemainingSeconds,
+  (val) => {
+    holdSeconds.value = Math.max(0, val ?? 0)
+  }
+)
+
+onMounted(() => {
+  holdTimer = setInterval(() => {
+    if (holdSeconds.value > 0) {
+      holdSeconds.value -= 1
+    }
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (holdTimer) {
+    clearInterval(holdTimer)
+    holdTimer = null
+  }
+})
+
+const formatHoldTimer = (seconds: number): string => {
+  const safe = Math.max(0, Math.floor(seconds))
+  const mins = Math.floor(safe / 60)
+  const secs = safe % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
 
 const showRefundPolicyModal = ref(false)
 const lessonPrice = computed(() => {
@@ -48,13 +84,59 @@ const submit = () => {
   form.post(route('bookings.store-payment', props.booking.id))
 }
 
+const parseLocalDate = (dateString: string): Date => {
+  const isoDay = dateString.slice(0, 10)
+  const parts = isoDay.split('-').map(Number)
+  if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
+    return new Date(parts[0], parts[1] - 1, parts[2])
+  }
+  return new Date(dateString)
+}
+
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
+  return parseLocalDate(date).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   })
+}
+
+const formatClockTime = (time?: string | null): string => {
+  if (!time) return ''
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return time
+  const hour24 = Number(match[1])
+  const minute = Number(match[2])
+  const period = hour24 >= 12 ? 'PM' : 'AM'
+  const hour12 = hour24 % 12 || 12
+  return `${hour12}:${String(minute).padStart(2, '0')} ${period}`
+}
+
+const formatBookingTime = (booking: Booking): string => {
+  if (booking.start_time && booking.end_time) {
+    return `${formatClockTime(booking.start_time)} – ${formatClockTime(booking.end_time)}`
+  }
+  if (booking.start_time) {
+    return formatClockTime(booking.start_time)
+  }
+  return booking.time_period === 'morning'
+    ? 'Morning (6:00 AM - 12:00 PM)'
+    : 'Afternoon (1:00 PM - 6:00 PM)'
+}
+
+const lessonDurationHours = (): number => {
+  if (props.booking.duration_hours && props.booking.duration_hours > 0) {
+    return props.booking.duration_hours
+  }
+  if (props.booking.start_time && props.booking.end_time) {
+    const startH = Number(props.booking.start_time.slice(0, 2))
+    const endH = Number(props.booking.end_time.slice(0, 2))
+    if (!Number.isNaN(startH) && !Number.isNaN(endH) && endH > startH) {
+      return endH - startH
+    }
+  }
+  return 2
 }
 
 const goBack = () => {
@@ -73,20 +155,29 @@ const goBack = () => {
         <BookingStepper :current="step" />
 
         <!-- Exclusive Slot Hold Banner -->
-        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex items-center justify-between gap-4">
+        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-3">
-            <span class="flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+            <span class="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
             <p class="text-xs font-semibold text-emerald-900">
               Time slot reserved for you! Complete payment selection below to send your booking request to {{ booking.instructor?.name || 'your instructor' }}.
             </p>
           </div>
-          <button
-            type="button"
-            @click="goBack"
-            class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
-          >
-            Cancel &amp; Release Hold
-          </button>
+          <div class="flex items-center gap-3 shrink-0">
+            <span
+              v-if="holdRemainingSeconds !== undefined"
+              class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
+              :class="holdSeconds <= 180 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'"
+            >
+              Hold expires in {{ formatHoldTimer(holdSeconds) }}
+            </span>
+            <button
+              type="button"
+              @click="goBack"
+              class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
+            >
+              Cancel &amp; Release Hold
+            </button>
+          </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-5 gap-8">
@@ -216,7 +307,7 @@ const goBack = () => {
               
               <div class="p-6 space-y-4">
                 <div class="flex justify-between text-sm">
-                  <span class="text-slate-500">Lesson Price</span>
+                  <span class="text-slate-500">{{ lessonDurationHours() }}-Hour Surfing Lesson</span>
                   <span class="font-medium text-slate-900">₱{{ lessonPrice.toLocaleString() }}</span>
                 </div>
                 <div v-if="serviceFeeAmount > 0" class="flex justify-between text-sm">
@@ -242,7 +333,7 @@ const goBack = () => {
                    <svg class="w-4 h-4 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                    </svg>
-                   {{ formatDate(booking.date) }} • {{ booking.time_period === 'morning' ? '8:00 AM' : '1:00 PM' }}
+                   {{ formatDate(booking.date) }} • {{ formatBookingTime(booking) }}
                 </div>
                  <div class="flex items-center text-xs text-slate-600">
                    <svg class="w-4 h-4 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

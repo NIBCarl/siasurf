@@ -235,6 +235,6 @@ class BookingParticipantsTest extends TestCase
             ->post(route('bookings.store-payment', $booking), ['payment_method' => 'cash'])
             ->assertRedirect(route('bookings.waiver', $booking));
 
-        $this->assertSame(BookingStatus::Pending, $booking->fresh()->status);
+        $this->assertSame(BookingStatus::Reserved, $booking->fresh()->status);
     }
 }

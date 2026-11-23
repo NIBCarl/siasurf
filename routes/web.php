@@ -30,6 +30,7 @@ use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\Student\FeedbackController;
 use App\Http\Controllers\SurfSpotController;
 use App\Http\Controllers\WaiverController;
+use App\Models\SurfSpot;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -205,6 +206,7 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
 
         Route::prefix('availability')->name('availability.')->group(function () {
             Route::get('/', [AvailabilityController::class, 'index'])->name('index');
+            Route::get('/schedule', [AvailabilityController::class, 'schedule'])->name('schedule');
             Route::post('/weekly', [AvailabilityController::class, 'updateWeekly'])->name('weekly');
             Route::post('/block', [AvailabilityController::class, 'blockDates'])->name('block');
             Route::delete('/unblock', [AvailabilityController::class, 'unblockDates'])->name('unblock');
@@ -246,18 +248,28 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
     // Onboarding page
     Route::get('/onboarding', function () {
         $user = auth()->user();
-        $profile = $user->instructorProfile;
+        $profile = $user->instructorProfile?->load('surfSpots');
 
         return Inertia::render('Instructor/Onboarding', [
             'profile' => $profile ? [
                 'bio' => $profile->bio,
                 'level' => $profile->level->value,
-                'rate_per_hour' => (float) $profile->rate_per_hour,
+                'offered_services' => $profile->offeredServiceValues(),
+                'rate_per_hour' => $profile->rate_per_hour !== null ? (float) $profile->rate_per_hour : null,
                 'guiding_rate' => $profile->guiding_rate !== null ? (float) $profile->guiding_rate : null,
                 'coaching_rate' => $profile->coaching_rate !== null ? (float) $profile->coaching_rate : null,
                 'area' => $profile->area,
                 'meeting_point' => $profile->meeting_point,
+                'surf_spot_ids' => $profile->activeAllowedSurfSpots()->pluck('id')->values()->all(),
             ] : null,
+            'availableSurfSpots' => SurfSpot::query()
+                ->active()
+                ->orderByRaw("CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END")
+                ->orderBy('name')
+                ->get()
+                ->map(fn (SurfSpot $spot) => $spot->toMapPayload())
+                ->values()
+                ->all(),
             'uploadedCertificates' => $user->certificates()->count(),
         ]);
     })->name('onboarding');

@@ -109,9 +109,11 @@ class BookingControllerTest extends TestCase
         $this->assertEquals(140.0, (float) $booking->service_fee_amount);
         $this->assertEquals(2140.0, (float) $booking->total_amount);
 
-        // The acceptance clock starts at creation so an abandoned pre-payment
-        // booking can be swept and its slot released.
-        $this->assertNotNull($booking->accept_deadline_at);
+        // The 15-minute checkout hold clock starts at creation so an abandoned
+        // pre-payment booking can be swept and its slot released; the 2-hour
+        // instructor acceptance clock starts only after payment selection.
+        $this->assertNotNull($booking->payment_deadline_at);
+        $this->assertNull($booking->accept_deadline_at);
     }
 
     /** @test */

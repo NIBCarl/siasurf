@@ -62,14 +62,14 @@ class BookingAcceptanceService
      */
     private function assertAcceptable(Booking $booking): void
     {
-        if ($booking->status !== BookingStatus::Pending) {
-            throw new BookingRequestException('This booking request has already been handled.');
-        }
-
         if ($booking->isInStudentCheckout()) {
             throw new BookingRequestException(
                 'The student is still completing the waiver and payment step for this booking.'
             );
+        }
+
+        if ($booking->status !== BookingStatus::Pending) {
+            throw new BookingRequestException('This booking request has already been handled.');
         }
 
         if ($booking->acceptDeadlinePassed()) {

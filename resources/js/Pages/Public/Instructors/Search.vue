@@ -38,6 +38,13 @@ interface DirectoryInstructor {
         min: number;
         max: number;
     }>;
+    offered_services?: string[];
+    surf_spots?: Array<{
+        id: number;
+        name: string;
+        area?: string | null;
+        difficulty: string;
+    }>;
     teaches_all_levels?: boolean | null;
     available_today?: boolean;
     open_periods?: string[];
@@ -517,7 +524,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                                     </p>
                                 </div>
                                 <p class="shrink-0 text-body-sm font-semibold text-deep-950">
-                                    ₱{{ formatRate(instructor.display_rate ?? instructor.instructor_profile.rate_per_hour) }}
+                                    ₱{{ formatRate(instructor.display_rate ?? instructor.service_rates?.[0]?.rate ?? instructor.instructor_profile.rate_per_hour ?? 600) }}
                                 </p>
                             </div>
                         </button>
@@ -588,7 +595,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
 
                                 <div class="shrink-0 text-right">
                                     <p class="metric text-title font-semibold text-deep-950">
-                                        ₱{{ formatRate(instructor.display_rate ?? instructor.instructor_profile.rate_per_hour) }}
+                                        ₱{{ formatRate(instructor.display_rate ?? instructor.service_rates?.[0]?.rate ?? instructor.instructor_profile.rate_per_hour ?? 600) }}
                                     </p>
                                     <p class="text-body-sm text-stone-600">
                                         {{ instructor.display_service_label ? `${instructor.display_service_label} / hr` : 'per hour' }}
@@ -611,6 +618,22 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                                     </span>
                                 </template>
                             </p>
+
+                            <div v-if="instructor.surf_spots && instructor.surf_spots.length > 0" class="mt-2 flex flex-wrap items-center gap-1.5">
+                                <span
+                                    v-for="spot in instructor.surf_spots.slice(0, 3)"
+                                    :key="spot.id"
+                                    class="inline-flex items-center rounded-full border border-lagoon-200 bg-lagoon-50 px-2.5 py-0.5 text-[11px] font-semibold text-lagoon-800"
+                                >
+                                    {{ spot.name }}
+                                </span>
+                                <span
+                                    v-if="instructor.surf_spots.length > 3"
+                                    class="text-[11px] font-semibold text-stone-500"
+                                >
+                                    +{{ instructor.surf_spots.length - 3 }} more
+                                </span>
+                            </div>
 
                             <!-- Availability and the two ways forward share the last row -->
                             <div class="mt-2 flex flex-wrap items-center justify-between gap-2">

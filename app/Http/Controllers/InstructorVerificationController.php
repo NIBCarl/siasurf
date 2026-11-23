@@ -38,7 +38,7 @@ class InstructorVerificationController extends Controller
                 'bio' => $profile?->bio,
                 'level' => $profile?->level?->value,
                 'level_label' => $profile?->level?->shortLabel(),
-                'rate_per_hour' => (float) ($profile?->rate_per_hour ?? 0),
+                'rate_per_hour' => $profile ? $profile->startingRate() : 0,
                 'average_rating' => round((float) $averageRating, 1),
                 'reviews_count' => $reviewsCount,
             ],

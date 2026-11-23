@@ -131,7 +131,7 @@ class Booking extends Model
     ];
 
     protected $casts = [
-        'date' => 'date',
+        'date' => 'date:Y-m-d',
         'time_period' => TimePeriod::class,
         'start_time' => 'datetime:H:i',
         'end_time' => 'datetime:H:i',
@@ -274,6 +274,11 @@ class Booking extends Model
     }
 
     // Scopes
+    public function scopeReserved($query)
+    {
+        return $query->where('status', BookingStatus::Reserved);
+    }
+
     public function scopePending($query)
     {
         return $query->where('status', BookingStatus::Pending);
@@ -321,12 +326,13 @@ class Booking extends Model
     }
 
     /**
-     * Requests still occupying a slot: waiting on the instructor to answer, or
-     * waiting on the student to pay.
+     * Requests still occupying a slot: held during checkout, waiting on the
+     * instructor to answer, or waiting on the student to pay.
      */
     public function scopeOpen($query)
     {
         return $query->whereIn('status', [
+            BookingStatus::Reserved,
             BookingStatus::Pending,
             BookingStatus::AwaitingPayment,
         ]);
@@ -338,24 +344,30 @@ class Booking extends Model
      */
     public function scopeInStudentCheckout($query)
     {
-        return $query->where('status', BookingStatus::Pending)
-            ->whereNull('accept_deadline_at')
-            ->whereNotNull('payment_deadline_at')
-            ->whereDoesntHave('payment');
+        return $query->where(function ($q) {
+            $q->where('status', BookingStatus::Reserved)
+                ->orWhere(function ($legacy) {
+                    $legacy->where('status', BookingStatus::Pending)
+                        ->whereNull('accept_deadline_at')
+                        ->whereNotNull('payment_deadline_at')
+                        ->whereDoesntHave('payment');
+                });
+        });
     }
 
     /**
      * Bookings that have completed the student's waiver & payment-method step
-     * and are visible to the instructor.
+     * and are actionable by the instructor.
      */
     public function scopeSubmittedToInstructor($query)
     {
-        return $query->where(function ($q) {
-            $q->where('status', '!=', BookingStatus::Pending)
-                ->orWhereNotNull('accept_deadline_at')
-                ->orWhereNull('payment_deadline_at')
-                ->orWhereHas('payment');
-        });
+        return $query->where('status', '!=', BookingStatus::Reserved)
+            ->where(function ($q) {
+                $q->where('status', '!=', BookingStatus::Pending)
+                    ->orWhereNotNull('accept_deadline_at')
+                    ->orWhereNull('payment_deadline_at')
+                    ->orWhereHas('payment');
+            });
     }
 
     public function scopeForSlot($query, int $instructorId, string $date, string $timePeriod)
@@ -366,6 +378,11 @@ class Booking extends Model
     }
 
     // Helper methods
+    public function isReserved(): bool
+    {
+        return $this->status === BookingStatus::Reserved || $this->isInStudentCheckout();
+    }
+
     public function isPending(): bool
     {
         return $this->status === BookingStatus::Pending;
@@ -484,7 +501,7 @@ class Booking extends Model
             return false;
         }
 
-        return $this->isPending() || $this->isConfirmed() || $this->status === BookingStatus::AwaitingPayment;
+        return $this->isReserved() || $this->isPending() || $this->isConfirmed() || $this->status === BookingStatus::AwaitingPayment;
     }
 
     /**
@@ -501,6 +518,10 @@ class Booking extends Model
      */
     public function isInStudentCheckout(): bool
     {
+        if ($this->status === BookingStatus::Reserved) {
+            return true;
+        }
+
         if ($this->status !== BookingStatus::Pending) {
             return false;
         }

@@ -9,6 +9,7 @@ import Badge from '@/Components/Atoms/Badge.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import TextInput from '@/Components/TextInput.vue'
 import AvailabilityCalendar from '@/Components/UI/AvailabilityCalendar.vue'
+import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
 
@@ -19,7 +20,7 @@ interface Instructor {
   avatar_url?: string | null
   instructor_profile: {
     level: number
-    rate_per_hour: number
+    rate_per_hour: number | null
     guiding_rate?: number | null
     coaching_rate?: number | null
     bio: string
@@ -34,15 +35,7 @@ interface ServiceOption {
   recommended: boolean
 }
 
-interface SurfSpot {
-  id: number
-  name: string
-  area?: string | null
-  barangay?: string | null
-  section?: string | null
-  side?: string | null
-  break_type?: string | null
-  best_tide?: string | null
+interface SurfSpot extends SurfZoneSpot {
   difficulty: string
   description: string
 }
@@ -57,6 +50,7 @@ interface StudentProfileInfo {
 interface Props {
   instructor: Instructor
   surfSpots: SurfSpot[]
+  instructorHasCustomSpots?: boolean
   safetyRules: any
   step: number
   tideData: Record<string, any[]>
@@ -163,7 +157,7 @@ const maxStudents = computed(() => {
 })
 
 const serviceOptions = computed<ServiceOption[]>(() => {
-  if (props.serviceOptions && props.serviceOptions.length > 0) {
+  if (Array.isArray(props.serviceOptions)) {
     return props.serviceOptions
   }
   return [
@@ -185,7 +179,7 @@ const form = useForm({
   // The student now chooses both ends. The server validates the range against
   // the instructor's schedule and the slot's remaining student capacity.
   end_time: '',
-  session_type: props.defaultSessionType || serviceOptions.value[0]?.type || 'teaching',
+  session_type: props.defaultSessionType ?? serviceOptions.value[0]?.type ?? '',
   // Source of truth is the profile; this mirrors it for the server payload.
   skill_level: props.studentSkillLevel || 'beginner',
   // Primary participant (the account holder). Falls back to the age of majority
@@ -197,7 +191,7 @@ const form = useForm({
   height: prefill.height ?? ('' as string | number),
   weight: prefill.weight ?? ('' as string | number),
   student_count: 1,
-  surf_spot_id: props.surfSpots[0]?.id || '',
+  surf_spot_id: (props.surfSpots[0]?.id ?? '') as number | string,
   has_board: prefill.has_board ?? false,
   needs_hotel_pickup: false,
   hotel_name: '',
@@ -221,7 +215,7 @@ watch(() => form.needs_hotel_pickup, (needsPickup) => {
   }
 })
 
-const activeService = computed<ServiceOption>(
+const activeService = computed<ServiceOption | undefined>(
   () => serviceOptions.value.find((option) => option.type === form.session_type) ?? serviceOptions.value[0],
 )
 
@@ -234,6 +228,7 @@ interface AvailabilityPeriod {
   available: boolean
   reason: string | null
   slots: string[]
+  reserved_slots?: string[]
   slot_remaining?: Record<string, number>
   capacity?: number
   remaining_capacity?: number
@@ -258,6 +253,8 @@ const availabilityError = ref<string | null>(null)
 const endTimeOptions = ref<{ value: string; label: string }[]>([])
 const endTimesLoading = ref(false)
 const endTimesError = ref<string | null>(null)
+const endTimesUnavailableReason = ref<string | null>(null)
+const endTimesIsReserved = ref(false)
 
 const fetchAvailability = async (date: string) => {
   if (!date) {
@@ -276,7 +273,7 @@ const fetchAvailability = async (date: string) => {
           date,
           students: form.student_count || 1,
           skill_level: props.studentSkillLevel || 'beginner',
-          session_type: form.session_type,
+          session_type: form.session_type || undefined,
         },
       },
     )
@@ -306,12 +303,16 @@ const fetchAvailability = async (date: string) => {
 const fetchEndTimes = async () => {
   if (!form.date || !form.start_time) {
     endTimeOptions.value = []
+    endTimesUnavailableReason.value = null
+    endTimesIsReserved.value = false
     form.end_time = ''
     return
   }
 
   endTimesLoading.value = true
   endTimesError.value = null
+  endTimesUnavailableReason.value = null
+  endTimesIsReserved.value = false
 
   try {
     const { data } = await axios.get(
@@ -322,7 +323,7 @@ const fetchEndTimes = async () => {
           start_time: form.start_time,
           students: form.student_count || 1,
           skill_level: props.studentSkillLevel || 'beginner',
-          session_type: form.session_type,
+          session_type: form.session_type || undefined,
         },
       },
     )
@@ -333,6 +334,8 @@ const fetchEndTimes = async () => {
     }))
 
     endTimeOptions.value = options
+    endTimesIsReserved.value = Boolean(data.is_reserved)
+    endTimesUnavailableReason.value = data.reason ?? null
 
     // Prefer the instructor's usual lesson length. If that exact end time is
     // gone, take the next longer option; if none is longer, take the longest
@@ -345,6 +348,8 @@ const fetchEndTimes = async () => {
     form.end_time = keep ? form.end_time : (fallback?.value ?? '')
   } catch (e) {
     endTimeOptions.value = []
+    endTimesUnavailableReason.value = null
+    endTimesIsReserved.value = false
     form.end_time = ''
     endTimesError.value = 'Could not load end times for that start. Please pick another time.'
   } finally {
@@ -357,6 +362,8 @@ watch(() => form.date, (date) => {
   form.start_time = ''
   form.end_time = ''
   endTimeOptions.value = []
+  endTimesUnavailableReason.value = null
+  endTimesIsReserved.value = false
   fetchAvailability(date)
 })
 
@@ -376,6 +383,20 @@ watch(() => form.start_time, () => {
   fetchEndTimes()
 })
 
+interface StartTimeOption {
+  value: string
+  label: string
+  disabled: boolean
+}
+
+const formatSlotLabel = (time: string) => {
+  const [hour, minute] = time.split(':').map(Number)
+  const suffix = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12
+
+  return `${displayHour}:${minute.toString().padStart(2, '0')} ${suffix}`
+}
+
 // Only offer times the instructor is genuinely free for.
 const formatSlotOptionLabel = (time: string, periodKey: 'morning' | 'afternoon') => {
   const base = formatSlotLabel(time)
@@ -392,19 +413,40 @@ const formatSlotOptionLabel = (time: string, periodKey: 'morning' | 'afternoon')
   return base
 }
 
-const morningHours = computed(() =>
-  (availability.value?.periods?.morning?.slots ?? []).map((value) => ({
-    value,
-    label: formatSlotOptionLabel(value, 'morning'),
-  })),
-)
+const buildPeriodOptions = (periodKey: 'morning' | 'afternoon'): StartTimeOption[] => {
+  const period = availability.value?.periods?.[periodKey]
+  const openSlots = period?.slots ?? []
+  const reservedSlots = period?.reserved_slots ?? []
+  const openSet = new Set(openSlots)
 
-const afternoonHours = computed(() =>
-  (availability.value?.periods?.afternoon?.slots ?? []).map((value) => ({
-    value,
-    label: formatSlotOptionLabel(value, 'afternoon'),
-  })),
-)
+  const options: StartTimeOption[] = [
+    ...openSlots.map((value) => ({
+      value,
+      label: formatSlotOptionLabel(value, periodKey),
+      disabled: false,
+    })),
+    ...reservedSlots
+      .filter((value) => !openSet.has(value))
+      .map((value) => ({
+        value,
+        label: `${formatSlotLabel(value)} — Already reserved`,
+        disabled: true,
+      })),
+  ]
+
+  return options.sort((a, b) => a.value.localeCompare(b.value))
+}
+
+const morningHours = computed(() => buildPeriodOptions('morning'))
+
+const afternoonHours = computed(() => buildPeriodOptions('afternoon'))
+
+const reservedSlotLabels = computed(() => {
+  const morning = availability.value?.periods?.morning?.reserved_slots ?? []
+  const afternoon = availability.value?.periods?.afternoon?.reserved_slots ?? []
+  const uniqueSorted = Array.from(new Set([...morning, ...afternoon])).sort((a, b) => a.localeCompare(b))
+  return uniqueSorted.map((time) => formatSlotLabel(time))
+})
 
 const selectedSlotRemainingSeats = computed<number | null>(() => {
   if (!form.start_time) return null
@@ -414,16 +456,10 @@ const selectedSlotRemainingSeats = computed<number | null>(() => {
 })
 
 const totalAvailableSlots = computed(
-  () => morningHours.value.length + afternoonHours.value.length,
+  () =>
+    (availability.value?.periods?.morning?.slots?.length ?? 0) +
+    (availability.value?.periods?.afternoon?.slots?.length ?? 0),
 )
-
-const formatSlotLabel = (time: string) => {
-  const [hour, minute] = time.split(':').map(Number)
-  const suffix = hour >= 12 ? 'PM' : 'AM'
-  const displayHour = hour % 12 === 0 ? 12 : hour % 12
-
-  return `${displayHour}:${minute.toString().padStart(2, '0')} ${suffix}`
-}
 
 const hasAnyAvailability = computed(() => availability.value?.has_any_slot === true)
 
@@ -548,14 +584,14 @@ const ambientSpots = computed(() => {
   return props.surfSpots.filter((spot) => allowed.includes(spot.difficulty))
 })
 
-// Keep the chosen break safe when the party composition changes.
-watch(partySkill, () => {
-  const stillAllowed = ambientSpots.value.some((spot) => spot.id === form.surf_spot_id)
+// Keep the chosen break safe when the party composition or spot list changes.
+watch(ambientSpots, (spots) => {
+  const stillAllowed = spots.some((spot) => Number(spot.id) === Number(form.surf_spot_id))
 
   if (!stillAllowed) {
-    form.surf_spot_id = ambientSpots.value[0]?.id ?? ''
+    form.surf_spot_id = spots[0]?.id ?? ''
   }
-})
+}, { immediate: true })
 
 // Tide Information
 const dailyTides = computed(() => {
@@ -583,7 +619,13 @@ const tideWarning = computed(() => {
 
 // Client-side pricing calculation (service-based rate + 7% non-refundable platform service fee)
 const estimatedPrice = computed(() => {
-  const baseRate = Number(activeService.value?.rate ?? props.instructor.instructor_profile.rate_per_hour ?? 600)
+  const baseRate = Number(
+    activeService.value?.rate
+      ?? props.instructor.instructor_profile.rate_per_hour
+      ?? props.instructor.instructor_profile.guiding_rate
+      ?? props.instructor.instructor_profile.coaching_rate
+      ?? 600,
+  )
   const hours = lessonHours.value
   const studentCount = form.student_count || 1
   const feePercent = Number(props.serviceFeePercent ?? 7)
@@ -631,6 +673,22 @@ const childSafetyViolation = computed(() => {
   return null
 })
 
+const flashErrorTitle = (message: string): string => {
+  const normalized = message.toLowerCase()
+  if (normalized.includes('reserved')) {
+    return 'Time Already Reserved'
+  }
+  if (
+    normalized.includes('booked') ||
+    normalized.includes('available') ||
+    normalized.includes('hold expired') ||
+    normalized.includes('open request')
+  ) {
+    return 'Booking Unavailable'
+  }
+  return 'Safety Requirement Not Met'
+}
+
 const syncCompanionAge = (companion: Companion) => {
   const age = calculateAgeFromBirthday(companion.birthday)
   if (age !== null) {
@@ -673,7 +731,7 @@ const submit = () => {
   <Head :title="`Book with ${instructor.name}`" />
 
   <AppSidebarLayout title="Book Your Surf Session">
-    <div class="py-12 bg-slate-50 min-h-screen">
+    <div class="py-12 pb-28 lg:pb-12 bg-slate-50 min-h-screen">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Progress Stepper -->
@@ -697,7 +755,7 @@ const submit = () => {
                   </svg>
                 </div>
                 <div>
-                  <h4 class="text-sm font-bold text-rose-800">Safety Requirement Not Met</h4>
+                  <h4 class="text-sm font-bold text-rose-800">{{ flashErrorTitle($page.props.flash.error) }}</h4>
                   <p class="text-xs text-rose-700 mt-1">{{ $page.props.flash.error }}</p>
                 </div>
               </div>
@@ -709,9 +767,15 @@ const submit = () => {
                   <div class="col-span-full">
                     <InputLabel value="Session Service Type" />
                     <p class="mt-0.5 text-xs text-slate-500">
-                      Pricing is based on the service you choose, not the instructor's certification tier.
+                      Showing lesson types offered by {{ instructor.name }} that match your skill level.
                     </p>
-                    <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div
+                      v-if="serviceOptions.length === 0"
+                      class="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-800"
+                    >
+                      {{ instructor.name }} does not currently offer a lesson type available for your {{ studentSkillLevel }} skill level.
+                    </div>
+                    <div v-else class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <button
                         v-for="service in serviceOptions"
                         :key="service.type"
@@ -753,7 +817,7 @@ const submit = () => {
                       :instructor-id="instructor.id"
                       :students="form.student_count"
                       :skill-level="studentSkillLevel"
-                      :session-type="form.session_type"
+                      :session-type="form.session_type || undefined"
                       v-model="form.date"
                     />
                     <InputError class="mt-2" :message="form.errors.date" />
@@ -820,12 +884,22 @@ const submit = () => {
                       >
                         <option value="" disabled>Select a time slot</option>
                         <optgroup v-if="morningHours.length > 0" label="Morning">
-                          <option v-for="hour in morningHours" :key="hour.value" :value="hour.value">
+                          <option
+                            v-for="hour in morningHours"
+                            :key="hour.value"
+                            :value="hour.value"
+                            :disabled="hour.disabled"
+                          >
                             {{ hour.label }}
                           </option>
                         </optgroup>
                         <optgroup v-if="afternoonHours.length > 0" label="Afternoon">
-                          <option v-for="hour in afternoonHours" :key="hour.value" :value="hour.value">
+                          <option
+                            v-for="hour in afternoonHours"
+                            :key="hour.value"
+                            :value="hour.value"
+                            :disabled="hour.disabled"
+                          >
                             {{ hour.label }}
                           </option>
                         </optgroup>
@@ -850,6 +924,15 @@ const submit = () => {
                         </span>
                       </div>
 
+                      <div
+                        v-if="reservedSlotLabels.length > 0"
+                        role="note"
+                        class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                      >
+                        <span class="font-bold">Reminder:</span>
+                        Already reserved by another student: {{ reservedSlotLabels.join(', ') }}. Please pick an open time slot.
+                      </div>
+
                       <!-- Explain a closed period rather than silently hiding it -->
                       <p
                         v-for="(period, key) in availability?.periods"
@@ -863,7 +946,7 @@ const submit = () => {
 
                     <p class="mt-1 text-xs text-slate-500">
                       Only times with enough room for {{ form.student_count }}
-                      {{ form.student_count === 1 ? 'student' : 'students' }} are shown.
+                      {{ form.student_count === 1 ? 'student' : 'students' }} can be selected. Times already reserved by another student are marked and unavailable.
                     </p>
                     <InputError class="mt-2" :message="form.errors.start_time" />
                   </div>
@@ -899,9 +982,20 @@ const submit = () => {
 
                     <div
                       v-else-if="endTimeOptions.length === 0"
-                      class="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                      role="alert"
+                      class="mt-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex items-start gap-3"
                     >
-                      No end time is left for that start. Please choose a different start time.
+                      <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                      </svg>
+                      <div>
+                        <p class="text-sm font-bold text-amber-900">
+                          {{ endTimesIsReserved ? 'Time Already Reserved' : 'Selected Time Unavailable' }}
+                        </p>
+                        <p class="mt-0.5 text-xs text-amber-800">
+                          {{ endTimesUnavailableReason || 'This time is already reserved by another student. Please choose a different start time.' }}
+                        </p>
+                      </div>
                     </div>
 
                     <template v-else>
@@ -1203,19 +1297,49 @@ const submit = () => {
                     </p>
                   </div>
 
-                    <!-- Surf Spot -->
-                    <div>
-                      <InputLabel for="surf_spot" value="Preferred Surf Spot" />
-                      <select 
-                        id="surf_spot"
-                        v-model="form.surf_spot_id"
-                        class="mt-1 block w-full border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm"
+                    <!-- Surf Spot (interactive map + photo gallery filtered by instructor surf zones & party skill) -->
+                    <div class="col-span-full space-y-2.5">
+                      <div class="flex flex-wrap items-baseline justify-between gap-2">
+                        <InputLabel for="surf_spot" value="Choose Surf Spot & View Photos" />
+                        <span v-if="instructorHasCustomSpots" class="text-xs font-semibold text-ocean-700">
+                          Showing surf zones where {{ instructor.name }} teaches for your skill level
+                        </span>
+                      </div>
+                      <p class="text-xs text-slate-500">
+                        Click a pin on the map or pick a surf spot from the list to preview photos and break details.
+                      </p>
+
+                      <div
+                        v-if="ambientSpots.length === 0"
+                        class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-700"
                       >
-                        <option v-for="spot in ambientSpots" :key="spot.id" :value="spot.id">
-                          {{ spot.name }} — {{ spot.area ?? 'Siargao' }} ({{ spot.difficulty.charAt(0).toUpperCase() + spot.difficulty.slice(1) }})
-                        </option>
-                      </select>
-                      <p class="mt-1 text-xs text-slate-500">
+                        No breaks taught by {{ instructor.name }} match your party's skill level. Please adjust your party or choose another instructor.
+                      </div>
+
+                      <template v-else>
+                        <SurfZoneMap
+                          mode="single"
+                          :spots="ambientSpots"
+                          v-model="form.surf_spot_id"
+                          height="320px"
+                          show-gallery
+                        />
+
+                        <div>
+                          <label for="surf_spot" class="sr-only">Preferred Surf Spot</label>
+                          <select
+                            id="surf_spot"
+                            v-model="form.surf_spot_id"
+                            class="mt-1 block w-full border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm text-sm"
+                          >
+                            <option v-for="spot in ambientSpots" :key="spot.id" :value="spot.id">
+                              {{ spot.name }} — {{ spot.area ?? 'Siargao' }} ({{ spot.difficulty.charAt(0).toUpperCase() + spot.difficulty.slice(1) }})
+                            </option>
+                          </select>
+                        </div>
+                      </template>
+
+                      <p class="text-xs text-slate-500">
                         <template v-if="partyHasBeginner">
                           Only beginner-rated breaks are shown because someone in your party is a beginner.
                         </template>
@@ -1226,9 +1350,7 @@ const submit = () => {
                           All breaks are available because everyone in your party is advanced.
                         </template>
                       </p>
-                      <p v-if="ambientSpots.length === 0" class="mt-1 text-xs font-semibold text-rose-600">
-                        No breaks match your party's level. Please adjust the party before booking.
-                      </p>
+                      <InputError :message="form.errors.surf_spot_id" />
                     </div>
 
                     <!-- Hotel Pickup Option (decides whether Hotel appears on the waiver) -->
@@ -1453,7 +1575,7 @@ const submit = () => {
                     variant="primary" 
                     size="lg"
                     :loading="form.processing"
-                    :disabled="form.processing || !form.date || !form.start_time || Boolean(childSafetyViolation) || (form.needs_hotel_pickup && !form.hotel_name.trim())"
+                    :disabled="form.processing || !form.date || !form.start_time || !form.end_time || !form.surf_spot_id || !form.session_type || serviceOptions.length === 0 || ambientSpots.length === 0 || Boolean(childSafetyViolation) || (form.needs_hotel_pickup && !form.hotel_name.trim())"
                   >
                     Continue to Waiver &rarr;
                   </BaseButton>

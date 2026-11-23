@@ -25,9 +25,12 @@ interface Instructor {
   id: number
   name: string
   avatar_path?: string | null
+  starting_rate?: number | null
   instructor_profile?: {
     level: number
-    rate_per_hour: number
+    rate_per_hour: number | null
+    guiding_rate?: number | null
+    coaching_rate?: number | null
   }
 }
 
@@ -77,8 +80,14 @@ const needsSkillAssessment = computed(() => {
   return Boolean(profile && !profile.skill_assessed_at)
 })
 
+const parseLocalDate = (dateString: string) => {
+  const [year, month, day] = String(dateString).slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return new Date(dateString)
+  return new Date(year, month - 1, day)
+}
+
 const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-US', {
+  parseLocalDate(dateString).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     weekday: 'short',
@@ -131,7 +140,7 @@ type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | '
 
 const statusVariant = (status: string): PillVariant => {
   if (status === 'confirmed') return 'verified'
-  if (status === 'pending') return 'pending'
+  if (status === 'reserved' || status === 'pending' || status === 'awaiting_payment') return 'pending'
   if (status === 'in_progress') return 'live'
   if (status === 'completed') return 'completed'
   if (status === 'cancelled') return 'cancelled'
@@ -139,7 +148,9 @@ const statusVariant = (status: string): PillVariant => {
 }
 
 const statusLabel = (status: string) => {
+  if (status === 'reserved') return 'Reserved · Finish checkout'
   if (status === 'pending') return 'Awaiting instructor'
+  if (status === 'awaiting_payment') return 'Awaiting payment'
   if (status === 'in_progress') return 'In progress'
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
@@ -488,7 +499,7 @@ onUnmounted(() => {
                                         </p>
                                         <p class="mt-0.5 text-body-sm text-stone-600">
                                             Level {{ instructor.instructor_profile?.level }} ·
-                                            ₱{{ instructor.instructor_profile?.rate_per_hour }} per hour
+                                            ₱{{ instructor.starting_rate ?? instructor.instructor_profile?.rate_per_hour ?? instructor.instructor_profile?.guiding_rate ?? instructor.instructor_profile?.coaching_rate ?? 600 }} per hour
                                         </p>
                                     </div>
 

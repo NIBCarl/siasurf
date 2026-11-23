@@ -18,6 +18,8 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
 
+        app(\App\Services\AvailabilityService::class)->releaseExpiredCheckoutHoldsForStudent($user->id);
+
         // 1. Active Session (Currently ongoing)
         $activeSession = Booking::with(['instructor', 'surfSpot'])
             ->where('student_id', $user->id)
@@ -29,7 +31,12 @@ class DashboardController extends Controller
         // 2. Upcoming Bookings
         $upcomingBookings = Booking::with(['instructor', 'surfSpot'])
             ->where('student_id', $user->id)
-            ->whereIn('status', [BookingStatus::Pending, BookingStatus::Confirmed])
+            ->whereIn('status', [
+                BookingStatus::Reserved,
+                BookingStatus::Pending,
+                BookingStatus::AwaitingPayment,
+                BookingStatus::Confirmed,
+            ])
             ->whereNull('started_at')
             ->whereDate('date', '>=', now())
             ->orderBy('date', 'asc')
@@ -45,7 +52,14 @@ class DashboardController extends Controller
             ->get()
             ->unique('instructor_id')
             ->take(3)
-            ->map(fn($booking) => $booking->instructor);
+            ->map(function ($booking) {
+                $instructor = $booking->instructor;
+                if ($instructor && $instructor->instructorProfile) {
+                    $instructor->setAttribute('starting_rate', $instructor->instructorProfile->startingRate());
+                }
+
+                return $instructor;
+            });
 
         // 4. Real Surf & Weather Data for Siargao via Open-Meteo + Stormglass
         $stormglass = app(StormglassService::class);

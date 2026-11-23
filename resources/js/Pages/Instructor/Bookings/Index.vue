@@ -57,10 +57,12 @@ interface Booking {
   change_requests?: ChangeRequestSummary[]
 
   // FR 1.9.3 / 1.9.4 server-computed flags
+  is_reserved?: boolean
+  hold_time_remaining?: number
   accept_time_remaining?: number
   can_be_declined?: boolean
   can_be_accepted?: boolean
-  accept_block?: 'window_closed' | 'too_close' | null
+  accept_block?: 'awaiting_waiver' | 'window_closed' | 'too_close' | null
   requires_admin_approval_for_change?: boolean
   has_pending_change_request?: boolean
   attendance_label?: string | null
@@ -99,14 +101,19 @@ const mountedAt = Date.now()
 const now = ref(Date.now())
 let ticker: ReturnType<typeof setInterval> | null = null
 
+const isReservedBooking = (booking: Booking): boolean =>
+  booking.status === 'reserved' || booking.is_reserved === true
+
 const hasLiveCountdown = computed(() =>
   props.bookings.data.some(
-    (booking) => booking.status === 'pending' && (booking.accept_time_remaining ?? 0) > 0,
+    (booking) =>
+      (booking.status === 'pending' && (booking.accept_time_remaining ?? 0) > 0) ||
+      (isReservedBooking(booking) && (booking.hold_time_remaining ?? 0) > 0),
   ),
 )
 
 onMounted(() => {
-  // Only tick while a request is actually counting down: an idle roster
+  // Only tick while a request or hold is actually counting down: an idle roster
   // should not re-render the whole list once per second.
   if (!hasLiveCountdown.value) return
 
@@ -121,6 +128,16 @@ onUnmounted(() => {
 
 const remainingFor = (booking: Booking): number => {
   const base = booking.accept_time_remaining ?? 0
+
+  if (base <= 0) return 0
+
+  const elapsed = Math.floor((now.value - mountedAt) / 1000)
+
+  return Math.max(0, base - elapsed)
+}
+
+const holdRemainingFor = (booking: Booking): number => {
+  const base = booking.hold_time_remaining ?? 0
 
   if (base <= 0) return 0
 
@@ -168,8 +185,10 @@ type PillVariant = 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | '
 
 const statusMeta = (status: string): { label: string; variant: PillVariant; date: string } => {
   switch (status.toLowerCase()) {
+    case 'reserved':
+      return { label: 'Reserved', variant: 'pending', date: 'border-dashed border-amber-400 bg-amber-50 text-amber-950' }
     case 'pending':
-      return { label: 'Request', variant: 'pending', date: 'border-amber-300 bg-amber-100 text-amber-950' }
+      return { label: 'Pending approval', variant: 'pending', date: 'border-amber-300 bg-amber-100 text-amber-950' }
     case 'awaiting_payment':
       return { label: 'Awaiting payment', variant: 'pending', date: 'border-amber-300 bg-amber-100 text-amber-950' }
     case 'confirmed':
@@ -269,6 +288,11 @@ const attendanceTone = (status?: string | null): ChipTone => {
 }
 
 const statusPillText = (booking: Booking): string => {
+  if (isReservedBooking(booking)) {
+    const secs = holdRemainingFor(booking)
+    return secs > 0 ? `Reserved · ${compactCountdown(secs)} hold` : 'Reserved · hold expiring'
+  }
+
   if (booking.status !== 'pending') return statusMeta(booking.status).label
 
   if (booking.accept_block === 'window_closed') return 'Request · expired'
@@ -278,6 +302,7 @@ const statusPillText = (booking: Booking): string => {
 }
 
 const statusPillVariant = (booking: Booking): PillVariant => {
+  if (isReservedBooking(booking)) return 'pending'
   if (booking.status !== 'pending') return statusMeta(booking.status).variant
 
   // Closed windows are terminal, so they drop out of the amber "act now" tone.
@@ -293,6 +318,7 @@ const statusPillVariant = (booking: Booking): PillVariant => {
  * when a live countdown reaches zero.
  */
 const canAccept = (booking: Booking): boolean => {
+  if (isReservedBooking(booking)) return false
   if (booking.can_be_accepted === false) return false
 
   if (booking.accept_block == null && (booking.accept_time_remaining ?? 0) > 0) {
@@ -302,9 +328,15 @@ const canAccept = (booking: Booking): boolean => {
   return true
 }
 
-const canDecline = (booking: Booking): boolean => booking.can_be_declined !== false
+const canDecline = (booking: Booking): boolean =>
+  !isReservedBooking(booking) && booking.can_be_declined !== false
 
 const acceptBlockLabel = (booking: Booking): string | null => {
+  if (booking.accept_block === 'awaiting_waiver' || isReservedBooking(booking)) {
+    return booking.has_waiver
+      ? 'Waiver signed · awaiting payment method'
+      : 'Awaiting waiver completion'
+  }
   if (booking.accept_block === 'window_closed') return 'Window closed · released'
   if (booking.accept_block === 'too_close') return 'Starts too soon to accept'
 
@@ -312,7 +344,7 @@ const acceptBlockLabel = (booking: Booking): string | null => {
 }
 
 const canChange = (booking: Booking): boolean =>
-  ['pending', 'confirmed', 'awaiting_payment'].includes(booking.status)
+  !isReservedBooking(booking) && ['pending', 'confirmed', 'awaiting_payment'].includes(booking.status)
 
 const formatAmount = (amount: number | string) => Number(amount ?? 0).toLocaleString()
 
@@ -341,7 +373,7 @@ const filterTabs = computed(() => [
   {
     key: 'all',
     label: 'All',
-    count: props.bookings.total ?? props.bookings.data.length,
+    count: props.counts?.all ?? props.bookings.total ?? props.bookings.data.length,
     idle: 'border-sand-200 bg-white text-stone-700 hover:border-deep-900',
     active: 'border-deep-950 bg-deep-950 text-white',
   },
@@ -351,6 +383,13 @@ const filterTabs = computed(() => [
     count: props.counts?.pending ?? 0,
     idle: 'border-amber-200 bg-amber-50 text-amber-950 hover:border-amber-400',
     active: 'border-amber-500 bg-amber-500 text-deep-950',
+  },
+  {
+    key: 'reserved',
+    label: 'Reserved',
+    count: props.counts?.reserved ?? 0,
+    idle: 'border-amber-200 bg-white text-amber-900 hover:border-amber-400',
+    active: 'border-amber-600 bg-amber-600 text-white',
   },
   {
     key: 'confirmed',
@@ -566,6 +605,13 @@ const canMarkAttendance = (booking: Booking): boolean =>
                         </div>
                     </div>
 
+                    <p
+                        v-if="isReservedBooking(booking)"
+                        class="mt-2.5 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-950"
+                    >
+                        Tourist has selected this schedule and is completing the liability waiver. Accept/Decline unlocks once completed.
+                    </p>
+
                     <!-- Facts and actions share the last row: chips left, actions right -->
                     <div class="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-sand-200/70 pt-2.5">
                         <div class="flex min-w-0 flex-wrap gap-1.5">
@@ -585,14 +631,40 @@ const canMarkAttendance = (booking: Booking): boolean =>
                                 {{ boardLabel(booking) }}
                             </span>
 
-                            <span class="chip" :class="booking.has_waiver ? 'chip-positive' : 'chip-critical'">
+                            <span
+                                class="chip"
+                                :class="
+                                    booking.has_waiver
+                                        ? 'chip-positive'
+                                        : isReservedBooking(booking)
+                                          ? 'chip-warning'
+                                          : 'chip-critical'
+                                "
+                            >
                                 <DocumentCheckIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                                {{ booking.has_waiver ? 'Waiver signed' : 'Waiver missing' }}
+                                {{
+                                    booking.has_waiver
+                                        ? 'Waiver signed'
+                                        : isReservedBooking(booking)
+                                          ? 'Awaiting waiver'
+                                          : 'Waiver missing'
+                                }}
                             </span>
 
-                            <span class="chip" :class="`chip-${paymentTone(booking.payment_status)}`">
+                            <span
+                                class="chip"
+                                :class="
+                                    isReservedBooking(booking) && !booking.payment_method
+                                        ? 'chip-neutral'
+                                        : `chip-${paymentTone(booking.payment_status)}`
+                                "
+                            >
                                 <BanknotesIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                                {{ paymentLabel(booking.payment_status) }}
+                                {{
+                                    isReservedBooking(booking) && !booking.payment_method
+                                        ? 'Payment not selected'
+                                        : paymentLabel(booking.payment_status)
+                                }}
                             </span>
 
                             <span
@@ -626,7 +698,33 @@ const canMarkAttendance = (booking: Booking): boolean =>
 
                         <!-- One accent action; secondary work folds into Details -->
                         <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                            <template v-if="booking.status === 'pending'">
+                            <template v-if="isReservedBooking(booking)">
+                                <AppButton
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled
+                                    title="Available once the tourist completes the waiver and payment selection"
+                                >
+                                    Accept
+                                </AppButton>
+                                <AppButton
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled
+                                    title="Available once the tourist completes the waiver and payment selection"
+                                >
+                                    Decline
+                                </AppButton>
+                                <AppButton
+                                    :href="route('instructor.availability.index', { date: String(booking.date).slice(0, 10) })"
+                                    size="sm"
+                                    variant="secondary"
+                                >
+                                    View on calendar
+                                </AppButton>
+                            </template>
+
+                            <template v-else-if="booking.status === 'pending'">
                                 <AppButton
                                     v-if="canAccept(booking)"
                                     size="sm"
@@ -666,6 +764,12 @@ const canMarkAttendance = (booking: Booking): boolean =>
                                 <template #content>
                                     <Link :href="route('instructor.bookings.show', booking.id)" class="menu-item">
                                         Open lesson
+                                    </Link>
+                                    <Link
+                                        :href="route('instructor.availability.index', { date: String(booking.date).slice(0, 10) })"
+                                        class="menu-item"
+                                    >
+                                        View on calendar
                                     </Link>
                                     <button
                                         v-if="canChange(booking)"

@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import AppButton from '@/Components/UI/AppButton.vue'
 import AppCard from '@/Components/UI/AppCard.vue'
 import ProfilePhotoCard from '@/Components/Molecules/ProfilePhotoCard.vue'
+import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
 import TextInput from '@/Components/TextInput.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
@@ -12,6 +13,7 @@ import Badge from '@/Components/Atoms/Badge.vue'
 import {
   DocumentArrowUpIcon,
   MapPinIcon,
+  ShieldCheckIcon,
   StarIcon,
   TrophyIcon,
 } from '@heroicons/vue/24/outline'
@@ -19,12 +21,13 @@ import {
 interface InstructorProfile {
   bio: string
   level: number
-  rate_per_hour: number
+  offered_services?: string[] | null
+  rate_per_hour: number | null
+  guiding_rate?: number | null
+  coaching_rate?: number | null
   status: string
   area?: string | null
   meeting_point?: string | null
-  latitude?: number | string | null
-  longitude?: number | string | null
 }
 
 interface User {
@@ -50,7 +53,22 @@ interface CertificateSummary {
   expires_at: string | null
 }
 
+interface ServiceBand {
+  type: 'teaching' | 'guiding' | 'coaching'
+  label: string
+  description: string
+  min: number
+  max: number
+  default: number
+  rangeLabel: string
+}
+
 const props = defineProps<{
+  availableSurfSpots: SurfZoneSpot[]
+  selectedSurfSpotIds: number[]
+  offeredServices: string[]
+  allowedServices: string[]
+  surfZoneRule: string
   stats: Stats
   certificates: CertificateSummary[]
 }>()
@@ -58,26 +76,127 @@ const props = defineProps<{
 const page = usePage()
 const user = page.props.auth.user as User
 const pricing = computed(() => (page.props as any).pricing ?? { minRatePerHour: 600, maxRatePerHour: 1000 })
-const teachingBand = computed(() => pricing.value.services?.teaching ?? { min: 600, max: 1000, rangeLabel: '₱600–₱1,000' })
-const guidingBand = computed(() => pricing.value.services?.guiding ?? { min: 800, max: 1500, rangeLabel: '₱800–₱1,500' })
-const coachingBand = computed(() => pricing.value.services?.coaching ?? { min: 1500, max: 2000, rangeLabel: '₱1,500–₱2,000' })
+const teachingBand = computed<ServiceBand>(() => pricing.value.services?.teaching ?? {
+  type: 'teaching',
+  label: 'Teaching',
+  description: 'First-timer or complete beginner learning surf fundamentals.',
+  min: 600,
+  max: 1000,
+  default: 600,
+  rangeLabel: '₱600–₱1,000',
+})
+const guidingBand = computed<ServiceBand>(() => pricing.value.services?.guiding ?? {
+  type: 'guiding',
+  label: 'Guiding',
+  description: 'Surfer who needs lineup guidance and in-water assistance.',
+  min: 800,
+  max: 1500,
+  default: 800,
+  rangeLabel: '₱800–₱1,500',
+})
+const coachingBand = computed<ServiceBand>(() => pricing.value.services?.coaching ?? {
+  type: 'coaching',
+  label: 'Coaching',
+  description: 'Surfer working on technique, maneuvers, and surf skills.',
+  min: 1500,
+  max: 2000,
+  default: 1500,
+  rangeLabel: '₱1,500–₱2,000',
+})
 const instructorLevel = computed(() => Number(user.instructor_profile?.level ?? 1))
 const flashSuccess = computed(() => (page.props.flash as any)?.success ?? null)
 
 const form = useForm({
   name: user.name,
   bio: user.instructor_profile?.bio || '',
-  rate_per_hour: Number(user.instructor_profile?.rate_per_hour) || 600,
-  guiding_rate: Number((user.instructor_profile as any)?.guiding_rate) || 800,
-  coaching_rate: Number((user.instructor_profile as any)?.coaching_rate) || 1500,
-  area: user.instructor_profile?.area || '',
-  meeting_point: user.instructor_profile?.meeting_point || '',
-  latitude: user.instructor_profile?.latitude ?? '',
-  longitude: user.instructor_profile?.longitude ?? '',
+  offered_services: [...(props.offeredServices?.length ? props.offeredServices : props.allowedServices)] as string[],
+  rate_per_hour: Number(user.instructor_profile?.rate_per_hour) || teachingBand.value.default,
+  guiding_rate: Number(user.instructor_profile?.guiding_rate) || guidingBand.value.default,
+  coaching_rate: Number(user.instructor_profile?.coaching_rate) || coachingBand.value.default,
+  surf_spot_ids: [...(props.selectedSurfSpotIds ?? [])] as number[],
 })
 
+const serviceCards = computed(() => {
+  const all = [
+    {
+      ...teachingBand.value,
+      field: 'rate_per_hour' as const,
+      subtitle: 'Beginners & first-timers',
+    },
+    {
+      ...guidingBand.value,
+      field: 'guiding_rate' as const,
+      subtitle: 'Lineup guidance & assistance',
+    },
+    {
+      ...coachingBand.value,
+      field: 'coaching_rate' as const,
+      subtitle: 'Technique, maneuvers & surf skills',
+    },
+  ]
+
+  return all.filter((item) => props.allowedServices.includes(item.type))
+})
+
+const isServiceOffered = (type: string) => form.offered_services.includes(type)
+
+const toggleService = (type: string) => {
+  if (instructorLevel.value === 1) {
+    return
+  }
+
+  const index = form.offered_services.indexOf(type)
+  if (index === -1) {
+    form.offered_services.push(type)
+    if (type === 'teaching' && (!form.rate_per_hour || Number(form.rate_per_hour) < teachingBand.value.min)) {
+      form.rate_per_hour = teachingBand.value.default
+    }
+    if (type === 'guiding' && (!form.guiding_rate || Number(form.guiding_rate) < guidingBand.value.min)) {
+      form.guiding_rate = guidingBand.value.default
+    }
+    if (type === 'coaching' && (!form.coaching_rate || Number(form.coaching_rate) < coachingBand.value.min)) {
+      form.coaching_rate = coachingBand.value.default
+    }
+  } else {
+    form.offered_services.splice(index, 1)
+  }
+}
+
+const rateValueFor = (field: 'rate_per_hour' | 'guiding_rate' | 'coaching_rate'): number => Number(form[field])
+
+const rateOutOfRange = (field: 'rate_per_hour' | 'guiding_rate' | 'coaching_rate', min: number, max: number): string | null => {
+  const raw = form[field]
+  if (raw === null || raw === undefined || String(raw).trim() === '') {
+    return 'Enter an hourly rate for this lesson type.'
+  }
+  const value = Number(raw)
+  if (Number.isNaN(value)) {
+    return 'Enter a valid number.'
+  }
+  if (value < min) {
+    return `Rate must be at least ₱${min.toLocaleString()} per hour.`
+  }
+  if (value > max) {
+    return `Rate cannot exceed ₱${max.toLocaleString()} per hour.`
+  }
+  return null
+}
+
+const hasAnyInvalidOfferedRate = computed(() =>
+  serviceCards.value.some(
+    (card) => isServiceOffered(card.type) && rateOutOfRange(card.field, card.min, card.max) !== null,
+  ),
+)
+
 const submit = () => {
-  form.patch(route('instructor.profile.update'), { preserveScroll: true })
+  form
+    .transform((data) => ({
+      ...data,
+      rate_per_hour: data.offered_services.includes('teaching') ? data.rate_per_hour : null,
+      guiding_rate: data.offered_services.includes('guiding') ? data.guiding_rate : null,
+      coaching_rate: data.offered_services.includes('coaching') ? data.coaching_rate : null,
+    }))
+    .patch(route('instructor.profile.update'), { preserveScroll: true })
 }
 
 // Additional certificates are submitted to the instructor endpoint, which only
@@ -148,7 +267,7 @@ const certificateVariant = (status: string): BadgeVariant => {
           <p class="eyebrow">Instructor settings</p>
           <h2 class="mt-1 text-headline font-semibold tracking-tight text-deep-900">Public profile</h2>
           <p class="mt-1 max-w-2xl text-body-sm text-stone-600">
-            Update your photo, professional details, and teaching rate. Students see this information in the directory.
+            Choose the surf zones you teach in, the lesson types you offer, and your SISA-approved hourly rates. Students only see the surf zones and lesson types you configure here.
           </p>
         </div>
 
@@ -219,7 +338,7 @@ const certificateVariant = (status: string): BadgeVariant => {
           </AppCard>
         </div>
 
-        <!-- Right: editable profile + certificates -->
+        <!-- Right: editable profile + surf zones + lesson types & rates -->
         <div class="space-y-6 md:col-span-2">
           <AppCard padding="lg">
             <form @submit.prevent="submit" class="space-y-6">
@@ -241,129 +360,135 @@ const certificateVariant = (status: string): BadgeVariant => {
                   id="bio"
                   v-model="form.bio"
                   class="mt-1 block w-full rounded-control border-sand-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600"
-                  rows="6"
+                  rows="5"
                   maxlength="1000"
                   placeholder="Tell students about your experience..."
                 ></textarea>
                 <InputError class="mt-2" :message="form.errors.bio" />
               </div>
 
+              <!-- Lesson Types & Hourly Rates -->
               <div class="space-y-4 rounded-control border border-sand-200 bg-sand-50/40 p-5">
-                <div>
-                  <p class="text-body-sm font-semibold text-deep-900">Service rates (per hour)</p>
-                  <p class="mt-0.5 text-label text-stone-600">
-                    Students are charged based on the service they book. Choose any rate within each SISA-approved range.
-                  </p>
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p class="text-body-sm font-semibold text-deep-900">Lesson types &amp; hourly rates</p>
+                    <p class="mt-0.5 text-label text-stone-600">
+                      Choose which lesson types you offer (limited to your {{ levelLabel }} certification) and set an hourly rate inside SISA's approved range for each.
+                    </p>
+                  </div>
+                  <Badge variant="info">{{ form.offered_services.length }} selected</Badge>
                 </div>
 
-                <div>
-                  <InputLabel for="rate" value="Teaching rate (beginners)" />
-                  <div class="relative mt-1">
-                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
-                      ₱
-                    </span>
-                    <TextInput
-                      id="rate"
-                      type="number"
-                      v-model="form.rate_per_hour"
-                      class="block w-full pl-8"
-                      required
-                      :min="teachingBand.min"
-                      :max="teachingBand.max"
-                      step="50"
-                    />
-                  </div>
-                  <p class="mt-1 text-label text-stone-500">
-                    Allowed range: {{ teachingBand.rangeLabel }}/hour.
-                  </p>
-                  <InputError class="mt-2" :message="form.errors.rate_per_hour" />
-                </div>
+                <InputError :message="form.errors.offered_services || (form.errors as any)['offered_services.0']" />
 
-                <div v-if="instructorLevel >= 2">
-                  <InputLabel for="guiding_rate" value="Guiding rate (lineup assistance)" />
-                  <div class="relative mt-1">
-                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
-                      ₱
-                    </span>
-                    <TextInput
-                      id="guiding_rate"
-                      type="number"
-                      v-model="form.guiding_rate"
-                      class="block w-full pl-8"
-                      required
-                      :min="guidingBand.min"
-                      :max="guidingBand.max"
-                      step="50"
-                    />
-                  </div>
-                  <p class="mt-1 text-label text-stone-500">
-                    Allowed range: {{ guidingBand.rangeLabel }}/hour.
-                  </p>
-                  <InputError class="mt-2" :message="form.errors.guiding_rate" />
-                </div>
+                <div class="space-y-3">
+                  <div
+                    v-for="card in serviceCards"
+                    :key="card.type"
+                    class="rounded-xl border bg-white p-4 transition"
+                    :class="
+                      isServiceOffered(card.type)
+                        ? 'border-lagoon-500 ring-1 ring-lagoon-500/20'
+                        : 'border-sand-200 opacity-75'
+                    "
+                  >
+                    <div class="flex items-start justify-between gap-3">
+                      <label class="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="isServiceOffered(card.type)"
+                          :disabled="instructorLevel === 1"
+                          class="mt-0.5 h-4 w-4 rounded border-sand-300 text-lagoon-600 focus:ring-lagoon-600 disabled:opacity-60"
+                          @change="toggleService(card.type)"
+                        />
+                        <div>
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-body-sm font-bold text-deep-900">{{ card.label }}</span>
+                            <span class="text-[11px] font-medium text-stone-500">{{ card.subtitle }}</span>
+                          </div>
+                          <p class="mt-0.5 text-label text-stone-600">{{ card.description }}</p>
+                        </div>
+                      </label>
 
-                <div v-if="instructorLevel >= 3">
-                  <InputLabel for="coaching_rate" value="Coaching rate (technique &amp; surf skills)" />
-                  <div class="relative mt-1">
-                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
-                      ₱
-                    </span>
-                    <TextInput
-                      id="coaching_rate"
-                      type="number"
-                      v-model="form.coaching_rate"
-                      class="block w-full pl-8"
-                      required
-                      :min="coachingBand.min"
-                      :max="coachingBand.max"
-                      step="50"
-                    />
+                      <span class="shrink-0 rounded-full bg-sand-100 px-2.5 py-0.5 text-[11px] font-semibold text-stone-700">
+                        {{ card.rangeLabel }}/hr
+                      </span>
+                    </div>
+
+                    <div v-if="isServiceOffered(card.type)" class="mt-3 border-t border-sand-100 pt-3 pl-7">
+                      <InputLabel :for="`rate-${card.type}`" :value="`${card.label} hourly rate (PHP)`" />
+                      <div class="relative mt-1 max-w-xs">
+                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-body-sm text-stone-500">
+                          ₱
+                        </span>
+                        <TextInput
+                          :id="`rate-${card.type}`"
+                          type="number"
+                          v-model="form[card.field]"
+                          class="block w-full pl-8"
+                          required
+                          :min="card.min"
+                          :max="card.max"
+                          step="50"
+                        />
+                      </div>
+                      <p
+                        v-if="rateOutOfRange(card.field, card.min, card.max)"
+                        class="mt-1 text-label font-semibold text-rose-600"
+                      >
+                        {{ rateOutOfRange(card.field, card.min, card.max) }} (Allowed: {{ card.rangeLabel }}/hour, current: ₱{{ rateValueFor(card.field) || 0 }})
+                      </p>
+                      <p v-else class="mt-1 text-label text-stone-500">
+                        SISA-approved range: {{ card.rangeLabel }}/hour.
+                      </p>
+                      <InputError class="mt-1" :message="form.errors[card.field]" />
+                    </div>
                   </div>
-                  <p class="mt-1 text-label text-stone-500">
-                    Allowed range: {{ coachingBand.rangeLabel }}/hour.
-                  </p>
-                  <InputError class="mt-2" :message="form.errors.coaching_rate" />
                 </div>
               </div>
 
-              <div class="rounded-control border border-lagoon-100 bg-lagoon-50/40 p-5">
-                <div class="flex items-center gap-2">
-                  <MapPinIcon class="h-5 w-5 text-lagoon-700" aria-hidden="true" />
-                  <p class="text-body-sm font-semibold text-deep-900">Teaching location</p>
+              <!-- Surf Zones Map Picker -->
+              <div class="space-y-4 rounded-control border border-lagoon-100 bg-lagoon-50/40 p-5">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <MapPinIcon class="h-5 w-5 text-lagoon-700" aria-hidden="true" />
+                      <p class="text-body-sm font-semibold text-deep-900">Surf zones you teach in</p>
+                    </div>
+                    <p class="mt-1 text-label text-stone-600">
+                      Click existing SISA surf spots on the map (or in the list) to choose where you teach. Only spots you select here will be available to students booking with you.
+                    </p>
+                  </div>
                 </div>
-                <p class="mt-1 text-label text-stone-600">
-                  This pin appears in the public instructor directory and on your profile map.
+
+                <div class="flex items-center gap-2 rounded-lg border border-lagoon-200 bg-white px-3 py-2 text-xs font-medium text-lagoon-900">
+                  <ShieldCheckIcon class="h-4 w-4 shrink-0 text-lagoon-700" aria-hidden="true" />
+                  <span>{{ props.surfZoneRule }}</span>
+                </div>
+
+                <SurfZoneMap
+                  mode="multi"
+                  :spots="props.availableSurfSpots"
+                  v-model="form.surf_spot_ids"
+                  height="380px"
+                  empty-message="No active SISA surf spots are available for your level yet."
+                />
+
+                <InputError :message="form.errors.surf_spot_ids || (form.errors as any)['surf_spot_ids.0']" />
+              </div>
+
+              <div class="flex items-center justify-between gap-4 border-t border-sand-200 pt-6">
+                <p v-if="form.offered_services.length === 0 || hasAnyInvalidOfferedRate" class="text-xs font-semibold text-rose-600">
+                  Select at least one lesson type with a rate inside SISA's approved range before saving.
                 </p>
-
-                <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <InputLabel for="area" value="Area / barangay" />
-                    <TextInput id="area" v-model="form.area" type="text" class="mt-1 block w-full" placeholder="General Luna" />
-                    <InputError class="mt-2" :message="form.errors.area" />
-                  </div>
-
-                  <div>
-                    <InputLabel for="meeting_point" value="Meeting point" />
-                    <TextInput id="meeting_point" v-model="form.meeting_point" type="text" class="mt-1 block w-full" placeholder="Cloud 9 tower" />
-                    <InputError class="mt-2" :message="form.errors.meeting_point" />
-                  </div>
-
-                  <div>
-                    <InputLabel for="latitude" value="Latitude" />
-                    <TextInput id="latitude" v-model="form.latitude" type="number" step="0.0000001" class="mt-1 block w-full" placeholder="9.8000000" />
-                    <InputError class="mt-2" :message="form.errors.latitude" />
-                  </div>
-
-                  <div>
-                    <InputLabel for="longitude" value="Longitude" />
-                    <TextInput id="longitude" v-model="form.longitude" type="number" step="0.0000001" class="mt-1 block w-full" placeholder="126.1600000" />
-                    <InputError class="mt-2" :message="form.errors.longitude" />
-                  </div>
-                </div>
-              </div>
-
-              <div class="flex justify-end border-t border-sand-200 pt-6">
-                <AppButton type="submit" :loading="form.processing">Save profile changes</AppButton>
+                <span v-else />
+                <AppButton
+                  type="submit"
+                  :loading="form.processing"
+                  :disabled="form.processing || form.offered_services.length === 0 || hasAnyInvalidOfferedRate"
+                >
+                  Save profile changes
+                </AppButton>
               </div>
             </form>
           </AppCard>
@@ -445,4 +570,3 @@ const certificateVariant = (status: string): BadgeVariant => {
     </div>
   </AppLayout>
 </template>
-

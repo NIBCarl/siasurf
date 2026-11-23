@@ -29,6 +29,9 @@ interface Booking {
   end_time?: string | null
   created_at?: string | null
   status: string
+  is_reserved?: boolean
+  hold_remaining_seconds?: number
+  resume_url?: string | null
   total_amount: number
   payment_status: string
   can_be_cancelled?: boolean
@@ -86,8 +89,14 @@ const applyFilter = (status: string) => {
   )
 }
 
+const parseLocalDate = (date: string) => {
+  const [year, month, day] = String(date).slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return new Date(date)
+  return new Date(year, month - 1, day)
+}
+
 const formatDate = (date: string) =>
-  new Date(date).toLocaleDateString('en-US', {
+  parseLocalDate(date).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -98,8 +107,13 @@ const formatAmount = (amount: number) => Number(amount ?? 0).toLocaleString()
 
 const timeLabel = (period: string) => period.charAt(0).toUpperCase() + period.slice(1)
 
+const isReservedBooking = (booking: Booking) =>
+  booking.status === 'reserved' || booking.is_reserved === true
+
 const statusMeta = (status: string): { label: string; variant: 'neutral' | 'verified' | 'live' | 'pending' | 'completed' | 'cancelled' | 'critical'; date: string } => {
   switch (status) {
+    case 'reserved':
+      return { label: 'Reserved · Finish checkout', variant: 'pending', date: 'border-dashed border-amber-400 bg-amber-50 text-amber-950' }
     case 'pending':
       return { label: 'Awaiting instructor', variant: 'pending', date: 'border-amber-300 bg-amber-100 text-amber-950' }
     case 'awaiting_payment':
@@ -174,7 +188,17 @@ const slotLabel = (booking: Booking) => {
 const avatarUrl = (booking: Booking) => resolveAvatarUrl(booking.instructor)
 
 const canCancel = (booking: Booking) =>
-  booking.can_be_cancelled ?? ['pending', 'awaiting_payment'].includes(booking.status)
+  !isReservedBooking(booking) && (booking.can_be_cancelled ?? ['pending', 'awaiting_payment'].includes(booking.status))
+
+const releaseHold = (booking: Booking) => {
+  router.post(route('bookings.abandon', booking.id))
+}
+
+const formatHoldMinutes = (seconds?: number) => {
+  if (!seconds || seconds <= 0) return null
+  const mins = Math.ceil(seconds / 60)
+  return `${mins} min left`
+}
 
 const paginationLabel = (label: string) =>
   label.replace(/&laquo;/g, '').replace(/&raquo;/g, '').replace(/&amp;/g, '&').trim()
@@ -274,10 +298,10 @@ const submitCancel = () => {
                                     :class="statusMeta(booking.status).date"
                                 >
                                     <span class="text-label font-semibold uppercase tracking-[0.06em] opacity-80">
-                                        {{ new Date(booking.date).toLocaleDateString('en-US', { month: 'short' }) }}
+                                        {{ parseLocalDate(booking.date).toLocaleDateString('en-US', { month: 'short' }) }}
                                     </span>
                                     <span class="text-headline font-semibold leading-none">
-                                        {{ new Date(booking.date).getDate() }}
+                                        {{ parseLocalDate(booking.date).getDate() }}
                                     </span>
                                     <span class="mt-1 max-w-full truncate text-label font-semibold capitalize opacity-80">
                                         {{ booking.time_period }}
@@ -306,6 +330,16 @@ const submitCancel = () => {
                                         {{ formatDate(booking.date) }}
                                         <span aria-hidden="true">·</span>
                                         <span>{{ slotLabel(booking) }}</span>
+                                    </p>
+
+                                    <p
+                                        v-if="isReservedBooking(booking)"
+                                        class="mt-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-950"
+                                    >
+                                        Temporarily held while you finish the liability waiver and payment selection
+                                        <template v-if="formatHoldMinutes(booking.hold_remaining_seconds)">
+                                            ({{ formatHoldMinutes(booking.hold_remaining_seconds) }})
+                                        </template>. Your instructor will receive this request once you finish.
                                     </p>
 
                                     <p
@@ -380,6 +414,13 @@ const submitCancel = () => {
 
                             <div class="mt-4 space-y-2">
                                 <AppButton
+                                    v-if="isReservedBooking(booking)"
+                                    :href="booking.resume_url ?? route('bookings.waiver', booking.id)"
+                                    block
+                                >
+                                    Continue Waiver / Payment →
+                                </AppButton>
+                                <AppButton
                                     :href="route('student.bookings.show', booking.id)"
                                     variant="secondary"
                                     block
@@ -387,7 +428,16 @@ const submitCancel = () => {
                                     View booking
                                 </AppButton>
                                 <AppButton
-                                    v-if="canCancel(booking)"
+                                    v-if="isReservedBooking(booking)"
+                                    variant="ghost"
+                                    block
+                                    class="text-rose-700 hover:bg-rose-50"
+                                    @click="releaseHold(booking)"
+                                >
+                                    Release Hold
+                                </AppButton>
+                                <AppButton
+                                    v-else-if="canCancel(booking)"
                                     variant="ghost"
                                     block
                                     class="text-rose-700 hover:bg-rose-50"

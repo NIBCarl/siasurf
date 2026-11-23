@@ -21,6 +21,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
 
 interface Certificate {
   id: number
@@ -28,6 +29,14 @@ interface Certificate {
   file_path: string
   status: string
   expires_at: string
+}
+
+interface ServiceRate {
+  type: string
+  label: string
+  description: string
+  rate: number
+  range_label: string
 }
 
 interface Instructor {
@@ -39,7 +48,7 @@ interface Instructor {
     bio: string
     level: number
     status: string
-    rate_per_hour: number
+    rate_per_hour: number | null
     strike_count: number
     qr_code_path: string
     suspension_reason?: string | null
@@ -51,6 +60,8 @@ interface Instructor {
 
 interface Props {
   instructor: Instructor
+  serviceRates?: ServiceRate[]
+  surfSpots?: SurfZoneSpot[]
   qrImageUrl: string | null
   verificationUrl: string
 }
@@ -284,8 +295,13 @@ const getStatusVariant = (status: string) => {
                                 </div>
                             </div>
                             <div>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Service Rate</p>
-                                <p class="text-lg font-black text-slate-900 line-clamp-1">₱{{ instructor.instructor_profile.rate_per_hour }}<span class="text-xs text-slate-400 ml-1">/hr</span></p>
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Offered Services</p>
+                                <div v-if="serviceRates && serviceRates.length > 0" class="space-y-1">
+                                    <p v-for="service in serviceRates" :key="service.type" class="text-sm font-black text-slate-900">
+                                        {{ service.label }}: ₱{{ Number(service.rate).toLocaleString() }}<span class="text-xs text-slate-400">/hr</span>
+                                    </p>
+                                </div>
+                                <p v-else class="text-lg font-black text-slate-900 line-clamp-1">₱{{ instructor.instructor_profile.rate_per_hour ?? 600 }}<span class="text-xs text-slate-400 ml-1">/hr</span></p>
                             </div>
                             <div>
                                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Security Strikes</p>
@@ -315,6 +331,38 @@ const getStatusVariant = (status: string) => {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Selected Surf Zones -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8 space-y-5">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest">Selected Surf Zones</h3>
+                            <p class="mt-1 text-xs text-slate-500">
+                                Zones configured by this instructor (permitted by Level {{ instructor.instructor_profile.level }}).
+                            </p>
+                        </div>
+                        <span class="px-3 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-600 uppercase">
+                            {{ surfSpots?.length ?? 0 }} selected
+                        </span>
+                    </div>
+
+                    <div v-if="surfSpots && surfSpots.length > 0" class="space-y-4">
+                        <div class="flex flex-wrap gap-2">
+                            <span
+                                v-for="spot in surfSpots"
+                                :key="spot.id"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-ocean-200 bg-ocean-50 px-3 py-1 text-xs font-bold text-ocean-800"
+                            >
+                                {{ spot.name }}
+                                <span class="text-[10px] uppercase text-ocean-600">({{ spot.difficulty }})</span>
+                            </span>
+                        </div>
+                        <SurfZoneMap mode="view" :spots="surfSpots" height="280px" />
+                    </div>
+                    <p v-else class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs font-semibold text-slate-500">
+                        No surf zones selected yet (defaults to all level-permitted spots).
+                    </p>
                 </div>
 
                 <!-- Documentation Audit table -->

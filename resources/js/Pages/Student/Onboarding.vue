@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
@@ -11,6 +11,8 @@ interface Profile {
     skill_assessed_at: string | null;
     is_first_time: boolean;
     phone: string | null;
+    date_of_birth: string | null;
+    country: string | null;
     age: number | null;
     height: number | null;
     weight: number | null;
@@ -109,8 +111,37 @@ function submitAssessment() {
     });
 }
 
+const maxBirthday = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 5);
+    return d.toISOString().split('T')[0];
+})();
+
+const commonCountries = [
+    'Philippines',
+    'Australia',
+    'United States',
+    'United Kingdom',
+    'Canada',
+    'France',
+    'Germany',
+    'Spain',
+    'Netherlands',
+    'Italy',
+    'Switzerland',
+    'Sweden',
+    'Japan',
+    'South Korea',
+    'Singapore',
+    'New Zealand',
+    'Israel',
+    'Brazil',
+];
+
 const form = useForm({
     phone: props.profile.phone ?? '',
+    date_of_birth: props.profile.date_of_birth ?? '',
+    country: props.profile.country ?? '',
     height: props.profile.height ?? ('' as number | string),
     weight: props.profile.weight ?? ('' as number | string),
     has_board: props.profile.has_board,
@@ -119,8 +150,32 @@ const form = useForm({
     intended: props.intended ?? '',
 });
 
-// Age is derived on the server from the birthday captured at registration.
-const age = computed<number | null>(() => props.profile.age);
+// Age is derived from the date of birth so the student sees what the safety
+// rules will actually use. Kept in sync as they type.
+const age = ref<number | null>(props.profile.age);
+
+watch(
+    () => form.date_of_birth,
+    (value) => {
+        if (!value) {
+            age.value = null;
+            return;
+        }
+        const dob = new Date(value);
+        if (Number.isNaN(dob.getTime())) {
+            age.value = null;
+            return;
+        }
+        const today = new Date();
+        let years = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+            years -= 1;
+        }
+        age.value = years >= 0 ? years : null;
+    },
+    { immediate: true },
+);
 
 const isMinor = computed(() => age.value !== null && age.value < 18);
 const boardNeedsMeasurements = computed(() => !form.has_board);
@@ -442,10 +497,53 @@ function skip() {
                         <p class="text-eyebrow uppercase tracking-widest text-lagoon-600">Step 2 · Booking details</p>
                         <h2 class="mt-1 text-h3 text-deep-900">About you</h2>
                         <p class="mt-1 text-body-sm text-stone-600">
-                            Your phone lets your instructor or SISA reach you if a lesson needs to move.
+                            Used to prefill your surf lesson waiver and check age-based safety rules, and your phone lets your instructor reach you if a lesson needs to move.
                         </p>
 
-                        <div class="mt-5 max-w-md">
+                        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                            <div>
+                                <label for="date_of_birth" class="block text-body-sm font-semibold text-deep-900">
+                                    Birthday
+                                </label>
+                                <input
+                                    id="date_of_birth"
+                                    v-model="form.date_of_birth"
+                                    type="date"
+                                    :max="maxBirthday"
+                                    min="1920-01-01"
+                                    class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
+                                />
+                                <InputError :message="form.errors.date_of_birth" class="mt-1.5" />
+                                <p v-if="age !== null" class="mt-1.5 text-body-sm text-stone-600">
+                                    You are <span class="font-semibold text-deep-900">{{ age }}</span> years old.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label for="country" class="block text-body-sm font-semibold text-deep-900">
+                                    Country
+                                </label>
+                                <input
+                                    id="country"
+                                    v-model="form.country"
+                                    type="text"
+                                    list="onboarding-country-options"
+                                    maxlength="100"
+                                    autocomplete="country-name"
+                                    placeholder="e.g. Philippines"
+                                    class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
+                                />
+                                <datalist id="onboarding-country-options">
+                                    <option v-for="country in commonCountries" :key="country" :value="country" />
+                                </datalist>
+                                <InputError :message="form.errors.country" class="mt-1.5" />
+                                <p class="mt-1.5 text-body-sm text-stone-500">
+                                    Prefilled on your surf lesson waiver.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-5">
                             <label for="phone" class="block text-body-sm font-semibold text-deep-900">
                                 Your phone number
                             </label>

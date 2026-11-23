@@ -74,11 +74,16 @@ class HandleInertiaRequests extends Middleware
                         'upcomingBookings' => \App\Models\Booking::query()
                             ->where('student_id', $user->id)
                             ->whereIn('status', [
+                                \App\Enums\BookingStatus::Reserved,
                                 \App\Enums\BookingStatus::Pending,
                                 \App\Enums\BookingStatus::AwaitingPayment,
                                 \App\Enums\BookingStatus::Confirmed,
                                 \App\Enums\BookingStatus::InProgress,
                             ])
+                            ->where(function ($q) {
+                                $q->where('status', '!=', \App\Enums\BookingStatus::Reserved)
+                                    ->orWhere('payment_deadline_at', '>=', now());
+                            })
                             ->whereDate('date', '>=', now()->toDateString())
                             ->count(),
                         'pendingFeedback' => \App\Models\Booking::query()
@@ -104,6 +109,7 @@ class HandleInertiaRequests extends Middleware
                         * count(\App\Enums\TimePeriod::cases()),
                     'pendingRequests' => \App\Models\Booking::query()
                         ->where('instructor_id', $user->id)
+                        ->submittedToInstructor()
                         ->where('status', \App\Enums\BookingStatus::Pending)
                         ->count(),
                     'status' => $user->instructorProfile?->status?->value,

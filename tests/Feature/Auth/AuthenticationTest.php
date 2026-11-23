@@ -70,7 +70,6 @@ class AuthenticationTest extends TestCase
             'password' => 'password',
             'password_confirmation' => 'password',
             'role' => 'student',
-            'birthday' => '1998-05-15',
             'phone' => '+63 912 345 6789',
             'skill_level' => 'beginner',
             'is_first_time' => true,

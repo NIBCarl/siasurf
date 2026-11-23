@@ -4,20 +4,26 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\CertificateStatus;
 use App\Enums\InstructorStatus;
+use App\Enums\SuspensionStatus;
+use App\Enums\SuspensionType;
 use App\Events\InstructorStatusChanged;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\InstructorProfile;
+use App\Models\InstructorStatusLog;
+use App\Models\InstructorSuspension;
+use App\Models\SurfSpot;
 use App\Models\User;
 use App\Notifications\InstructorReactivated;
 use App\Notifications\InstructorRejected;
-use App\Notifications\InstructorSuspended;
 use App\Notifications\InstructorVerified;
 use App\Services\PricingService;
 use App\Services\QRCodeService;
+use App\Services\SuspensionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -76,7 +82,16 @@ class InstructorController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('Admin/Instructors/Create');
+        return Inertia::render('Admin/Instructors/Create', [
+            'availableSurfSpots' => SurfSpot::query()
+                ->active()
+                ->orderByRaw("CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END")
+                ->orderBy('name')
+                ->get()
+                ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+                ->values()
+                ->all(),
+        ]);
     }
 
     /**
@@ -85,6 +100,7 @@ class InstructorController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $level = (int) $request->input('level', 1);
+        $hasOfferedServices = $request->has('offered_services');
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -93,12 +109,13 @@ class InstructorController extends Controller
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
-            ...PricingService::rateValidationRulesForLevel($level),
+            ...PricingService::offeringValidationRules($level, $request->input('offered_services'), $hasOfferedServices),
+            ...SurfSpot::instructorSelectionValidationRules($level, requireWhenPresent: false),
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',
             'longitude' => 'nullable|numeric|between:125.8,126.5',
-        ], PricingService::rateValidationMessages());
+        ], PricingService::offeringValidationMessages($level));
 
         // Create user
         $user = User::create([
@@ -109,20 +126,28 @@ class InstructorController extends Controller
             'phone' => $validated['phone'] ?? null,
         ]);
 
-        $rates = PricingService::normalizeRatesForLevel((int) $validated['level'], $validated);
+        $offerings = PricingService::normalizeOfferingsForLevel((int) $validated['level'], $validated, $hasOfferedServices);
 
         // Create instructor profile
-        InstructorProfile::create([
+        $profile = InstructorProfile::create([
             'user_id' => $user->id,
             'bio' => $validated['bio'] ?? null,
             'level' => $validated['level'],
             'status' => InstructorStatus::PendingVerification->value,
-            ...$rates,
+            ...$offerings,
             'area' => $validated['area'] ?? null,
             'meeting_point' => $validated['meeting_point'] ?? null,
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
         ]);
+
+        if (array_key_exists('surf_spot_ids', $validated)) {
+            $profile->syncSurfSpotsAndLocation(
+                $validated['surf_spot_ids'] ?? [],
+                syncCoordinates: ! $request->filled('latitude') && ! $request->filled('longitude'),
+                submittedArea: $validated['area'] ?? null,
+            );
+        }
 
         // Assign role
         $user->assignRole('instructor');
@@ -137,7 +162,7 @@ class InstructorController extends Controller
      */
     public function show(User $instructor): Response
     {
-        $instructor->load(['instructorProfile', 'certificates', 'availabilities']);
+        $instructor->load(['instructorProfile.surfSpots', 'certificates', 'availabilities']);
 
         // Existing active instructors verified before the QR module existed may
         // not have an image on disk yet. Generate it lazily so the dossier is
@@ -145,14 +170,20 @@ class InstructorController extends Controller
         $profile = $instructor->instructorProfile;
         if ($profile && $profile->status === InstructorStatus::Active) {
             $path = $profile->qr_code_path;
-            if (!$path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+            if (! $path || ! Storage::disk('local')->exists($path)) {
                 $this->qrCodeService->ensureInstructorQR($profile);
-                $instructor->load('instructorProfile');
+                $instructor->load('instructorProfile.surfSpots');
+                $profile = $instructor->instructorProfile;
             }
         }
 
         return Inertia::render('Admin/Instructors/Show', [
             'instructor' => $instructor,
+            'serviceRates' => $profile?->serviceRates() ?? [],
+            'surfSpots' => $profile?->activeAllowedSurfSpots()
+                ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+                ->values()
+                ->all() ?? [],
             'qrImageUrl' => $instructor->instructorProfile?->qr_code_path
                 ? route('qr.image', $instructor->id)
                 : null,
@@ -263,7 +294,7 @@ class InstructorController extends Controller
     /**
      * Suspend an instructor.
      */
-    public function suspend(Request $request, User $instructor, \App\Services\SuspensionService $suspensionService): RedirectResponse
+    public function suspend(Request $request, User $instructor, SuspensionService $suspensionService): RedirectResponse
     {
         $this->authorize('suspend', $instructor->instructorProfile);
 
@@ -291,7 +322,7 @@ class InstructorController extends Controller
     /**
      * Reactivate a suspended instructor.
      */
-    public function reactivate(User $instructor, \App\Services\SuspensionService $suspensionService): RedirectResponse
+    public function reactivate(User $instructor, SuspensionService $suspensionService): RedirectResponse
     {
         $this->authorize('suspend', $instructor->instructorProfile);
 
@@ -301,21 +332,21 @@ class InstructorController extends Controller
             return back()->with('error', 'Instructor profile not found.');
         }
 
-        $suspension = \App\Models\InstructorSuspension::where('instructor_id', $instructor->id)
-            ->where('status', \App\Enums\SuspensionStatus::Active->value)
+        $suspension = InstructorSuspension::where('instructor_id', $instructor->id)
+            ->where('status', SuspensionStatus::Active->value)
             ->latest()
             ->first();
 
         if ($suspension) {
             // Automatic/legacy suspensions clear the served strike slate;
             // a manual suspension does not change the strike ledger.
-            $resetStrikes = $suspension->type !== \App\Enums\SuspensionType::Manual;
+            $resetStrikes = $suspension->type !== SuspensionType::Manual;
 
             $suspensionService->lift(
                 $suspension,
                 'Reactivated by SISA.',
                 request()->user(),
-                \App\Enums\SuspensionStatus::RevokedByAdmin,
+                SuspensionStatus::RevokedByAdmin,
                 $resetStrikes
             );
         } else {
@@ -329,7 +360,7 @@ class InstructorController extends Controller
                 'strike_count' => 0,
             ]);
 
-            \App\Models\InstructorStatusLog::create([
+            InstructorStatusLog::create([
                 'instructor_id' => $instructor->id,
                 'from_status' => $oldStatus?->value,
                 'to_status' => InstructorStatus::Active->value,
@@ -384,10 +415,24 @@ class InstructorController extends Controller
      */
     public function edit(User $instructor): Response
     {
-        $instructor->load('instructorProfile');
+        $instructor->load('instructorProfile.surfSpots');
+        $profile = $instructor->instructorProfile;
 
         return Inertia::render('Admin/Instructors/Edit', [
             'instructor' => $instructor,
+            'availableSurfSpots' => SurfSpot::query()
+                ->active()
+                ->orderByRaw("CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END")
+                ->orderBy('name')
+                ->get()
+                ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+                ->values()
+                ->all(),
+            'selectedSurfSpotIds' => $profile?->activeAllowedSurfSpots()
+                ->pluck('id')
+                ->values()
+                ->all() ?? [],
+            'offeredServices' => $profile?->offeredServiceValues() ?? [],
         ]);
     }
 
@@ -397,6 +442,7 @@ class InstructorController extends Controller
     public function update(Request $request, User $instructor): RedirectResponse
     {
         $level = (int) $request->input('level', $instructor->instructorProfile?->level?->value ?? 1);
+        $hasOfferedServices = $request->has('offered_services');
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -404,13 +450,14 @@ class InstructorController extends Controller
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
-            ...PricingService::rateValidationRulesForLevel($level),
+            ...PricingService::offeringValidationRules($level, $request->input('offered_services'), $hasOfferedServices),
+            ...SurfSpot::instructorSelectionValidationRules($level, requireWhenPresent: false),
             'status' => 'required|string|in:'.implode(',', array_column(InstructorStatus::cases(), 'value')),
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',
             'longitude' => 'nullable|numeric|between:125.8,126.5',
-        ], PricingService::rateValidationMessages());
+        ], PricingService::offeringValidationMessages($level));
 
         $profile = $instructor->instructorProfile;
         $wasActive = $profile->status === InstructorStatus::Active;
@@ -444,23 +491,36 @@ class InstructorController extends Controller
             'phone' => $validated['phone'] ?? null,
         ]);
 
-        $rates = PricingService::normalizeRatesForLevel(
+        $offerings = PricingService::normalizeOfferingsForLevel(
             (int) $validated['level'],
             $validated,
+            $hasOfferedServices,
             $instructor->instructorProfile
         );
+
+        $profile = $instructor->instructorProfile;
 
         // Update profile
         $profile->update([
             'bio' => $validated['bio'] ?? null,
             'level' => $validated['level'],
             'status' => $validated['status'],
-            ...$rates,
+            ...$offerings,
             'area' => $validated['area'] ?? null,
             'meeting_point' => $validated['meeting_point'] ?? null,
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
         ]);
+
+        if (array_key_exists('surf_spot_ids', $validated)) {
+            $profile->syncSurfSpotsAndLocation(
+                $validated['surf_spot_ids'] ?? [],
+                syncCoordinates: ! $request->filled('latitude') && ! $request->filled('longitude'),
+                submittedArea: $validated['area'] ?? null,
+            );
+        }
+
+        $profile->pruneForCurrentLevel();
 
         if ($becomingActive && empty($profile->qr_code_path)) {
             $qrPath = $this->qrCodeService->generateInstructorQR($profile->fresh());

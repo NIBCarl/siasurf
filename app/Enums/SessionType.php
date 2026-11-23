@@ -133,4 +133,17 @@ enum SessionType: string
             fn (self $service) => $service->canBeDeliveredBy($instructorLevel) && $service->canBeBookedBy($skill)
         ));
     }
+
+    /**
+     * Services a student of `$skill` is eligible to book (regardless of instructor).
+     *
+     * @return array<int, self>
+     */
+    public static function bookableBy(SkillLevel $skill): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            fn (self $service) => $service->canBeBookedBy($skill)
+        ));
+    }
 }

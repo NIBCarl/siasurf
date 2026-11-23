@@ -52,8 +52,8 @@ class BookingPolicy
      */
     public function update(User $user, Booking $booking): bool
     {
-        // Student can update their own pending/confirmed bookings
-        if ($user->id === $booking->student_id && ($booking->isPending() || $booking->isConfirmed())) {
+        // Student can update their own reserved/pending/confirmed bookings
+        if ($user->id === $booking->student_id && ($booking->isReserved() || $booking->isPending() || $booking->isConfirmed())) {
             return true;
         }
 

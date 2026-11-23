@@ -7,6 +7,7 @@ use App\Enums\CertificateType;
 use App\Enums\InstructorStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
+use App\Models\SurfSpot;
 use App\Services\FileScanService;
 use App\Services\PricingService;
 use Illuminate\Http\RedirectResponse;
@@ -34,11 +35,13 @@ class OnboardingController extends Controller
         }
 
         $level = (int) $request->input('level', 1);
+        $hasOfferedServices = $request->has('offered_services');
 
         $validated = $request->validate([
             'bio' => 'required|string|max:1000',
             'level' => 'required|integer|in:1,2,3',
-            ...PricingService::rateValidationRulesForLevel($level),
+            ...PricingService::offeringValidationRules($level, $request->input('offered_services'), $hasOfferedServices),
+            ...SurfSpot::instructorSelectionValidationRules($level, requireWhenPresent: false),
             'certificates' => 'required|array|min:1',
             'certificates.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // Max 10MB
             'area' => 'nullable|string|max:100',
@@ -51,10 +54,15 @@ class OnboardingController extends Controller
             'certificates.*.uploaded' => 'A certificate could not be uploaded because it is larger than this server allows (max '.$this->uploadMaxSizeLabel().' per file). Compress it and try again.',
             'bio.max' => 'Keep your bio to 1000 characters or fewer.',
             'bio.required' => 'Tell students about your experience before submitting.',
-            ...PricingService::rateValidationMessages(),
+            ...PricingService::offeringValidationMessages($level),
         ]);
 
-        $rates = PricingService::normalizeRatesForLevel((int) $validated['level'], $validated, $user->instructorProfile);
+        $offerings = PricingService::normalizeOfferingsForLevel(
+            (int) $validated['level'],
+            $validated,
+            $hasOfferedServices,
+            $user->instructorProfile
+        );
 
         // Phase 13 - verify the real MIME type and (when enabled) scan every
         // file before writing a profile or storing anything to disk.
@@ -82,18 +90,28 @@ class OnboardingController extends Controller
                 ];
             }
 
-            DB::transaction(function () use ($user, $validated, $rates, $storedCertificates): void {
-                $user->instructorProfile()->updateOrCreate(
+            DB::transaction(function () use ($user, $validated, $offerings, $storedCertificates): void {
+                $profile = $user->instructorProfile()->updateOrCreate(
                     ['user_id' => $user->id],
                     [
                         'bio' => $validated['bio'],
                         'level' => $validated['level'],
-                        ...$rates,
+                        ...$offerings,
                         'status' => InstructorStatus::PendingVerification,
                         'area' => $validated['area'] ?? null,
                         'meeting_point' => $validated['meeting_point'] ?? null,
                     ]
                 );
+
+                if (array_key_exists('surf_spot_ids', $validated)) {
+                    $profile->syncSurfSpotsAndLocation(
+                        $validated['surf_spot_ids'] ?? [],
+                        syncCoordinates: false,
+                        submittedArea: $validated['area'] ?? null,
+                    );
+                } else {
+                    $profile->pruneForCurrentLevel();
+                }
 
                 foreach ($storedCertificates as $certificate) {
                     $user->certificates()->create([

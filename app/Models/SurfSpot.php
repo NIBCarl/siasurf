@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Enums\InstructorLevel;
 use App\Enums\SkillLevel;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class SurfSpot extends Model
 {
@@ -65,6 +70,86 @@ class SurfSpot extends Model
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
+    }
+
+    public function instructorProfiles(): BelongsToMany
+    {
+        return $this->belongsToMany(InstructorProfile::class, 'instructor_surf_spots')
+            ->withTimestamps();
+    }
+
+    /**
+     * Active surf zones maintained by SISA that an instructor at `$level` is permitted to select.
+     */
+    public static function activeForInstructorLevel(int|InstructorLevel $level): Builder
+    {
+        $levelEnum = $level instanceof InstructorLevel
+            ? $level
+            : (InstructorLevel::tryFrom($level) ?? InstructorLevel::Level1);
+
+        return self::query()
+            ->active()
+            ->whereIn('difficulty', $levelEnum->allowedSurfSpotDifficulties())
+            ->orderByRaw("CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END")
+            ->orderBy('name');
+    }
+
+    /**
+     * Validation rules for selecting surf zones from SISA's registry within an instructor's approved level.
+     *
+     * @return array<string, mixed>
+     */
+    public static function instructorSelectionValidationRules(int $level, bool $requireWhenPresent = false): array
+    {
+        $levelEnum = InstructorLevel::tryFrom($level) ?? InstructorLevel::Level1;
+
+        return [
+            'surf_spot_ids' => [
+                'sometimes',
+                'nullable',
+                'array',
+                function (string $attribute, mixed $value, \Closure $fail) use ($levelEnum, $requireWhenPresent): void {
+                    if (! is_array($value)) {
+                        return;
+                    }
+
+                    $ids = array_values(array_unique(array_map('intval', $value)));
+
+                    if ($requireWhenPresent && $ids === [] && self::activeForInstructorLevel($levelEnum)->exists()) {
+                        $fail('Select at least one surf zone from the map.');
+
+                        return;
+                    }
+
+                    if ($ids === []) {
+                        return;
+                    }
+
+                    $spots = self::query()
+                        ->whereIn('id', $ids)
+                        ->get(['id', 'name', 'difficulty', 'is_active']);
+
+                    if ($spots->count() !== count($ids) || $spots->contains(fn (self $spot) => ! $spot->is_active)) {
+                        $fail('One or more selected surf zones are inactive or unavailable.');
+
+                        return;
+                    }
+
+                    foreach ($spots as $spot) {
+                        if (! $levelEnum->canTeachAtDifficulty((string) $spot->difficulty)) {
+                            $fail("{$spot->name} is a {$spot->difficulty} zone and cannot be selected by a {$levelEnum->shortLabel()} instructor. {$levelEnum->surfZoneRuleLabel()}");
+
+                            return;
+                        }
+                    }
+                },
+            ],
+            'surf_spot_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('surf_spots', 'id')->where('is_active', true),
+            ],
+        ];
     }
 
     // Scopes
@@ -144,6 +229,34 @@ class SurfSpot extends Model
     }
 
     /**
+     * Normalized location slug shared by paired Inner/Outer breaks when
+     * looking up curated gallery imagery in config/surf_spot_images.php.
+     */
+    public function imageSlug(): string
+    {
+        $baseName = preg_replace('/\s*\((?:inner|outer)\)\s*$/i', '', (string) $this->name) ?? '';
+        $normalized = str_replace(["'", '’'], '', $baseName);
+
+        return Str::slug($normalized);
+    }
+
+    /**
+     * Curated gallery photos for this surf spot location.
+     *
+     * @return array<int, array{url: string, caption: string, accuracy: string, width: int, height: int}>
+     */
+    public function images(): array
+    {
+        $slug = $this->imageSlug();
+
+        if ($slug === '') {
+            return [];
+        }
+
+        return array_values(config('surf_spot_images.'.$slug, []));
+    }
+
+    /**
      * Payload used by the Leaflet map components and the JSON API.
      */
     public function toMapPayload(): array
@@ -171,6 +284,7 @@ class SurfSpot extends Model
             'longitude' => $this->longitude !== null ? (float) $this->longitude : null,
             'is_active' => $this->is_active,
             'is_safe_zone' => $this->is_safe_zone,
+            'images' => $this->images(),
         ];
     }
 }

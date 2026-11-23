@@ -40,7 +40,6 @@ class StudentSkillAssessmentTest extends TestCase
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'role' => 'student',
-            'birthday' => '1998-05-15',
             'skill_level' => 'advanced',
             'is_first_time' => false,
         ])->assertRedirect(route('verification.notice'));
