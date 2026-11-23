@@ -22,7 +22,10 @@ class StudentOnboardingTest extends TestCase
 
         $this->student = User::factory()->create(['role' => 'student']);
         $this->student->assignRole('student');
-        $this->student->studentProfile()->create(['skill_level' => 'beginner']);
+        $this->student->studentProfile()->create([
+            'skill_level' => 'beginner',
+            'birthday' => now()->subYears(28)->format('Y-m-d'),
+        ]);
     }
 
     private function profile(): \App\Models\StudentProfile
@@ -41,10 +44,11 @@ class StudentOnboardingTest extends TestCase
     /** @test */
     public function saving_details_stores_them_and_marks_the_profile_complete()
     {
+        $expectedBirthday = $this->profile()->birthday->format('Y-m-d');
+
         $this->actingAs($this->student)
             ->post(route('student.onboarding.store'), [
                 'phone' => '+63 917 000 9999',
-                'date_of_birth' => now()->subYears(28)->format('Y-m-d'),
                 'height' => 175,
                 'weight' => 70,
                 'has_board' => false,
@@ -57,6 +61,7 @@ class StudentOnboardingTest extends TestCase
         $profile = $this->profile();
 
         $this->assertSame('+63 917 000 9999', $this->student->fresh()->phone);
+        $this->assertSame($expectedBirthday, $profile->birthday->format('Y-m-d'));
         $this->assertSame(28, $profile->age);
         $this->assertSame('175.00', $profile->height);
         $this->assertSame('70.00', $profile->weight);
@@ -67,11 +72,11 @@ class StudentOnboardingTest extends TestCase
     }
 
     /** @test */
-    public function age_is_derived_from_date_of_birth_and_does_not_go_stale()
+    public function age_is_derived_from_birthday_and_does_not_go_stale()
     {
         // Born exactly 10 years ago: still a minor under the 5-12 safety rule.
         $profile = $this->profile();
-        $profile->forceFill(['date_of_birth' => now()->subYears(10)])->save();
+        $profile->forceFill(['birthday' => now()->subYears(10)])->save();
 
         $this->assertSame(10, $profile->fresh()->age);
 
@@ -83,33 +88,10 @@ class StudentOnboardingTest extends TestCase
     }
 
     /** @test */
-    public function a_birth_date_under_five_is_rejected()
-    {
-        $this->actingAs($this->student)
-            ->post(route('student.onboarding.store'), [
-                'date_of_birth' => now()->subYears(3)->format('Y-m-d'),
-                'has_board' => false,
-            ])
-            ->assertSessionHasErrors('date_of_birth');
-    }
-
-    /** @test */
-    public function a_future_birth_date_is_rejected()
-    {
-        $this->actingAs($this->student)
-            ->post(route('student.onboarding.store'), [
-                'date_of_birth' => now()->addYear()->format('Y-m-d'),
-                'has_board' => false,
-            ])
-            ->assertSessionHasErrors('date_of_birth');
-    }
-
-    /** @test */
     public function a_student_with_their_own_board_does_not_need_measurements()
     {
         $this->actingAs($this->student)
             ->post(route('student.onboarding.store'), [
-                'date_of_birth' => now()->subYears(30)->format('Y-m-d'),
                 'has_board' => true,
                 'height' => null,
                 'weight' => null,
@@ -141,7 +123,6 @@ class StudentOnboardingTest extends TestCase
     public function the_prompt_is_not_shown_again_once_completed()
     {
         $this->actingAs($this->student)->post(route('student.onboarding.store'), [
-            'date_of_birth' => now()->subYears(25)->format('Y-m-d'),
             'height' => 170,
             'weight' => 65,
             'has_board' => false,
@@ -153,8 +134,11 @@ class StudentOnboardingTest extends TestCase
     /** @test */
     public function the_booking_prefill_only_contains_supplied_values()
     {
+        $this->student->studentProfile->update([
+            'birthday' => now()->subYears(25)->format('Y-m-d'),
+        ]);
+
         $this->actingAs($this->student)->post(route('student.onboarding.store'), [
-            'date_of_birth' => now()->subYears(25)->format('Y-m-d'),
             'height' => 170,
             'weight' => 65,
             'has_board' => true,
@@ -175,9 +159,12 @@ class StudentOnboardingTest extends TestCase
     /** @test */
     public function the_booking_form_receives_the_prefill()
     {
+        $this->student->studentProfile->update([
+            'birthday' => now()->subYears(33)->format('Y-m-d'),
+        ]);
+
         $this->actingAs($this->student)->post(route('student.onboarding.store'), [
             'phone' => '+63 917 888 4321',
-            'date_of_birth' => now()->subYears(33)->format('Y-m-d'),
             'height' => 182,
             'weight' => 78,
             'has_board' => false,
@@ -214,6 +201,7 @@ class StudentOnboardingTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('Student/Onboarding')
                 ->where('profile.phone', '+63 917 111 2222')
+                ->missing('profile.date_of_birth')
                 ->missing('profile.medical_info')
             );
     }
@@ -280,7 +268,6 @@ class StudentOnboardingTest extends TestCase
     public function the_prompt_stops_once_the_details_are_saved()
     {
         $this->actingAs($this->student)->post(route('student.onboarding.store'), [
-            'date_of_birth' => now()->subYears(30)->format('Y-m-d'),
             'height' => 170,
             'weight' => 65,
             'has_board' => false,
@@ -317,7 +304,6 @@ class StudentOnboardingTest extends TestCase
     {
         $this->actingAs($this->student)
             ->post(route('student.onboarding.store'), [
-                'date_of_birth' => now()->subYears(25)->format('Y-m-d'),
                 'height' => 170,
                 'weight' => 65,
                 'has_board' => false,
@@ -327,7 +313,6 @@ class StudentOnboardingTest extends TestCase
 
         $this->actingAs($this->student)
             ->post(route('student.onboarding.store'), [
-                'date_of_birth' => now()->subYears(25)->format('Y-m-d'),
                 'height' => 170,
                 'weight' => 65,
                 'has_board' => false,
@@ -341,7 +326,6 @@ class StudentOnboardingTest extends TestCase
     {
         $this->actingAs($this->student)
             ->post(route('student.onboarding.store'), [
-                'date_of_birth' => now()->subYears(25)->format('Y-m-d'),
                 'height' => 170,
                 'weight' => 65,
                 'has_board' => false,

@@ -151,7 +151,7 @@ class BookingController extends Controller
             'studentName' => $studentUser->name,
             'studentProfile' => [
                 'email' => $studentUser->email,
-                'birthday' => ($studentProfile?->birthday ?? $studentProfile?->date_of_birth)?->format('Y-m-d'),
+                'birthday' => $studentProfile?->birthday?->format('Y-m-d'),
                 'age' => $studentProfile?->age,
                 'country' => $studentProfile?->country,
             ],

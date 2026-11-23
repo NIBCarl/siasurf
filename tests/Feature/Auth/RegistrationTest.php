@@ -30,6 +30,7 @@ class RegistrationTest extends TestCase
             'password' => 'password',
             'password_confirmation' => 'password',
             'role' => 'student',
+            'birthday' => '1998-05-15',
             'skill_level' => 'beginner',
             'is_first_time' => true,
         ], $overrides);
@@ -50,6 +51,21 @@ class RegistrationTest extends TestCase
         // New accounts land on the verification screen, not the dashboard,
         // because every protected route now requires a verified email.
         $response->assertRedirect(route('verification.notice'));
+
+        $user = User::where('email', 'test@example.com')->firstOrFail();
+        $this->assertSame('1998-05-15', $user->studentProfile?->birthday?->format('Y-m-d'));
+    }
+
+    public function test_student_registration_requires_valid_birthday(): void
+    {
+        $this->post('/register', $this->payload(['birthday' => '']))
+            ->assertSessionHasErrors('birthday');
+
+        $this->post('/register', $this->payload(['birthday' => now()->subYears(3)->format('Y-m-d')]))
+            ->assertSessionHasErrors('birthday');
+
+        $this->post('/register', $this->payload(['birthday' => now()->addYear()->format('Y-m-d')]))
+            ->assertSessionHasErrors('birthday');
     }
 
     public function test_a_verification_email_is_sent_when_a_user_registers(): void

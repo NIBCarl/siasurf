@@ -40,7 +40,7 @@ class RegisteredUserController extends Controller
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|in:student,instructor',
-            'birthday' => ['nullable', 'date', 'after:1920-01-01', 'before_or_equal:'.now()->subYears(5)->toDateString()],
+            'birthday' => ['nullable', 'required_if:role,student', 'date', 'after:1920-01-01', 'before_or_equal:'.now()->subYears(5)->toDateString()],
             'country' => 'nullable|string|max:100',
         ]);
 

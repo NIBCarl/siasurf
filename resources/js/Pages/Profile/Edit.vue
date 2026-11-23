@@ -62,7 +62,7 @@ const showsPhotoUploader = computed(() => user.value?.role === 'student' || user
                 <div class="mt-6 border-t border-sand-200 pt-6">
                     <p class="text-body-sm font-semibold text-deep-900">Booking details</p>
                     <p class="mt-1 text-body-sm text-stone-600">
-                        Age, height, board, and emergency contact — used to prefill every booking.
+                        Phone, height, weight, board, and emergency contact — used to prefill every booking.
                     </p>
                     <a
                         :href="route('student.onboarding')"

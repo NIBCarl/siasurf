@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
@@ -11,7 +11,6 @@ interface Profile {
     skill_assessed_at: string | null;
     is_first_time: boolean;
     phone: string | null;
-    date_of_birth: string | null;
     age: number | null;
     height: number | null;
     weight: number | null;
@@ -112,7 +111,6 @@ function submitAssessment() {
 
 const form = useForm({
     phone: props.profile.phone ?? '',
-    date_of_birth: props.profile.date_of_birth ?? '',
     height: props.profile.height ?? ('' as number | string),
     weight: props.profile.weight ?? ('' as number | string),
     has_board: props.profile.has_board,
@@ -121,32 +119,8 @@ const form = useForm({
     intended: props.intended ?? '',
 });
 
-// Age is derived from the date of birth so the student sees what the safety
-// rules will actually use. Kept in sync as they type.
-const age = ref<number | null>(props.profile.age);
-
-watch(
-    () => form.date_of_birth,
-    (value) => {
-        if (!value) {
-            age.value = null;
-            return;
-        }
-        const dob = new Date(value);
-        if (Number.isNaN(dob.getTime())) {
-            age.value = null;
-            return;
-        }
-        const today = new Date();
-        let years = today.getFullYear() - dob.getFullYear();
-        const monthDiff = today.getMonth() - dob.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-            years -= 1;
-        }
-        age.value = years >= 0 ? years : null;
-    },
-    { immediate: true },
-);
+// Age is derived on the server from the birthday captured at registration.
+const age = computed<number | null>(() => props.profile.age);
 
 const isMinor = computed(() => age.value !== null && age.value < 18);
 const boardNeedsMeasurements = computed(() => !form.has_board);
@@ -468,45 +442,26 @@ function skip() {
                         <p class="text-eyebrow uppercase tracking-widest text-lagoon-600">Step 2 · Booking details</p>
                         <h2 class="mt-1 text-h3 text-deep-900">About you</h2>
                         <p class="mt-1 text-body-sm text-stone-600">
-                            Age decides which breaks and instructors are safe for you, and your phone lets your instructor reach you if a lesson needs to move.
+                            Your phone lets your instructor or SISA reach you if a lesson needs to move.
                         </p>
 
-                        <div class="mt-5 grid gap-5 sm:grid-cols-2">
-                            <div>
-                                <label for="date_of_birth" class="block text-body-sm font-semibold text-deep-900">
-                                    Date of birth
-                                </label>
-                                <input
-                                    id="date_of_birth"
-                                    v-model="form.date_of_birth"
-                                    type="date"
-                                    :max="new Date().toISOString().split('T')[0]"
-                                    class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
-                                />
-                                <InputError :message="form.errors.date_of_birth" class="mt-1.5" />
-                                <p v-if="age !== null" class="mt-1.5 text-body-sm text-stone-600">
-                                    You are <span class="font-semibold text-deep-900">{{ age }}</span> years old.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label for="phone" class="block text-body-sm font-semibold text-deep-900">
-                                    Your phone number
-                                </label>
-                                <input
-                                    id="phone"
-                                    v-model="form.phone"
-                                    type="tel"
-                                    maxlength="30"
-                                    autocomplete="tel"
-                                    placeholder="+63 917 000 0000"
-                                    class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
-                                />
-                                <InputError :message="form.errors.phone" class="mt-1.5" />
-                                <p class="mt-1.5 text-body-sm text-stone-500">
-                                    Used by your instructor or SISA if a lesson needs to be moved.
-                                </p>
-                            </div>
+                        <div class="mt-5 max-w-md">
+                            <label for="phone" class="block text-body-sm font-semibold text-deep-900">
+                                Your phone number
+                            </label>
+                            <input
+                                id="phone"
+                                v-model="form.phone"
+                                type="tel"
+                                maxlength="30"
+                                autocomplete="tel"
+                                placeholder="+63 917 000 0000"
+                                class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
+                            />
+                            <InputError :message="form.errors.phone" class="mt-1.5" />
+                            <p class="mt-1.5 text-body-sm text-stone-500">
+                                Used by your instructor or SISA if a lesson needs to be moved.
+                            </p>
                         </div>
 
                         <p
