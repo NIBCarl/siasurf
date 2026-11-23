@@ -74,6 +74,7 @@ interface Props {
   participant?: Participant | null
   progress?: { participants: number; signed: number; required: number } | null
   holdRemainingSeconds?: number
+  step?: number
   waiverPrefill: WaiverPrefill
   waiverDocument: WaiverDocument
 }
@@ -328,7 +329,7 @@ const goBack = () => {
     <div class="waiver-page-outer py-10 bg-slate-50 min-h-screen print:py-0 print:bg-white print:min-h-0">
       <div class="waiver-page-container max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 print:max-w-none print:px-0">
         <!-- Progress Stepper -->
-        <BookingStepper :current="4" class="mt-4 waiver-no-print print:hidden" />
+        <BookingStepper :current="step ?? 2" class="mt-4 waiver-no-print print:hidden" />
 
         <!-- Exclusive Slot Hold Banner -->
         <div class="waiver-no-print mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 print:hidden">

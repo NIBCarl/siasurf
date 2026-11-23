@@ -65,6 +65,7 @@ class WaiverController extends Controller
                 'waiverPrefill' => $this->buildWaiverPrefill($booking, $participant),
                 'waiverDocument' => $waiverDocument,
                 'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
+                'step' => 2,
             ]);
         }
 
@@ -86,6 +87,7 @@ class WaiverController extends Controller
             'waiverPrefill' => $this->buildWaiverPrefill($booking, null),
             'waiverDocument' => $waiverDocument,
             'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
+            'step' => 2,
         ]);
     }
 
@@ -434,6 +436,7 @@ class WaiverController extends Controller
                 'participant' => $participant,
                 'progress' => $this->waiverService->waiverProgress($booking),
                 'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
+                'step' => 2,
             ]);
         }
 
@@ -456,6 +459,7 @@ class WaiverController extends Controller
             'participant' => null,
             'progress' => null,
             'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
+            'step' => 2,
         ]);
     }
 

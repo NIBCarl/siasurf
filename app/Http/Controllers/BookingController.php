@@ -66,7 +66,7 @@ class BookingController extends Controller
     }
 
     /**
-     * Display the booking creation form (Step 1: Select instructor)
+     * Display the booking creation form (Step 1: Lesson details)
      */
     public function create(Request $request, User $instructor): Response
     {
@@ -165,7 +165,7 @@ class BookingController extends Controller
     }
 
     /**
-     * Store booking details (Step 2: Enter details)
+     * Store booking details and validate safety rules (Step 1 submit)
      */
     public function storeDetails(Request $request, User $instructor): Response|RedirectResponse
     {
@@ -422,7 +422,7 @@ class BookingController extends Controller
             $durationMinutes
         );
 
-        // Step 3: Safety validation. With an explicit party, every participant
+        // Safety validation. With an explicit party, every participant
         // is checked (all must be the same skill level); otherwise use the
         // single-person rules so older clients keep working.
         try {
@@ -614,7 +614,7 @@ class BookingController extends Controller
     }
 
     /**
-     * Display payment page (Step 5: Payment)
+     * Display payment page (Step 3: Payment)
      */
     public function payment(Booking $booking): Response|RedirectResponse
     {
@@ -640,13 +640,13 @@ class BookingController extends Controller
 
         return Inertia::render('Booking/Payment', [
             'booking' => $booking->load(['instructor.instructorProfile', 'surfSpot']),
-            'step' => 5,
+            'step' => 3,
             'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
         ]);
     }
 
     /**
-     * Process payment (Step 5: Payment)
+     * Process payment (Step 3: Payment)
      */
     public function storePayment(Request $request, Booking $booking): RedirectResponse
     {
@@ -776,7 +776,7 @@ class BookingController extends Controller
     }
 
     /**
-     * Display booking confirmation (Step 6: Confirmation / Live Request Status)
+     * Display booking confirmation (Step 4: Confirmation / Live Request Status)
      */
     public function confirmation(Booking $booking): Response
     {
@@ -786,7 +786,7 @@ class BookingController extends Controller
 
         return Inertia::render('Booking/Confirmation', [
             'booking' => $booking,
-            'step' => 6,
+            'step' => 4,
             'acceptRemainingSeconds' => $booking->getAcceptTimeRemaining(),
             'paymentRemainingSeconds' => $booking->getPaymentTimeRemaining(),
         ]);

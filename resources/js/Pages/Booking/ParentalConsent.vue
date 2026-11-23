@@ -43,6 +43,7 @@ interface Props {
   participant?: Participant | null
   progress?: { participants: number; signed: number; required: number } | null
   holdRemainingSeconds?: number
+  step?: number
 }
 
 const props = defineProps<Props>()
@@ -184,7 +185,7 @@ const goBack = () => {
     <div class="py-12">
       <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
         <!-- Progress Stepper -->
-        <BookingStepper :current="4" class="mt-6" />
+        <BookingStepper :current="step ?? 2" class="mt-6" />
 
         <!-- Exclusive Slot Hold Banner -->
         <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">

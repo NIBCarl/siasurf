@@ -39,6 +39,7 @@ interface Booking {
 
 interface Props {
   booking: Booking
+  step?: number
   acceptRemainingSeconds?: number | null
   paymentRemainingSeconds?: number | null
 }
@@ -216,7 +217,7 @@ onBeforeUnmount(() => {
     <div class="py-12 bg-white min-h-screen">
       <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <!-- Progress Stepper -->
-        <BookingStepper :current="6" class="mt-6" />
+        <BookingStepper :current="step ?? 4" class="mt-6" />
 
         <!-- =============================================================== -->
         <!-- STATE 1: WAITING FOR INSTRUCTOR CONFIRMATION (status = pending) -->
@@ -310,7 +311,7 @@ onBeforeUnmount(() => {
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-ocean-200/70">
                 <div>
                   <p class="text-xs font-black uppercase tracking-wider text-ocean-700">
-                    Step 6 • Payment Unlocked
+                    Step 4 • Payment Unlocked
                   </p>
                   <p class="text-2xl font-black text-slate-900 mt-1">
                     Amount Due: ₱{{ booking.total_amount.toLocaleString() }}

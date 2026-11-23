@@ -155,23 +155,23 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->as('
 
 // Booking creation routes (for students)
 Route::middleware(['auth', 'verified', 'role:student'])->prefix('bookings')->as('bookings.')->group(function () {
-    // Step 1: Select instructor and enter details
+    // Step 1: Lesson details
     Route::get('/create/{instructor}', [BookingController::class, 'create'])->name('create');
     Route::post('/create/{instructor}/details', [BookingController::class, 'storeDetails'])->name('store-details');
 
-    // Step 4: Sign waiver
+    // Step 2: Sign waiver
     Route::get('/{booking}/waiver', [WaiverController::class, 'showLiability'])->name('waiver');
     Route::post('/{booking}/waiver', [WaiverController::class, 'storeLiability'])->name('store-waiver');
     Route::post('/{booking}/waiver/download-pdf', [WaiverController::class, 'downloadPreviewPdf'])->name('waiver.download-pdf');
 
-    // Step 4b: Parental consent (if needed)
+    // Step 2b: Parental consent (if needed)
     Route::get('/{booking}/parental-consent', [WaiverController::class, 'showParentalConsent'])->name('parental-consent');
     Route::post('/{booking}/parental-consent', [WaiverController::class, 'storeParentalConsent'])->name('store-parental-consent');
 
     // Abandon an unfinished checkout booking (from Waiver / Parental Consent / Payment step) and release the slot immediately
     Route::post('/{booking}/abandon', [BookingController::class, 'abandon'])->name('abandon');
 
-    // Step 5: Payment
+    // Step 3: Payment
     // BR-4.4 - a booking cannot reach payment until the liability waiver (and
     // parental consent for minors) is signed. The middleware redirects back to
     // the missing step instead of trusting the UI to keep the order.
@@ -180,7 +180,7 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('bookings')->as(
         Route::post('/{booking}/payment', [BookingController::class, 'storePayment'])->name('store-payment');
     });
 
-    // Step 6: Confirmation
+    // Step 4: Confirmation
     Route::get('/{booking}/confirmation', [BookingController::class, 'confirmation'])->name('confirmation');
 
     // Waiver status check
