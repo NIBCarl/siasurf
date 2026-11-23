@@ -11,7 +11,6 @@ import StatusPill from '@/Components/UI/StatusPill.vue'
 import {
   ArrowLeftIcon,
   CheckBadgeIcon,
-  ExclamationTriangleIcon,
   PhotoIcon,
   ShieldExclamationIcon,
 } from '@heroicons/vue/24/outline'
@@ -25,24 +24,34 @@ interface Booking {
   surf_spot: { id: number; name: string }
 }
 
-interface TagOption {
+interface PositiveTagOption {
   value: string
   label: string
   description: string
-  group: string
-  severity: string | null
-  severity_label: string | null
-  strikes: number | null
+}
+
+interface TopicOption {
+  value: string
+  label: string
+}
+
+interface ConcernOption {
+  value: string
+  label: string
+  description: string
+  topic: string
+  topic_label: string
 }
 
 interface Props {
   booking: Booking
   review: { id: number; comment: string; rating: number | null } | null
-  report: { id: number; status: string; category: string } | null
+  report: { id: number; status: string; report_type: string | null; checked_items: string[] } | null
   canReview: boolean
   canReport: boolean
-  positiveTags: TagOption[]
-  concernCategories: TagOption[]
+  positiveTags: PositiveTagOption[]
+  reportTopics: TopicOption[]
+  concernCategories: ConcernOption[]
 }
 
 const props = defineProps<Props>()
@@ -54,7 +63,8 @@ const form = useForm({
   comment: '',
   feedback_tags: [] as string[],
   photo: null as File | null,
-  concern_category: '',
+  report_type: '',
+  concern_categories: [] as string[],
   concern_details: '',
   injury_occurred: false,
   near_miss: false,
@@ -65,34 +75,44 @@ const form = useForm({
 const photoPreview = ref<string | null>(null)
 const evidenceName = ref<string | null>(null)
 
-const groupedConcerns = computed(() => {
-  const groups: Record<string, TagOption[]> = { minor: [], major: [], critical: [], concern: [] }
-  props.concernCategories.forEach((category) => {
-    const key = groups[category.group] ? category.group : 'concern'
-    groups[key].push(category)
-  })
-  return groups
+const groupedByTopic = computed(() => {
+  return props.reportTopics.map((topic) => ({
+    ...topic,
+    items: props.concernCategories.filter((item) => item.topic === topic.value),
+  })).filter((group) => group.items.length > 0)
 })
 
-const selectedConcern = computed(
-  () => props.concernCategories.find((category) => category.value === form.concern_category) ?? null,
-)
+const visibleTopicGroups = computed(() => {
+  if (!form.report_type) return groupedByTopic.value
+  const selected = groupedByTopic.value.filter((g) => g.value === form.report_type)
+  const rest = groupedByTopic.value.filter((g) => g.value !== form.report_type)
+  return [...selected, ...rest]
+})
+
+const toggleConcernItem = (value: string) => {
+  const index = form.concern_categories.indexOf(value)
+  if (index === -1) {
+    form.concern_categories.push(value)
+    if (!form.report_type) {
+      const matched = props.concernCategories.find((c) => c.value === value)
+      if (matched) form.report_type = matched.topic
+    }
+  } else {
+    form.concern_categories.splice(index, 1)
+  }
+}
 
 const setRating = (value: number) => {
   form.rating = form.rating === value ? null : value
 }
 
-const groupLabels: Record<string, string> = {
-  minor: 'Minor concern â€” 1 strike if confirmed',
-  major: 'Major concern â€” 2 strikes if confirmed',
-  critical: 'Critical concern â€” 3 strikes if confirmed',
-  concern: 'Other concern â€” SISA assigns the severity',
-}
-
 const canSubmit = computed(() => {
   const reviewOk = !form.submit_review || (props.canReview && form.rating !== null && form.comment.length >= 20)
   const concernOk = !form.submit_concern
-    || (props.canReport && form.concern_category !== '' && form.concern_details.length >= 30 && form.truth_declaration)
+    || (props.canReport
+      && form.concern_categories.length > 0
+      && form.concern_details.length >= 30
+      && form.truth_declaration)
   return (form.submit_review || form.submit_concern) && reviewOk && concernOk
 })
 
@@ -133,8 +153,11 @@ const submit = () => {
   })
 }
 
-const formatDate = (date: string) =>
-  new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+const formatDate = (date: string) => {
+  const [y, m, d] = String(date).slice(0, 10).split('-').map(Number)
+  const parsed = y && m && d ? new Date(y, m - 1, d) : new Date(date)
+  return parsed.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+}
 
 const feedbackError = computed(() => (form.errors as Record<string, string>).feedback ?? '')
 </script>
@@ -183,7 +206,7 @@ const feedbackError = computed(() => (form.errors as Record<string, string>).fee
                         </div>
                         <h2 class="mt-3 text-body-lg font-semibold text-deep-900">Leave a public review</h2>
                         <p class="mt-1 text-body-sm text-stone-600">
-                            Visible on the instructor's profile. A public review never adds a strike by itself.
+                            Visible on the instructor's profile to help future tourists choose a lesson.
                         </p>
                         <p v-if="!canReview" class="mt-2 text-label font-semibold text-lagoon-700">
                             A public review already exists for this booking.
@@ -209,14 +232,14 @@ const feedbackError = computed(() => (form.errors as Record<string, string>).fee
                             >
                                 <ShieldExclamationIcon class="h-5 w-5" aria-hidden="true" />
                             </span>
-                            <StatusPill v-if="form.submit_concern" variant="critical" :dot="false">Selected</StatusPill>
+                            <StatusPill v-if="form.submit_concern" variant="pending" :dot="false">Selected</StatusPill>
                         </div>
-                        <h2 class="mt-3 text-body-lg font-semibold text-deep-900">Report a private concern</h2>
+                        <h2 class="mt-3 text-body-lg font-semibold text-deep-900">Report a safety concern or complaint</h2>
                         <p class="mt-1 text-body-sm text-stone-600">
-                            Only SISA sees this. It becomes a strike only after SISA confirms it.
+                            Sent privately to SISA administrators for review and appropriate action.
                         </p>
                         <p v-if="!canReport" class="mt-2 text-label font-semibold text-rose-700">
-                            A concern was already submitted for this booking.
+                            A report was already submitted for this booking.
                         </p>
                     </button>
                 </div>
@@ -333,7 +356,7 @@ const feedbackError = computed(() => (form.errors as Record<string, string>).fee
                     </AppCard>
                 </section>
 
-                <!-- Private concern -->
+                <!-- Private incident / complaint report -->
                 <section v-if="form.submit_concern">
                     <AppCard padding="lg" class="border-rose-200">
                         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -342,7 +365,7 @@ const feedbackError = computed(() => (form.errors as Record<string, string>).fee
                                     <ShieldExclamationIcon class="h-5 w-5" aria-hidden="true" />
                                 </span>
                                 <div>
-                                    <p class="eyebrow">Private concern</p>
+                                    <p class="eyebrow">Private report</p>
                                     <h2 class="mt-1 text-headline font-semibold text-deep-900">What happened?</h2>
                                 </div>
                             </div>
@@ -350,35 +373,64 @@ const feedbackError = computed(() => (form.errors as Record<string, string>).fee
                         </div>
 
                         <p class="mt-3 text-body-sm text-stone-600">
-                            SISA reviews this before any strike is added. Your identity is visible to SISA admins but
-                            not to the instructor.
+                            Only SISA administrators review this report. Your identity is visible to SISA admins but
+                            hidden from the instructor.
                         </p>
 
                         <div class="mt-5">
-                            <label for="concern-category" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                                Category <span class="text-rose-600">*</span>
+                            <label for="report-type" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                Primary report type
                             </label>
                             <select
-                                id="concern-category"
-                                v-model="form.concern_category"
+                                id="report-type"
+                                v-model="form.report_type"
                                 class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-rose-500 focus:ring-rose-500"
                             >
-                                <option value="">Choose the closest category</option>
-                                <optgroup v-for="(items, key) in groupedConcerns" :key="key" :label="groupLabels[key]">
-                                    <option v-for="category in items" :key="category.value" :value="category.value">
-                                        {{ category.label }}
-                                    </option>
-                                </optgroup>
+                                <option value="">All report topics</option>
+                                <option v-for="topic in reportTopics" :key="topic.value" :value="topic.value">
+                                    {{ topic.label }}
+                                </option>
                             </select>
-                            <p v-if="selectedConcern" class="mt-2 text-body-sm text-stone-600">
-                                {{ selectedConcern.description }}
-                                <template v-if="selectedConcern.strikes">
-                                    <span class="font-semibold text-rose-800">
-                                        · Proposed weight: {{ selectedConcern.strikes }} strike(s)
-                                    </span>
-                                </template>
-                            </p>
-                            <InputError :message="form.errors.concern_category" />
+                            <InputError :message="form.errors.report_type" />
+                        </div>
+
+                        <div class="mt-5 space-y-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                    Checklist — select all that apply <span class="text-rose-600">*</span>
+                                </p>
+                                <span class="text-label text-stone-500">
+                                    {{ form.concern_categories.length }} selected
+                                </span>
+                            </div>
+
+                            <div v-for="group in visibleTopicGroups" :key="group.value" class="space-y-2">
+                                <p class="text-body-sm font-semibold text-deep-900">{{ group.label }}</p>
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <label
+                                        v-for="item in group.items"
+                                        :key="item.value"
+                                        class="flex cursor-pointer items-start gap-3 rounded-control border p-3 text-body-sm transition-colors"
+                                        :class="
+                                            form.concern_categories.includes(item.value)
+                                                ? 'border-rose-400 bg-rose-50'
+                                                : 'border-sand-200 bg-white hover:border-rose-300'
+                                        "
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            :checked="form.concern_categories.includes(item.value)"
+                                            class="mt-0.5 rounded border-sand-300 text-rose-600 focus:ring-rose-500"
+                                            @change="toggleConcernItem(item.value)"
+                                        />
+                                        <span>
+                                            <span class="block font-semibold text-deep-900">{{ item.label }}</span>
+                                            <span class="block text-label text-stone-600">{{ item.description }}</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            <InputError :message="form.errors.concern_categories" />
                         </div>
 
                         <div class="mt-5">
@@ -455,8 +507,8 @@ const feedbackError = computed(() => (form.errors as Record<string, string>).fee
                 </section>
 
                 <AppPanel tone="neutral" label="What happens next">
-                    A public review is published immediately. A private concern stays pending until SISA confirms or
-                    rejects it. Only confirmed minor, major or critical concerns add 1, 2 or 3 strikes.
+                    A public review is published immediately. A private incident report goes directly to SISA
+                    administrators for review; SISA decides the final outcome and notifies you.
                 </AppPanel>
 
                 <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -482,4 +534,3 @@ const feedbackError = computed(() => (form.errors as Record<string, string>).fee
         </div>
     </AppLayout>
 </template>
-

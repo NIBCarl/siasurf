@@ -1,20 +1,21 @@
 # SiaSurf — Feedback, Strikes, Suspension, and Appeals
 
-**Status:** Implemented (October 2026)  
-**Source of truth:** code + tests; this document summarizes the policy.
+**Status:** Updated to V3 (November 2026)  
+**Source of truth:** code + tests + `words/Capstone2_Introduction_V3.docx` (§1.23, U6, I8).
 
-## 1. Core policy
+## 1. Core policy (V3)
 
 1. A public review never directly creates a strike.
-2. A private student concern starts as `pending` and does not affect the instructor until SISA confirms it.
-3. Confirmed severity determines the strike: **Minor = 1, Major = 2, Critical = 3**.
-4. Three active confirmed strikes trigger an automatic **30-day suspension**.
-5. One report per booking. Multiple tags in one report do not stack strikes; the final confirmed severity wins.
-6. Suspension reason, dates, and active strikes are visible to the instructor.
-7. The instructor may submit **one appeal per suspension**.
-8. SISA approves or rejects the appeal with a written response. Approval lifts the suspension and may revoke selected incidents; the active strike count must fall below 3 for an automatic suspension to be overturned.
-9. SISA can suspend manually with a required reason and duration.
-10. Automatic suspension clears served strikes after expiry. Manual suspension does not reset strikes unless an incident is revoked.
+2. A private student report starts as `pending` (`severity = null`) and does not affect the instructor until SISA decides.
+3. Tourist checklist items are grouped by neutral report topic (`IncidentReportTopic`). System-suggested severity/outcomes (`no_strike`, `1_strike`, `2_strikes`, `3_strikes`, `critical`) are computed by highest severity item (never summed) and are **visible to SISA administrators only** — hidden from tourists and instructors.
+4. Every SISA final decision (including dismissal/`no_strike`) requires a `decision_reason` (sent to the reporter) and an internal `admin_note` (SISA-only). `instructor_summary` is strictly separate and redacted.
+5. **3-Strike Penalty Ladder** (tier-for-total on active strikes):
+   - **1 active strike:** Official warning + **₱500 fine** recorded as `due` in `instructor_fines` (collected by SISA outside the system). Instructor remains active.
+   - **2 active strikes:** **1-week (7-day) suspension**. Profile is hidden from booking; upcoming bookings cancelled. Reinstatement requires SISA administrator approval and **preserves** the 2 active strikes on record.
+   - **3+ active strikes:** **1-month (30-day) suspension** + physical SISA ID confiscation notice outside the system. Profile is hidden from booking; upcoming bookings cancelled. Reinstatement requires SISA administrator approval and marks served strikes as `served` (`strike_count = 0`).
+6. **Critical incidents** are recorded (`handled_externally = true`, `strike_weight = 0`, no strike ledger row, no automatic suspension) and SISA is notified to handle them outside the system. Admins may optionally place a manual administrative hold while handled externally.
+7. **Reinstatement:** Elapsed suspensions transition to `awaiting_reinstatement` (staying hidden from booking) until a SISA administrator explicitly approves reinstatement.
+8. **Appeals & Revocations:** Instructors may submit one appeal per suspension. Revoking a 1-strike incident voids its `due` ₱500 fine; revoking strikes down from 3 to 2 downgrades a Tier 3 (1-month) suspension to Tier 2 (1-week); dropping below 2 lifts the automatic suspension.
 
 ## 2. Student feedback hub
 
@@ -23,146 +24,35 @@ One page: `Student/Feedback/Create.vue`.
 | Track | Visibility | Strike effect |
 |---|---|---|
 | Public review | Public profile | **0** |
-| Private concern | Student + SISA only | Pending; 1/2/3 after confirmation |
+| Private concern / report | Student + SISA only (suggested severity hidden from student/instructor) | Pending; SISA decides final outcome |
 
-The student can submit either track, or both. The private report links to the public review when both exist.
+### Private report fields
 
-### Public review fields
-
-- Optional 1–5 rating
-- Comment, minimum 20 characters
-- Optional photo
-- Positive predefined tags
-- “Other positive comment”
-
-### Private concern fields
-
-- One primary category
+- Primary report topic (`unsafe_surf_zone`, `no_safety_protocol`, `unprofessional_conduct`, `service_complaint`, `other`)
+- Multi-item checklist grouped by neutral topic (zero minor/major/critical or strike labels shown)
 - Description, minimum 30 characters
 - Injury / near-miss flags
 - Optional evidence (PDF/JPG/PNG, max 10 MB)
 - Truthfulness declaration
 
-“Other concern” is unclassified and requires SISA to assign the final severity.
+## 3. Database & state transitions
 
-## 3. Predefined categories
+- `safety_incidents` — `report_type`, `checked_items` (JSON), `suggested_outcome`, `final_outcome`, `decision_reason`, `admin_note`, `handled_externally`, `external_handled_at`, `strike_weight`, `instructor_summary`
+- `instructor_strikes` — append-only ledger (`active` / `revoked` / `served`)
+- `instructor_fines` — fine ledger for 1-strike penalties (`due` / `paid` / `waived` / `voided`)
+- `instructor_suspensions` — `type` (`manual`/`automatic`/`legacy`), `strike_tier` (`2`/`3`), `status` (`active` → `awaiting_reinstatement` → `completed` | `lifted_on_appeal` | `revoked_by_admin`), `requires_sisa_id_confiscation`, `reinstated_at`, `reinstated_by`, `reinstatement_note`
+- `instructor_appeals` — one per suspension
 
-The code-defined list lives in `App\Enums\FeedbackCategory`.
-
-### Positive — 0 strikes
-
-- Clear coaching and encouragement
-- Felt safe and well supervised
-- Good local, tide, and current knowledge
-- Appropriate board and equipment
-- Punctual, prepared, and professional
-- Other positive comment
-
-### Minor — 1 strike
-
-- Late start or early end without notice
-- Poor communication or unclear instructions
-- Phone or social-media distraction
-- Did not follow the agreed lesson plan
-- Ill-fitting or poorly checked equipment
-- Unprofessional language or attitude
-- Asked to pay or cancel outside the platform
-- Other minor concern
-
-### Major — 2 strikes
-
-- No safety briefing
-- Ignored tide/current/weather warnings
-- Exceeded the certified student ratio
-- Taught above the booked skill level
-- Briefly left the student/group unsupervised
-- Pressured the student beyond their comfort level
-- Unsafe equipment or leash failure
-- Unwanted personal comments/photos without consent
-- Failed first aid/injury response
-- Allowed an unverified assistant to teach
-- Other major concern
-
-### Critical — 3 strikes
-
-- Left the student alone/unattended in the water
-- Took a beginner to a dangerous or advanced break
-- Harassment, threats, or discrimination
-- Under the influence of alcohol/drugs
-- Physical assault/violence
-- Continued after the student said stop or reported injury
-- Taught without valid certification
-- Serious negligence causing/worsening injury
-- Theft, extortion, or fraud
-- Other critical concern
-
-## 4. Database model
-
-- `reviews.feedback_tags` — positive tags (JSON)
-- `safety_incidents` — source, status, category, suggested/final severity, strike weight, review link, evidence, instructor summary, confirmation/rejection fields
-- `instructor_strikes` — append-only ledger (weight, reason, source, status active/revoked/served)
-- `instructor_suspensions` — type manual/automatic/legacy, status, reason, start/end, triggering incident
-- `instructor_appeals` — one per suspension, statement, ground, evidence, status, admin response, revoked incident IDs
-- `instructor_status_logs` — status change audit trail
-- `instructor_profiles.suspension_reason` / `suspended_at` — current-state fallback for the suspended page
-
-## 5. State transitions
-
-```text
-Student concern: pending → confirmed → revoked
-                         → rejected
-Admin incident:  confirmed (immediate)
-```
-
-Only `confirmed` incidents create strikes.
-
-```text
-Suspension: active → completed (expiry)
-                   → lifted_on_appeal
-                   → revoked_by_admin
-Appeal:     pending → approved | rejected | withdrawn | expired
-```
-
-## 6. Key implementation files
+## 4. Key implementation files
 
 | Concern | File |
 |---|---|
-| Category taxonomy | `app/Enums/FeedbackCategory.php` |
-| Student submission | `app/Http/Controllers/Student/FeedbackController.php` |
-| Submission orchestration | `app/Services/FeedbackService.php` |
-| Strike ledger + threshold | `app/Services/StrikeService.php` |
-| Suspension + booking cancellation | `app/Services/SuspensionService.php` |
-| Appeal review | `app/Services/AppealService.php` |
-| Admin report queue | `app/Http/Controllers/Admin/IncidentController.php` |
-| Admin appeal queue | `app/Http/Controllers/Admin/AppealController.php` |
-| Suspended page + appeal | `app/Http/Controllers/Instructor/SuspensionController.php` |
-| Suspended UI | `resources/js/Pages/Instructor/Suspended.vue` |
-| Feedback UI | `resources/js/Pages/Student/Feedback/Create.vue` |
-
-## 7. Tests
-
-`tests/Feature/FeedbackStrikeAppealTest.php` covers:
-
-- positive review → no report/no strike
-- pending concern → no strike
-- admin confirmation → correct weight
-- three minors → suspension
-- one critical → immediate suspension
-- rejection → no strike
-- one report per booking
-- suspended page reason and appeal availability
-- suspended instructor blocked from booking workspace
-- appeal approval → strike revoked, suspension lifted
-- manual suspension reason visible
-- admin direct incident applies its strike
-
-## 8. Documentation alignment
-
-This behavior is reflected in:
-
-- `prd.md` §2.5.5 and BR-5.8–BR-5.15
-- `AGENTS.md` Phase 4, Phase 9, Phase 10 and the Business Rules table
-- `PRODUCT.md` capabilities
-- `siasurf_methodology.md` §1.6 and §3.2
-- `Capstone2_Introduction_V2.docx` Safety and Strike Management
-
+| Outcomes, topics & fines | `app/Enums/IncidentOutcome.php`, `app/Enums/IncidentReportTopic.php`, `app/Enums/FineStatus.php` |
+| Category taxonomy & student filter | `app/Enums/FeedbackCategory.php` |
+| Student submission | `app/Http/Controllers/Student/FeedbackController.php`, `app/Services/FeedbackService.php` |
+| Strike ladder & fines | `app/Services/StrikeService.php`, `app/Models/InstructorFine.php` |
+| Suspension & reinstatement | `app/Services/SuspensionService.php`, `app/Console/Commands/LiftExpiredSuspensions.php` |
+| Appeal review | `app/Services/AppealService.php`, `app/Http/Controllers/Admin/AppealController.php` |
+| Admin incident & instructor controls | `app/Http/Controllers/Admin/IncidentController.php`, `app/Http/Controllers/Admin/InstructorController.php` |
+| Instructor standing & suspended UI | `app/Http/Controllers/Instructor/SuspensionController.php`, `resources/js/Pages/Instructor/Dashboard.vue`, `resources/js/Pages/Instructor/Suspended.vue` |
+| Feedback UI (hidden suggestions) | `resources/js/Pages/Student/Feedback/Create.vue` |

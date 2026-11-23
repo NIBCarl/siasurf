@@ -74,6 +74,16 @@
     }
 }
 
+select:not([multiple]):not([size]) {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+select::picker-icon {
+    display: none;
+}
+
 @layer components {
     /* Three-plane depth system:
        0 canvas = sand-50 · 1 paper = white · 2 well = sand-50 inset · 3 chrome = deep-900 */

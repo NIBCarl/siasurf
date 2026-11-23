@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import AppButton from '@/Components/UI/AppButton.vue'
@@ -76,6 +76,10 @@ interface Booking {
   total_amount: number
   refund_amount?: number | null
   skill_level: string
+  session_type?: string | null
+  previous_surf_spot_id?: number | null
+  spot_change_reason?: string | null
+  spot_changed_at?: string | null
   student_age: number
   height: number | null
   weight: number | null
@@ -111,6 +115,11 @@ interface Booking {
     latitude?: number | null
     longitude?: number | null
   }
+  previous_surf_spot?: {
+    id?: number
+    name: string
+    difficulty?: string
+  } | null
   payment?: {
     amount: number
     payment_method: string
@@ -141,12 +150,24 @@ const isReserved = computed(
   () => props.booking.status === 'reserved' || props.booking.is_reserved === true,
 )
 
-const holdSeconds = ref(Math.max(0, props.booking.hold_remaining_seconds ?? 0))
+const holdDeadlineMs = ref(Date.now() + Math.max(0, props.booking.hold_remaining_seconds ?? 0) * 1000)
+const nowTick = ref(Date.now())
+const holdSeconds = computed(() =>
+  Math.max(0, Math.floor((holdDeadlineMs.value - nowTick.value) / 1000)),
+)
 const paymentTimeRemaining = ref(0)
 const payingGCash = ref(false)
 
 let paymentTimer: ReturnType<typeof setInterval> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+watch(
+  () => props.booking.hold_remaining_seconds,
+  (val) => {
+    holdDeadlineMs.value = Date.now() + Math.max(0, val ?? 0) * 1000
+    nowTick.value = Date.now()
+  },
+)
 
 const calculatePaymentTimeRemaining = () => {
   if (!props.booking.payment_deadline_at) return
@@ -171,9 +192,7 @@ const startGCashCheckout = () => {
 onMounted(() => {
   calculatePaymentTimeRemaining()
   paymentTimer = setInterval(() => {
-    if (isReserved.value && holdSeconds.value > 0) {
-      holdSeconds.value = Math.max(0, holdSeconds.value - 1)
-    }
+    nowTick.value = Date.now()
     if (props.booking.status === 'awaiting_payment' && props.booking.payment_deadline_at) {
       calculatePaymentTimeRemaining()
     }
@@ -376,6 +395,12 @@ const releaseHold = () => {
   router.post(route('bookings.abandon', props.booking.id))
 }
 const canFeedback = computed(() => props.booking.status === 'completed')
+
+const sessionTypeLabel = computed(() => {
+  const type = props.booking.session_type
+  if (!type) return null
+  return type.charAt(0).toUpperCase() + type.slice(1)
+})
 
 // The receipt is served through an authorised route, never a public URL.
 const receiptUrl = computed(() =>
@@ -736,6 +761,32 @@ const canChat = computed(() =>
                         </div>
                     </AppCard>
 
+                    <!-- Surf location changed by instructor notice -->
+                    <AppCard
+                        v-if="booking.spot_changed_at && booking.spot_change_reason"
+                        padding="md"
+                        class="border-ocean-200 bg-ocean-50"
+                    >
+                        <div class="flex items-start gap-3">
+                            <MapPinIcon class="mt-0.5 h-5 w-5 shrink-0 text-ocean-700" aria-hidden="true" />
+                            <div>
+                                <p class="text-label font-semibold uppercase tracking-[0.06em] text-ocean-800">
+                                    Surf Spot Updated by Instructor
+                                </p>
+                                <p class="mt-1 text-body-sm text-ocean-950">
+                                    {{ booking.instructor.name }} moved your session
+                                    <template v-if="booking.previous_surf_spot?.name">
+                                        from <strong>{{ booking.previous_surf_spot.name }}</strong>
+                                    </template>
+                                    to <strong>{{ booking.surf_spot.name }}</strong>.
+                                </p>
+                                <p class="mt-1 text-body-sm text-ocean-900">
+                                    <strong>Reason:</strong> {{ booking.spot_change_reason }}
+                                </p>
+                            </div>
+                        </div>
+                    </AppCard>
+
                     <!-- Lesson details -->
                     <AppCard padding="lg">
                         <SectionHeader eyebrow="Lesson" title="Session details" />
@@ -773,6 +824,10 @@ const canChat = computed(() =>
                             <div>
                                 <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Skill level</dt>
                                 <dd class="mt-1 text-body font-semibold capitalize text-deep-900">{{ booking.skill_level }}</dd>
+                            </div>
+                            <div v-if="sessionTypeLabel">
+                                <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Service type</dt>
+                                <dd class="mt-1 text-body font-semibold text-deep-900">{{ sessionTypeLabel }}</dd>
                             </div>
                             <div>
                                 <dt class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">Age</dt>

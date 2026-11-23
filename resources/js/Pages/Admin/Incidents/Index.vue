@@ -15,7 +15,11 @@ interface Incident {
     status: string
     source: string
     category: string | null
+    report_type: string | null
     severity: string | null
+    suggested_outcome: string | null
+    final_outcome: string | null
+    handled_externally: boolean
     strike_weight: number
     description: string
     created_at: string
@@ -30,7 +34,7 @@ interface Props {
         links: Array<{ url: string | null; label: string; active: boolean }>
     }
     filters: { status: string }
-    counts: { pending: number; confirmed: number; rejected: number; revoked: number }
+    counts: { pending: number; confirmed: number; rejected: number; revoked: number; critical_external?: number }
     instructors: Array<{ id: number; name: string }>
 }
 
@@ -45,7 +49,7 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
         case 'confirmed':
             return { label: 'Confirmed', variant: 'critical' }
         case 'rejected':
-            return { label: 'Rejected', variant: 'verified' }
+            return { label: 'Dismissed', variant: 'verified' }
         case 'revoked':
             return { label: 'Revoked', variant: 'cancelled' }
         default:
@@ -53,18 +57,23 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
     }
 }
 
-const severityMeta = (severity: string | null): { label: string; variant: PillVariant } => {
-    if (severity === 'critical') return { label: 'Critical', variant: 'critical' }
-    if (severity === 'major') return { label: 'Major', variant: 'pending' }
-    if (severity === 'minor') return { label: 'Minor', variant: 'neutral' }
-    return { label: 'Unrated', variant: 'neutral' }
+const outcomeMeta = (incident: Incident): { label: string; variant: PillVariant } => {
+    const val = incident.final_outcome ?? incident.suggested_outcome
+    const prefix = incident.final_outcome ? '' : 'Suggested: '
+    if (val === 'critical' || incident.handled_externally) return { label: `${prefix}Critical (External)`, variant: 'critical' }
+    if (val === '3_strikes') return { label: `${prefix}3 strikes`, variant: 'critical' }
+    if (val === '2_strikes') return { label: `${prefix}2 strikes`, variant: 'pending' }
+    if (val === '1_strike') return { label: `${prefix}1 strike`, variant: 'neutral' }
+    if (val === 'no_strike') return { label: 'No strike', variant: 'verified' }
+    return { label: 'Unclassified', variant: 'neutral' }
 }
 
 const tabs = [
     { key: 'all', label: 'All', count: null as number | null, dot: 'bg-deep-900' },
     { key: 'pending', label: 'Pending', count: props.counts.pending, dot: 'bg-amber-500' },
     { key: 'confirmed', label: 'Confirmed', count: props.counts.confirmed, dot: 'bg-rose-500' },
-    { key: 'rejected', label: 'Rejected', count: props.counts.rejected, dot: 'bg-lagoon-600' },
+    { key: 'critical_external', label: 'Critical (External)', count: props.counts.critical_external ?? 0, dot: 'bg-rose-700' },
+    { key: 'rejected', label: 'Dismissed', count: props.counts.rejected, dot: 'bg-lagoon-600' },
     { key: 'revoked', label: 'Revoked', count: props.counts.revoked, dot: 'bg-stone-400' },
 ]
 
@@ -86,7 +95,7 @@ const paginationLabel = (label: string) =>
                 <SectionHeader
                     eyebrow="Safety monitoring"
                     title="Reports & incidents"
-                    description="Review student concerns and log incidents. A pending report has not added a strike yet."
+                    description="Review student concerns and log incidents. Suggested outcomes are visible only to SISA administrators."
                 />
 
                 <AppButton :href="route('admin.incidents.create')" variant="danger">
@@ -97,9 +106,9 @@ const paginationLabel = (label: string) =>
 
             <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="Pending review" :value="counts.pending" tone="attention" meta="No strike applied yet" />
-                <StatCard label="Confirmed" :value="counts.confirmed" tone="critical" meta="Strikes applied" />
-                <StatCard label="Rejected" :value="counts.rejected" meta="No strike applied" />
-                <StatCard label="Revoked" :value="counts.revoked" meta="Strike ledger reversed" />
+                <StatCard label="Confirmed" :value="counts.confirmed" tone="critical" meta="Decided by SISA" />
+                <StatCard label="Critical (External)" :value="counts.critical_external ?? 0" tone="critical" meta="Handled outside system" />
+                <StatCard label="Dismissed" :value="counts.rejected" meta="Kept on record (0 strikes)" />
             </div>
 
             <div
@@ -144,13 +153,13 @@ const paginationLabel = (label: string) =>
                             <StatusPill :variant="statusMeta(incident.status).variant">
                                 {{ statusMeta(incident.status).label }}
                             </StatusPill>
-                            <StatusPill :variant="severityMeta(incident.severity).variant" :dot="false">
-                                {{ severityMeta(incident.severity).label }}
+                            <StatusPill :variant="outcomeMeta(incident).variant" :dot="false">
+                                {{ outcomeMeta(incident).label }}
                             </StatusPill>
                         </div>
 
                         <h2 class="mt-3 text-body-lg font-semibold capitalize text-deep-900">
-                            {{ (incident.category ?? incident.type).replace(/_/g, ' ') }}
+                            {{ (incident.report_type ?? incident.category ?? incident.type).replace(/_/g, ' ') }}
                         </h2>
                         <p class="mt-1 line-clamp-3 text-body-sm text-stone-600">{{ incident.description }}</p>
 
@@ -165,7 +174,7 @@ const paginationLabel = (label: string) =>
                                 </p>
                             </div>
                             <span class="shrink-0 rounded-full bg-sand-100 px-2.5 py-1 text-label font-semibold text-stone-700">
-                                {{ incident.strike_weight }} strike{{ incident.strike_weight === 1 ? '' : 's' }}
+                                {{ incident.handled_externally ? 'External' : `${incident.strike_weight} strike${incident.strike_weight === 1 ? '' : 's'}` }}
                             </span>
                         </div>
 
@@ -216,4 +225,3 @@ const paginationLabel = (label: string) =>
         </div>
     </AppLayout>
 </template>
-

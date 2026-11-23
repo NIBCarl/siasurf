@@ -45,41 +45,46 @@ class ExpirePaymentWindowJob implements ShouldQueue
             return;
         }
 
-        // A GCash receipt has already been submitted. The money may be sitting
-        // in the instructor's account, so the hold must not auto-release while
-        // a human is reviewing the proof of payment.
-        if ($booking->payment?->hasReceipt()) {
-            return;
-        }
-
-        // A late payment may still be landing; respect the deadline itself.
-        if ($booking->payment_deadline_at && $booking->payment_deadline_at->isFuture()) {
-            return;
-        }
-
         DB::transaction(function () use ($booking, $availabilityService) {
+            $locked = Booking::with(['instructor', 'student', 'surfSpot', 'payment'])
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $locked || $locked->status !== BookingStatus::AwaitingPayment) {
+                return;
+            }
+
+            if ($locked->payment?->isCompleted() || $locked->payment?->isAwaitingVerification()) {
+                return;
+            }
+
+            if ($locked->payment_deadline_at && $locked->payment_deadline_at->isFuture()) {
+                return;
+            }
+
             // FR 1.4 - its own terminal state, so a payment timeout is not
             // confused with a deliberate cancellation in reports.
-            $booking->markPaymentTimedOut();
+            $locked->markPaymentTimedOut();
 
             // Update payment record to Failed
-            if ($booking->payment && $booking->payment->status === PaymentStatus::Pending) {
-                $booking->payment->update(['status' => PaymentStatus::Failed]);
+            if ($locked->payment && $locked->payment->status === PaymentStatus::Pending) {
+                $locked->payment->update(['status' => PaymentStatus::Failed]);
             }
 
             // FR 1.8.3 - hand the slot back so the instructor can be booked again.
-            $availabilityService->releaseForBooking($booking);
+            $availabilityService->releaseForBooking($locked);
 
-            $booking->refresh();
+            $locked->refresh();
 
-            // Broadcast WebSocket cancellation event
-            broadcast(new BookingCancelled($booking, 'Payment window expired.'))->toOthers();
+            DB::afterCommit(function () use ($locked) {
+                broadcast(new BookingCancelled($locked, 'Payment window expired.'))->toOthers();
 
-            // Notify both student and instructor via database/email notifications
-            $booking->student?->notify(new BookingCancelledNotification($booking, 'Payment window expired.'));
-            $booking->instructor?->notify(new BookingCancelledNotification($booking, 'Payment window expired.'));
+                $locked->student?->notify(new BookingCancelledNotification($locked, 'Payment window expired.'));
+                $locked->instructor?->notify(new BookingCancelledNotification($locked, 'Payment window expired.'));
+            });
 
-            Log::info("Booking #{$booking->id} payment window expired; slot released.");
+            Log::info("Booking #{$locked->id} payment window expired; slot released.");
         });
     }
 }

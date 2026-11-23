@@ -336,10 +336,7 @@ const submitCancel = () => {
                                         v-if="isReservedBooking(booking)"
                                         class="mt-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-950"
                                     >
-                                        Temporarily held while you finish the liability waiver and payment selection
-                                        <template v-if="formatHoldMinutes(booking.hold_remaining_seconds)">
-                                            ({{ formatHoldMinutes(booking.hold_remaining_seconds) }})
-                                        </template>. Your instructor will receive this request once you finish.
+                                        Temporarily held while you finish the liability waiver and payment selection<template v-if="formatHoldMinutes(booking.hold_remaining_seconds)"> ({{ formatHoldMinutes(booking.hold_remaining_seconds) }})</template>. Your instructor will receive this request once you finish.
                                     </p>
 
                                     <p

@@ -6,7 +6,6 @@ import Modal from '@/Components/Modal.vue'
 import { 
     ChevronLeftIcon,
     ArrowDownTrayIcon,
-    PencilSquareIcon,
     MapPinIcon,
     UserIcon,
     IdentificationIcon,
@@ -35,8 +34,14 @@ interface Booking {
   refund_amount?: number | null
   instructor_retained_amount?: number | null
   skill_level: string
+  session_type?: string | null
   student_age: number
   student_count: number
+  accepted_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  spot_changed_at?: string | null
+  spot_change_reason?: string | null
   needs_hotel_pickup?: boolean
   hotel_name?: string | null
   notes: string
@@ -47,7 +52,7 @@ interface Booking {
   cancelled_at?: string | null
   student: { id: number; name: string; email: string; phone: string; student_profile?: { status: string } | null }
   instructor: { name: string; email: string }
-  surf_spot: { name: string }
+  surf_spot: { name: string; difficulty?: string | null }
   payment?: {
     amount: number
     lesson_price?: number | null
@@ -194,6 +199,116 @@ const getStatusVariant = (status: string) => {
     default: return 'info'
   }
 }
+
+const canDownloadReceipt = computed(() =>
+  Boolean(
+    props.booking.payment &&
+      ['completed', 'underpaid', 'refunded', 'partially_refunded'].includes(props.booking.payment.status),
+  ),
+)
+
+const formatEventTime = (iso?: string | null) => {
+  if (!iso) return 'Recorded'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return 'Recorded'
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+const timelineEvents = computed(() => {
+  const b = props.booking
+  const events: Array<{ timestamp: number; timeLabel: string; title: string; detail: string; dotClass: string; textClass: string }> = []
+
+  if (b.created_at) {
+    events.push({
+      timestamp: new Date(b.created_at).getTime(),
+      timeLabel: formatEventTime(b.created_at),
+      title: 'Booking Created',
+      detail: `Requested at ${b.surf_spot.name}.`,
+      dotClass: 'bg-slate-400 ring-slate-100',
+      textClass: 'text-slate-500',
+    })
+  }
+
+  const waiverSignedAt = b.waivers?.[0]?.signed_at ?? b.waiver?.signed_at
+  if (waiverSignedAt) {
+    events.push({
+      timestamp: new Date(waiverSignedAt).getTime(),
+      timeLabel: formatEventTime(waiverSignedAt),
+      title: 'Waiver Signed',
+      detail: 'Electronic release form captured.',
+      dotClass: 'bg-wave-500 ring-wave-50',
+      textClass: 'text-wave-600',
+    })
+  }
+
+  if (b.accepted_at) {
+    events.push({
+      timestamp: new Date(b.accepted_at).getTime(),
+      timeLabel: formatEventTime(b.accepted_at),
+      title: 'Instructor Accepted',
+      detail: `${b.instructor.name} accepted the booking.`,
+      dotClass: 'bg-ocean-600 ring-ocean-50',
+      textClass: 'text-ocean-600',
+    })
+  }
+
+  if (b.spot_changed_at) {
+    events.push({
+      timestamp: new Date(b.spot_changed_at).getTime(),
+      timeLabel: formatEventTime(b.spot_changed_at),
+      title: 'Surf Spot Updated',
+      detail: b.spot_change_reason || `Updated to ${b.surf_spot.name}.`,
+      dotClass: 'bg-amber-500 ring-amber-50',
+      textClass: 'text-amber-600',
+    })
+  }
+
+  if (b.payment?.paid_at) {
+    events.push({
+      timestamp: new Date(b.payment.paid_at).getTime(),
+      timeLabel: formatEventTime(b.payment.paid_at),
+      title: 'Payment Recorded',
+      detail: `${b.payment.payment_method.toUpperCase()} settlement (${b.payment.status.replace(/_/g, ' ')}).`,
+      dotClass: 'bg-reef-500 ring-reef-50',
+      textClass: 'text-reef-600',
+    })
+  }
+
+  if (b.started_at) {
+    events.push({
+      timestamp: new Date(b.started_at).getTime(),
+      timeLabel: formatEventTime(b.started_at),
+      title: 'Session Started',
+      detail: 'Instructor started the live lesson timer.',
+      dotClass: 'bg-emerald-500 ring-emerald-50',
+      textClass: 'text-emerald-600',
+    })
+  }
+
+  if (b.completed_at) {
+    events.push({
+      timestamp: new Date(b.completed_at).getTime(),
+      timeLabel: formatEventTime(b.completed_at),
+      title: 'Lesson Completed',
+      detail: 'Session marked complete.',
+      dotClass: 'bg-emerald-600 ring-emerald-50',
+      textClass: 'text-emerald-700',
+    })
+  }
+
+  if (b.cancelled_at) {
+    events.push({
+      timestamp: new Date(b.cancelled_at).getTime(),
+      timeLabel: formatEventTime(b.cancelled_at),
+      title: b.cancellation_label || 'Booking Closed',
+      detail: b.cancellation_note || 'Cancelled before lesson.',
+      dotClass: 'bg-rose-500 ring-rose-50',
+      textClass: 'text-rose-600',
+    })
+  }
+
+  return events.sort((a, c) => c.timestamp - a.timestamp)
+})
 </script>
 
 <template>
@@ -221,14 +336,24 @@ const getStatusVariant = (status: string) => {
             </div>
             
             <div class="flex gap-2">
-                <button class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+                <a
+                    v-if="canDownloadReceipt"
+                    :href="route('payments.receipt', booking.id)"
+                    target="_blank"
+                    rel="noopener"
+                    class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                >
                     <ArrowDownTrayIcon class="w-4 h-4" />
-                    Receipt
-                </button>
-                <button class="flex items-center gap-2 px-4 py-2 bg-ocean-600 text-white rounded-xl text-sm font-bold hover:bg-ocean-700 transition-all shadow-lg shadow-ocean-600/20">
-                    <PencilSquareIcon class="w-4 h-4" />
-                    Edit Details
-                </button>
+                    Receipt PDF
+                </a>
+                <span
+                    v-else
+                    class="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-400 cursor-not-allowed"
+                    title="Receipt becomes available once payment is recorded"
+                >
+                    <ArrowDownTrayIcon class="w-4 h-4" />
+                    Receipt Pending
+                </span>
             </div>
         </div>
 
@@ -253,12 +378,16 @@ const getStatusVariant = (status: string) => {
                             <div class="space-y-1">
                                 <p class="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Assigned Surf Spot</p>
                                 <p class="text-xl font-black text-slate-900">{{ booking.surf_spot.name }}</p>
-                                <p class="text-xs text-ocean-600 font-bold">Standard Difficulty</p>
+                                <p class="text-xs text-ocean-600 font-bold capitalize">
+                                    {{ booking.surf_spot.difficulty ? `${booking.surf_spot.difficulty} break` : 'Verified break' }}
+                                </p>
                             </div>
                             <div class="space-y-1">
                                 <p class="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Skill Classification</p>
                                 <p class="text-xl font-black text-slate-900 capitalize">{{ booking.skill_level }}</p>
-                                <p class="text-xs text-wave-600 font-bold">1:{{ booking.student_count }} Instructor Ratio</p>
+                                <p class="text-xs text-wave-600 font-bold capitalize">
+                                    {{ booking.student_count }} {{ booking.student_count === 1 ? 'Surfer' : 'Surfers' }}<template v-if="booking.session_type"> · {{ booking.session_type }}</template>
+                                </p>
                             </div>
                             <div class="space-y-1">
                                 <p class="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Schedule Window</p>
@@ -640,45 +769,25 @@ const getStatusVariant = (status: string) => {
                     </div>
 
                     <div class="relative pl-8 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
-                        <!-- Step 1 -->
-                        <div class="relative group/step">
-                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-ocean-600 border-4 border-white shadow-sm ring-4 ring-ocean-50 z-10 transition-transform group-hover/step:scale-125"></div>
+                        <div
+                            v-for="(item, idx) in timelineEvents"
+                            :key="idx"
+                            class="relative group/step"
+                        >
+                            <div
+                                class="absolute -left-10 top-0 w-6 h-6 rounded-full border-4 border-white shadow-sm ring-4 z-10 transition-transform group-hover/step:scale-125"
+                                :class="item.dotClass"
+                            ></div>
                             <div class="flex flex-col">
-                                <span class="text-[10px] font-black text-ocean-600 uppercase tracking-tighter">14:22 • TODAY</span>
-                                <span class="text-sm font-bold text-slate-900">Booking Confirmed</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">Automated system release after verification.</span>
+                                <span class="text-[10px] font-black uppercase tracking-tighter" :class="item.textClass">{{ item.timeLabel }}</span>
+                                <span class="text-sm font-bold text-slate-900">{{ item.title }}</span>
+                                <span class="text-[10px] text-slate-500 mt-0.5">{{ item.detail }}</span>
                             </div>
                         </div>
 
-                        <!-- Step 2 -->
-                        <div class="relative group/step">
-                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-reef-500 border-4 border-white shadow-sm ring-4 ring-reef-50 z-10 transition-transform group-hover/step:scale-125"></div>
-                            <div class="flex flex-col">
-                                <span class="text-[10px] font-black text-reef-600 uppercase tracking-tighter">14:15 • TODAY</span>
-                                <span class="text-sm font-bold text-slate-900">Payment Secured</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">GCash transaction verified by PayMongo.</span>
-                            </div>
-                        </div>
-
-                        <!-- Step 3 -->
-                        <div class="relative group/step">
-                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-wave-500 border-4 border-white shadow-sm ring-4 ring-wave-50 z-10 transition-transform group-hover/step:scale-125"></div>
-                            <div class="flex flex-col">
-                                <span class="text-[10px] font-black text-wave-600 uppercase tracking-tighter">14:02 • TODAY</span>
-                                <span class="text-sm font-bold text-slate-900">Signature Affixed</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">Electronic waveform capture successful.</span>
-                            </div>
-                        </div>
-
-                        <!-- Step 4 -->
-                        <div class="relative group/step">
-                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-slate-300 border-4 border-white shadow-sm ring-4 ring-slate-50 z-10 transition-transform group-hover/step:scale-125"></div>
-                            <div class="flex flex-col opacity-60">
-                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">14:00 • TODAY</span>
-                                <span class="text-sm font-bold text-slate-900">Reservation Inflow</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">Inquiry registered via Cloud9 entry.</span>
-                            </div>
-                        </div>
+                        <p v-if="timelineEvents.length === 0" class="text-xs text-slate-500 italic">
+                            No timeline events recorded yet.
+                        </p>
                     </div>
 
                     <div class="mt-10 p-4 bg-slate-900 rounded-2xl text-[10px] text-slate-400 text-center uppercase font-black tracking-widest leading-relaxed">

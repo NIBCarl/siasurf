@@ -68,11 +68,11 @@ class BookingController extends Controller
     /**
      * Display the booking creation form (Step 1: Select instructor)
      */
-    public function create(Request $request, User $instructor): Response
+    public function create(Request $request, User $instructor): Response|RedirectResponse
     {
         Gate::authorize('create', Booking::class);
 
-        if (! $instructor->isBookable()) {
+        if (! $instructor->isBookable() || ($instructor->certificates()->exists() && ! $instructor->hasVerifiedCertificate())) {
             return redirect()->route('instructors.search')->with('error', 'This instructor is currently not available for bookings.');
         }
 
@@ -111,17 +111,17 @@ class BookingController extends Controller
             $studentSkill->value
         );
 
-        $recommendedService = $profile->recommendedServiceFor($studentSkill);
-        $serviceOptions = array_map(
-            fn (SessionType $service) => [
-                'type' => $service->value,
-                'label' => $service->label(),
-                'description' => $service->description(),
-                'rate' => $profile->rateForService($service),
-                'recommended' => $service === $recommendedService,
-            ],
-            $profile->serviceOptionsFor($studentSkill)
-        );
+        $requiredService = SessionType::forSkill($studentSkill);
+        $offersRequiredService = $profile->offersService($requiredService);
+        $serviceOptions = $offersRequiredService
+            ? [[
+                'type' => $requiredService->value,
+                'label' => $requiredService->label(),
+                'description' => $requiredService->description(),
+                'rate' => $profile->rateForService($requiredService),
+                'recommended' => true,
+            ]]
+            : [];
 
         $surfSpots = $profile->bookableSurfSpotsFor($studentSkill)
             ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
@@ -137,16 +137,16 @@ class BookingController extends Controller
             'instructorHasCustomSpots' => $profile->hasConfiguredSurfSpots(),
             'safetyRules' => $safetyRules,
             'serviceOptions' => $serviceOptions,
-            'defaultSessionType' => $recommendedService?->value ?? '',
+            'defaultSessionType' => $offersRequiredService ? $requiredService->value : '',
+            'minimumDurationMinutes' => $requiredService->minimumMinutes(),
             'serviceFeePercent' => PricingService::serviceFeePercent(),
             // Explains why some breaks are not in the list.
             'surfSpotRule' => $studentSkill->surfSpotRuleLabel(),
             'allowedSurfSpotDifficulties' => $studentSkill->allowedSurfSpotDifficulties(),
             'tideData' => $this->stormglassService->getUpcomingTides(7),
-            // Fallback lesson length for the estimate before a date is chosen;
-            // once a date is picked the exact per-slot duration comes from the
-            // availability API.
-            'defaultDurationMinutes' => Booking::standardDurationMinutes(),
+            // Standard 2-hour default (Teaching starts at 2h recommended with 1h option;
+            // Guiding & Coaching require at least 2h).
+            'defaultDurationMinutes' => $requiredService->defaultMinutes(),
             // The account holder's level is the source of truth (set at signup
             // and maintained by the skill-upgrade flow) - not re-asked here.
             'studentSkillLevel' => $studentProfile?->skill_level ?? SkillLevel::Beginner->value,
@@ -171,7 +171,7 @@ class BookingController extends Controller
     {
         Gate::authorize('create', Booking::class);
 
-        if (! $instructor->isBookable()) {
+        if (! $instructor->isBookable() || ($instructor->certificates()->exists() && ! $instructor->hasVerifiedCertificate())) {
             return redirect()->route('instructors.search')->with('error', 'This instructor is currently not available for bookings.');
         }
 
@@ -250,9 +250,18 @@ class BookingController extends Controller
             'hotel_name.required_if' => 'Please enter the hotel or accommodation name where the instructor will pick you up.',
         ]);
 
+        $studentCount = (int) $validated['student_count'];
+        $rawParticipants = $request->input('participants');
+
+        if ($studentCount > 1 && (! is_array($rawParticipants) || count($rawParticipants) !== $studentCount)) {
+            throw ValidationException::withMessages([
+                'participants' => 'Please provide details (name, age, skill level, and board info) for every surfer in the group.',
+            ]);
+        }
+
         // Per-participant board-size fields follow the same rule: only required
         // when that surfer does not have their own board.
-        foreach (($request->input('participants') ?? []) as $index => $participant) {
+        foreach (($rawParticipants ?? []) as $index => $participant) {
             $hasBoard = filter_var($participant['has_board'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
             if (! $hasBoard && (blank($participant['height'] ?? null) || blank($participant['weight'] ?? null))) {
@@ -260,22 +269,39 @@ class BookingController extends Controller
                     "participants.{$index}.height" => 'Height and weight are required when this surfer does not have a board.',
                 ]);
             }
+
+            if (! empty($participant['birthday'])) {
+                $derivedAge = Carbon::parse($participant['birthday'])->age;
+                if ($derivedAge < 5 || $derivedAge > 100) {
+                    throw ValidationException::withMessages([
+                        "participants.{$index}.birthday" => 'Surfers must be between 5 and 100 years old.',
+                    ]);
+                }
+            }
         }
 
         // Determine the time period from the chosen start, and derive the
         // lesson length from the two ends the student picked. When an older
-        // client sends only a start time, the instructor's configured lesson
-        // length is used so nothing silently changes for them.
+        // client omits end_time, clamp the fallback up to the service minimum.
+        $profileSkillRaw = auth()->user()->studentProfile?->skill_level;
+        $fallbackSkillEnum = $profileSkillRaw instanceof SkillLevel
+            ? $profileSkillRaw
+            : (SkillLevel::tryFrom((string) ($profileSkillRaw ?: ($validated['skill_level'] ?? ''))) ?? SkillLevel::Beginner);
+        $fallbackService = SessionType::forSkill($fallbackSkillEnum);
+
         $startTime = Carbon::parse($validated['start_time']);
         $validated['time_period'] = $startTime->hour < 12 ? 'morning' : 'afternoon';
 
         $endTime = ! empty($validated['end_time'])
             ? Carbon::parse($validated['end_time'])
             : $startTime->copy()->addMinutes(
-                $this->availabilityService->sessionMinutesFor(
-                    $instructor->id,
-                    $validated['date'],
-                    $validated['time_period']
+                max(
+                    $this->availabilityService->sessionMinutesFor(
+                        $instructor->id,
+                        $validated['date'],
+                        $validated['time_period']
+                    ),
+                    $fallbackService->minimumMinutes()
                 )
             );
 
@@ -349,6 +375,15 @@ class BookingController extends Controller
             if ($studentProfile?->age !== null) {
                 $participantsInput[0]['age'] = $studentProfile->age;
             }
+
+            // Always derive authoritative age from birthday when present so
+            // companions or primary surfers cannot pair a child birthday with an adult age.
+            foreach ($participantsInput as $idx => $entry) {
+                if (! empty($entry['birthday'])) {
+                    $participantsInput[$idx]['age'] = Carbon::parse($entry['birthday'])->age;
+                }
+            }
+
             $validated['student_count'] = count($participantsInput);
 
             $primary = $participantsInput[0];
@@ -358,8 +393,8 @@ class BookingController extends Controller
             $validated['weight'] = $primary['weight'] ?? null;
             $validated['has_board'] = $primary['has_board'];
         } else {
-            // Legacy single-person payload: synthesise the primary participant.
-            $primaryAge = $studentProfile?->age ?? $validated['student_age'];
+            // Single-person payload: synthesise the primary participant.
+            $primaryAge = $studentProfile?->birthday?->age ?? $studentProfile?->age ?? $validated['student_age'];
             $validated['student_age'] = $primaryAge;
             $participantsInput = [[
                 'full_name' => $studentUser->name,
@@ -387,18 +422,20 @@ class BookingController extends Controller
                 .'. This instructor is Level '.$instructorLevelValue.'.');
         }
 
-        // Resolve service type (Teaching / Guiding / Coaching) from what the
-        // instructor actually offers. Defaults to their recommended offered
-        // service for this student skill level.
+        // Strict 1-to-1 service assignment from student skill level:
+        // Beginner -> Teaching, Intermediate -> Guiding, Advanced -> Coaching.
         $profile = $instructor->instructorProfile->loadMissing('surfSpots');
 
-        $sessionType = ! empty($validated['session_type'])
-            ? SessionType::from($validated['session_type'])
-            : $profile->recommendedServiceFor($studentSkill);
+        $requiredService = SessionType::forSkill($studentSkill);
 
-        if ($sessionType === null) {
-            return back()->with('error', 'This instructor does not offer a lesson type available for your skill level.');
+        if (! empty($validated['session_type']) && $validated['session_type'] !== $requiredService->value) {
+            return back()->with(
+                'error',
+                "Your {$studentSkill->label()} skill level is assigned to {$requiredService->label()} sessions only."
+            );
         }
+
+        $sessionType = $requiredService;
 
         if (! $profile->offersService($sessionType)) {
             return back()->with('error', "This instructor does not offer {$sessionType->label()} sessions.");
@@ -455,7 +492,7 @@ class BookingController extends Controller
         $this->availabilityService->releaseStudentCheckoutHolds(auth()->id(), $instructor->id);
 
         // FR 1.8 - respect the instructor's schedule, skill-dependent seat cap,
-        // and same-level/same-service shared-slot rule.
+        // same-level/same-service shared-slot rule, and shared surf spot lock.
         try {
             $this->availabilityService->assertRangeIsBookable(
                 $instructor->id,
@@ -465,7 +502,8 @@ class BookingController extends Controller
                 $validated['student_count'],
                 null,
                 $studentSkill,
-                $sessionType
+                $sessionType,
+                $surfSpot->id
             );
         } catch (BookingRequestException $exception) {
             return back()->with('error', $exception->getMessage());
@@ -498,7 +536,7 @@ class BookingController extends Controller
         // row is locked so two students cannot both pass the capacity check and
         // create overlapping requests in the same instant.
         try {
-            $booking = DB::transaction(function () use ($validated, $instructor, $pricing, $participantsInput, $studentSkill, $sessionType) {
+            $booking = DB::transaction(function () use ($validated, $instructor, $pricing, $participantsInput, $studentSkill, $sessionType, $surfSpot) {
                 User::query()->whereKey($instructor->id)->lockForUpdate()->first();
 
                 $this->availabilityService->releaseExpiredCheckoutHolds($instructor->id);
@@ -514,7 +552,8 @@ class BookingController extends Controller
                     $validated['student_count'],
                     null,
                     $studentSkill,
-                    $sessionType
+                    $sessionType,
+                    $surfSpot->id
                 );
 
                 $this->requestGuard->assertStudentMayRequest(auth()->user(), [
@@ -650,27 +689,10 @@ class BookingController extends Controller
      */
     public function storePayment(Request $request, Booking $booking): RedirectResponse
     {
-        // The student owns the booking; the explicit status guard below prevents
-        // this endpoint from regressing an accepted/confirmed booking.
+        // The student owns the booking; the locked status guards below prevent
+        // this endpoint from regressing an accepted/confirmed booking or
+        // racing with checkout hold expiry.
         Gate::authorize('view', $booking);
-
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            $this->availabilityService->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
-        }
-
-        if ($booking->status === BookingStatus::AwaitingPayment) {
-            return redirect()->route('payments.show', $booking)
-                ->with('info', 'Payment method is already set. Complete the GCash payment from the payment page.');
-        }
-
-        if (! in_array($booking->status, [BookingStatus::Reserved, BookingStatus::Pending], true)) {
-            return redirect()->route('student.bookings.show', $booking)
-                ->with('error', 'The payment method can no longer be changed for this booking.');
-        }
 
         $validated = $request->validate([
             'payment_method' => 'required|in:gcash,cash',
@@ -680,24 +702,75 @@ class BookingController extends Controller
         // the student skips the 2-hour acceptance wait entirely.
         $instantBook = (bool) $booking->instructor?->instructorProfile?->usesInstantBook();
 
-        DB::transaction(function () use ($booking, $validated, $instantBook) {
+        $outcome = DB::transaction(function () use ($booking, $validated, $instantBook): array {
+            User::query()->whereKey($booking->instructor_id)->lockForUpdate()->first();
+            $locked = Booking::with(['instructor.instructorProfile', 'payment'])
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($locked->checkoutHoldExpired()) {
+                $locked->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+                $this->availabilityService->releaseForBooking($locked);
+
+                return ['result' => 'expired', 'booking' => $locked];
+            }
+
+            if ($locked->status === BookingStatus::AwaitingPayment) {
+                return ['result' => 'awaiting_payment', 'booking' => $locked];
+            }
+
+            if (! in_array($locked->status, [BookingStatus::Reserved, BookingStatus::Pending], true)) {
+                return ['result' => 'invalid_status', 'booking' => $locked];
+            }
+
+            // If still Reserved (e.g. racing near hold boundary), verify the slot
+            // still has valid open capacity before admitting to Pending.
+            if ($locked->status === BookingStatus::Reserved && $locked->start_time && $locked->end_time) {
+                $skillEnum = $locked->skill_level instanceof SkillLevel
+                    ? $locked->skill_level
+                    : SkillLevel::tryFrom((string) $locked->skill_level);
+                $serviceEnum = $locked->session_type instanceof SessionType
+                    ? $locked->session_type
+                    : SessionType::tryFrom((string) $locked->session_type);
+
+                try {
+                    $this->availabilityService->assertRangeIsBookable(
+                        $locked->instructor_id,
+                        $locked->date->format('Y-m-d'),
+                        $locked->start_time->format('H:i'),
+                        $locked->end_time->format('H:i'),
+                        max(1, (int) $locked->student_count),
+                        $locked->id,
+                        $skillEnum,
+                        $serviceEnum,
+                        $locked->surf_spot_id ? (int) $locked->surf_spot_id : null
+                    );
+                } catch (BookingRequestException $exception) {
+                    $locked->expireAcceptance($exception->getMessage());
+                    $this->availabilityService->releaseForBooking($locked);
+
+                    return ['result' => 'slot_conflict', 'message' => $exception->getMessage(), 'booking' => $locked];
+                }
+            }
+
             // Update booking status and transition from the 15-minute student
             // checkout hold to the 2-hour instructor acceptance window.
-            $booking->update([
+            $locked->update([
                 'payment_status' => $validated['payment_method'] === 'cash'
                     ? PaymentStatus::PendingCash
                     : PaymentStatus::Pending,
                 'status' => BookingStatus::Pending, // Status remains pending until confirmed or paid
                 'payment_deadline_at' => null,
                 // FR 1.9.3 - the instructor now has 2 hours to accept or decline.
-                'accept_deadline_at' => $booking->acceptDeadlineFrom(),
+                'accept_deadline_at' => $locked->acceptDeadlineFrom(),
             ]);
 
             // Create or update payment record
-            $booking->payment()->updateOrCreate([], [
-                'amount' => $booking->total_amount,
-                'lesson_price' => $booking->effectiveLessonPrice(),
-                'service_fee_amount' => $booking->effectiveServiceFeeAmount(),
+            $locked->payment()->updateOrCreate([], [
+                'amount' => $locked->total_amount,
+                'lesson_price' => $locked->effectiveLessonPrice(),
+                'service_fee_amount' => $locked->effectiveServiceFeeAmount(),
                 'payment_method' => $validated['payment_method'],
                 'status' => $validated['payment_method'] === 'cash'
                     ? PaymentStatus::PendingCash
@@ -707,13 +780,44 @@ class BookingController extends Controller
             // Instant Book skips the request queue, so there is nothing to notify the
             // instructor about or to expire.
             if (! $instantBook) {
-                broadcast(new BookingCreated($booking->fresh(['instructor', 'student', 'surfSpot'])))->toOthers();
+                DB::afterCommit(function () use ($locked) {
+                    $fresh = $locked->fresh(['instructor', 'student', 'surfSpot']);
+                    if (! $fresh) {
+                        return;
+                    }
 
-                // FR 1.9.3 - auto-release the request if the instructor stays silent.
-                ExpireBookingAcceptanceJob::dispatch($booking)
-                    ->delay($booking->accept_deadline_at ?? now()->addHours(Booking::ACCEPT_WINDOW_HOURS));
+                    broadcast(new BookingCreated($fresh))->toOthers();
+
+                    // FR 1.9.3 - auto-release the request if the instructor stays silent.
+                    ExpireBookingAcceptanceJob::dispatch($fresh)
+                        ->delay($fresh->accept_deadline_at ?? now()->addHours(Booking::ACCEPT_WINDOW_HOURS));
+                });
             }
+
+            return ['result' => 'ok', 'booking' => $locked->fresh()];
         });
+
+        if ($outcome['result'] === 'expired') {
+            return redirect()->route('bookings.create', $outcome['booking']->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
+
+        if ($outcome['result'] === 'slot_conflict') {
+            return redirect()->route('bookings.create', $outcome['booking']->instructor_id)
+                ->with('error', $outcome['message'] ?? 'That time slot is no longer available.');
+        }
+
+        if ($outcome['result'] === 'awaiting_payment') {
+            return redirect()->route('payments.show', $outcome['booking'])
+                ->with('info', 'Payment method is already set. Complete the GCash payment from the payment page.');
+        }
+
+        if ($outcome['result'] === 'invalid_status') {
+            return redirect()->route('student.bookings.show', $outcome['booking'])
+                ->with('error', 'The payment method can no longer be changed for this booking.');
+        }
+
+        $booking = $outcome['booking'];
 
         if ($instantBook) {
             return $this->finalizeInstantBook($booking);
@@ -735,13 +839,17 @@ class BookingController extends Controller
 
         $instructorId = $booking->instructor_id;
 
-        if (($booking->isInStudentCheckout() || $booking->status === BookingStatus::Pending) && ! $booking->hasSubmittedPayment()) {
-            $booking->cancel(
-                'Booking abandoned by student before completing waiver and payment selection.',
-                CancellationReason::Student
-            );
-            $this->availabilityService->releaseForBooking($booking);
-        }
+        DB::transaction(function () use ($booking): void {
+            $locked = Booking::with('payment')->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+
+            if (($locked->isInStudentCheckout() || $locked->status === BookingStatus::Pending) && ! $locked->hasSubmittedPayment()) {
+                $locked->cancel(
+                    'Booking abandoned by student before completing waiver and payment selection.',
+                    CancellationReason::Student
+                );
+                $this->availabilityService->releaseForBooking($locked);
+            }
+        });
 
         return redirect()->route('bookings.create', $instructorId)
             ->with('info', 'Your temporary slot hold has been released. You may update your details or select another time.');
@@ -887,6 +995,7 @@ class BookingController extends Controller
         $booking->load([
             'instructor',
             'surfSpot',
+            'previousSurfSpot',
             'payment',
             'latestRefund',
             'refunds',

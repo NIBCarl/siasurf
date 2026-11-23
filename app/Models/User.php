@@ -147,6 +147,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(InstructorStrike::class, 'instructor_id');
     }
 
+    public function instructorFines(): HasMany
+    {
+        return $this->hasMany(InstructorFine::class, 'instructor_id');
+    }
+
     public function instructorAppeals(): HasMany
     {
         return $this->hasMany(InstructorAppeal::class, 'instructor_id');
@@ -155,7 +160,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function activeInstructorSuspension(): ?InstructorSuspension
     {
         return $this->instructorSuspensions()
-            ->where('status', SuspensionStatus::Active->value)
+            ->enforced()
             ->latest()
             ->first();
     }

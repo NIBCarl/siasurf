@@ -6,12 +6,16 @@ use App\Enums\AttendanceStatus;
 use App\Enums\BookingStatus;
 use App\Enums\ChangeRequestStatus;
 use App\Enums\InstructorLevel;
+use App\Enums\SessionType;
+use App\Enums\SkillLevel;
 use App\Jobs\ExpireBookingAcceptanceJob;
 use App\Models\Booking;
 use App\Models\SurfSpot;
 use App\Models\User;
+use App\Notifications\BookingSpotChangedNotification;
 use App\Services\AvailabilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -65,6 +69,8 @@ class InstructorBookingWorkflowTest extends TestCase
             'instructor_id' => $this->instructor->id,
             'surf_spot_id' => $this->surfSpot->id,
             'status' => BookingStatus::Pending,
+            'skill_level' => SkillLevel::Beginner->value,
+            'session_type' => SessionType::Teaching->value,
             'date' => now()->addDays(3)->format('Y-m-d'),
             'time_period' => 'morning',
             'start_time' => '08:00',
@@ -83,6 +89,8 @@ class InstructorBookingWorkflowTest extends TestCase
             'instructor_id' => $this->instructor->id,
             'surf_spot_id' => $this->surfSpot->id,
             'status' => BookingStatus::Confirmed,
+            'skill_level' => SkillLevel::Beginner->value,
+            'session_type' => SessionType::Teaching->value,
             'date' => now()->addDays(3)->format('Y-m-d'),
             'time_period' => 'morning',
             'start_time' => '08:00',
@@ -472,7 +480,7 @@ class InstructorBookingWorkflowTest extends TestCase
         $booking->refresh();
 
         $this->assertSame(AttendanceStatus::Absent, $booking->attendance_status);
-        $this->assertSame(BookingStatus::Completed, $booking->status);
+        $this->assertSame(BookingStatus::NoShow, $booking->status);
         $this->assertFalse($booking->studentAttended());
     }
 
@@ -554,5 +562,182 @@ class InstructorBookingWorkflowTest extends TestCase
             'time_period' => $booking->time_period->value,
             'is_available' => false,
         ]);
+    }
+
+    /** @test */
+    public function instructor_can_change_surf_spot_for_shared_session_and_notifies_all_students_while_enforcing_safety_rule_5(): void
+    {
+        Notification::fake();
+
+        $l3 = User::factory()->create(['role' => 'instructor']);
+        $l3->assignRole('instructor');
+        $l3->instructorProfile()->create([
+            'level' => InstructorLevel::Level3,
+            'offered_services' => ['teaching', 'guiding', 'coaching'],
+            'status' => 'active',
+            'rate_per_hour' => 700,
+            'guiding_rate' => 1000,
+            'coaching_rate' => 1600,
+        ]);
+
+        $spotA = $this->surfSpot;
+        $spotB = SurfSpot::factory()->create(['difficulty' => 'beginner', 'name' => 'Burgos (Inner)']);
+        $advSpot = SurfSpot::factory()->create(['difficulty' => 'advanced', 'name' => 'Cloud 9 Outer']);
+        $l3->instructorProfile->surfSpots()->sync([$spotA->id, $spotB->id, $advSpot->id]);
+
+        $studentA = $this->student;
+        $studentB = User::factory()->create(['role' => 'student']);
+        $studentB->assignRole('student');
+        $studentC = User::factory()->create(['role' => 'student']);
+        $studentC->assignRole('student');
+
+        $date = now()->addDays(4)->format('Y-m-d');
+
+        // Student A (06:00-09:00) and Student B (06:00-08:00) share an overlapping session at Spot A.
+        $bookingA = Booking::factory()->create([
+            'student_id' => $studentA->id,
+            'instructor_id' => $l3->id,
+            'surf_spot_id' => $spotA->id,
+            'status' => BookingStatus::Confirmed,
+            'skill_level' => SkillLevel::Beginner->value,
+            'session_type' => SessionType::Teaching->value,
+            'date' => $date,
+            'time_period' => 'morning',
+            'start_time' => '06:00',
+            'end_time' => '09:00',
+            'duration_hours' => 3,
+        ]);
+
+        $bookingB = Booking::factory()->create([
+            'student_id' => $studentB->id,
+            'instructor_id' => $l3->id,
+            'surf_spot_id' => $spotA->id,
+            'status' => BookingStatus::Confirmed,
+            'skill_level' => SkillLevel::Beginner->value,
+            'session_type' => SessionType::Teaching->value,
+            'date' => $date,
+            'time_period' => 'morning',
+            'start_time' => '06:00',
+            'end_time' => '08:00',
+            'duration_hours' => 2,
+        ]);
+
+        // Student C is in a separate, non-overlapping afternoon slot on the same date at Spot A.
+        $bookingC = Booking::factory()->create([
+            'student_id' => $studentC->id,
+            'instructor_id' => $l3->id,
+            'surf_spot_id' => $spotA->id,
+            'status' => BookingStatus::Confirmed,
+            'skill_level' => SkillLevel::Beginner->value,
+            'session_type' => SessionType::Teaching->value,
+            'date' => $date,
+            'time_period' => 'afternoon',
+            'start_time' => '13:00',
+            'end_time' => '15:00',
+            'duration_hours' => 2,
+        ]);
+
+        // Safety Rule #5: cannot move Beginner students to an Advanced break.
+        $this->actingAs($l3)
+            ->patch(route('instructor.bookings.update-spot', $bookingA->id), [
+                'surf_spot_id' => $advSpot->id,
+                'reason' => 'Trying to move beginners to an advanced reef break.',
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame($spotA->id, $bookingA->fresh()->surf_spot_id);
+        $this->assertSame($spotA->id, $bookingB->fresh()->surf_spot_id);
+
+        // Moving to beginner Spot B updates BOTH overlapping bookings and notifies BOTH students with reason.
+        $reason = 'Strong onshore wind at original spot; calmer clean waves at Burgos Inner.';
+        $this->actingAs($l3)
+            ->patch(route('instructor.bookings.update-spot', $bookingA->id), [
+                'surf_spot_id' => $spotB->id,
+                'reason' => $reason,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $bookingA->refresh();
+        $bookingB->refresh();
+        $bookingC->refresh();
+
+        $this->assertSame($spotB->id, $bookingA->surf_spot_id);
+        $this->assertSame($spotA->id, $bookingA->previous_surf_spot_id);
+        $this->assertSame($reason, $bookingA->spot_change_reason);
+        $this->assertNotNull($bookingA->spot_changed_at);
+
+        $this->assertSame($spotB->id, $bookingB->surf_spot_id);
+        $this->assertSame($spotA->id, $bookingB->previous_surf_spot_id);
+        $this->assertSame($reason, $bookingB->spot_change_reason);
+        $this->assertNotNull($bookingB->spot_changed_at);
+
+        // Non-overlapping Student C stays at Spot A and is not notified.
+        $this->assertSame($spotA->id, $bookingC->surf_spot_id);
+        $this->assertNull($bookingC->spot_changed_at);
+
+        Notification::assertSentTo($studentA, BookingSpotChangedNotification::class);
+        Notification::assertSentTo($studentB, BookingSpotChangedNotification::class);
+        Notification::assertNotSentTo($studentC, BookingSpotChangedNotification::class);
+    }
+
+    /** @test */
+    public function instructor_cannot_reschedule_a_beginner_booking_onto_an_intermediate_slot(): void
+    {
+        $l3 = User::factory()->create(['role' => 'instructor']);
+        $l3->assignRole('instructor');
+        $l3->instructorProfile()->create([
+            'level' => InstructorLevel::Level3,
+            'status' => 'active',
+            'rate_per_hour' => 800,
+        ]);
+
+        $otherStudent = User::factory()->create(['role' => 'student']);
+        $otherStudent->assignRole('student');
+
+        $targetDate = now()->addDays(6)->format('Y-m-d');
+        $originalDate = now()->addDays(4)->format('Y-m-d');
+
+        // Target slot is already held by an Intermediate Guiding booking.
+        Booking::factory()->create([
+            'student_id' => $otherStudent->id,
+            'instructor_id' => $l3->id,
+            'surf_spot_id' => $this->surfSpot->id,
+            'status' => BookingStatus::Confirmed,
+            'skill_level' => SkillLevel::Intermediate->value,
+            'session_type' => SessionType::Guiding->value,
+            'date' => $targetDate,
+            'time_period' => 'morning',
+            'start_time' => '07:00',
+            'end_time' => '09:00',
+            'duration_hours' => 2,
+        ]);
+
+        $beginnerBooking = Booking::factory()->create([
+            'student_id' => $this->student->id,
+            'instructor_id' => $l3->id,
+            'surf_spot_id' => $this->surfSpot->id,
+            'status' => BookingStatus::Confirmed,
+            'skill_level' => SkillLevel::Beginner->value,
+            'session_type' => SessionType::Teaching->value,
+            'date' => $originalDate,
+            'time_period' => 'morning',
+            'start_time' => '07:00',
+            'end_time' => '09:00',
+            'duration_hours' => 2,
+        ]);
+
+        $this->actingAs($l3)
+            ->post(route('instructor.bookings.change-request', $beginnerBooking->id), [
+                'type' => 'reschedule',
+                'date' => $targetDate,
+                'time_period' => 'morning',
+                'start_time' => '07:00',
+                'end_time' => '09:00',
+                'reason' => 'Trying to merge Beginner onto Intermediate slot.',
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame($originalDate, $beginnerBooking->fresh()->date->format('Y-m-d'));
     }
 }

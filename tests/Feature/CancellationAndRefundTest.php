@@ -686,4 +686,112 @@ class CancellationAndRefundTest extends TestCase
 
         Notification::assertSentTo($actors['student'], BookingNoShowNotification::class);
     }
+
+    #[Test]
+    public function xendit_gcash_payment_and_refund_flow_works_with_redirect_verification_and_webhooks(): void
+    {
+        $webhookToken = 'xnd_webhook_secret_token_123';
+        config([
+            'services.xendit.secret_key' => 'xnd_development_test_key',
+            'services.xendit.webhook_token' => $webhookToken,
+        ]);
+
+        $actors = $this->createActors();
+        [$booking, $payment] = $this->createPaidGcashBooking(
+            $actors,
+            daysUntilSession: 10,
+            daysSincePayment: 1,
+            gatewayPaymentId: null,
+            transactionId: 'ewc_test_charge_001',
+        );
+
+        $payment->update(['status' => PaymentStatus::Pending->value]);
+        $booking->update([
+            'status' => BookingStatus::AwaitingPayment->value,
+            'payment_status' => PaymentStatus::Pending->value,
+        ]);
+
+        Http::fake([
+            'https://api.xendit.co/ewallets/charges/ewc_test_charge_001' => Http::response([
+                'id' => 'ewc_test_charge_001',
+                'status' => 'SUCCEEDED',
+                'currency' => 'PHP',
+                'charge_amount' => 1284.00,
+            ], 200),
+            'https://api.xendit.co/ewallets/charges/ewc_test_charge_001/refunds' => Http::response([
+                'id' => 'ewr_test_refund_001',
+                'charge_id' => 'ewc_test_charge_001',
+                'status' => 'PENDING',
+                'currency' => 'PHP',
+                'refund_amount' => 1200.00,
+            ], 200),
+        ]);
+
+        // 1. Student returns from Xendit checkout to /payments/{booking}/success -> auto-verifies status & captures ewc_...
+        $this->actingAs($actors['student'])
+            ->get(route('payments.success', $booking))
+            ->assertRedirect(route('bookings.confirmation', $booking));
+
+        $payment->refresh();
+        $booking->refresh();
+        $this->assertSame(BookingStatus::Confirmed, $booking->status);
+        $this->assertSame(PaymentStatus::Completed, $payment->status);
+        $this->assertSame('ewc_test_charge_001', $payment->gateway_payment_id);
+
+        // 2. Student cancels booking -> dispatches Xendit refund (lesson price only, 1200.00)
+        $this->actingAs($actors['student'])
+            ->post(route('student.bookings.cancel', $booking), [
+                'reason' => 'Cancelling Xendit GCash booking',
+            ])
+            ->assertRedirect();
+
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://api.xendit.co/ewallets/charges/ewc_test_charge_001/refunds'
+                && (float) ($request->data()['amount'] ?? 0) === 1200.00
+                && ($request->data()['reason'] ?? null) === 'REQUESTED_BY_CUSTOMER';
+        });
+
+        $refund = Refund::where('booking_id', $booking->id)->firstOrFail();
+        $this->assertSame('xendit', $refund->gateway);
+        $this->assertSame(RefundStatus::Processing, $refund->status);
+        $this->assertSame('ewr_test_refund_001', $refund->paymongo_refund_id);
+
+        // 3. Invalid x-callback-token webhook is rejected with 401
+        $refundWebhookJson = json_encode([
+            'event' => 'ewallet.refund',
+            'data' => [
+                'id' => 'ewr_test_refund_001',
+                'charge_id' => 'ewc_test_charge_001',
+                'status' => 'SUCCEEDED',
+                'refund_amount' => 1200.00,
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $this->call(
+            'POST',
+            route('payments.webhook'),
+            [],
+            [],
+            [],
+            ['HTTP_X_CALLBACK_TOKEN' => 'wrong_token', 'CONTENT_TYPE' => 'application/json'],
+            $refundWebhookJson
+        )->assertStatus(401);
+
+        $this->assertSame(RefundStatus::Processing, $refund->fresh()->status);
+
+        // 4. Valid x-callback-token completes the Refund and Payment
+        $this->call(
+            'POST',
+            route('payments.webhook'),
+            [],
+            [],
+            [],
+            ['HTTP_X_CALLBACK_TOKEN' => $webhookToken, 'CONTENT_TYPE' => 'application/json'],
+            $refundWebhookJson
+        )->assertOk();
+
+        $this->assertSame(RefundStatus::Completed, $refund->fresh()->status);
+        $this->assertSame(PaymentStatus::Refunded, $payment->fresh()->status);
+        $this->assertSame(PaymentStatus::Refunded, $booking->fresh()->payment_status);
+    }
 }

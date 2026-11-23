@@ -295,7 +295,11 @@ class InstructorSearchController extends Controller
                 ->all()
             : [];
 
-        return array_merge($instructor->toArray(), [
+        $publicInstructor = collect($instructor->toArray())
+            ->except(['email', 'phone', 'role', 'email_verified_at', 'remember_token'])
+            ->all();
+
+        return array_merge($publicInstructor, [
             'total_reviews' => (int) ($instructor->reviews_as_instructor_count ?? 0),
             'average_rating' => round((float) ($instructor->reviews_as_instructor_avg_rating ?? 0), 1),
             'avatar_url' => $instructor->avatar_url,
@@ -367,16 +371,23 @@ class InstructorSearchController extends Controller
             },
             'reviewsAsInstructor' => function ($q) {
                 $q->visible()
-                    ->with('student')
+                    ->with('student:id,name,avatar_path')
                     ->latest()
                     ->limit(10);
             },
             'availabilities' => function ($q) {
                 $q->where('is_available', true)
-                    ->where('specific_date', '>=', now()->format('Y-m-d'))
-                    ->orWhereNull('specific_date');
+                    ->where(function ($dateQuery) {
+                        $dateQuery->where('specific_date', '>=', now()->format('Y-m-d'))
+                            ->orWhereNull('specific_date');
+                    });
             },
         ]);
+
+        $instructor->makeHidden(['email', 'phone', 'role', 'email_verified_at', 'remember_token']);
+        $instructor->reviewsAsInstructor->each(function ($review) {
+            $review->student?->makeHidden(['email', 'phone', 'role', 'email_verified_at', 'remember_token']);
+        });
 
         // Calculate average rating
         $averageRating = $instructor->reviewsAsInstructor()->visible()->avg('rating') ?? 0;

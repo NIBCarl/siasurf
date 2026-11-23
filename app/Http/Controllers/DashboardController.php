@@ -133,6 +133,7 @@ class DashboardController extends Controller
                 'revenue' => $this->dashboardService->getRevenueData(),
                 'bookings' => $this->dashboardService->getBookingTrends(),
                 'spots' => $this->dashboardService->getPopularSurfSpots(),
+                'summary' => $this->dashboardService->getAnalyticsSummary(),
             ]
         ]);
     }

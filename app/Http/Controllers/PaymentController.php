@@ -167,28 +167,39 @@ class PaymentController extends Controller
 
         $this->authorize('verify', $payment);
 
-        if (! $payment->isAwaitingVerification()) {
-            return back()->with('error', 'There is no receipt waiting for verification.');
-        }
-
-        $request->validate([
+        $validated = $request->validate([
             'note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        DB::transaction(function () use ($booking, $payment) {
-            $payment->markReceiptVerified(auth()->id());
+        $error = DB::transaction(function () use ($booking, $payment, $validated): ?string {
+            $lockedBooking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $lockedPayment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
 
-            $booking->update([
+            if ($lockedBooking->status !== BookingStatus::AwaitingPayment) {
+                return 'This booking is no longer awaiting payment verification.';
+            }
+
+            if (! $lockedPayment->isAwaitingVerification()) {
+                return 'There is no receipt waiting for verification.';
+            }
+
+            $lockedPayment->markReceiptVerified(auth()->id(), $validated['note'] ?? null);
+
+            $lockedBooking->update([
                 'payment_status' => PaymentStatus::Completed,
                 'payment_deadline_at' => null,
             ]);
 
             // The lesson was only waiting on the money: confirming it now turns
             // the held slot into a confirmed booking.
-            if ($booking->status === BookingStatus::AwaitingPayment) {
-                $booking->confirm();
-            }
+            $lockedBooking->confirm();
+
+            return null;
         });
+
+        if ($error !== null) {
+            return back()->with('error', $error);
+        }
 
         return back()->with('success', 'Receipt verified. The payment is now marked as paid.');
     }
@@ -205,27 +216,39 @@ class PaymentController extends Controller
 
         $this->authorize('verify', $payment);
 
-        if (! $payment->isAwaitingVerification()) {
-            return back()->with('error', 'There is no receipt waiting for verification.');
-        }
-
         $validated = $request->validate([
             'note' => ['required', 'string', 'max:500'],
         ], [
             'note.required' => 'Tell the student why the receipt was rejected.',
         ]);
 
-        DB::transaction(function () use ($booking, $payment, $validated) {
-            $payment->rejectReceipt($validated['note'], auth()->id());
+        $error = DB::transaction(function () use ($booking, $payment, $validated): ?string {
+            $lockedBooking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $lockedPayment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
 
-            $booking->update([
+            if ($lockedBooking->status !== BookingStatus::AwaitingPayment) {
+                return 'This booking is no longer awaiting payment verification.';
+            }
+
+            if (! $lockedPayment->isAwaitingVerification()) {
+                return 'There is no receipt waiting for verification.';
+            }
+
+            $lockedPayment->rejectReceipt($validated['note'], auth()->id());
+
+            $lockedBooking->update([
                 'payment_status' => PaymentStatus::Pending,
-                // Give the student a usable window to correct the upload.
-                'payment_deadline_at' => $booking->status === BookingStatus::AwaitingPayment
-                    ? now()->addMinutes(Booking::PAYMENT_HOLD_MINUTES)
-                    : $booking->payment_deadline_at,
+                // Give the student a usable window to correct the upload, clamped
+                // so it never extends past the lesson start cutoff.
+                'payment_deadline_at' => $lockedBooking->paymentDeadlineFrom(),
             ]);
+
+            return null;
         });
+
+        if ($error !== null) {
+            return back()->with('error', $error);
+        }
 
         return back()->with('success', 'Receipt rejected. The student can upload a corrected one.');
     }
@@ -233,7 +256,7 @@ class PaymentController extends Controller
     /**
      * Process GCash payment
      */
-    public function processGCash(Request $request, Booking $booking): RedirectResponse
+    public function processGCash(Request $request, Booking $booking): \Symfony\Component\HttpFoundation\Response
     {
         $this->authorize('view', $booking);
 
@@ -270,21 +293,25 @@ class PaymentController extends Controller
 
         try {
             // The acceptance flow already created a checkout session; reuse it
-            // instead of creating a second payment intent.
-            if ($booking->payment?->checkout_url) {
-                return redirect($booking->payment->checkout_url);
+            // unless the previous attempt failed or was cancelled.
+            if (
+                $booking->payment?->checkout_url
+                && $booking->payment->status !== PaymentStatus::Failed
+            ) {
+                return $this->redirectToCheckout($request, $booking->payment->checkout_url);
             }
 
             $paymentIntent = $this->paymentService->createPaymentIntent($booking);
 
             if ($booking->payment) {
                 $booking->payment->update([
+                    'status' => PaymentStatus::Pending,
                     'transaction_id' => $paymentIntent['transaction_id'],
                     'checkout_url' => $paymentIntent['checkout_url'],
                 ]);
             }
 
-            return redirect($paymentIntent['checkout_url']);
+            return $this->redirectToCheckout($request, $paymentIntent['checkout_url']);
         } catch (\Exception $e) {
             Log::error('GCash payment initiation failed', [
                 'booking_id' => $booking->id,
@@ -293,6 +320,24 @@ class PaymentController extends Controller
 
             return back()->with('error', 'Failed to initiate payment. Please try again.');
         }
+    }
+
+    /**
+     * Perform a full-page browser navigation when redirecting to an external
+     * gateway (Xendit / PayMongo) from an Inertia XHR visit to avoid CORS errors.
+     */
+    private function redirectToCheckout(Request $request, string $checkoutUrl): \Symfony\Component\HttpFoundation\Response
+    {
+        $targetHost = parse_url($checkoutUrl, PHP_URL_HOST);
+        $isExternal = is_string($targetHost)
+            && $targetHost !== ''
+            && strcasecmp($targetHost, $request->getHost()) !== 0;
+
+        if ($isExternal && $request->header('X-Inertia')) {
+            return Inertia::location($checkoutUrl);
+        }
+
+        return redirect()->away($checkoutUrl);
     }
 
     /**
@@ -433,6 +478,41 @@ class PaymentController extends Controller
     {
         $this->authorize('view', $booking);
 
+        $payment = $booking->payment;
+
+        // When returning from Xendit/PayMongo before an async webhook lands (or
+        // on localhost without a webhook tunnel), verify the gateway status directly.
+        if ($payment && ! $payment->isCompleted() && ! empty($payment->transaction_id)) {
+            $gatewayStatus = strtolower($this->paymentService->getPaymentStatus($payment->transaction_id));
+
+            if (in_array($gatewayStatus, ['succeeded', 'paid', 'completed'], true)) {
+                DB::transaction(function () use ($booking, $payment) {
+                    $payment->update([
+                        'status' => PaymentStatus::Completed,
+                        'gateway_payment_id' => $payment->gateway_payment_id ?: $payment->transaction_id,
+                        'paid_at' => $payment->paid_at ?? now(),
+                    ]);
+
+                    $booking->update([
+                        'status' => BookingStatus::Confirmed,
+                        'payment_status' => PaymentStatus::Completed,
+                        'payment_deadline_at' => null,
+                    ]);
+                });
+
+                $booking->refresh()->load('payment');
+            } elseif (in_array($gatewayStatus, ['failed', 'voided', 'expired'], true)) {
+                $payment->update([
+                    'status' => PaymentStatus::Failed,
+                    'checkout_url' => null,
+                ]);
+
+                return redirect()
+                    ->route('student.bookings.show', $booking)
+                    ->with('error', 'Payment was not completed. You can try again.');
+            }
+        }
+
         // Generate receipt if payment is completed
         if ($booking->payment && $booking->payment->isCompleted()) {
             $this->receiptService->generateReceipt($booking);
@@ -450,10 +530,17 @@ class PaymentController extends Controller
     {
         $this->authorize('view', $booking);
 
-        // Mark payment as failed
-        if ($booking->payment) {
+        // Only mark an active GCash checkout attempt failed when the booking is
+        // still awaiting online payment (never overwrite uploaded receipts, cash
+        // holds, or completed payments via a gateway cancel redirect).
+        if (
+            $booking->status === BookingStatus::AwaitingPayment
+            && $booking->payment
+            && $booking->payment->status === PaymentStatus::Pending
+        ) {
             $booking->payment->update([
-                'status' => 'failed',
+                'status' => PaymentStatus::Failed,
+                'checkout_url' => null,
             ]);
         }
 
@@ -463,13 +550,15 @@ class PaymentController extends Controller
     }
 
     /**
-     * Handle PayMongo webhook
+     * Handle PayMongo / Xendit webhook
      */
     public function webhook(Request $request): \Illuminate\Http\Response
     {
         try {
             $this->paymentService->handleWebhook($request);
             return response('Webhook processed', 200);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            return response($e->getMessage() ?: 'Webhook unauthorized', $e->getStatusCode());
         } catch (\Exception $e) {
             Log::error('Payment webhook failed', [
                 'error' => $e->getMessage(),
@@ -484,6 +573,18 @@ class PaymentController extends Controller
     public function downloadReceipt(Booking $booking)
     {
         $this->authorize('view', $booking);
+
+        $payment = $booking->payment;
+        $hasIssuedReceipt = $booking->isPaid()
+            || ($payment !== null && in_array($payment->status, [
+                PaymentStatus::Completed,
+                PaymentStatus::Underpaid,
+                PaymentStatus::RefundRequested,
+                PaymentStatus::RefundProcessing,
+                PaymentStatus::Refunded,
+            ], true));
+
+        abort_unless($hasIssuedReceipt, 403, 'Official receipt is only available after payment is recorded.');
 
         return $this->receiptService->streamReceipt($booking);
     }

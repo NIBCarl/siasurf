@@ -2,14 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BookingStatus;
+use App\Enums\SessionType;
 use App\Enums\WaiverType;
+use App\Exceptions\SafetyViolationException;
 use App\Models\Booking;
 use App\Models\BookingParticipant;
 use App\Models\Waiver;
+use App\Services\AvailabilityService;
+use App\Services\SafetyService;
 use App\Services\WaiverService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -33,12 +39,8 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        if ($redirect = $this->ensureCheckoutOpen($booking)) {
+            return $redirect;
         }
 
         $booking->load(['student.studentProfile', 'instructor.instructorProfile', 'surfSpot', 'participants']);
@@ -96,12 +98,8 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        if ($redirect = $this->ensureCheckoutOpen($booking)) {
+            return $redirect;
         }
 
         $validated = $request->validate([
@@ -121,7 +119,7 @@ class WaiverController extends Controller
             'signature.required' => 'Please provide your signature.',
         ]);
 
-        $booking->loadMissing(['student.studentProfile', 'instructor', 'surfSpot']);
+        $booking->loadMissing(['student.studentProfile', 'instructor.instructorProfile', 'surfSpot', 'participants']);
 
         $participant = null;
 
@@ -186,6 +184,48 @@ class WaiverController extends Controller
             ? Carbon::parse($birthday)->age
             : ($participant?->age ?? $booking->student_age);
 
+        // Enforce Safety Rule #4 (and full participant safety rules) when
+        // birthday newly reveals a child/toddler age.
+        if ($age !== null) {
+            $instructorLevel = (int) ($booking->instructor?->instructorProfile?->level?->value ?? 1);
+            $spotDifficulty = (string) ($booking->surfSpot?->difficulty ?? 'beginner');
+            $sessionType = $booking->session_type instanceof SessionType
+                ? $booking->session_type
+                : SessionType::tryFrom((string) $booking->session_type);
+
+            $safetyParticipants = $booking->participants->isNotEmpty()
+                ? $booking->participants->map(function (BookingParticipant $p) use ($participant, $age) {
+                    $resolvedAge = ($participant && $p->id === $participant->id)
+                        ? (int) $age
+                        : ($p->birthday?->age ?? $p->age);
+
+                    return [
+                        'age' => $resolvedAge,
+                        'skill_level' => $p->skill_level,
+                    ];
+                })->values()->all()
+                : [[
+                    'age' => (int) $age,
+                    'skill_level' => $booking->skill_level,
+                ]];
+
+            try {
+                app(SafetyService::class)->validateParticipants(
+                    $safetyParticipants,
+                    $instructorLevel,
+                    $spotDifficulty,
+                    $booking->student_id,
+                    $sessionType
+                );
+            } catch (SafetyViolationException $exception) {
+                $booking->expireAcceptance($exception->getMessage());
+                app(AvailabilityService::class)->releaseForBooking($booking);
+
+                return redirect()->route('bookings.create', $booking->instructor_id)
+                    ->with('error', $exception->getMessage());
+            }
+        }
+
         $emergencyContact = trim((string) $validated['emergency_contact']);
         $medicalInfo = isset($validated['medical_info']) && trim((string) $validated['medical_info']) !== ''
             ? trim((string) $validated['medical_info'])
@@ -193,57 +233,107 @@ class WaiverController extends Controller
         $printedName = trim((string) $validated['signed_by']);
 
         try {
-            $this->waiverService->createLiabilityWaiver(
+            DB::transaction(function () use (
                 $booking,
-                $printedName,
-                $validated['signature'],
                 $participant,
-                [
-                    'participant_name' => $participantName,
-                    'birthday' => $birthday,
-                    'age' => $age,
-                    'email' => $email,
-                    'country' => $country,
-                    'hotel_name' => $booking->needs_hotel_pickup ? $booking->hotel_name : null,
-                    'emergency_contact' => $emergencyContact,
-                    'medical_info' => $medicalInfo,
-                    'surf_shop' => config('waiver.surf_shop', config('app.name', 'SiaSurf')),
-                    'instructor_name' => $booking->instructor?->name ?? '',
-                    'witness_name' => $booking->instructor?->name ?? '',
-                    'signed_by_guardian' => $age !== null && $age < 18,
-                ]
-            );
+                $isPrimary,
+                $printedName,
+                $validated,
+                $participantName,
+                $birthday,
+                $age,
+                $email,
+                $country,
+                $emergencyContact,
+                $medicalInfo,
+                $request
+            ): void {
+                $lockedBooking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
 
-            // Sync the manually entered emergency contact, medical info, and any
-            // fallback demographics onto the participant so instructors see them
-            // on the session sheet and parental consent can reuse them if needed.
-            if ($participant) {
-                [$ecName, $ecPhone] = $this->splitEmergencyContact($emergencyContact);
-
-                $participantUpdates = [
-                    'emergency_contact_name' => $ecName,
-                    'emergency_contact_phone' => $ecPhone,
-                ];
-
-                if ($request->exists('medical_info')) {
-                    $participantUpdates['medical_info'] = $medicalInfo;
+                if ($lockedBooking->checkoutHoldExpired()) {
+                    throw new \RuntimeException('HOLD_EXPIRED');
                 }
 
-                if (empty($participant->birthday) && ! empty($birthday)) {
-                    $participantUpdates['birthday'] = $birthday;
-                }
-                if (empty($participant->country) && ! empty($country)) {
-                    $participantUpdates['country'] = $country;
-                }
-                if (empty($participant->email) && ! empty($email)) {
-                    $participantUpdates['email'] = $email;
+                if (! in_array($lockedBooking->status, [BookingStatus::Reserved, BookingStatus::Pending], true)) {
+                    throw new \RuntimeException('BOOKING_CLOSED');
                 }
 
-                $participant->update($participantUpdates);
+                $this->waiverService->createLiabilityWaiver(
+                    $lockedBooking,
+                    $printedName,
+                    $validated['signature'],
+                    $participant,
+                    [
+                        'participant_name' => $participantName,
+                        'birthday' => $birthday,
+                        'age' => $age,
+                        'email' => $email,
+                        'country' => $country,
+                        'hotel_name' => $lockedBooking->needs_hotel_pickup ? $lockedBooking->hotel_name : null,
+                        'emergency_contact' => $emergencyContact,
+                        'medical_info' => $medicalInfo,
+                        'surf_shop' => config('waiver.surf_shop', config('app.name', 'SiaSurf')),
+                        'instructor_name' => $lockedBooking->instructor?->name ?? '',
+                        'witness_name' => $lockedBooking->instructor?->name ?? '',
+                        'signed_by_guardian' => $age !== null && $age < 18,
+                    ]
+                );
+
+                // Sync age, emergency contact, medical info, and fallback demographics
+                // onto the participant and booking so instructors and parental consent
+                // checks evaluate the true verified age.
+                if ($participant) {
+                    [$ecName, $ecPhone] = $this->splitEmergencyContact($emergencyContact);
+
+                    $participantUpdates = [
+                        'emergency_contact_name' => $ecName,
+                        'emergency_contact_phone' => $ecPhone,
+                    ];
+
+                    if ($request->exists('medical_info')) {
+                        $participantUpdates['medical_info'] = $medicalInfo;
+                    }
+
+                    if ($age !== null) {
+                        $participantUpdates['age'] = $age;
+                    }
+
+                    if (empty($participant->birthday) && ! empty($birthday)) {
+                        $participantUpdates['birthday'] = $birthday;
+                    }
+                    if (empty($participant->country) && ! empty($country)) {
+                        $participantUpdates['country'] = $country;
+                    }
+                    if (empty($participant->email) && ! empty($email)) {
+                        $participantUpdates['email'] = $email;
+                    }
+
+                    $participant->update($participantUpdates);
+                }
+
+                if ($isPrimary && $age !== null && (int) $lockedBooking->student_age !== (int) $age) {
+                    $lockedBooking->update(['student_age' => $age]);
+                }
+            });
+
+            return $this->continueFlow($booking->fresh())
+                ->with('success', 'Liability waiver signed successfully.');
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'HOLD_EXPIRED') {
+                $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+                app(AvailabilityService::class)->releaseForBooking($booking);
+
+                return redirect()->route('bookings.create', $booking->instructor_id)
+                    ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
             }
 
-            return $this->continueFlow($booking)
-                ->with('success', 'Liability waiver signed successfully.');
+            if ($e->getMessage() === 'BOOKING_CLOSED') {
+                return redirect()->route('student.bookings.show', $booking)
+                    ->with('error', 'This booking is no longer in an active waiver step.');
+            }
+
+            return redirect()->back()
+                ->with('error', 'Failed to save waiver: ' . $e->getMessage());
         } catch (\Exception $e) {
             return redirect()->back()
                 ->with('error', 'Failed to save waiver: ' . $e->getMessage());
@@ -329,12 +419,8 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        if ($redirect = $this->ensureCheckoutOpen($booking)) {
+            return $redirect;
         }
 
         $booking->load(['instructor', 'surfSpot', 'participants']);
@@ -388,12 +474,8 @@ class WaiverController extends Controller
     {
         $this->authorize('view', $booking);
 
-        if ($booking->checkoutHoldExpired()) {
-            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
-            app(\App\Services\AvailabilityService::class)->releaseForBooking($booking);
-
-            return redirect()->route('bookings.create', $booking->instructor_id)
-                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        if ($redirect = $this->ensureCheckoutOpen($booking)) {
+            return $redirect;
         }
 
         $validated = $request->validate([
@@ -406,59 +488,103 @@ class WaiverController extends Controller
             'participant_id' => 'nullable|integer',
         ]);
 
-        $participant = null;
-
-        if ($booking->participants()->exists()) {
-            $participant = isset($validated['participant_id'])
-                ? $booking->participants()->find($validated['participant_id'])
-                : $this->waiverService->nextParticipantAwaitingParentalConsent($booking);
-
-            if (! $participant) {
-                return $this->continueFlow($booking);
-            }
-
-            if (! $participant->hasSigned(WaiverType::Liability)) {
-                return redirect()->route('bookings.waiver', $booking)
-                    ->with('error', 'Please sign the liability waiver first.');
-            }
-
-            if ($participant->hasSigned(WaiverType::ParentalConsent)) {
-                return $this->continueFlow($booking);
-            }
-        } else {
-            if ($booking->student_age >= 18) {
-                return $this->continueFlow($booking);
-            }
-
-            if ($booking->waivers()->where('type', WaiverType::ParentalConsent->value)->exists()) {
-                return $this->continueFlow($booking);
-            }
-        }
-
         try {
-            $this->waiverService->createParentalConsent(
-                $booking,
-                $validated['parent_name'],
-                $validated['parent_signature'],
-                $validated['emergency_contact_name'],
-                $validated['emergency_contact_phone'],
-                $validated['medical_info'] ?? null,
-                $participant
-            );
+            $earlyRedirect = null;
 
-            // The guardian details also apply to the participant's record.
-            if ($participant) {
-                $participant->update([
-                    'emergency_contact_name' => $validated['emergency_contact_name'],
-                    'emergency_contact_phone' => $validated['emergency_contact_phone'],
-                    'medical_info' => $validated['medical_info'] ?? $participant->medical_info,
-                    'guardian_name' => $validated['parent_name'],
-                    'guardian_phone' => $participant->guardian_phone,
-                ]);
+            DB::transaction(function () use ($booking, $validated, &$earlyRedirect): void {
+                $lockedBooking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+
+                if ($lockedBooking->checkoutHoldExpired()) {
+                    throw new \RuntimeException('HOLD_EXPIRED');
+                }
+
+                if (! in_array($lockedBooking->status, [BookingStatus::Reserved, BookingStatus::Pending], true)) {
+                    throw new \RuntimeException('BOOKING_CLOSED');
+                }
+
+                $participant = null;
+
+                if ($lockedBooking->participants()->exists()) {
+                    $participant = isset($validated['participant_id'])
+                        ? $lockedBooking->participants()->find($validated['participant_id'])
+                        : $this->waiverService->nextParticipantAwaitingParentalConsent($lockedBooking);
+
+                    if (! $participant) {
+                        $earlyRedirect = $this->continueFlow($lockedBooking);
+
+                        return;
+                    }
+
+                    if (! $participant->hasSigned(WaiverType::Liability)) {
+                        $earlyRedirect = redirect()->route('bookings.waiver', $lockedBooking)
+                            ->with('error', 'Please sign the liability waiver first.');
+
+                        return;
+                    }
+
+                    if ($participant->hasSigned(WaiverType::ParentalConsent)) {
+                        $earlyRedirect = $this->continueFlow($lockedBooking);
+
+                        return;
+                    }
+                } else {
+                    if ($lockedBooking->student_age >= 18) {
+                        $earlyRedirect = $this->continueFlow($lockedBooking);
+
+                        return;
+                    }
+
+                    if ($lockedBooking->waivers()->where('type', WaiverType::ParentalConsent->value)->exists()) {
+                        $earlyRedirect = $this->continueFlow($lockedBooking);
+
+                        return;
+                    }
+                }
+
+                $this->waiverService->createParentalConsent(
+                    $lockedBooking,
+                    $validated['parent_name'],
+                    $validated['parent_signature'],
+                    $validated['emergency_contact_name'],
+                    $validated['emergency_contact_phone'],
+                    $validated['medical_info'] ?? null,
+                    $participant
+                );
+
+                // The guardian details also apply to the participant's record.
+                if ($participant) {
+                    $participant->update([
+                        'emergency_contact_name' => $validated['emergency_contact_name'],
+                        'emergency_contact_phone' => $validated['emergency_contact_phone'],
+                        'medical_info' => $validated['medical_info'] ?? $participant->medical_info,
+                        'guardian_name' => $validated['parent_name'],
+                        'guardian_phone' => $participant->guardian_phone,
+                    ]);
+                }
+            });
+
+            if ($earlyRedirect) {
+                return $earlyRedirect;
             }
 
-            return $this->continueFlow($booking)
+            return $this->continueFlow($booking->fresh())
                 ->with('success', 'Parental consent provided.');
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'HOLD_EXPIRED') {
+                $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+                app(AvailabilityService::class)->releaseForBooking($booking);
+
+                return redirect()->route('bookings.create', $booking->instructor_id)
+                    ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+            }
+
+            if ($e->getMessage() === 'BOOKING_CLOSED') {
+                return redirect()->route('student.bookings.show', $booking)
+                    ->with('error', 'This booking is no longer in an active waiver step.');
+            }
+
+            return redirect()->back()
+                ->with('error', 'Failed to save consent: ' . $e->getMessage());
         } catch (\Exception $e) {
             return redirect()->back()
                 ->with('error', 'Failed to save consent: ' . $e->getMessage());
@@ -491,6 +617,32 @@ class WaiverController extends Controller
 
         return redirect()->route('bookings.payment', $booking)
             ->with('success', 'All waivers signed. Please proceed to payment.');
+    }
+
+    /**
+     * Ensure the booking is still inside its active checkout waiver stage.
+     */
+    private function ensureCheckoutOpen(Booking $booking): ?RedirectResponse
+    {
+        if ($booking->checkoutHoldExpired()) {
+            $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
+            app(AvailabilityService::class)->releaseForBooking($booking);
+
+            return redirect()->route('bookings.create', $booking->instructor_id)
+                ->with('error', 'Your 15-minute reservation hold expired. Please select your time slot again.');
+        }
+
+        if ($booking->status === BookingStatus::AwaitingPayment) {
+            return redirect()->route('payments.show', $booking)
+                ->with('info', 'Your instructor accepted this booking. Complete the GCash payment before the hold expires.');
+        }
+
+        if (! in_array($booking->status, [BookingStatus::Reserved, BookingStatus::Pending], true)) {
+            return redirect()->route('student.bookings.show', $booking)
+                ->with('info', 'This booking has already moved past the waiver step.');
+        }
+
+        return null;
     }
 
     /**

@@ -83,7 +83,7 @@ class SurfSpotSkillTest extends TestCase
         return array_merge([
             'date' => $this->day->format('Y-m-d'),
             'start_time' => '07:00',
-            'end_time' => '08:00',
+            'end_time' => '09:00',
             'student_age' => 25,
             'height' => 175,
             'weight' => 70,

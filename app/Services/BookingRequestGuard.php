@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\BookingStatus;
+use App\Enums\PaymentStatus;
 use App\Exceptions\BookingRequestException;
 use App\Models\Booking;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Abuse prevention for the two-phase flow.
@@ -35,40 +38,49 @@ class BookingRequestGuard
      */
     private function assertNoDuplicateSlotRequest(User $student, array $slot): void
     {
-        $exists = Booking::query()
-            ->where('student_id', $student->id)
+        $exists = $this->unpaidActiveRequestsQuery($student)
             ->forSlot(
                 (int) $slot['instructor_id'],
                 (string) $slot['date'],
                 (string) $slot['time_period']
             )
-            ->open()
             ->exists();
 
         if ($exists) {
             throw new BookingRequestException(
-                'You already have an open request for this instructor at that time. '
-                . 'Wait for a response before requesting it again.'
+                'You already have an open or unpaid booking for this instructor at that time. '
+                . 'Complete or wait for that booking before requesting it again.'
             );
         }
     }
 
     /**
-     * Cap the total number of unanswered requests a student can hold, so a
-     * single account cannot tie up many slots at once.
+     * Cap the total number of unanswered or unpaid upcoming cash bookings a
+     * student can hold, so a single account cannot tie up many slots at once.
      */
     private function assertWithinOpenRequestLimit(User $student): void
     {
-        $open = Booking::query()
-            ->where('student_id', $student->id)
-            ->open()
-            ->count();
+        $open = $this->unpaidActiveRequestsQuery($student)->count();
 
         if ($open >= Booking::MAX_OPEN_REQUESTS_PER_STUDENT) {
             throw new BookingRequestException(
-                'You already have ' . $open . ' booking requests waiting for a response. '
-                . 'Please wait for those to be answered before requesting another lesson.'
+                'You already have ' . $open . ' open or unpaid booking requests. '
+                . 'Please complete or wait for those before requesting another lesson.'
             );
         }
+    }
+
+    private function unpaidActiveRequestsQuery(User $student): Builder
+    {
+        return Booking::query()
+            ->where('student_id', $student->id)
+            ->where(function (Builder $query) {
+                $query->open()
+                    ->orWhere(function (Builder $cashHold) {
+                        $cashHold->where('status', BookingStatus::Confirmed)
+                            ->where('payment_status', PaymentStatus::PendingCash->value)
+                            ->whereDate('date', '>=', today());
+                    });
+            });
     }
 }

@@ -114,7 +114,9 @@ const formatCountdown = (seconds: number) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
+  const [y, m, d] = String(date).slice(0, 10).split('-').map(Number)
+  const parsed = y && m && d ? new Date(y, m - 1, d) : new Date(date)
+  return parsed.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',

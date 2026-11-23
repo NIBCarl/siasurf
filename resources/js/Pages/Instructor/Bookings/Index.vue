@@ -518,6 +518,23 @@ const canMarkAttendance = (booking: Booking): boolean =>
         <template #header>Lesson schedule</template>
 
         <div class="mx-auto w-full max-w-6xl space-y-4">
+            <div
+                v-if="($page.props as any)?.flash?.error"
+                class="flex items-start gap-2.5 rounded-card border border-rose-200 bg-rose-50 px-4 py-3 text-body-sm font-medium text-rose-900"
+                role="alert"
+            >
+                <ExclamationTriangleIcon class="mt-0.5 h-4 w-4 shrink-0 text-rose-600" aria-hidden="true" />
+                <span>{{ ($page.props as any).flash.error }}</span>
+            </div>
+            <div
+                v-else-if="($page.props as any)?.flash?.success"
+                class="flex items-start gap-2.5 rounded-card border border-emerald-200 bg-emerald-50 px-4 py-3 text-body-sm font-medium text-emerald-900"
+                role="status"
+            >
+                <CheckCircleIcon class="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                <span>{{ ($page.props as any).flash.success }}</span>
+            </div>
+
             <!-- Filters and roster summary share one row, so lessons start above the fold -->
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div

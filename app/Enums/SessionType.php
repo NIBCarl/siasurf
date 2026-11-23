@@ -81,18 +81,50 @@ enum SessionType: string
     }
 
     /**
+     * Strict 1-to-1 skill-level assignment per service:
+     * Beginner -> Teaching, Intermediate -> Guiding, Advanced -> Coaching.
+     *
      * @return array<int, string>
      */
     public function allowedSkillLevels(): array
     {
         return match ($this) {
             self::Teaching => [SkillLevel::Beginner->value],
-            self::Guiding => [SkillLevel::Intermediate->value, SkillLevel::Advanced->value],
-            self::Coaching => [
-                SkillLevel::Beginner->value,
-                SkillLevel::Intermediate->value,
-                SkillLevel::Advanced->value,
-            ],
+            self::Guiding => [SkillLevel::Intermediate->value],
+            self::Coaching => [SkillLevel::Advanced->value],
+        };
+    }
+
+    public function minimumHours(): int
+    {
+        return match ($this) {
+            self::Teaching => 1,
+            self::Guiding => 2,
+            self::Coaching => 2,
+        };
+    }
+
+    public function minimumMinutes(): int
+    {
+        return $this->minimumHours() * 60;
+    }
+
+    public function defaultHours(): int
+    {
+        return 2;
+    }
+
+    public function defaultMinutes(): int
+    {
+        return $this->defaultHours() * 60;
+    }
+
+    public static function forSkill(SkillLevel $skill): self
+    {
+        return match ($skill) {
+            SkillLevel::Beginner => self::Teaching,
+            SkillLevel::Intermediate => self::Guiding,
+            SkillLevel::Advanced => self::Coaching,
         };
     }
 
@@ -107,18 +139,11 @@ enum SessionType: string
     }
 
     /**
-     * Natural default service for a student + instructor pairing.
-     *
-     * Beginners always default to Teaching (even on Level 3) so they pay the
-     * Teaching rate rather than Coaching unless they explicitly choose Coaching.
+     * Required service for a student skill level (1-to-1 assignment).
      */
     public static function recommendedFor(SkillLevel $skill, int $instructorLevel): self
     {
-        return match ($skill) {
-            SkillLevel::Beginner => self::Teaching,
-            SkillLevel::Intermediate => self::Guiding,
-            SkillLevel::Advanced => $instructorLevel >= 3 ? self::Coaching : self::Guiding,
-        };
+        return self::forSkill($skill);
     }
 
     /**

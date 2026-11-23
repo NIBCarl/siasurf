@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Enums\BookingStatus;
+use App\Enums\PaymentStatus;
 use App\Jobs\ExpireBookingAcceptanceJob;
+use App\Jobs\ExpirePaymentWindowJob;
 use App\Models\Booking;
 use Illuminate\Console\Command;
 
@@ -43,6 +45,25 @@ class ExpireStaleBookingRequests extends Command
             ->chunkById((int) $this->option('chunk'), function ($bookings) use (&$expired) {
                 foreach ($bookings as $booking) {
                     ExpireBookingAcceptanceJob::dispatch($booking);
+                    $expired++;
+                }
+            });
+
+        Booking::query()
+            ->where('status', BookingStatus::AwaitingPayment)
+            ->whereNotNull('payment_deadline_at')
+            ->where('payment_deadline_at', '<', now())
+            ->where('payment_status', '!=', PaymentStatus::Completed->value)
+            ->whereDoesntHave('payment', function ($q) {
+                $q->whereIn('status', [
+                    PaymentStatus::Completed->value,
+                    PaymentStatus::PendingVerification->value,
+                ]);
+            })
+            ->orderBy('id')
+            ->chunkById((int) $this->option('chunk'), function ($bookings) use (&$expired) {
+                foreach ($bookings as $booking) {
+                    ExpirePaymentWindowJob::dispatch($booking);
                     $expired++;
                 }
             });

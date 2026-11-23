@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Enums\FeedbackCategory;
+use App\Enums\IncidentOutcome;
 use App\Enums\IncidentSeverity;
 use App\Enums\IncidentSource;
 use App\Enums\IncidentStatus;
 use App\Enums\IncidentType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SafetyIncident extends Model
 {
@@ -26,13 +28,21 @@ class SafetyIncident extends Model
         'source',
         'status',
         'category',
+        'report_type',
+        'checked_items',
         'type',
         'severity',
         'suggested_severity',
+        'suggested_outcome',
+        'final_outcome',
         'strike_weight',
         'description',
         'evidence_path',
         'instructor_summary',
+        'decision_reason',
+        'admin_note',
+        'handled_externally',
+        'external_handled_at',
         'location',
         'resolved_at',
         'confirmed_at',
@@ -48,9 +58,14 @@ class SafetyIncident extends Model
         'type' => IncidentType::class,
         'severity' => IncidentSeverity::class,
         'suggested_severity' => IncidentSeverity::class,
+        'suggested_outcome' => IncidentOutcome::class,
+        'final_outcome' => IncidentOutcome::class,
         'source' => IncidentSource::class,
         'status' => IncidentStatus::class,
+        'checked_items' => 'array',
         'strike_weight' => 'integer',
+        'handled_externally' => 'boolean',
+        'external_handled_at' => 'datetime',
         'resolved_at' => 'datetime',
         'confirmed_at' => 'datetime',
         'rejected_at' => 'datetime',
@@ -92,6 +107,11 @@ class SafetyIncident extends Model
     public function strike(): HasOne
     {
         return $this->hasOne(InstructorStrike::class);
+    }
+
+    public function fine(): HasOne
+    {
+        return $this->hasOne(InstructorFine::class);
     }
 
     // Scopes
@@ -168,7 +188,14 @@ class SafetyIncident extends Model
 
     public function isCritical(): bool
     {
-        return $this->severity === IncidentSeverity::Critical;
+        return $this->severity === IncidentSeverity::Critical
+            || $this->final_outcome === IncidentOutcome::Critical;
+    }
+
+    public function isExternallyHandled(): bool
+    {
+        return (bool) $this->handled_externally
+            || $this->final_outcome === IncidentOutcome::Critical;
     }
 
     public function isPending(): bool
@@ -191,22 +218,62 @@ class SafetyIncident extends Model
         return $this->resolved_at !== null;
     }
 
-    public function categoryEnum(): ?\App\Enums\FeedbackCategory
+    public function categoryEnum(): ?FeedbackCategory
     {
-        return $this->category ? \App\Enums\FeedbackCategory::tryFrom($this->category) : null;
+        return $this->category ? FeedbackCategory::tryFrom($this->category) : null;
     }
 
     /**
-     * The strike weight that was actually applied. Falls back to the severity
-     * for legacy rows that predate the strike_weight column.
+     * The strike weight that was actually applied.
+     * Critical and dismissed incidents never carry in-system strikes.
      */
     public function strikes(): int
     {
-        if ($this->strike_weight > 0) {
-            return $this->strike_weight;
+        if (
+            $this->isExternallyHandled()
+            || $this->final_outcome === IncidentOutcome::NoStrike
+        ) {
+            return 0;
         }
 
-        return $this->severity?->strikes() ?? 0;
+        if ($this->final_outcome !== null) {
+            return $this->final_outcome->strikes();
+        }
+
+        return max(0, (int) $this->strike_weight);
+    }
+
+    /**
+     * Student-safe representation: never leaks suggested severity/outcome,
+     * admin notes, or internal strike weights.
+     *
+     * @return array<string, mixed>
+     */
+    public function toStudentPayload(): array
+    {
+        $finalOutcomeLabel = null;
+        if (! $this->isPending()) {
+            $finalOutcomeLabel = $this->final_outcome?->label()
+                ?? match ($this->status) {
+                    IncidentStatus::Rejected => IncidentOutcome::NoStrike->label(),
+                    IncidentStatus::Confirmed => $this->isExternallyHandled()
+                        ? IncidentOutcome::Critical->label()
+                        : 'Confirmed by SISA',
+                    default => $this->status?->label(),
+                };
+        }
+
+        return [
+            'id' => $this->id,
+            'status' => $this->status?->value,
+            'report_type' => $this->report_type,
+            'checked_items' => $this->checked_items ?? ($this->category ? [$this->category] : []),
+            'description' => $this->description,
+            'decision_reason' => ! $this->isPending() ? ($this->decision_reason ?? $this->rejection_reason) : null,
+            'final_outcome_label' => $finalOutcomeLabel,
+            'created_at' => $this->created_at?->toIso8601String(),
+            'resolved_at' => $this->resolved_at?->toIso8601String(),
+        ];
     }
 
     public function resolve(): void

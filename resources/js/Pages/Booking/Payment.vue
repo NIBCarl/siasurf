@@ -33,21 +33,25 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const holdSeconds = ref<number>(Math.max(0, props.holdRemainingSeconds ?? 0))
+const holdDeadlineMs = ref<number>(Date.now() + Math.max(0, props.holdRemainingSeconds ?? 0) * 1000)
+const nowTick = ref<number>(Date.now())
+const holdSeconds = computed<number>(() =>
+  Math.max(0, Math.floor((holdDeadlineMs.value - nowTick.value) / 1000)),
+)
+const isHoldExpired = computed(() => props.holdRemainingSeconds !== undefined && holdSeconds.value <= 0)
 let holdTimer: ReturnType<typeof setInterval> | null = null
 
 watch(
   () => props.holdRemainingSeconds,
   (val) => {
-    holdSeconds.value = Math.max(0, val ?? 0)
+    holdDeadlineMs.value = Date.now() + Math.max(0, val ?? 0) * 1000
+    nowTick.value = Date.now()
   }
 )
 
 onMounted(() => {
   holdTimer = setInterval(() => {
-    if (holdSeconds.value > 0) {
-      holdSeconds.value -= 1
-    }
+    nowTick.value = Date.now()
   }, 1000)
 })
 
@@ -166,9 +170,9 @@ const goBack = () => {
             <span
               v-if="holdRemainingSeconds !== undefined"
               class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
-              :class="holdSeconds <= 180 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'"
+              :class="isHoldExpired ? 'bg-rose-100 text-rose-900' : holdSeconds <= 180 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'"
             >
-              Hold expires in {{ formatHoldTimer(holdSeconds) }}
+              {{ isHoldExpired ? 'Hold expired — release & rebook' : `Hold expires in ${formatHoldTimer(holdSeconds)}` }}
             </span>
             <button
               type="button"
@@ -268,6 +272,7 @@ const goBack = () => {
                     variant="primary" 
                     size="lg" 
                     class="w-2/3 justify-center group"
+                    :disabled="form.processing || isHoldExpired"
                     :loading="form.processing"
                   >
                     <span v-if="form.payment_method === 'gcash'">Send Request (GCash) &rarr;</span>

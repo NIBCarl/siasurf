@@ -190,14 +190,16 @@ class Payment extends Model
     /**
      * Mark a receipt as verified and the payment as settled.
      */
-    public function markReceiptVerified(?int $userId = null): void
+    public function markReceiptVerified(?int $userId = null, ?string $note = null): void
     {
+        $cleanNote = $note !== null ? trim($note) : '';
+
         $this->update([
             'status' => PaymentStatus::Completed,
             'paid_at' => $this->paid_at ?? now(),
             'receipt_verified_at' => now(),
             'receipt_verified_by' => $userId,
-            'receipt_note' => null,
+            'receipt_note' => $cleanNote !== '' ? $cleanNote : null,
         ]);
     }
 

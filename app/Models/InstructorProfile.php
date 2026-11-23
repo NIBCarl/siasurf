@@ -83,10 +83,15 @@ class InstructorProfile extends Model
         return $this->hasMany(InstructorStrike::class, 'instructor_id', 'user_id');
     }
 
+    public function fines(): HasMany
+    {
+        return $this->hasMany(InstructorFine::class, 'instructor_id', 'user_id');
+    }
+
     public function activeSuspension()
     {
         return $this->hasOne(InstructorSuspension::class, 'instructor_id', 'user_id')
-            ->where('status', \App\Enums\SuspensionStatus::Active->value)
+            ->enforced()
             ->latestOfMany();
     }
 
@@ -140,7 +145,7 @@ class InstructorProfile extends Model
 
     public function hasActiveSuspension(): bool
     {
-        return $this->suspensions()->active()->exists();
+        return $this->suspensions()->enforced()->exists();
     }
 
     public function maxStudents(): int
@@ -448,17 +453,5 @@ class InstructorProfile extends Model
     public function canTeachSkillLevel(string $skillLevel): bool
     {
         return in_array($skillLevel, $this->level->allowedSkillLevels());
-    }
-
-    public function addStrike(int $strikes = 1): void
-    {
-        $this->increment('strike_count', $strikes);
-        
-        if ($this->strike_count >= 3) {
-            $this->update([
-                'status' => InstructorStatus::Suspended,
-                'suspended_until' => now()->addMonth(),
-            ]);
-        }
     }
 }

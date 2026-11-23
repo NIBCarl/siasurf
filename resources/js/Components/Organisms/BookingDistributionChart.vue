@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+const props = withDefaults(defineProps<{ dark?: boolean }>(), {
+    dark: false,
+})
+
 const distribution = ref<Record<string, number>>({})
 const isLoading = ref(true)
 const hasError = ref(false)
@@ -59,7 +63,7 @@ const cumulativeOffset = (index: number) =>
 
 <template>
     <div class="flex h-64 flex-col">
-        <div v-if="isLoading" class="flex h-full items-center justify-center text-body-sm text-stone-500">
+        <div v-if="isLoading" class="flex h-full items-center justify-center text-body-sm" :class="props.dark ? 'text-slate-400' : 'text-stone-500'">
             Loading distribution…
         </div>
 
@@ -67,15 +71,15 @@ const cumulativeOffset = (index: number) =>
             v-else-if="hasError || total === 0"
             class="flex h-full flex-col items-center justify-center gap-1 text-center"
         >
-            <p class="text-body-sm font-semibold text-deep-900">No bookings yet</p>
-            <p class="text-label text-stone-500">Status distribution will appear here.</p>
+            <p class="text-body-sm font-semibold" :class="props.dark ? 'text-white' : 'text-deep-900'">No bookings yet</p>
+            <p class="text-label" :class="props.dark ? 'text-slate-400' : 'text-stone-500'">Status distribution will appear here.</p>
         </div>
 
         <div v-else class="flex h-full flex-col justify-between">
             <div class="flex items-center justify-center">
                 <div class="relative h-32 w-32">
                     <svg viewBox="0 0 36 36" class="h-full w-full -rotate-90">
-                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="#E7E5E4" stroke-width="3" />
+                        <circle cx="18" cy="18" r="15.9" fill="none" :stroke="props.dark ? '#334155' : '#E7E5E4'" stroke-width="3" />
                         <circle
                             v-for="(row, index) in rows"
                             :key="row.key"
@@ -92,20 +96,20 @@ const cumulativeOffset = (index: number) =>
                     </svg>
 
                     <div class="absolute inset-0 flex flex-col items-center justify-center">
-                        <span class="metric text-headline font-semibold text-deep-900">{{ total }}</span>
-                        <span class="text-label text-stone-500">bookings</span>
+                        <span class="metric text-headline font-semibold" :class="props.dark ? 'text-white' : 'text-deep-900'">{{ total }}</span>
+                        <span class="text-label" :class="props.dark ? 'text-slate-400' : 'text-stone-500'">bookings</span>
                     </div>
                 </div>
             </div>
 
-            <div class="space-y-2 border-t border-sand-200 pt-3">
+            <div class="space-y-2 border-t pt-3" :class="props.dark ? 'border-white/10' : 'border-sand-200'">
                 <div v-for="row in rows" :key="row.key" class="flex items-center justify-between gap-2">
-                    <span class="flex items-center gap-2 text-body-sm font-semibold text-stone-700">
+                    <span class="flex items-center gap-2 text-body-sm font-semibold" :class="props.dark ? 'text-slate-200' : 'text-stone-700'">
                         <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: row.colour }" />
                         {{ row.label }}
                     </span>
-                    <span class="text-body-sm font-semibold text-deep-900">
-                        {{ row.value }} <span class="text-label font-normal text-stone-500">({{ row.pct }}%)</span>
+                    <span class="text-body-sm font-semibold" :class="props.dark ? 'text-white' : 'text-deep-900'">
+                        {{ row.value }} <span class="text-label font-normal" :class="props.dark ? 'text-slate-400' : 'text-stone-500'">({{ row.pct }}%)</span>
                     </span>
                 </div>
             </div>

@@ -10,54 +10,65 @@ class InstructorSuspended extends Notification
 {
     use Queueable;
 
-    protected $reason;
-    protected $duration;
+    protected string $reason;
 
-    /**
-     * Create a new notification instance.
-     */
-    public function __construct(string $reason, int $duration)
-    {
+    protected int $duration;
+
+    protected ?int $strikeTier;
+
+    protected bool $requiresSisaIdConfiscation;
+
+    public function __construct(
+        string $reason,
+        int $duration,
+        ?int $strikeTier = null,
+        bool $requiresSisaIdConfiscation = false
+    ) {
         $this->reason = $reason;
         $this->duration = $duration;
+        $this->strikeTier = $strikeTier;
+        $this->requiresSisaIdConfiscation = $requiresSisaIdConfiscation;
     }
 
-    /**
-     * Get the notification's delivery channels.
-     *
-     * @return array<int, string>
-     */
     public function via(object $notifiable): array
     {
         return ['mail', 'database'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
+        $tierLine = match ($this->strikeTier) {
+            2 => 'Tier applied: 1-week suspension (2 active strikes).',
+            3 => 'Tier applied: 1-month suspension (3 active strikes).',
+            default => 'Suspension duration: '.$this->duration.' day(s).',
+        };
+
+        $mail = (new MailMessage)
             ->subject('Your Instructor Account Has Been Suspended')
-            ->greeting('Hello ' . $notifiable->name . ',')
-            ->line('Your instructor account has been suspended for ' . $this->duration . ' days.')
-            ->line('Reason for suspension: ' . $this->reason)
-            ->line('During this period, you will not be able to accept new bookings or be featured in search results.')
-            ->line('You can appeal this suspension from your account page.')
+            ->greeting('Hello '.$notifiable->name.',')
+            ->line('Your instructor account has been suspended for '.$this->duration.' day(s).')
+            ->line($tierLine)
+            ->line('Reason for suspension: '.$this->reason)
+            ->line('Your profile is hidden from booking until the suspension period ends and a SISA administrator approves reinstatement.');
+
+        if ($this->requiresSisaIdConfiscation) {
+            $mail->line('Important: A 3-strike (1-month) suspension requires surrendering/confiscating your physical SISA ID outside the system with SISA officers.');
+        }
+
+        return $mail
             ->action('View Suspension & Appeal', route('instructor.suspended'))
-            ->line('If you believe this is an error, submit an appeal from your account page.');
+            ->line('If you believe this is an error, you may submit one appeal for this suspension.');
     }
 
-    /**
-     * Get the array representation of the notification.
-     */
     public function toArray(object $notifiable): array
     {
         return [
             'type' => 'instructor_suspended',
             'reason' => $this->reason,
             'duration' => $this->duration,
-            'message' => 'Your instructor account has been suspended for ' . $this->duration . ' days.',
+            'strike_tier' => $this->strikeTier,
+            'requires_sisa_id_confiscation' => $this->requiresSisaIdConfiscation,
+            'message' => 'Your instructor account has been suspended for '.$this->duration.' day(s). Reinstatement requires SISA approval.',
         ];
     }
 }

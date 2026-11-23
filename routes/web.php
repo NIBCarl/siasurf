@@ -230,6 +230,7 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
         // FR 1.9.4 - cancel or reschedule (admin approval when under 24 hours)
         Route::post('/bookings/{booking}/change-request', [InstructorBookingController::class, 'requestChange'])->name('bookings.change-request');
         Route::delete('/bookings/{booking}/change-request', [InstructorBookingController::class, 'cancelChangeRequest'])->name('bookings.change-request.cancel');
+        Route::patch('/bookings/{booking}/surf-spot', [InstructorBookingController::class, 'updateSurfSpot'])->name('bookings.update-spot');
 
         // FR 1.10.1 - mark student attendance
         Route::post('/bookings/{booking}/attendance', [InstructorBookingController::class, 'markAttendance'])->name('bookings.attendance');
@@ -313,6 +314,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
     Route::post('/instructors/{instructor}/reject', [InstructorController::class, 'reject'])->name('instructors.reject');
     Route::post('/instructors/{instructor}/suspend', [InstructorController::class, 'suspend'])->name('instructors.suspend');
     Route::post('/instructors/{instructor}/reactivate', [InstructorController::class, 'reactivate'])->name('instructors.reactivate');
+    Route::post('/instructors/{instructor}/fines/{fine}/mark-paid', [InstructorController::class, 'markFinePaid'])->name('instructors.fines.mark-paid');
+    Route::post('/instructors/{instructor}/fines/{fine}/waive', [InstructorController::class, 'waiveFine'])->name('instructors.fines.waive');
 
     // Certificate management
     Route::post('/instructors/{instructor}/certificates', [CertificateController::class, 'store'])->name('certificates.store');

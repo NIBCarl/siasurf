@@ -11,6 +11,7 @@ use App\Exceptions\BookingRequestException;
 use App\Jobs\ExpirePaymentWindowJob;
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -37,22 +38,29 @@ class BookingAcceptanceService
      */
     public function accept(Booking $booking): Booking
     {
-        $this->assertAcceptable($booking);
-
         return DB::transaction(function () use ($booking) {
-            $booking->update([
-                'accepted_at' => $booking->accepted_at ?? now(),
+            User::query()->whereKey($booking->instructor_id)->lockForUpdate()->first();
+
+            $locked = Booking::with(['instructor.instructorProfile', 'payment'])
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertAcceptable($locked);
+
+            $locked->update([
+                'accepted_at' => $locked->accepted_at ?? now(),
             ]);
 
             // FR 1.8.3 - the lesson now owns this slot. Level 3 keeps the
             // calendar open until its fifth student is booked.
-            $this->availabilityService->lockIfSlotIsFull($booking);
+            $this->availabilityService->lockIfSlotIsFull($locked);
 
-            $booking->refresh();
+            $locked->refresh();
 
-            return $this->paymentMethodFor($booking) === PaymentMethod::GCash
-                ? $this->awaitPayment($booking)
-                : $this->confirmWithCash($booking);
+            return $this->paymentMethodFor($locked) === PaymentMethod::GCash
+                ? $this->awaitPayment($locked)
+                : $this->confirmWithCash($locked);
         });
     }
 

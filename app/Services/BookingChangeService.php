@@ -6,17 +6,23 @@ use App\Enums\BookingStatus;
 use App\Enums\CancellationReason;
 use App\Enums\ChangeRequestStatus;
 use App\Enums\ChangeRequestType;
+use App\Enums\SessionType;
+use App\Enums\SkillLevel;
 use App\Events\BookingChangeRequested;
 use App\Events\BookingChangeResolved;
 use App\Exceptions\BookingChangeException;
 use App\Exceptions\BookingRequestException;
+use App\Exceptions\SafetyViolationException;
 use App\Models\Availability;
 use App\Models\Booking;
 use App\Models\BookingChangeRequest;
+use App\Models\SurfSpot;
 use App\Models\User;
 use App\Notifications\BookingChangeRequestedNotification;
 use App\Notifications\BookingRescheduledNotification;
+use App\Notifications\BookingSpotChangedNotification;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -135,19 +141,90 @@ class BookingChangeService
      */
     public function approve(BookingChangeRequest $changeRequest, User $admin, ?string $note = null): BookingChangeRequest
     {
-        if (!$changeRequest->isPending()) {
-            throw new BookingChangeException('This request has already been resolved.');
-        }
-
         return DB::transaction(function () use ($changeRequest, $admin, $note) {
-            $changeRequest->resolve(ChangeRequestStatus::Approved, $admin->id, $note);
-            $this->apply($changeRequest);
+            $lockedRequest = BookingChangeRequest::query()
+                ->whereKey($changeRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            broadcast(new BookingChangeResolved(
-                $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
-            ))->toOthers();
+            if (! $lockedRequest->isPending()) {
+                throw new BookingChangeException('This request has already been resolved.');
+            }
 
-            return $changeRequest;
+            $instructorId = Booking::query()->whereKey($lockedRequest->booking_id)->value('instructor_id');
+            if ($instructorId) {
+                User::query()->whereKey($instructorId)->lockForUpdate()->first();
+            }
+
+            $lockedBooking = Booking::with(['instructor.instructorProfile', 'surfSpot', 'participants'])
+                ->whereKey($lockedRequest->booking_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $lockedBooking->canBeChanged()) {
+                throw new BookingChangeException(
+                    'This booking can no longer be changed because it is ' . $lockedBooking->status->label() . '.'
+                );
+            }
+
+            if (! $lockedRequest->isCancellation()) {
+                $profile = $lockedBooking->instructor?->instructorProfile?->loadMissing('surfSpots');
+
+                if ($profile) {
+                    $service = $lockedBooking->session_type instanceof SessionType
+                        ? $lockedBooking->session_type
+                        : SessionType::tryFrom((string) $lockedBooking->session_type);
+
+                    if ($service && ! $profile->offersService($service)) {
+                        throw new BookingChangeException('The instructor no longer offers this service type.');
+                    }
+
+                    if ($lockedBooking->surfSpot && ! $profile->teachesAtSurfSpot($lockedBooking->surfSpot)) {
+                        throw new BookingChangeException('The instructor is no longer authorized to teach at the scheduled surf spot.');
+                    }
+
+                    $safetyParticipants = $lockedBooking->participants->isNotEmpty()
+                        ? $lockedBooking->participants->map(fn ($p) => [
+                            'age' => $p->birthday?->age ?? $p->age,
+                            'skill_level' => $p->skill_level,
+                        ])->values()->all()
+                        : [[
+                            'age' => $lockedBooking->student_age,
+                            'skill_level' => $lockedBooking->skill_level,
+                        ]];
+
+                    try {
+                        app(SafetyService::class)->validateParticipants(
+                            $safetyParticipants,
+                            (int) ($profile->level?->value ?? 1),
+                            (string) ($lockedBooking->surfSpot?->difficulty ?? 'beginner'),
+                            $lockedBooking->student_id,
+                            $service
+                        );
+                    } catch (SafetyViolationException $exception) {
+                        throw new BookingChangeException($exception->getMessage(), 0, $exception);
+                    }
+                }
+
+                $this->assertSlotIsFree($lockedBooking, [
+                    'date' => $lockedRequest->new_date->format('Y-m-d'),
+                    'time_period' => $lockedRequest->new_time_period?->value ?? (string) $lockedRequest->new_time_period,
+                    'start_time' => $lockedRequest->new_start_time->format('H:i'),
+                    'end_time' => $lockedRequest->new_end_time->format('H:i'),
+                ]);
+            }
+
+            $lockedRequest->setRelation('booking', $lockedBooking);
+            $lockedRequest->resolve(ChangeRequestStatus::Approved, $admin->id, $note);
+            $this->apply($lockedRequest);
+
+            DB::afterCommit(function () use ($lockedRequest) {
+                broadcast(new BookingChangeResolved(
+                    $lockedRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
+                ))->toOthers();
+            });
+
+            return $lockedRequest->fresh();
         });
     }
 
@@ -316,8 +393,16 @@ class BookingChangeService
         }
 
         // Capacity-aware: another lesson may share the slot as long as the
-        // instructor's student capacity is not exceeded. The booking being
-        // moved is excluded so it never conflicts with itself.
+        // instructor's student capacity, skill level, service type, and spot
+        // are compatible. The booking being moved is excluded so it never
+        // conflicts with itself.
+        $bookingSkill = $booking->skill_level instanceof SkillLevel
+            ? $booking->skill_level
+            : SkillLevel::tryFrom((string) $booking->skill_level);
+        $bookingService = $booking->session_type instanceof SessionType
+            ? $booking->session_type
+            : SessionType::tryFrom((string) $booking->session_type);
+
         try {
             $this->availabilityService->assertRangeIsBookable(
                 $booking->instructor_id,
@@ -325,10 +410,116 @@ class BookingChangeService
                 $slot['start_time'],
                 $slot['end_time'],
                 max(1, (int) $booking->student_count),
-                $booking->id
+                $booking->id,
+                $bookingSkill,
+                $bookingService,
+                $booking->surf_spot_id ? (int) $booking->surf_spot_id : null
             );
         } catch (BookingRequestException $exception) {
             throw new BookingChangeException($exception->getMessage());
         }
+    }
+
+    /**
+     * Move this booking (and any overlapping bookings sharing the same instructor
+     * session) to a new surf spot and notify every affected student with the
+     * instructor's reason.
+     *
+     * Safety Rule #5 is never bypassed: the new spot's difficulty must remain
+     * safe for every surfer in the session and be offered by the instructor.
+     *
+     * @return Collection<int, Booking>
+     */
+    public function updateSurfSpot(Booking $booking, SurfSpot $newSpot, string $reason, User $instructor): Collection
+    {
+        if ($booking->instructor_id !== $instructor->id) {
+            throw new BookingChangeException('You are not authorized to change the surf spot for this booking.');
+        }
+
+        if (! $booking->canChangeSurfSpot()) {
+            throw new BookingChangeException(
+                'The surf spot can no longer be updated because this booking is ' . $booking->status->label() . '.'
+            );
+        }
+
+        if (! $newSpot->is_active) {
+            throw new BookingChangeException('The selected surf spot is currently unavailable.');
+        }
+
+        if ($newSpot->id === $booking->surf_spot_id) {
+            throw new BookingChangeException("This lesson is already scheduled at {$newSpot->name}.");
+        }
+
+        $profile = $instructor->instructorProfile?->loadMissing('surfSpots');
+
+        if (! $profile || ! $profile->teachesAtSurfSpot($newSpot) || ! $profile->level->canTeachAtDifficulty((string) $newSpot->difficulty)) {
+            throw new BookingChangeException("You are not authorized to teach at {$newSpot->name}.");
+        }
+
+        $cleanReason = trim($reason);
+
+        if ($cleanReason === '') {
+            throw new BookingChangeException('Please provide a reason for changing the surf spot.');
+        }
+
+        return DB::transaction(function () use ($booking, $newSpot, $cleanReason, $instructor) {
+            User::query()->whereKey($instructor->id)->lockForUpdate()->first();
+
+            $lockedBooking = Booking::with('surfSpot')
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $lockedBooking->canChangeSurfSpot()) {
+                throw new BookingChangeException(
+                    'The surf spot can no longer be updated because this booking is ' . $lockedBooking->status->label() . '.'
+                );
+            }
+
+            $group = $this->availabilityService->overlappingSessionBookings($lockedBooking);
+
+            foreach ($group as $member) {
+                $memberSkill = $member->skill_level instanceof SkillLevel
+                    ? $member->skill_level
+                    : (SkillLevel::tryFrom((string) $member->skill_level) ?? SkillLevel::Beginner);
+
+                if (! $memberSkill->canSurfDifficulty((string) $newSpot->difficulty)) {
+                    throw new BookingChangeException(sprintf(
+                        'Safety rule violation: %s surfers in this session cannot surf %s breaks (%s is rated %s).',
+                        $memberSkill->label(),
+                        $newSpot->difficulty,
+                        $newSpot->name,
+                        ucfirst((string) $newSpot->difficulty)
+                    ));
+                }
+            }
+
+            $previousSpots = [];
+
+            foreach ($group as $member) {
+                $previousSpots[$member->id] = $member->surfSpot?->name ?? 'Previous surf spot';
+
+                $member->update([
+                    'previous_surf_spot_id' => $member->surf_spot_id,
+                    'surf_spot_id' => $newSpot->id,
+                    'spot_change_reason' => $cleanReason,
+                    'spot_changed_at' => now(),
+                ]);
+            }
+
+            DB::afterCommit(function () use ($group, $previousSpots, $newSpot, $cleanReason) {
+                foreach ($group as $member) {
+                    $fresh = $member->fresh(['instructor', 'surfSpot', 'student', 'previousSurfSpot']);
+                    $fresh?->student?->notify(new BookingSpotChangedNotification(
+                        $fresh,
+                        $previousSpots[$member->id],
+                        $newSpot->name,
+                        $cleanReason
+                    ));
+                }
+            });
+
+            return $group;
+        });
     }
 }

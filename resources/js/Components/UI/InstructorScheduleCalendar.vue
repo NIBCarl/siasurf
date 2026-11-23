@@ -506,6 +506,10 @@ const instructorActionSentence = (booking: ScheduleBooking): string => {
             Pending approval
           </span>
           <span class="inline-flex items-center gap-1.5">
+            <span class="h-2.5 w-2.5 rounded-sm border border-lagoon-400 bg-amber-50" aria-hidden="true" />
+            Awaiting payment
+          </span>
+          <span class="inline-flex items-center gap-1.5">
             <span class="h-2.5 w-2.5 rounded-sm bg-lagoon-600" aria-hidden="true" />
             Confirmed
           </span>
@@ -527,7 +531,7 @@ const instructorActionSentence = (booking: ScheduleBooking): string => {
     <!-- Desktop: Dated Week Grid (Mon–Sun × 6:00 AM–6:00 PM) -->
     <AppCard padding="none" class="hidden overflow-hidden md:block">
       <div class="overflow-x-auto">
-        <div class="min-w-[820px]">
+        <div class="min-w-[940px]">
           <!-- Day column headers -->
           <div class="grid grid-cols-[76px_repeat(7,minmax(0,1fr))] border-b border-sand-200 bg-sand-100">
             <div class="px-2 py-3 text-center text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
@@ -578,8 +582,11 @@ const instructorActionSentence = (booking: ScheduleBooking): string => {
                   @click="selectedBooking = booking"
                 >
                   <template v-if="booking.start_time === hour">
-                    <div class="flex items-center justify-between gap-1">
-                      <span class="truncate text-[10px] font-bold uppercase tracking-[0.05em]">
+                    <div class="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+                      <span
+                        class="text-[10px] font-bold uppercase leading-tight tracking-[0.03em]"
+                        :title="statusInfo(booking.status).label"
+                      >
                         {{ statusInfo(booking.status).label }}
                       </span>
                       <span
@@ -589,7 +596,7 @@ const instructorActionSentence = (booking: ScheduleBooking): string => {
                         {{ formatCompactTimer(remainingSeconds(booking)) }}
                       </span>
                     </div>
-                    <p class="truncate text-label font-semibold">
+                    <p class="truncate text-label font-semibold" :title="booking.student_name">
                       {{ booking.student_name }}
                     </p>
                     <p class="truncate text-[10px] opacity-80">
@@ -610,7 +617,8 @@ const instructorActionSentence = (booking: ScheduleBooking): string => {
                   v-if="schedule.slot_capacity > 1 && isHourOpen(day, hour) && seatsUsedInHour(day, hour) < schedule.slot_capacity"
                   class="px-1 text-[10px] font-semibold text-lagoon-700"
                 >
-                  +{{ schedule.slot_capacity - seatsUsedInHour(day, hour) }} seat open
+                  +{{ schedule.slot_capacity - seatsUsedInHour(day, hour) }}
+                  {{ schedule.slot_capacity - seatsUsedInHour(day, hour) === 1 ? 'seat' : 'seats' }} open
                 </p>
               </div>
 

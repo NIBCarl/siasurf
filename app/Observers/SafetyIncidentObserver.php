@@ -15,16 +15,23 @@ class SafetyIncidentObserver
 {
     public function created(SafetyIncident $incident): void
     {
-        if ($incident->status === IncidentStatus::Confirmed) {
+        if ($this->shouldApplyStrike($incident)) {
             app(StrikeService::class)->applyForIncident($incident);
         }
     }
 
     public function updated(SafetyIncident $incident): void
     {
-        if ($incident->status === IncidentStatus::Confirmed && $incident->strike_applied_at === null) {
+        if ($this->shouldApplyStrike($incident) && $incident->strike_applied_at === null) {
             app(StrikeService::class)->applyForIncident($incident);
         }
+    }
+
+    private function shouldApplyStrike(SafetyIncident $incident): bool
+    {
+        return $incident->status === IncidentStatus::Confirmed
+            && ! $incident->isExternallyHandled()
+            && $incident->strikes() > 0;
     }
 
     public function deleted(SafetyIncident $incident): void
