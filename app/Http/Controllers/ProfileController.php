@@ -47,6 +47,7 @@ class ProfileController extends Controller
             $profileData = [];
             if (array_key_exists('birthday', $validated)) {
                 $profileData['birthday'] = $validated['birthday'] ?: null;
+                $profileData['date_of_birth'] = $validated['birthday'] ?: null;
             }
             if (array_key_exists('country', $validated)) {
                 $profileData['country'] = filled($validated['country']) ? trim((string) $validated['country']) : null;

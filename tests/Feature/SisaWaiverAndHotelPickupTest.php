@@ -89,12 +89,28 @@ class SisaWaiverAndHotelPickupTest extends TestCase
             'role' => 'student',
             'skill_level' => 'beginner',
             'is_first_time' => true,
-            'birthday' => '2001-08-20',
-            'country' => 'Philippines',
         ])->assertRedirect(route('verification.notice'));
 
         $registered = User::where('email', 'maya@example.com')->with('studentProfile')->firstOrFail();
+        $this->assertNull($registered->studentProfile->birthday);
+        $this->assertNull($registered->studentProfile->date_of_birth);
+        $this->assertNull($registered->studentProfile->country);
+
+        $registered->markEmailAsVerified();
+
+        // Store birthday & country via student onboarding
+        $this->actingAs($registered)
+            ->post(route('student.onboarding.store'), [
+                'date_of_birth' => '2001-08-20',
+                'country' => 'Philippines',
+                'has_board' => true,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('student.dashboard'));
+
+        $registered->studentProfile->refresh();
         $this->assertSame('2001-08-20', $registered->studentProfile->birthday->format('Y-m-d'));
+        $this->assertSame('2001-08-20', $registered->studentProfile->date_of_birth->format('Y-m-d'));
         $this->assertSame('Philippines', $registered->studentProfile->country);
         $this->assertSame(Carbon::parse('2001-08-20')->age, $registered->studentProfile->age);
 
@@ -111,7 +127,9 @@ class SisaWaiverAndHotelPickupTest extends TestCase
 
         $this->student->studentProfile->refresh();
         $this->assertSame('1998-03-10', $this->student->studentProfile->birthday->format('Y-m-d'));
+        $this->assertSame('1998-03-10', $this->student->studentProfile->date_of_birth->format('Y-m-d'));
         $this->assertSame('Canada', $this->student->studentProfile->country);
+        $this->assertSame(Carbon::parse('1998-03-10')->age, $this->student->studentProfile->age);
     }
 
     /** @test */

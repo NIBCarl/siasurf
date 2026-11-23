@@ -25,6 +25,7 @@ class OnboardingController extends Controller
         $user = auth()->user();
         $profile = $user->studentProfile;
         $latestAssessment = $user->latestSkillAssessment;
+        $dob = ($profile?->birthday ?? $profile?->date_of_birth)?->format('Y-m-d');
 
         return Inertia::render('Student/Onboarding', [
             'profile' => [
@@ -32,7 +33,8 @@ class OnboardingController extends Controller
                 'skill_assessed_at' => $profile?->skill_assessed_at?->toIso8601String(),
                 'is_first_time' => (bool) ($profile?->is_first_time ?? true),
                 'phone' => $user->phone,
-                'date_of_birth' => $profile?->date_of_birth?->format('Y-m-d'),
+                'date_of_birth' => $dob,
+                'country' => $profile?->country,
                 'age' => $profile?->age,
                 'height' => $profile?->height !== null ? (float) $profile->height : null,
                 'weight' => $profile?->weight !== null ? (float) $profile->weight : null,
@@ -107,6 +109,7 @@ class OnboardingController extends Controller
                     }
                 },
             ],
+            'country' => ['nullable', 'string', 'max:100'],
             'height' => 'nullable|numeric|min:50|max:250',
             'weight' => 'nullable|numeric|min:10|max:200',
             'has_board' => 'required|boolean',
@@ -132,8 +135,15 @@ class OnboardingController extends Controller
 
         $profile = $user->studentProfile()->firstOrNew(['user_id' => $user->id]);
 
+        $dob = $validated['date_of_birth'] ?? null;
+        $country = isset($validated['country']) && trim((string) $validated['country']) !== ''
+            ? trim((string) $validated['country'])
+            : null;
+
         $profile->fill([
-            'date_of_birth' => $validated['date_of_birth'] ?? null,
+            'date_of_birth' => $dob,
+            'birthday' => $dob,
+            'country' => $country,
             'height' => $validated['height'] ?? null,
             'weight' => $validated['weight'] ?? null,
             'has_board' => (bool) $validated['has_board'],
