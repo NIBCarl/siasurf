@@ -72,7 +72,7 @@ defineProps<Props>()
                     <div class="flex items-center justify-between mb-8">
                         <div>
                             <h3 class="text-xl font-bold text-slate-900">Revenue Velocity</h3>
-                            <p class="text-slate-500 text-sm">Monthly growth and income patterns</p>
+                            <p class="text-slate-500 text-sm">Monthly 7% platform service fee revenue patterns</p>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-full">

@@ -113,6 +113,31 @@ class Payment extends Model
         return $this->payment_method->isDigital();
     }
 
+    /**
+     * Platform service fee portion of this payment (BR-PRC-03). Falls back to
+     * the parent booking's recorded fee if the payment column is still zero.
+     */
+    public function effectiveServiceFeeAmount(): float
+    {
+        if ((float) $this->service_fee_amount > 0) {
+            return round((float) $this->service_fee_amount, 2);
+        }
+
+        return round((float) ($this->booking?->service_fee_amount ?? 0), 2);
+    }
+
+    /**
+     * Instructor's lesson price portion of this payment (excluding the 7% service fee).
+     */
+    public function effectiveLessonPrice(): float
+    {
+        if ($this->lesson_price !== null) {
+            return round((float) $this->lesson_price, 2);
+        }
+
+        return round(max(0.0, (float) $this->amount - $this->effectiveServiceFeeAmount()), 2);
+    }
+
     public function markAsCompleted(): void
     {
         $this->update([

@@ -30,7 +30,7 @@ const barHeight = (value: number) => `${(Number(value) / maxValue.value) * 100}%
 const formatCurrency = (value: number) => {
     const amount = Number(value ?? 0)
     if (amount >= 1000) return '₱' + (amount / 1000).toFixed(1) + 'k'
-    return '₱' + amount.toLocaleString()
+    return '₱' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 </script>
 
@@ -45,7 +45,7 @@ const formatCurrency = (value: number) => {
             class="flex h-full flex-col items-center justify-center gap-1 text-center"
         >
             <p class="text-body-sm font-semibold text-deep-900">No revenue recorded yet</p>
-            <p class="text-label text-stone-500">Paid bookings will appear here.</p>
+            <p class="text-label text-stone-500">Collected service fees from paid bookings will appear here.</p>
         </div>
 
         <div v-else class="flex h-full flex-col">

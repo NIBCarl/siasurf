@@ -60,4 +60,20 @@ enum PaymentStatus: string
     {
         return [self::PendingVerification, self::Underpaid, self::Completed];
     }
+
+    /**
+     * Statuses where payment has been settled and the non-refundable
+     * platform service fee has been earned/retained (BR-PRC-03, BR-CXL-05).
+     *
+     * @return array<int, self>
+     */
+    public static function serviceFeeCollected(): array
+    {
+        return [
+            self::Completed,
+            self::RefundRequested,
+            self::RefundProcessing,
+            self::Refunded,
+        ];
+    }
 }

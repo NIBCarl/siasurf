@@ -366,6 +366,8 @@ class PaymentController extends Controller
         if ($booking->payment) {
             $booking->payment->update([
                 'amount' => $recordedAmount,
+                'lesson_price' => $booking->effectiveLessonPrice(),
+                'service_fee_amount' => $booking->effectiveServiceFeeAmount(),
                 'status' => $targetStatus,
                 'paid_at' => now(),
                 'receipt_verified_by' => auth()->id(),
@@ -375,6 +377,8 @@ class PaymentController extends Controller
         } else {
             $booking->payment()->create([
                 'amount' => $recordedAmount,
+                'lesson_price' => $booking->effectiveLessonPrice(),
+                'service_fee_amount' => $booking->effectiveServiceFeeAmount(),
                 'payment_method' => \App\Enums\PaymentMethod::Cash,
                 'status' => $targetStatus,
                 'paid_at' => now(),
