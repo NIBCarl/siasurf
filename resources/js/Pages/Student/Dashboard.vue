@@ -219,7 +219,7 @@ onUnmounted(() => {
 
             <div class="grid gap-6 lg:grid-cols-12">
                 <!-- Hero -->
-                <div class="lg:col-span-7">
+                <div class="min-w-0 lg:col-span-7">
                     <AppCard variant="chrome" padding="lg" class="relative h-full overflow-hidden">
                         <svg
                             class="pointer-events-none absolute -bottom-6 -right-6 h-48 w-72 text-white/5"
@@ -263,7 +263,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Conditions -->
-                <div class="lg:col-span-5">
+                <div class="min-w-0 lg:col-span-5">
                     <AppCard padding="lg" class="flex h-full flex-col">
                         <div class="flex items-start justify-between gap-3">
                             <div>
@@ -327,7 +327,7 @@ onUnmounted(() => {
             </div>
 
             <div class="grid gap-6 lg:grid-cols-12">
-                <section class="lg:col-span-7">
+                <section class="min-w-0 lg:col-span-7">
                     <SectionHeader eyebrow="Your next lesson" title="On the schedule">
                         <template #action>
                             <Link
@@ -380,7 +380,7 @@ onUnmounted(() => {
                     >
                         <AppCard padding="lg" interactive>
                             <div class="flex flex-wrap items-start justify-between gap-4">
-                                <div class="flex items-start gap-4">
+                                <div class="flex min-w-0 flex-1 items-start gap-4">
                                     <img
                                         v-if="avatarUrl(nextBooking.instructor)"
                                         :src="avatarUrl(nextBooking.instructor) || undefined"
@@ -458,9 +458,9 @@ onUnmounted(() => {
                         <li v-for="booking in remainingUpcoming" :key="booking.id">
                             <Link
                                 :href="route('student.bookings.show', booking.id)"
-                                class="flex items-center justify-between gap-3 rounded-control border border-sand-200 bg-white px-4 py-3 transition-colors hover:border-lagoon-600"
+                                class="flex flex-col gap-2 rounded-control border border-sand-200 bg-white px-4 py-3 transition-colors hover:border-lagoon-600 sm:flex-row sm:items-center sm:justify-between"
                             >
-                                <span class="min-w-0">
+                                <span class="min-w-0 flex-1">
                                     <span class="block truncate text-body-sm font-semibold text-deep-900">
                                         {{ booking.instructor.name }}
                                     </span>
@@ -469,7 +469,7 @@ onUnmounted(() => {
                                         {{ booking.surf_spot.name }}
                                     </span>
                                 </span>
-                                <div class="flex shrink-0 flex-wrap items-center gap-1.5">
+                                <div class="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
                                     <StatusPill
                                         v-if="booking.is_rescheduled || booking.rescheduled_by_instructor_at"
                                         variant="verified"
@@ -485,7 +485,7 @@ onUnmounted(() => {
                     </ul>
                 </section>
 
-                <section class="lg:col-span-5">
+                <section class="min-w-0 lg:col-span-5">
                     <SectionHeader eyebrow="Your instructors" title="Book again" />
 
                     <div v-if="pastInstructors.length" class="mt-4 space-y-3">
@@ -540,46 +540,46 @@ onUnmounted(() => {
                         <div class="mt-3 grid grid-cols-2 gap-2">
                             <Link
                                 :href="route('instructors.search')"
-                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                                class="flex min-w-0 items-center justify-between gap-2 rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
                             >
-                                Find instructor
-                                <MagnifyingGlassIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                                <span class="truncate">Find instructor</span>
+                                <MagnifyingGlassIcon class="h-4 w-4 shrink-0 text-stone-500" aria-hidden="true" />
                             </Link>
                             <Link
                                 :href="route('surf-spots.index')"
-                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                                class="flex min-w-0 items-center justify-between gap-2 rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
                             >
-                                Surf spots
-                                <MapPinIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                                <span class="truncate">Surf spots</span>
+                                <MapPinIcon class="h-4 w-4 shrink-0 text-stone-500" aria-hidden="true" />
                             </Link>
                             <Link
                                 :href="route('student.bookings.index')"
-                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                                class="flex min-w-0 items-center justify-between gap-2 rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
                             >
-                                My bookings
-                                <CalendarDaysIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                                <span class="truncate">My bookings</span>
+                                <CalendarDaysIcon class="h-4 w-4 shrink-0 text-stone-500" aria-hidden="true" />
                             </Link>
                             <Link
                                 :href="route('student.reviews.index')"
-                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                                class="flex min-w-0 items-center justify-between gap-2 rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
                             >
-                                My reviews
-                                <ChevronRightIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                                <span class="truncate">My reviews</span>
+                                <ChevronRightIcon class="h-4 w-4 shrink-0 text-stone-500" aria-hidden="true" />
                             </Link>
                             <Link
                                 :href="route('student.bookings.index')"
-                                class="flex items-center justify-between rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
+                                class="flex min-w-0 items-center justify-between gap-2 rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5 text-body-sm font-semibold text-deep-900 transition-colors hover:border-lagoon-600"
                             >
-                                <span class="flex items-center gap-2">
-                                    Messages
+                                <span class="flex min-w-0 items-center gap-2">
+                                    <span class="truncate">Messages</span>
                                     <span
                                         v-if="chatUnread > 0"
-                                        class="rounded-full bg-coral-700 px-2 py-0.5 text-label font-bold text-white"
+                                        class="shrink-0 rounded-full bg-coral-700 px-2 py-0.5 text-label font-bold text-white"
                                     >
                                         {{ chatUnread }}
                                     </span>
                                 </span>
-                                <ChatBubbleLeftRightIcon class="h-4 w-4 text-stone-500" aria-hidden="true" />
+                                <ChatBubbleLeftRightIcon class="h-4 w-4 shrink-0 text-stone-500" aria-hidden="true" />
                             </Link>
                         </div>
                     </AppCard>

@@ -336,9 +336,10 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
                 <!-- Brand -->
                 <div class="flex items-center gap-3 border-b border-deep-800 px-5 py-5">
                     <Link :href="homeRoute" class="flex items-center gap-3">
-                        <span class="flex h-10 w-10 items-center justify-center rounded-control bg-lagoon-500 text-deep-950">
-                            <ApplicationLogo class="h-6 w-6 fill-current" />
-                        </span>
+                        <ApplicationLogo
+                            variant="badge"
+                            class="h-10 w-10 shrink-0 rounded-control ring-1 ring-white/15 shadow-sm"
+                        />
                         <span>
                             <span class="block text-title font-bold leading-none tracking-tight text-white">SiaSurf</span>
                             <span class="mt-1.5 block text-label font-semibold uppercase tracking-[0.08em] text-lagoon-300">
@@ -456,7 +457,7 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
         </aside>
 
         <!-- Workspace -->
-        <div :class="shouldShowSidebar ? 'lg:pl-[264px] print:pl-0' : ''" class="app-shell-workspace flex min-h-screen flex-col print:min-h-0">
+        <div :class="shouldShowSidebar ? 'lg:pl-[264px] print:pl-0' : ''" class="app-shell-workspace flex min-h-screen min-w-0 flex-col overflow-x-clip print:min-h-0">
             <header class="app-shell-no-print sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-sand-200 bg-white/90 px-4 shadow-sm backdrop-blur-md sm:px-6 lg:px-8 print:hidden">
                 <div class="flex min-w-0 items-center gap-3">
                     <button
@@ -474,11 +475,8 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
                     </h1>
 
                     <template v-else>
-                        <Link href="/" class="flex items-center gap-2">
-                            <span class="flex h-9 w-9 items-center justify-center rounded-control bg-lagoon-500 text-deep-950">
-                                <ApplicationLogo class="h-5 w-5 fill-current" />
-                            </span>
-                            <span class="text-title font-bold tracking-tight text-deep-900">SiaSurf</span>
+                        <Link href="/" class="flex items-center">
+                            <ApplicationLogo variant="horizontal" class="h-9 w-auto" />
                         </Link>
                         <nav class="hidden items-center gap-5 sm:flex" aria-label="Public">
                             <Link
@@ -527,8 +525,8 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
                 </div>
             </header>
 
-            <main id="main-content" class="app-shell-main flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-10 print:p-0">
-                <div class="app-shell-main-inner mx-auto w-full max-w-shell print:max-w-none">
+            <main id="main-content" class="app-shell-main min-w-0 flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-10 print:p-0">
+                <div class="app-shell-main-inner mx-auto w-full min-w-0 max-w-shell print:max-w-none">
                     <slot />
                 </div>
             </main>
@@ -545,7 +543,7 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
             aria-label="Quick navigation"
         >
             <ul class="flex items-stretch justify-around">
-                <li v-for="item in mobileNavigation" :key="`mobile-${item.name}`" class="flex-1">
+                <li v-for="item in mobileNavigation" :key="`mobile-${item.name}`" class="min-w-0 flex-1">
                     <Link
                         :href="item.href"
                         :aria-current="isActive(item.pattern) ? 'page' : undefined"
@@ -559,8 +557,8 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
                             class="absolute inset-x-0 top-0 mx-auto h-0.5 w-8 rounded-full bg-lagoon-400"
                             aria-hidden="true"
                         />
-                        <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
-                        <span class="truncate">{{ item.name }}</span>
+                        <component :is="item.icon" class="h-5 w-5 shrink-0" aria-hidden="true" />
+                        <span class="max-w-full truncate">{{ item.name }}</span>
                     </Link>
                 </li>
             </ul>

@@ -147,7 +147,7 @@ const paginationLabel = (label: string) =>
                     v-for="incident in incidents.data"
                     :key="incident.id"
                     :href="route('admin.incidents.show', incident.id)"
-                    class="group block rounded-card focus:outline-none focus-visible:ring-2 focus-visible:ring-lagoon-600 focus-visible:ring-offset-2"
+                    class="group block min-w-0 rounded-card focus:outline-none focus-visible:ring-2 focus-visible:ring-lagoon-600 focus-visible:ring-offset-2"
                 >
                     <AppCard padding="md" interactive class="h-full">
                         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -159,10 +159,10 @@ const paginationLabel = (label: string) =>
                             </StatusPill>
                         </div>
 
-                        <h2 class="mt-3 text-body-lg font-semibold capitalize text-deep-900">
+                        <h2 class="mt-3 break-words [overflow-wrap:anywhere] text-body-lg font-semibold capitalize text-deep-900">
                             {{ (incident.report_type ?? incident.category ?? incident.type).replace(/_/g, ' ') }}
                         </h2>
-                        <p class="mt-1 line-clamp-3 text-body-sm text-stone-600">{{ incident.description }}</p>
+                        <p class="mt-1 line-clamp-3 break-words [overflow-wrap:anywhere] text-body-sm text-stone-600">{{ incident.description }}</p>
 
                         <div class="mt-4 flex items-center justify-between gap-2 border-t border-sand-200 pt-3">
                             <div class="min-w-0">

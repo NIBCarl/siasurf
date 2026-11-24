@@ -157,7 +157,7 @@ const quickActions = [
             </div>
 
             <div class="grid gap-4 lg:grid-cols-3">
-                <div class="space-y-4 lg:col-span-2">
+                <div class="min-w-0 space-y-4 lg:col-span-2">
                     <AppCard padding="lg">
                         <SectionHeader
                             eyebrow="Performance"
@@ -187,7 +187,7 @@ const quickActions = [
                     </AppCard>
                 </div>
 
-                <div class="space-y-4">
+                <div class="min-w-0 space-y-4">
                     <AppCard padding="md">
                         <SectionHeader eyebrow="Shortcuts" title="Operations" />
                         <div class="mt-3 space-y-2">
@@ -245,7 +245,40 @@ const quickActions = [
                     </p>
                 </div>
 
-                <div class="overflow-x-auto">
+                <div class="divide-y divide-sand-200 md:hidden">
+                    <div
+                        v-for="session in ongoingSessions"
+                        :key="`mob-${session.id}`"
+                        class="flex items-start justify-between gap-3 px-4 py-3.5"
+                    >
+                        <div class="min-w-0 space-y-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-mono text-label text-stone-500">#{{ session.id }}</span>
+                                <span class="truncate text-body-sm font-semibold text-deep-900">{{ session.instructor_name }}</span>
+                            </div>
+                            <p class="truncate text-label italic text-stone-500">{{ session.student_name }}</p>
+                            <div class="flex flex-wrap items-center gap-2 pt-0.5 text-label text-stone-600">
+                                <span class="inline-flex items-center rounded-control bg-sand-100 px-2 py-0.5 font-semibold text-stone-700">
+                                    {{ session.spot_name }}
+                                </span>
+                                <span class="font-mono font-semibold tabular-nums text-deep-900">
+                                    {{ formatStartedAt(session.started_at) }}
+                                </span>
+                                <span>· {{ session.duration_hours }}h lesson</span>
+                            </div>
+                        </div>
+                        <AppButton
+                            :href="route('admin.bookings.show', session.id)"
+                            variant="secondary"
+                            size="sm"
+                            class="shrink-0"
+                        >
+                            Audit
+                        </AppButton>
+                    </div>
+                </div>
+
+                <div class="hidden overflow-x-auto md:block">
                     <table class="w-full min-w-[760px] text-left">
                         <thead class="bg-sand-100">
                             <tr>

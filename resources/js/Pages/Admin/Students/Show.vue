@@ -262,11 +262,11 @@ const toggleBanStatus = () => {
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
                 <!-- Left Column: Personal Info & Stats -->
-                <div class="space-y-8">
+                <div class="min-w-0 space-y-6 sm:space-y-8">
                     <!-- Contact Card -->
-                    <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden group">
+                    <div class="bg-white rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 border border-slate-100 shadow-sm relative overflow-hidden group">
                         <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity duration-500 pointer-events-none">
                             <DocumentTextIcon class="w-32 h-32" />
                         </div>
@@ -278,7 +278,7 @@ const toggleBanStatus = () => {
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
                                     <EnvelopeIcon class="w-3 h-3" /> Email Address
                                 </p>
-                                <p class="font-bold text-slate-900">{{ student.email }}</p>
+                                <p class="font-bold text-slate-900 break-words [overflow-wrap:anywhere]">{{ student.email }}</p>
                             </div>
                             
                             <div>
@@ -346,13 +346,13 @@ const toggleBanStatus = () => {
 
                             <div v-if="student.student_profile?.medical_info">
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Medical Notes</p>
-                                <p class="text-sm font-medium text-slate-800 whitespace-pre-line">{{ student.student_profile.medical_info }}</p>
+                                <p class="text-sm font-medium text-slate-800 whitespace-pre-line break-words [overflow-wrap:anywhere]">{{ student.student_profile.medical_info }}</p>
                             </div>
                         </div>
                     </div>
 
                     <!-- Skill Pre-Assessment Audit Card -->
-                    <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
+                    <div class="bg-white rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 border border-slate-100 shadow-sm">
                         <div class="flex items-center justify-between gap-2 mb-5">
                             <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Skill Pre-Assessment</h3>
                             <Badge v-if="skillAssessment" :variant="skillAssessment.has_safety_warnings ? 'warning' : 'success'" class="text-[10px]">
@@ -416,8 +416,8 @@ const toggleBanStatus = () => {
                 </div>
 
                 <!-- Right Column: Booking History & Waivers -->
-                <div class="lg:col-span-2 space-y-8">
-                    <div class="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden">
+                <div class="min-w-0 lg:col-span-2 space-y-6 sm:space-y-8">
+                    <div class="bg-white rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 border border-slate-100 shadow-sm relative overflow-hidden">
                         <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-6">Session & Waiver History</h3>
                         
                         <div class="space-y-4">
@@ -427,14 +427,14 @@ const toggleBanStatus = () => {
                             </div>
 
                             <div v-for="booking in student.bookings_as_student" :key="booking.id" 
-                                class="flex flex-col md:flex-row items-center justify-between p-5 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-ocean-200 hover:bg-ocean-50/30 transition-all gap-4">
+                                class="flex flex-col md:flex-row items-center justify-between p-4 sm:p-5 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-ocean-200 hover:bg-ocean-50/30 transition-all gap-4">
                                 
-                                <div class="flex flex-col w-full md:w-auto">
+                                <div class="flex min-w-0 flex-col w-full md:w-auto">
                                     <div class="flex flex-wrap items-center gap-2 mb-1">
                                         <Badge :variant="getBookingStatusVariant(booking.status)" size="sm">
                                             {{ booking.status.toUpperCase() }}
                                         </Badge>
-                                        <Badge v-if="isBookingUnderpaid(booking)" variant="danger" size="sm">
+                                        <Badge v-if="isBookingUnderpaid(booking)" variant="danger" size="sm" class="max-w-full whitespace-normal text-left">
                                             UNDERPAID • PAID ₱{{ Number(booking.payment?.amount ?? 0).toLocaleString() }} OF ₱{{ Number(booking.total_amount).toLocaleString() }} (OWES ₱{{ bookingShortfall(booking).toLocaleString() }})
                                         </Badge>
                                         <Badge v-else-if="booking.payment?.status === 'completed'" variant="success" size="sm">
@@ -442,17 +442,17 @@ const toggleBanStatus = () => {
                                         </Badge>
                                         <span class="text-sm font-black text-slate-900">{{ booking.date }}</span>
                                     </div>
-                                    <span class="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1.5">
-                                        <MapPinIcon class="w-3.5 h-3.5" /> {{ booking.surf_spot.name }}
+                                    <span class="text-xs font-bold text-slate-500 mt-1 flex flex-wrap items-center gap-1.5 break-words [overflow-wrap:anywhere]">
+                                        <MapPinIcon class="w-3.5 h-3.5 shrink-0" /> {{ booking.surf_spot.name }}
                                         <span class="mx-1">&bull;</span>
                                         Instructor: {{ booking.instructor.name }}
                                     </span>
-                                    <p v-if="isBookingUnderpaid(booking) && booking.payment?.notes" class="mt-1 text-xs font-semibold text-rose-600">
+                                    <p v-if="isBookingUnderpaid(booking) && booking.payment?.notes" class="mt-1 text-xs font-semibold text-rose-600 break-words [overflow-wrap:anywhere]">
                                         Note: {{ booking.payment.notes }}
                                     </p>
                                 </div>
 
-                                <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                                <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto justify-end">
                                     <!-- View Booking Link -->
                                     <Link :href="route('admin.bookings.show', booking.id)"
                                         class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all">
@@ -474,22 +474,22 @@ const toggleBanStatus = () => {
                     </div>
                     
                     <!-- Incidents Log -->
-                    <div v-if="student.reported_incidents.length > 0" class="bg-rose-50/30 rounded-[2.5rem] p-8 border border-rose-100 shadow-sm">
+                    <div v-if="student.reported_incidents.length > 0" class="bg-rose-50/30 rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 border border-rose-100 shadow-sm">
                         <h3 class="text-[10px] font-bold text-rose-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
                             <ExclamationTriangleIcon class="w-4 h-4" />
                             Reported Incidents
                         </h3>
                         
                         <div class="space-y-4">
-                            <div v-for="incident in student.reported_incidents" :key="incident.id" class="p-5 bg-white rounded-2xl border border-rose-100 shadow-sm">
-                                <div class="flex items-center justify-between mb-2">
+                            <div v-for="incident in student.reported_incidents" :key="incident.id" class="p-4 sm:p-5 bg-white rounded-2xl border border-rose-100 shadow-sm">
+                                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                                     <Badge :variant="getSeverityVariant(incident.severity)" size="sm">
                                         {{ incident.severity.toUpperCase() }}
                                     </Badge>
                                     <span class="text-[10px] font-black text-slate-400 tracking-widest uppercase">{{ formatPhilippineDate(incident.created_at) }}</span>
                                 </div>
-                                <h4 class="font-bold text-slate-900">{{ incident.type.replace('_', ' ').toUpperCase() }}</h4>
-                                <p class="text-sm text-slate-600 mt-2">{{ incident.description }}</p>
+                                <h4 class="font-bold text-slate-900 break-words [overflow-wrap:anywhere]">{{ incident.type.replace('_', ' ').toUpperCase() }}</h4>
+                                <p class="text-sm text-slate-600 mt-2 break-words [overflow-wrap:anywhere]">{{ incident.description }}</p>
                             </div>
                         </div>
                     </div>
