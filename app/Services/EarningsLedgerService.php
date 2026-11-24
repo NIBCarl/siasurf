@@ -60,9 +60,7 @@ class EarningsLedgerService
                 BookingStatus::Completed,
             ], true)
         ) {
-            $anchor = $booking->status === BookingStatus::Completed
-                ? ($booking->completed_at ?? $booking->date ?? $payment->paid_at ?? $booking->created_at ?? now())
-                : ($booking->date ?? $payment->paid_at ?? $booking->created_at ?? now());
+            $anchor = $booking->date ?? $booking->completed_at ?? $payment->paid_at ?? $booking->created_at ?? now();
 
             return [
                 'entry_type' => $booking->status === BookingStatus::Completed ? 'gcash_completed' : 'gcash_booked',
