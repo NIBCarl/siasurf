@@ -178,6 +178,8 @@ class MockPaymentService implements PaymentServiceInterface
             return;
         }
 
+        app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
+
         // Update simulated storage
         self::$simulatedPayments[$transactionId]['status'] = 'paid';
 

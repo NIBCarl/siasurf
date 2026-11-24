@@ -56,6 +56,8 @@ interface DailyLedgerRow {
   effective_status: 'unsettled' | 'overdue' | 'settled'
   effective_status_label: string
   is_overdue: boolean
+  has_unfinished_sessions?: boolean
+  can_be_settled?: boolean
   days_until_remittance_due: number | null
   settled_at: string | null
   payout?: {
@@ -193,7 +195,7 @@ const dueText = (row: DailyLedgerRow) => {
     return row.payout ? `Settled · ${row.payout.reference_code}` : 'Settled'
   }
   if (Number(row.cash_service_fees_owed) <= 0 || !row.remittance_due_date) {
-    return 'No cash fee due'
+    return row.has_unfinished_sessions ? 'Payout unlocks after session' : 'No cash fee due'
   }
   const days = row.days_until_remittance_due ?? 0
   if (days < 0) {
@@ -408,6 +410,7 @@ const paginationLabel = (label: string) =>
                       <StatusPill variant="neutral" :dot="false">
                         {{ b.payment?.payment_method === 'cash' ? 'Cash' : 'GCash' }}
                         <template v-if="b.ledger_entry_type === 'gcash_retained'"> · Retained</template>
+                        <template v-else-if="b.ledger_entry_type === 'gcash_booked' || b.status === 'confirmed' || b.status === 'in_progress'"> · Booked (Pending Session)</template>
                       </StatusPill>
                     </div>
                     <p class="font-medium text-deep-900">{{ b.student?.name ?? 'Student' }} · {{ b.surf_spot?.name ?? 'Surf spot' }}</p>
@@ -515,6 +518,7 @@ const paginationLabel = (label: string) =>
                             <StatusPill variant="neutral" :dot="false">
                               {{ b.payment?.payment_method === 'cash' ? 'Cash' : 'GCash' }}
                               <template v-if="b.ledger_entry_type === 'gcash_retained'"> · Retained</template>
+                              <template v-else-if="b.ledger_entry_type === 'gcash_booked' || b.status === 'confirmed' || b.status === 'in_progress'"> · Booked (Pending Session)</template>
                             </StatusPill>
                           </div>
                           <div class="flex items-center gap-4 text-right">
@@ -560,7 +564,7 @@ const paginationLabel = (label: string) =>
           v-else
           :icon="BanknotesIcon"
           title="No daily ledger entries yet"
-          description="Completed GCash lessons, retained cancellations, and settled cash lessons appear here automatically by day."
+          description="Paid GCash bookings, retained cancellations, and settled cash lessons appear here automatically by day."
         >
           <AppButton :href="route('instructor.bookings.index')" variant="secondary" size="md">
             View my lessons

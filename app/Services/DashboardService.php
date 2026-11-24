@@ -490,17 +490,26 @@ class DashboardService
             ->where('status', BookingStatus::Completed)
             ->get();
 
+        $paidActiveOrCompletedBookings = $user->bookingsAsInstructor()
+            ->whereIn('status', [
+                BookingStatus::Confirmed->value,
+                BookingStatus::InProgress->value,
+                BookingStatus::Completed->value,
+            ])
+            ->where('payment_status', PaymentStatus::Completed->value)
+            ->get();
+
         $retainedCancelledBookings = $user->bookingsAsInstructor()
             ->whereIn('status', [BookingStatus::Cancelled->value, BookingStatus::NoShow->value])
             ->where('instructor_retained_amount', '>', 0)
             ->get();
 
-        $earningsTotal = $completedBookings->where('payment_status', PaymentStatus::Completed)
+        $earningsTotal = $paidActiveOrCompletedBookings
             ->sum(fn (Booking $b) => $b->effectiveLessonPrice())
             + $retainedCancelledBookings->sum(fn (Booking $b) => (float) $b->instructor_retained_amount);
 
-        $earningsThisMonth = $completedBookings->where('payment_status', PaymentStatus::Completed)
-            ->where('completed_at', '>=', now()->startOfMonth())
+        $earningsThisMonth = $paidActiveOrCompletedBookings
+            ->filter(fn (Booking $b) => ($b->completed_at ?? $b->date ?? $b->updated_at)?->greaterThanOrEqualTo(now()->startOfMonth()))
             ->sum(fn (Booking $b) => $b->effectiveLessonPrice())
             + $retainedCancelledBookings
                 ->filter(fn (Booking $b) => ($b->cancelled_at ?? $b->updated_at)?->greaterThanOrEqualTo(now()->startOfMonth()))

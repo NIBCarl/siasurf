@@ -224,6 +224,8 @@ class PaymentController extends Controller
             return back()->with('error', $error);
         }
 
+        app(\App\Services\EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
+
         return back()->with('success', 'Receipt verified. The payment is now marked as paid.');
     }
 
@@ -555,6 +557,7 @@ class PaymentController extends Controller
                 });
 
                 $booking->refresh()->load('payment');
+                app(\App\Services\EarningsLedgerService::class)->syncBookingToLedger($booking);
             } elseif (in_array($gatewayStatus, ['failed', 'voided', 'expired'], true)) {
                 $payment->update([
                     'status' => PaymentStatus::Failed,

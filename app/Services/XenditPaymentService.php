@@ -399,6 +399,8 @@ class XenditPaymentService implements PaymentServiceInterface
             return;
         }
 
+        app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
+
         $eventService = app(BookingEventService::class);
         if ($booking->payment) {
             $eventService->recordPaymentCompleted($booking, $booking->payment->fresh(), $booking->student_id);

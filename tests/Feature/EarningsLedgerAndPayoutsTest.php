@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AttendanceStatus;
 use App\Enums\BookingStatus;
+use App\Enums\InstructorLevel;
 use App\Enums\LedgerSettlementStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
@@ -19,10 +20,13 @@ use App\Models\User;
 use App\Notifications\CashRemittanceOverdueNotification;
 use App\Notifications\PayoutRecordedNotification;
 use App\Services\EarningsLedgerService;
+use App\Services\MockPaymentService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -600,5 +604,435 @@ class EarningsLedgerAndPayoutsTest extends TestCase
                 ->component('Admin/Instructors/Show')
                 ->where('ledgerSummary.net_payable', 1200)
             );
+    }
+
+    #[Test]
+    public function gcash_payment_immediately_reflects_on_instructor_and_admin_ledger_and_blocks_settlement_until_session_completes(): void
+    {
+        Storage::fake('local');
+
+        $admin = User::factory()->admin()->create();
+        $admin->assignRole('admin');
+
+        $instructor = User::factory()->instructor()->create();
+        $instructor->assignRole('instructor');
+        InstructorProfile::factory()->create([
+            'user_id' => $instructor->id,
+            'level' => InstructorLevel::Level3,
+            'status' => 'active',
+            'rate_per_hour' => 800,
+            'guiding_rate' => 1200,
+            'coaching_rate' => 1800,
+        ]);
+
+        $student = User::factory()->student()->create();
+        $student->assignRole('student');
+        $spot = SurfSpot::factory()->create(['difficulty' => 'advanced']);
+
+        $lessonDate = $this->now->copy()->addDays(2)->toDateString();
+
+        // Case 1: Mock GCash gateway payment immediately reflects on ledger
+        $booking = Booking::factory()->withServiceFee(3600.00)->create([
+            'student_id' => $student->id,
+            'instructor_id' => $instructor->id,
+            'surf_spot_id' => $spot->id,
+            'date' => $lessonDate,
+            'original_date' => $lessonDate,
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'duration_hours' => 2,
+            'session_type' => 'coaching',
+            'skill_level' => 'advanced',
+            'status' => BookingStatus::AwaitingPayment->value,
+            'payment_status' => PaymentStatus::Pending->value,
+            'payment_deadline_at' => $this->now->copy()->addMinutes(15),
+        ]);
+
+        Payment::factory()->gcash()->create([
+            'booking_id' => $booking->id,
+            'amount' => 3852.00,
+            'lesson_price' => 3600.00,
+            'service_fee_amount' => 252.00,
+            'transaction_id' => 'mock_lvl3_pay_1',
+            'status' => PaymentStatus::Pending->value,
+        ]);
+
+        app(MockPaymentService::class)->simulatePayment('mock_lvl3_pay_1', true);
+
+        $booking->refresh();
+        $this->assertSame(BookingStatus::Confirmed, $booking->status);
+        $this->assertSame(PaymentStatus::Completed, $booking->payment_status);
+        $this->assertSame('gcash_booked', $booking->ledger_entry_type);
+
+        $ledger = InstructorDailyLedger::query()
+            ->where('instructor_id', $instructor->id)
+            ->first();
+
+        $this->assertNotNull($ledger);
+        $this->assertSame($lessonDate, $ledger->ledger_date->toDateString());
+        $this->assertSame('3600.00', $ledger->gcash_earnings);
+        $this->assertSame('3600.00', $ledger->net_payable);
+        $this->assertTrue($ledger->hasUnfinishedSessions());
+        $this->assertFalse($ledger->canBeSettled());
+
+        // Case 2: Verifying a GCash receipt screenshot also reflects immediately on the ledger
+        $receiptBooking = Booking::factory()->withServiceFee(1800.00)->create([
+            'student_id' => $student->id,
+            'instructor_id' => $instructor->id,
+            'surf_spot_id' => $spot->id,
+            'date' => $lessonDate,
+            'original_date' => $lessonDate,
+            'start_time' => '13:00',
+            'end_time' => '15:00',
+            'duration_hours' => 2,
+            'session_type' => 'coaching',
+            'skill_level' => 'advanced',
+            'status' => BookingStatus::AwaitingPayment->value,
+            'payment_status' => PaymentStatus::Pending->value,
+            'payment_deadline_at' => $this->now->copy()->addMinutes(15),
+        ]);
+
+        $receiptPath = UploadedFile::fake()->image('gcash.jpg')->store('payment-receipts', 'local');
+        Payment::factory()->gcash()->create([
+            'booking_id' => $receiptBooking->id,
+            'amount' => 1926.00,
+            'lesson_price' => 1800.00,
+            'service_fee_amount' => 126.00,
+            'receipt_path' => $receiptPath,
+            'receipt_uploaded_at' => $this->now,
+            'status' => PaymentStatus::PendingVerification->value,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('payments.receipt.verify', $receiptBooking))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $ledger->refresh();
+        $this->assertSame('5400.00', $ledger->gcash_earnings);
+        $this->assertSame('5400.00', $ledger->net_payable);
+
+        // Both instructor & admin see the booked GCash earnings immediately, but Admin cannot settle yet
+        $this->actingAs($instructor)
+            ->get(route('instructor.earnings.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('summary.unsettled_gcash_earnings', 5400)
+                ->where('summary.can_settle_now', false)
+                ->where('ledgers.data.0.has_unfinished_sessions', true)
+                ->where('ledgers.data.0.can_be_settled', false)
+            );
+
+        $this->actingAs($admin)
+            ->get(route('admin.payouts.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('platformStats.total_unsettled_gcash_payable', 5400)
+                ->where('instructors.0.summary.unsettled_gcash_earnings', 5400)
+                ->where('instructors.0.summary.can_settle_now', false)
+            );
+
+        // Attempt to record settlement (with or without ledger_ids) must be rejected while sessions are not over
+        $this->actingAs($admin)
+            ->post(route('admin.payouts.store', $instructor), [
+                'ledger_ids' => [$ledger->id],
+                'payment_channel' => PayoutChannel::InPersonCash->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->actingAs($admin)
+            ->post(route('admin.payouts.store', $instructor), [
+                'payment_channel' => PayoutChannel::InPersonCash->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, InstructorPayout::count());
+
+        // Complete both sessions -> settlement unlocks
+        $booking->update(['status' => BookingStatus::InProgress->value, 'started_at' => $this->now]);
+        $receiptBooking->update(['status' => BookingStatus::InProgress->value, 'started_at' => $this->now]);
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.bookings.complete-session', $booking))
+            ->assertRedirect();
+
+        // Only 1 of 2 sessions finished on that day -> still blocked
+        $this->assertTrue($ledger->fresh()->hasUnfinishedSessions());
+        $this->assertFalse($ledger->fresh()->canBeSettled());
+
+        $this->actingAs($instructor)
+            ->post(route('instructor.bookings.complete-session', $receiptBooking))
+            ->assertRedirect();
+
+        $ledger->refresh();
+        $this->assertFalse($ledger->hasUnfinishedSessions());
+        $this->assertTrue($ledger->canBeSettled());
+
+        $this->actingAs($admin)
+            ->post(route('admin.payouts.store', $instructor), [
+                'payment_channel' => PayoutChannel::InPersonCash->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(1, InstructorPayout::count());
+        $this->assertSame('5400.00', InstructorPayout::first()->net_payout_amount);
+    }
+
+    #[Test]
+    public function cancelling_a_paid_gcash_booking_minus_adjusts_instructor_and_admin_payout_for_full_and_partial_refunds(): void
+    {
+        $actors = $this->createActors();
+
+        // Case A: Full refund (>= 7 days notice) -> 100% minus-adjustment
+        $fullRefundDate = $this->now->copy()->addDays(10)->toDateString();
+        $fullRefundBooking = Booking::factory()->withServiceFee(1200.00)->create([
+            'student_id' => $actors['student']->id,
+            'instructor_id' => $actors['instructor']->id,
+            'surf_spot_id' => $actors['spot']->id,
+            'date' => $fullRefundDate,
+            'original_date' => $fullRefundDate,
+            'status' => BookingStatus::AwaitingPayment->value,
+            'payment_status' => PaymentStatus::Pending->value,
+            'payment_deadline_at' => $this->now->copy()->addMinutes(15),
+        ]);
+
+        Payment::factory()->gcash()->create([
+            'booking_id' => $fullRefundBooking->id,
+            'amount' => 1284.00,
+            'lesson_price' => 1200.00,
+            'service_fee_amount' => 84.00,
+            'transaction_id' => 'mock_full_cxl',
+            'status' => PaymentStatus::Pending->value,
+        ]);
+
+        app(MockPaymentService::class)->simulatePayment('mock_full_cxl', true);
+        $this->assertSame(1, InstructorDailyLedger::count());
+        $this->assertSame('1200.00', InstructorDailyLedger::first()->net_payable);
+
+        $this->actingAs($actors['student'])
+            ->post(route('student.bookings.cancel', $fullRefundBooking), ['reason' => 'Change of plans'])
+            ->assertRedirect();
+
+        $this->assertSame(0, InstructorDailyLedger::count());
+        $this->assertNull($fullRefundBooking->fresh()->daily_ledger_id);
+
+        $summaryAfterFull = app(EarningsLedgerService::class)->getInstructorSummary($actors['instructor']);
+        $this->assertSame(0.0, $summaryAfterFull['unsettled_gcash_earnings']);
+        $this->assertSame(0.0, $summaryAfterFull['net_payable']);
+
+        // Case B: Partial 50% refund (4 days notice) -> 50% minus-adjustment (₱1,200 -> ₱600) and becomes settleable
+        $partialDate = $this->now->copy()->addDays(4)->toDateString();
+        $partialBooking = Booking::factory()->withServiceFee(1200.00)->create([
+            'student_id' => $actors['student']->id,
+            'instructor_id' => $actors['instructor']->id,
+            'surf_spot_id' => $actors['spot']->id,
+            'date' => $partialDate,
+            'original_date' => $partialDate,
+            'is_long_term' => false,
+            'status' => BookingStatus::AwaitingPayment->value,
+            'payment_status' => PaymentStatus::Pending->value,
+            'payment_deadline_at' => $this->now->copy()->addMinutes(15),
+        ]);
+
+        Payment::factory()->gcash()->create([
+            'booking_id' => $partialBooking->id,
+            'amount' => 1284.00,
+            'lesson_price' => 1200.00,
+            'service_fee_amount' => 84.00,
+            'transaction_id' => 'mock_half_cxl',
+            'status' => PaymentStatus::Pending->value,
+        ]);
+
+        app(MockPaymentService::class)->simulatePayment('mock_half_cxl', true);
+        $this->assertSame('1200.00', InstructorDailyLedger::first()->net_payable);
+
+        $this->actingAs($actors['student'])
+            ->post(route('student.bookings.cancel', $partialBooking), ['reason' => 'Weather worry'])
+            ->assertRedirect();
+
+        $ledger = InstructorDailyLedger::first();
+        $this->assertNotNull($ledger);
+        $this->assertSame($partialDate, $ledger->ledger_date->toDateString());
+        $this->assertSame('600.00', $ledger->gcash_earnings);
+        $this->assertSame('600.00', $ledger->net_payable);
+        $this->assertFalse($ledger->hasUnfinishedSessions());
+        $this->assertTrue($ledger->canBeSettled());
+
+        $this->actingAs($actors['admin'])
+            ->post(route('admin.payouts.store', $actors['instructor']), [
+                'payment_channel' => PayoutChannel::InPersonCash->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame('600.00', InstructorPayout::first()->net_payout_amount);
+    }
+
+    #[Test]
+    public function rescheduling_a_paid_gcash_booking_moves_earnings_from_old_date_and_declining_reschedule_deducts_full_amount(): void
+    {
+        $actors = $this->createActors();
+
+        $oldDate = $this->now->copy()->addDays(4)->toDateString();
+        $newDate = $this->now->copy()->addDays(6)->toDateString();
+
+        $booking = Booking::factory()->withServiceFee(2000.00)->create([
+            'student_id' => $actors['student']->id,
+            'instructor_id' => $actors['instructor']->id,
+            'surf_spot_id' => $actors['spot']->id,
+            'date' => $oldDate,
+            'original_date' => $oldDate,
+            'time_period' => 'morning',
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'duration_hours' => 2,
+            'status' => BookingStatus::AwaitingPayment->value,
+            'payment_status' => PaymentStatus::Pending->value,
+            'payment_deadline_at' => $this->now->copy()->addMinutes(15),
+        ]);
+
+        Payment::factory()->gcash()->create([
+            'booking_id' => $booking->id,
+            'amount' => 2140.00,
+            'lesson_price' => 2000.00,
+            'service_fee_amount' => 140.00,
+            'transaction_id' => 'mock_resched_1',
+            'status' => PaymentStatus::Pending->value,
+        ]);
+
+        app(MockPaymentService::class)->simulatePayment('mock_resched_1', true);
+
+        $this->assertSame(1, InstructorDailyLedger::whereDate('ledger_date', $oldDate)->count());
+        $this->assertSame('2000.00', InstructorDailyLedger::whereDate('ledger_date', $oldDate)->first()->net_payable);
+
+        // Instructor proposes reschedule to $newDate, student accepts (>= 24h notice -> auto-applied)
+        $this->actingAs($actors['instructor'])
+            ->post(route('instructor.bookings.change-request', $booking), [
+                'type' => 'reschedule',
+                'date' => $newDate,
+                'start_time' => '14:00',
+                'reason' => 'Better tide window in the afternoon',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($actors['student'])
+            ->post(route('student.bookings.accept-reschedule', $booking))
+            ->assertRedirect();
+
+        // Old date ledger is minus-adjusted (removed) and new date ledger holds ₱2,000.00 (locked until session completes)
+        $this->assertSame(0, InstructorDailyLedger::whereDate('ledger_date', $oldDate)->count());
+        $newLedger = InstructorDailyLedger::whereDate('ledger_date', $newDate)->first();
+        $this->assertNotNull($newLedger);
+        $this->assertSame('2000.00', $newLedger->gcash_earnings);
+        $this->assertSame('2000.00', $newLedger->net_payable);
+        $this->assertTrue($newLedger->hasUnfinishedSessions());
+        $this->assertFalse($newLedger->canBeSettled());
+
+        // Propose another reschedule, student cancels -> RescheduleDeclined (100% refund -> minus-adjusted to 0)
+        $thirdDate = $this->now->copy()->addDays(8)->toDateString();
+        $this->actingAs($actors['instructor'])
+            ->post(route('instructor.bookings.change-request', $booking), [
+                'type' => 'reschedule',
+                'date' => $thirdDate,
+                'start_time' => '09:00',
+                'reason' => 'Another schedule conflict',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($actors['student'])
+            ->post(route('student.bookings.cancel', $booking), [
+                'reason' => 'New time does not work for me',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(0, InstructorDailyLedger::count());
+        $summary = app(EarningsLedgerService::class)->getInstructorSummary($actors['instructor']);
+        $this->assertSame(0.0, $summary['unsettled_gcash_earnings']);
+        $this->assertSame(0.0, $summary['net_payable']);
+    }
+
+    #[Test]
+    public function bulk_settlement_only_settles_completed_days_and_keeps_pending_session_days_locked(): void
+    {
+        $actors = $this->createActors();
+        $ledgerService = app(EarningsLedgerService::class);
+
+        $day1Date = $this->now->copy()->subDay()->toDateString();
+        $day2Date = $this->now->copy()->addDay()->toDateString();
+
+        // Day 1: Completed GCash lesson (₱1,200) -> settleable
+        $completedBooking = Booking::factory()->withServiceFee(1200.00)->completed()->paid()->create([
+            'student_id' => $actors['student']->id,
+            'instructor_id' => $actors['instructor']->id,
+            'surf_spot_id' => $actors['spot']->id,
+            'date' => $day1Date,
+            'completed_at' => $this->now->copy()->subDay(),
+        ]);
+        Payment::factory()->gcash()->completed()->create([
+            'booking_id' => $completedBooking->id,
+            'amount' => 1284.00,
+            'lesson_price' => 1200.00,
+            'service_fee_amount' => 84.00,
+            'paid_at' => $this->now->copy()->subDays(2),
+        ]);
+        $day1Ledger = $ledgerService->syncBookingToLedger($completedBooking->fresh(['payment']));
+
+        // Day 2: Confirmed paid GCash lesson (₱2,000) -> NOT settleable yet
+        $pendingBooking = Booking::factory()->withServiceFee(2000.00)->confirmed()->paid()->create([
+            'student_id' => $actors['student']->id,
+            'instructor_id' => $actors['instructor']->id,
+            'surf_spot_id' => $actors['spot']->id,
+            'date' => $day2Date,
+        ]);
+        Payment::factory()->gcash()->completed()->create([
+            'booking_id' => $pendingBooking->id,
+            'amount' => 2140.00,
+            'lesson_price' => 2000.00,
+            'service_fee_amount' => 140.00,
+            'paid_at' => $this->now,
+        ]);
+        $day2Ledger = $ledgerService->syncBookingToLedger($pendingBooking->fresh(['payment']));
+
+        $this->assertTrue($day1Ledger->fresh()->canBeSettled());
+        $this->assertFalse($day2Ledger->fresh()->canBeSettled());
+
+        $summary = $ledgerService->getInstructorSummary($actors['instructor']);
+        $this->assertSame(2, $summary['unsettled_days_count']);
+        $this->assertSame(1, $summary['settleable_days_count']);
+        $this->assertSame(1, $summary['pending_session_days_count']);
+        $this->assertTrue($summary['can_settle_now']);
+        $this->assertSame(3200.0, $summary['net_payable']);
+        $this->assertSame(1200.0, $summary['settleable_net_payable']);
+
+        // Explicitly selecting Day 2 in ledger_ids is rejected
+        $this->actingAs($actors['admin'])
+            ->post(route('admin.payouts.store', $actors['instructor']), [
+                'ledger_ids' => [$day1Ledger->id, $day2Ledger->id],
+                'payment_channel' => PayoutChannel::InPersonCash->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, InstructorPayout::count());
+
+        // Bulk settling without ledger_ids settles ONLY Day 1 and leaves Day 2 open
+        $this->actingAs($actors['admin'])
+            ->post(route('admin.payouts.store', $actors['instructor']), [
+                'payment_channel' => PayoutChannel::InPersonCash->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $payout = InstructorPayout::first();
+        $this->assertNotNull($payout);
+        $this->assertSame(1, $payout->ledger_days_count);
+        $this->assertSame('1200.00', $payout->net_payout_amount);
+
+        $this->assertTrue($day1Ledger->fresh()->isSettled());
+        $this->assertFalse($day2Ledger->fresh()->isSettled());
+        $this->assertSame('2000.00', $day2Ledger->fresh()->net_payable);
     }
 }

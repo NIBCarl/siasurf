@@ -9,10 +9,16 @@ import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface InstructorSummary {
   unsettled_days_count: number
+  settleable_days_count?: number
+  pending_session_days_count?: number
+  can_settle_now?: boolean
   unsettled_gcash_earnings: number
   unsettled_cash_earnings: number
   unsettled_cash_fees_owed: number
   net_payable: number
+  settleable_gcash_earnings?: number
+  settleable_cash_fees_owed?: number
+  settleable_net_payable?: number
   settlement_direction: 'payout' | 'remittance' | 'offset' | 'clear'
   earliest_remittance_due_date: string | null
   days_until_remittance_due: number | null
@@ -120,16 +126,32 @@ const settleForm = useForm({
   notes: '',
 })
 
+const canSettleInstructor = (row: InstructorLedgerRow) =>
+  row.summary.can_settle_now ?? row.summary.unsettled_days_count > 0
+
+const settleableNetFor = (row: InstructorLedgerRow) =>
+  Number(row.summary.settleable_net_payable ?? row.summary.net_payable)
+
+const settleableGcashFor = (row: InstructorLedgerRow) =>
+  Number(row.summary.settleable_gcash_earnings ?? row.summary.unsettled_gcash_earnings)
+
+const settleableCashFeesFor = (row: InstructorLedgerRow) =>
+  Number(row.summary.settleable_cash_fees_owed ?? row.summary.unsettled_cash_fees_owed)
+
+const settleableDaysFor = (row: InstructorLedgerRow) =>
+  Number(row.summary.settleable_days_count ?? row.summary.unsettled_days_count)
+
 const isOffsetTarget = computed(() => {
   if (!settleTarget.value) return false
-  return Number(settleTarget.value.summary.net_payable) === 0
+  return settleableNetFor(settleTarget.value) === 0
 })
 
 const openSettleModal = (row: InstructorLedgerRow) => {
+  if (!canSettleInstructor(row)) return
   settleTarget.value = row
   settleForm.reset()
   settleForm.clearErrors()
-  settleForm.payment_channel = Number(row.summary.net_payable) === 0 ? 'offset' : 'in_person_cash'
+  settleForm.payment_channel = settleableNetFor(row) === 0 ? 'offset' : 'in_person_cash'
 }
 
 const submitSettlement = () => {
@@ -145,6 +167,7 @@ const submitSettlement = () => {
 
 const directionVariant = (row: InstructorLedgerRow) => {
   if (row.summary.has_overdue_remittance) return 'danger'
+  if (row.summary.unsettled_days_count > 0 && row.summary.can_settle_now === false) return 'info'
   if (row.summary.settlement_direction === 'payout') return 'success'
   if (row.summary.settlement_direction === 'remittance') return 'warning'
   if (row.summary.settlement_direction === 'offset') return 'info'
@@ -153,6 +176,7 @@ const directionVariant = (row: InstructorLedgerRow) => {
 
 const directionLabel = (row: InstructorLedgerRow) => {
   if (row.summary.has_overdue_remittance) return 'Overdue Remittance'
+  if (row.summary.unsettled_days_count > 0 && row.summary.can_settle_now === false) return 'Session Pending'
   switch (row.summary.settlement_direction) {
     case 'payout': return 'Payout Due'
     case 'remittance': return 'Remittance Due'
@@ -296,13 +320,23 @@ const paginationLabel = (label: string) =>
                 <BaseButton size="sm" variant="secondary" class="w-full min-h-[44px] justify-center">Daily Ledger</BaseButton>
               </Link>
               <BaseButton
-                v-if="row.summary.unsettled_days_count > 0"
+                v-if="canSettleInstructor(row)"
                 size="sm"
                 variant="primary"
                 class="w-full flex-1 min-h-[44px] justify-center"
                 @click="openSettleModal(row)"
               >
                 Record Settlement
+              </BaseButton>
+              <BaseButton
+                v-else-if="row.summary.unsettled_days_count > 0"
+                size="sm"
+                variant="secondary"
+                disabled
+                title="Sessions must be completed before releasing payout"
+                class="w-full flex-1 min-h-[44px] justify-center opacity-60 cursor-not-allowed"
+              >
+                Awaiting Session
               </BaseButton>
             </div>
           </div>
@@ -361,12 +395,22 @@ const paginationLabel = (label: string) =>
                     <BaseButton size="sm" variant="secondary">Daily Ledger</BaseButton>
                   </Link>
                   <BaseButton
-                    v-if="row.summary.unsettled_days_count > 0"
+                    v-if="canSettleInstructor(row)"
                     size="sm"
                     variant="primary"
                     @click="openSettleModal(row)"
                   >
                     Record Settlement
+                  </BaseButton>
+                  <BaseButton
+                    v-else-if="row.summary.unsettled_days_count > 0"
+                    size="sm"
+                    variant="secondary"
+                    disabled
+                    title="Sessions must be completed before releasing payout"
+                    class="opacity-60 cursor-not-allowed"
+                  >
+                    Awaiting Session
                   </BaseButton>
                 </td>
               </tr>
@@ -493,28 +537,35 @@ const paginationLabel = (label: string) =>
           <div>
             <h2 class="text-lg font-extrabold text-slate-900">Record In-Person Settlement</h2>
             <p class="text-sm text-slate-600 mt-1">
-              Settle all open daily ledger entries for <strong>{{ settleTarget.name }}</strong>
-              ({{ settleTarget.summary.unsettled_days_count }} day(s)).
+              Settle completed daily ledger entries for <strong>{{ settleTarget.name }}</strong>
+              ({{ settleableDaysFor(settleTarget) }} day(s)).
             </p>
+          </div>
+
+          <div
+            v-if="(settleTarget.summary.pending_session_days_count ?? 0) > 0"
+            class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+          >
+            {{ settleTarget.summary.pending_session_days_count }} open day(s) with unfinished sessions are excluded and will unlock once completed.
           </div>
 
           <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
             <div class="flex justify-between">
-              <span class="text-slate-600">Unsettled GCash Earnings</span>
-              <span class="font-bold text-emerald-700">+ {{ money(settleTarget.summary.unsettled_gcash_earnings) }}</span>
+              <span class="text-slate-600">Settleable GCash Earnings</span>
+              <span class="font-bold text-emerald-700">+ {{ money(settleableGcashFor(settleTarget)) }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-slate-600">Less: Cash Service Fees Owed (7%)</span>
-              <span class="font-bold text-amber-700">− {{ money(settleTarget.summary.unsettled_cash_fees_owed) }}</span>
+              <span class="font-bold text-amber-700">− {{ money(settleableCashFeesFor(settleTarget)) }}</span>
             </div>
             <div class="border-t border-slate-200 pt-2 flex justify-between text-base">
               <span class="font-extrabold text-slate-900">
-                <template v-if="settleTarget.summary.net_payable > 0">Net Payout to Instructor</template>
-                <template v-else-if="settleTarget.summary.net_payable < 0">Net Cash Fee Remittance from Instructor</template>
+                <template v-if="settleableNetFor(settleTarget) > 0">Net Payout to Instructor</template>
+                <template v-else-if="settleableNetFor(settleTarget) < 0">Net Cash Fee Remittance from Instructor</template>
                 <template v-else>Zero-Cash Offset Settlement</template>
               </span>
-              <span class="font-black" :class="settleTarget.summary.net_payable < 0 ? 'text-rose-600' : 'text-slate-900'">
-                {{ money(settleTarget.summary.net_payable) }}
+              <span class="font-black" :class="settleableNetFor(settleTarget) < 0 ? 'text-rose-600' : 'text-slate-900'">
+                {{ money(settleableNetFor(settleTarget)) }}
               </span>
             </div>
           </div>

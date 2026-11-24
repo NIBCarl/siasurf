@@ -49,17 +49,23 @@ class EarningsLedgerService
             return null;
         }
 
-        // 1. Digital (GCash / PayMaya) completed lesson: SISA holds the money
-        // and owes the instructor 100% of the lesson price.
+        // 1. Digital (GCash / PayMaya) paid lesson (confirmed, in progress, or completed):
+        // SISA holds the money and credits the instructor's ledger immediately upon payment.
         if (
             $payment->payment_method->isDigital()
-            && $booking->status === BookingStatus::Completed
             && $booking->payment_status === PaymentStatus::Completed
+            && in_array($booking->status, [
+                BookingStatus::Confirmed,
+                BookingStatus::InProgress,
+                BookingStatus::Completed,
+            ], true)
         ) {
-            $anchor = $booking->completed_at ?? $payment->paid_at ?? $booking->date ?? $booking->created_at ?? now();
+            $anchor = $booking->status === BookingStatus::Completed
+                ? ($booking->completed_at ?? $booking->date ?? $payment->paid_at ?? $booking->created_at ?? now())
+                : ($booking->date ?? $payment->paid_at ?? $booking->created_at ?? now());
 
             return [
-                'entry_type' => 'gcash_completed',
+                'entry_type' => $booking->status === BookingStatus::Completed ? 'gcash_completed' : 'gcash_booked',
                 'ledger_date' => $anchor->copy()->timezone($tz)->toDateString(),
                 'is_gcash' => true,
                 'is_cash' => false,
@@ -77,7 +83,7 @@ class EarningsLedgerService
             && in_array($booking->status, [BookingStatus::Cancelled, BookingStatus::NoShow], true)
             && (float) ($booking->instructor_retained_amount ?? 0) > 0
         ) {
-            $anchor = $booking->cancelled_at ?? $booking->attendance_marked_at ?? $booking->updated_at ?? $booking->date ?? now();
+            $anchor = $booking->date ?? $booking->cancelled_at ?? $booking->attendance_marked_at ?? $booking->updated_at ?? now();
 
             return [
                 'entry_type' => 'gcash_retained',
@@ -303,6 +309,7 @@ class EarningsLedgerService
             User::query()->whereKey($instructor->id)->lockForUpdate()->firstOrFail();
 
             $query = InstructorDailyLedger::query()
+                ->with('bookings:id,daily_ledger_id,status')
                 ->where('instructor_id', $instructor->id)
                 ->whereNull('payout_id')
                 ->orderBy('ledger_date')
@@ -317,10 +324,26 @@ class EarningsLedgerService
                 $query->whereDate('ledger_date', '<=', (string) $attributes['period_end']);
             }
 
-            $ledgers = $query->get();
+            $candidateLedgers = $query->get();
 
-            if ($ledgers->isEmpty()) {
+            if ($candidateLedgers->isEmpty()) {
                 throw new \DomainException('There are no unsettled daily ledger entries to settle for this instructor.');
+            }
+
+            if (! empty($ledgerIds)) {
+                if ($candidateLedgers->contains(fn (InstructorDailyLedger $row) => $row->hasUnfinishedSessions())) {
+                    throw new \DomainException('Cannot record settlement while one or more sessions on the selected ledger day(s) are not yet completed.');
+                }
+
+                $ledgers = $candidateLedgers;
+            } else {
+                $ledgers = $candidateLedgers
+                    ->filter(fn (InstructorDailyLedger $row) => ! $row->hasUnfinishedSessions())
+                    ->values();
+
+                if ($ledgers->isEmpty()) {
+                    throw new \DomainException('Cannot record settlement yet because the booked session(s) have not been completed.');
+                }
             }
 
             $gcashSettled = round((float) $ledgers->sum(fn (InstructorDailyLedger $row) => (float) $row->gcash_earnings), 2);
@@ -401,11 +424,14 @@ class EarningsLedgerService
         $monthStart = $today->copy()->startOfMonth()->toDateString();
 
         $allLedgers = InstructorDailyLedger::query()
+            ->with('bookings:id,daily_ledger_id,status')
             ->where('instructor_id', $instructor->id)
             ->orderBy('ledger_date')
             ->get();
 
         $unsettled = $allLedgers->whereNull('payout_id');
+        $settleable = $unsettled->filter(fn (InstructorDailyLedger $r) => $r->canBeSettled());
+        $pendingSessions = $unsettled->filter(fn (InstructorDailyLedger $r) => $r->hasUnfinishedSessions());
         $settledPayouts = InstructorPayout::query()
             ->where('instructor_id', $instructor->id)
             ->get();
@@ -414,6 +440,10 @@ class EarningsLedgerService
         $unsettledCashEarnings = round((float) $unsettled->sum(fn (InstructorDailyLedger $r) => (float) $r->cash_earnings), 2);
         $unsettledCashFees = round((float) $unsettled->sum(fn (InstructorDailyLedger $r) => (float) $r->cash_service_fees_owed), 2);
         $netPayable = round($unsettledGcash - $unsettledCashFees, 2);
+
+        $settleableGcash = round((float) $settleable->sum(fn (InstructorDailyLedger $r) => (float) $r->gcash_earnings), 2);
+        $settleableCashFees = round((float) $settleable->sum(fn (InstructorDailyLedger $r) => (float) $r->cash_service_fees_owed), 2);
+        $settleableNetPayable = round($settleableGcash - $settleableCashFees, 2);
 
         $cashFeeRows = $unsettled->filter(fn (InstructorDailyLedger $r) => (float) $r->cash_service_fees_owed > 0 && $r->remittance_due_date !== null);
         $earliestDueRow = $cashFeeRows->sortBy('remittance_due_date')->first();
@@ -448,10 +478,16 @@ class EarningsLedgerService
 
         return [
             'unsettled_days_count' => $unsettled->count(),
+            'settleable_days_count' => $settleable->count(),
+            'pending_session_days_count' => $pendingSessions->count(),
+            'can_settle_now' => $settleable->isNotEmpty(),
             'unsettled_gcash_earnings' => $unsettledGcash,
             'unsettled_cash_earnings' => $unsettledCashEarnings,
             'unsettled_cash_fees_owed' => $unsettledCashFees,
             'net_payable' => $netPayable,
+            'settleable_gcash_earnings' => $settleableGcash,
+            'settleable_cash_fees_owed' => $settleableCashFees,
+            'settleable_net_payable' => $settleableNetPayable,
             'settlement_direction' => $direction,
             'earliest_remittance_due_date' => $earliestDueDate,
             'days_until_remittance_due' => $daysUntilDue,
@@ -520,8 +556,12 @@ class EarningsLedgerService
             ->whereHas('payment')
             ->when($instructorId !== null, fn ($q) => $q->where('instructor_id', $instructorId))
             ->where(function ($q) {
-                $q->where(function ($completed) {
-                    $completed->where('status', BookingStatus::Completed->value)
+                $q->where(function ($paidOrCompleted) {
+                    $paidOrCompleted->whereIn('status', [
+                        BookingStatus::Confirmed->value,
+                        BookingStatus::InProgress->value,
+                        BookingStatus::Completed->value,
+                    ])
                         ->whereIn('payment_status', [PaymentStatus::Completed->value, PaymentStatus::Underpaid->value]);
                 })->orWhere(function ($retained) {
                     $retained->whereIn('status', [BookingStatus::Cancelled->value, BookingStatus::NoShow->value])

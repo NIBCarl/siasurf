@@ -292,6 +292,7 @@ class PayMongoPaymentService implements PaymentServiceInterface
             $eventService = app(BookingEventService::class);
             $eventService->recordPaymentCompleted($booking, $payment->fresh(), $booking->student_id);
             $eventService->recordConfirmed($booking, $booking->student_id, 'GCash');
+            app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
         } else {
             $payment->update([
                 'status' => PaymentStatus::Failed,
@@ -351,6 +352,8 @@ class PayMongoPaymentService implements PaymentServiceInterface
         if (! $booking) {
             return;
         }
+
+        app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
 
         // Phase 11 - broadcast so the student's booking page and the admin
         // dashboard update without a refresh.

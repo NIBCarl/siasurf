@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BookingStatus;
 use App\Enums\LedgerSettlementStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -53,6 +54,8 @@ class InstructorDailyLedger extends Model
         'effective_status_label',
         'is_overdue',
         'days_until_remittance_due',
+        'has_unfinished_sessions',
+        'can_be_settled',
     ];
 
     public function instructor(): BelongsTo
@@ -73,6 +76,30 @@ class InstructorDailyLedger extends Model
     public function isSettled(): bool
     {
         return $this->payout_id !== null;
+    }
+
+    public function hasUnfinishedSessions(): bool
+    {
+        if ($this->relationLoaded('bookings')) {
+            return $this->bookings->contains(
+                fn (Booking $booking) => in_array($booking->status, [
+                    BookingStatus::Confirmed,
+                    BookingStatus::InProgress,
+                ], true)
+            );
+        }
+
+        return $this->bookings()
+            ->whereIn('status', [
+                BookingStatus::Confirmed->value,
+                BookingStatus::InProgress->value,
+            ])
+            ->exists();
+    }
+
+    public function canBeSettled(): bool
+    {
+        return ! $this->isSettled() && ! $this->hasUnfinishedSessions();
     }
 
     public function isOverdue(): bool
@@ -131,6 +158,16 @@ class InstructorDailyLedger extends Model
     public function getDaysUntilRemittanceDueAttribute(): ?int
     {
         return $this->daysUntilRemittanceDue();
+    }
+
+    public function getHasUnfinishedSessionsAttribute(): bool
+    {
+        return $this->hasUnfinishedSessions();
+    }
+
+    public function getCanBeSettledAttribute(): bool
+    {
+        return $this->canBeSettled();
     }
 
     public function scopeUnsettled($query)

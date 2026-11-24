@@ -11,6 +11,7 @@ import { formatPhilippineDate } from '@/utils/philippineTime'
 interface BookingLine {
   id: number
   date: string
+  status?: string
   ledger_entry_type: string | null
   lesson_price: number
   service_fee_amount: number
@@ -41,6 +42,8 @@ interface DailyLedgerRow {
   effective_status: 'unsettled' | 'overdue' | 'settled'
   effective_status_label: string
   is_overdue: boolean
+  has_unfinished_sessions?: boolean
+  can_be_settled?: boolean
   payout?: {
     id: number
     reference_code: string
@@ -101,10 +104,19 @@ const props = defineProps<{
   remittanceDays: number
 }>()
 
-const selectedIds = ref<number[]>(props.unsettledLedgers.map((row) => row.id))
+const settleableLedgers = computed(() =>
+  props.unsettledLedgers.filter((row) => row.can_be_settled !== false),
+)
+
+const selectedIds = ref<number[]>(
+  props.unsettledLedgers.filter((row) => row.can_be_settled !== false).map((row) => row.id),
+)
 const showSettleModal = ref(false)
 
 const toggleDay = (id: number) => {
+  const row = props.unsettledLedgers.find((item) => item.id === id)
+  if (!row || row.can_be_settled === false) return
+
   const idx = selectedIds.value.indexOf(id)
   if (idx === -1) {
     selectedIds.value.push(id)
@@ -114,7 +126,7 @@ const toggleDay = (id: number) => {
 }
 
 const selectAllOpen = () => {
-  selectedIds.value = props.unsettledLedgers.map((row) => row.id)
+  selectedIds.value = settleableLedgers.value.map((row) => row.id)
 }
 
 const selectedRows = computed(() =>
@@ -212,7 +224,8 @@ const statusVariant = (status: string) => {
             :disabled="selectedIds.length === 0"
             @click="openSettle"
           >
-            Record In-Person Settlement ({{ selectedIds.length }} day{{ selectedIds.length === 1 ? '' : 's' }})
+            <template v-if="settleableLedgers.length === 0">Awaiting Session Completion</template>
+            <template v-else>Record In-Person Settlement ({{ selectedIds.length }} day{{ selectedIds.length === 1 ? '' : 's' }})</template>
           </BaseButton>
         </div>
       </div>
@@ -258,26 +271,43 @@ const statusVariant = (status: string) => {
               <strong :class="selectedNetPayable < 0 ? 'text-rose-600' : 'text-slate-900'">{{ money(selectedNetPayable) }}</strong>
             </p>
           </div>
-          <BaseButton size="sm" variant="secondary" @click="selectAllOpen">Select All Open</BaseButton>
+          <BaseButton
+            size="sm"
+            variant="secondary"
+            :disabled="settleableLedgers.length === 0"
+            @click="selectAllOpen"
+          >
+            Select All Open
+          </BaseButton>
         </div>
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <label
             v-for="row in unsettledLedgers"
             :key="row.id"
-            class="flex items-start gap-3 rounded-2xl border p-4 cursor-pointer transition-colors"
-            :class="selectedIds.includes(row.id) ? 'border-ocean-500 bg-ocean-50/40' : 'border-slate-200 hover:bg-slate-50'"
+            class="flex items-start gap-3 rounded-2xl border p-4 transition-colors"
+            :class="[
+              row.can_be_settled === false
+                ? 'border-slate-200 bg-slate-50 opacity-75 cursor-not-allowed'
+                : selectedIds.includes(row.id)
+                  ? 'border-ocean-500 bg-ocean-50/40 cursor-pointer'
+                  : 'border-slate-200 hover:bg-slate-50 cursor-pointer',
+            ]"
           >
             <input
               type="checkbox"
               :checked="selectedIds.includes(row.id)"
+              :disabled="row.can_be_settled === false"
               @change="toggleDay(row.id)"
-              class="mt-1 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500"
+              class="mt-1 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500 disabled:opacity-50"
             />
             <div class="min-w-0 flex-1 text-sm">
-              <div class="flex items-center justify-between gap-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="font-bold text-slate-900">{{ formatDate(row.ledger_date) }}</span>
-                <Badge :variant="statusVariant(row.effective_status)" size="sm">{{ row.effective_status_label }}</Badge>
+                <div class="flex items-center gap-1">
+                  <Badge v-if="row.has_unfinished_sessions" variant="info" size="sm">Session Not Over</Badge>
+                  <Badge :variant="statusVariant(row.effective_status)" size="sm">{{ row.effective_status_label }}</Badge>
+                </div>
               </div>
               <p class="text-xs text-slate-500 mt-1">
                 GCash: <strong class="text-emerald-700">{{ money(row.gcash_earnings) }}</strong> ·
@@ -285,6 +315,9 @@ const statusVariant = (status: string) => {
               </p>
               <p class="text-xs font-bold mt-1" :class="Number(row.net_payable) < 0 ? 'text-rose-600' : 'text-slate-900'">
                 Net: {{ money(row.net_payable) }}
+              </p>
+              <p v-if="row.can_be_settled === false" class="text-[11px] text-slate-500 mt-1">
+                Complete all sessions on this day before settling.
               </p>
             </div>
           </label>
@@ -320,7 +353,12 @@ const statusVariant = (status: string) => {
                   <p class="font-bold text-slate-900">{{ formatDate(row.ledger_date) }}</p>
                   <p class="text-xs text-slate-500">{{ row.completed_bookings_count }} ({{ row.gcash_bookings_count }} GCash, {{ row.cash_bookings_count }} Cash)</p>
                 </div>
-                <Badge :variant="statusVariant(row.effective_status)" size="sm" class="shrink-0">{{ row.effective_status_label }}</Badge>
+                <div class="flex flex-col items-end gap-1 shrink-0">
+                  <Badge :variant="statusVariant(row.effective_status)" size="sm">{{ row.effective_status_label }}</Badge>
+                  <span v-if="row.has_unfinished_sessions && row.effective_status !== 'settled'" class="text-[11px] font-medium text-slate-500">
+                    Session pending
+                  </span>
+                </div>
               </div>
               <div class="grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-3 text-xs">
                 <div>
@@ -380,6 +418,9 @@ const statusVariant = (status: string) => {
                   </td>
                   <td class="px-5 py-4">
                     <Badge :variant="statusVariant(row.effective_status)" size="sm">{{ row.effective_status_label }}</Badge>
+                    <p v-if="row.has_unfinished_sessions && row.effective_status !== 'settled'" class="text-[11px] text-slate-500 mt-1">
+                      Session pending
+                    </p>
                     <p v-if="row.payout" class="font-mono text-[11px] text-slate-400 mt-1">{{ row.payout.reference_code }}</p>
                   </td>
                 </tr>

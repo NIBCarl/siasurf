@@ -560,6 +560,8 @@ class BookingChangeService
         // FR 1.8.3 - old slot is freed, new slot is locked.
         $this->availabilityService->moveBookingSlot($booking, $oldDate, $oldPeriod);
 
+        app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
+
         ($this->bookingEventService ?? app(BookingEventService::class))
             ->recordRescheduled(
                 $booking,
