@@ -11,6 +11,8 @@ export interface AppNotification {
     data?: any
     timestamp: Date
     read: boolean
+    /** Server-resolved destination for this recipient's role. */
+    url?: string | null
     /** Present for notifications that exist in the database. */
     serverId?: string
 }
@@ -118,6 +120,18 @@ export function useNotifications() {
         }
     }
 
+    /**
+     * Mark read, then open the page the notification is about. The destination
+     * comes from the server, so it always matches the recipient's role.
+     */
+    const openNotification = (notification: AppNotification) => {
+        markAsRead(notification.id)
+
+        if (notification.url) {
+            router.visit(notification.url)
+        }
+    }
+
     const markAllAsRead = () => {
         const previouslyUnread = notifications.value.filter((n) => !n.read)
         notifications.value.forEach((n) => (n.read = true))
@@ -172,6 +186,7 @@ export function useNotifications() {
                 title: TITLE_BY_TYPE[item.type] ?? 'Notification',
                 message: item.message ?? 'You have a new update.',
                 data: item.data,
+                url: item.url ?? null,
                 timestamp: new Date(item.created_at ?? Date.now()),
                 read: Boolean(item.read),
             }))
@@ -183,16 +198,29 @@ export function useNotifications() {
     }
 
     /**
-     * Map a broadcast payload onto what the dropdown renders. Every SiaSurf
-     * event carries a `message`; some also send a machine-readable `type`.
+     * Broadcasts are only a nudge: the persisted row is written server-side, so
+     * reload the feed instead of trusting the payload. That keeps read state,
+     * dedup and multi-tab views consistent, and a reconnecting client cannot
+     * lose an event.
      */
-    const toNotification = (event: any, fallbackTitle: string, fallbackType: AppNotification['type']) => {
-        addNotification({
-            title: event?.title ?? fallbackTitle,
-            message: event?.message ?? 'You have a new update.',
-            type: (event?.type as AppNotification['type']) ?? fallbackType,
-            data: event,
-        })
+    let pendingRefresh: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = () => {
+        if (pendingRefresh) return
+
+        pendingRefresh = setTimeout(() => {
+            pendingRefresh = null
+            void loadNotifications()
+        }, 400)
+    }
+
+    /**
+     * Every listener funnels here. The payload is intentionally ignored: the
+     * persisted row is written server-side, so we reload the feed instead of
+     * trusting the broadcast. That keeps read state, dedup and multi-tab views
+     * consistent, and a reconnecting client cannot lose an event.
+     */
+    const toNotification = (_event?: unknown, _title?: string, _type?: string) => {
+        scheduleRefresh()
     }
 
     // A chat message should refresh the shared `nav.chatUnread` value even when
@@ -343,6 +371,7 @@ export function useNotifications() {
         unreadCount,
         addNotification,
         loadNotifications,
+        openNotification,
         markAsRead,
         markAllAsRead,
         removeNotification,

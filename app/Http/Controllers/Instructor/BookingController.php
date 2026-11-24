@@ -15,6 +15,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\SurfSpot;
 use App\Notifications\BookingDeclinedNotification;
+use App\Notifications\SessionAttendanceNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
 use App\Services\BookingChangeService;
@@ -701,10 +702,16 @@ class BookingController extends Controller
             }
 
             DB::afterCommit(function () use ($locked, $status) {
-                broadcast(new SessionAttendanceMarked(
-                    $locked->fresh(['student', 'instructor']),
-                    $status
-                ))->toOthers();
+                $fresh = $locked->fresh(['student', 'instructor']);
+
+                if (! $fresh) {
+                    return;
+                }
+
+                broadcast(new SessionAttendanceMarked($fresh, $status))->toOthers();
+
+                $fresh->student?->notify(new SessionAttendanceNotification($fresh, $status));
+                $fresh->instructor?->notify(new SessionAttendanceNotification($fresh, $status));
             });
 
             return null;

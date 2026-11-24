@@ -17,6 +17,7 @@ use App\Models\Booking;
 use App\Models\BookingParticipant;
 use App\Models\SurfSpot;
 use App\Models\User;
+use App\Notifications\BookingRequestedNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
 use App\Services\BookingCancellationService;
@@ -787,6 +788,10 @@ class BookingController extends Controller
                     }
 
                     broadcast(new BookingCreated($fresh))->toOthers();
+
+                    // The broadcast is a live nudge only; the persisted row is
+                    // what the instructor's bell actually reads.
+                    $fresh->instructor?->notify(new BookingRequestedNotification($fresh));
 
                     // FR 1.9.3 - auto-release the request if the instructor stays silent.
                     ExpireBookingAcceptanceJob::dispatch($fresh)

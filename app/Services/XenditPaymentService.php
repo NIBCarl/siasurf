@@ -402,6 +402,8 @@ class XenditPaymentService implements PaymentServiceInterface
         try {
             if ($booking->payment) {
                 broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
+
+                $booking->student?->notify(new \App\Notifications\PaymentReceivedNotification($booking->payment->fresh()));
             }
         } catch (\Throwable $exception) {
             Log::warning('Failed to broadcast Xendit payment received.', [

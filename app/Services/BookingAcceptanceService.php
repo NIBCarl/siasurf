@@ -12,6 +12,8 @@ use App\Jobs\ExpirePaymentWindowJob;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
+use App\Notifications\BookingAwaitingPaymentNotification;
+use App\Notifications\BookingConfirmedNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -139,6 +141,8 @@ class BookingAcceptanceService
 
         broadcast(new BookingAwaitingPayment($booking))->toOthers();
 
+        $booking->student?->notify(new BookingAwaitingPaymentNotification($booking));
+
         // The lock releases on its own, clamped to the lesson start.
         ExpirePaymentWindowJob::dispatch($booking)
             ->delay($deadline);
@@ -156,6 +160,9 @@ class BookingAcceptanceService
         $booking->refresh()->load(['instructor', 'student', 'surfSpot']);
 
         broadcast(new BookingConfirmed($booking))->toOthers();
+
+        $booking->student?->notify(new BookingConfirmedNotification($booking));
+        $booking->instructor?->notify(new BookingConfirmedNotification($booking));
 
         return $booking;
     }

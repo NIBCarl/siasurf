@@ -19,6 +19,7 @@ use App\Models\BookingChangeRequest;
 use App\Models\SurfSpot;
 use App\Models\User;
 use App\Notifications\BookingChangeRequestedNotification;
+use App\Notifications\BookingChangeResolvedNotification;
 use App\Notifications\BookingRescheduledNotification;
 use App\Notifications\BookingSpotChangedNotification;
 use Carbon\Carbon;
@@ -133,6 +134,8 @@ class BookingChangeService
             $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
         ))->toOthers();
 
+        $this->notifyParties($changeRequest);
+
         return $changeRequest;
     }
 
@@ -222,6 +225,8 @@ class BookingChangeService
                 broadcast(new BookingChangeResolved(
                     $lockedRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
                 ))->toOthers();
+
+                $this->notifyParties($lockedRequest);
             });
 
             return $lockedRequest->fresh();
@@ -243,6 +248,8 @@ class BookingChangeService
             broadcast(new BookingChangeResolved(
                 $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
             ))->toOthers();
+
+            $this->notifyParties($changeRequest);
 
             return $changeRequest;
         });
@@ -268,8 +275,26 @@ class BookingChangeService
                 $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
             ))->toOthers();
 
+            $this->notifyParties($changeRequest);
+
             return $changeRequest;
         });
+    }
+
+    /**
+     * Persist the outcome for both parties. The broadcast above is the live
+     * nudge; this is what the bell can still show after a page reload.
+     */
+    private function notifyParties(BookingChangeRequest $changeRequest): void
+    {
+        $fresh = $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy']);
+
+        if (! $fresh) {
+            return;
+        }
+
+        $fresh->booking?->student?->notify(new BookingChangeResolvedNotification($fresh));
+        $fresh->booking?->instructor?->notify(new BookingChangeResolvedNotification($fresh));
     }
 
     /**
