@@ -16,6 +16,7 @@ interface Instructor {
   phone: string
   instructor_profile: {
     bio: string
+    birthday?: string | null
     level: number
     offered_services?: string[] | null
     status: string
@@ -49,12 +50,19 @@ const allowedForLevel = (level: number): string[] => {
   return ['teaching']
 }
 
+const maxBirthday = computed(() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 18)
+  return d.toISOString().split('T')[0]
+})
+
 const initialLevel = Number(props.instructor.instructor_profile.level)
 
 const form = useForm({
   name: props.instructor.name,
   email: props.instructor.email,
   phone: props.instructor.phone || '',
+  birthday: props.instructor.instructor_profile.birthday || '',
   bio: props.instructor.instructor_profile.bio || '',
   level: initialLevel,
   offered_services: (
@@ -230,6 +238,12 @@ const submit = () => {
             </div>
 
             <div>
+               <InputLabel value="Date of Birth (for SISA ID)" class="mb-2" />
+               <TextInput v-model="form.birthday" type="date" :max="maxBirthday" class="w-full" />
+               <InputError :message="form.errors.birthday" />
+            </div>
+
+            <div class="md:col-span-2">
                <InputLabel value="Operational Status" class="mb-2" />
                <select v-model="form.status" class="w-full border-slate-100 rounded-2xl focus:ring-ocean-500 focus:border-ocean-500 font-bold">
                   <option value="active">Active (Verified)</option>

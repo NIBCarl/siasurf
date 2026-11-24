@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\InstructorVerificationService;
+use App\Services\SisaIdCardService;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -12,8 +13,11 @@ class InstructorVerificationController extends Controller
     /**
      * Live verification page opened by scanning an instructor's beach QR.
      */
-    public function show(User $instructor, InstructorVerificationService $verification): Response
-    {
+    public function show(
+        User $instructor,
+        InstructorVerificationService $verification,
+        SisaIdCardService $idCardService
+    ): Response {
         abort_unless($instructor->isInstructor(), 404);
 
         $instructor->load(['instructorProfile']);
@@ -35,6 +39,7 @@ class InstructorVerificationController extends Controller
                 'id' => $instructor->id,
                 'name' => $instructor->name,
                 'avatar_path' => $instructor->avatar_path,
+                'avatar_url' => $instructor->avatar_url,
                 'bio' => $profile?->bio,
                 'level' => $profile?->level?->value,
                 'level_label' => $profile?->level?->shortLabel(),
@@ -43,6 +48,7 @@ class InstructorVerificationController extends Controller
                 'reviews_count' => $reviewsCount,
             ],
             'verification' => $summary,
+            'idCard' => $idCardService->build($instructor),
             'recentReviews' => $reviews->map(fn ($review) => [
                 'id' => $review->id,
                 'rating' => $review->rating,

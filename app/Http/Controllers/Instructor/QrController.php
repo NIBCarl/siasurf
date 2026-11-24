@@ -6,6 +6,7 @@ use App\Enums\InstructorStatus;
 use App\Http\Controllers\Controller;
 use App\Services\InstructorVerificationService;
 use App\Services\QRCodeService;
+use App\Services\SisaIdCardService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -19,7 +20,8 @@ class QrController extends Controller
     public function show(
         Request $request,
         QRCodeService $qrCodes,
-        InstructorVerificationService $verification
+        InstructorVerificationService $verification,
+        SisaIdCardService $idCardService
     ): Response {
         $user = $request->user();
         $profile = $user->instructorProfile;
@@ -40,6 +42,7 @@ class QrController extends Controller
             'instructor' => [
                 'id' => $user->id,
                 'name' => $user->name,
+                'avatar_url' => $user->avatar_url,
             ],
             'profile' => [
                 'status' => $profile->status->value,
@@ -47,8 +50,10 @@ class QrController extends Controller
                 'level' => $profile->level->value,
                 'level_label' => $profile->level->shortLabel(),
                 'rate_per_hour' => $profile->startingRate(),
+                'birthday' => $profile->birthday?->format('Y-m-d'),
             ],
             'verification' => $summary,
+            'idCard' => $idCardService->build($user),
             'qrReady' => $qrReady,
             'qrImageUrl' => $qrReady ? route('qr.image', $user->id) : null,
             'qrDownloadUrl' => $qrReady ? route('qr.download', $user->id) : null,

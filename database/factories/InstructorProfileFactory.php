@@ -23,6 +23,7 @@ class InstructorProfileFactory extends Factory
         return [
             'user_id' => User::factory()->instructor(),
             'bio' => fake()->paragraph(),
+            'birthday' => fake()->dateTimeBetween('-45 years', '-18 years')->format('Y-m-d'),
             'level' => $level,
             'status' => InstructorStatus::Active->value,
             'rate_per_hour' => $rates[$level],

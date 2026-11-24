@@ -275,6 +275,7 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
         return Inertia::render('Instructor/Onboarding', [
             'profile' => $profile ? [
                 'bio' => $profile->bio,
+                'birthday' => $profile->birthday?->format('Y-m-d'),
                 'level' => $profile->level->value,
                 'offered_services' => $profile->offeredServiceValues(),
                 'rate_per_hour' => $profile->rate_per_hour !== null ? (float) $profile->rate_per_hour : null,

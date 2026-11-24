@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head, Link, usePage } from '@inertiajs/vue3'
-import ApplicationLogo from '@/Components/ApplicationLogo.vue'
-import { resolveAvatarUrl } from '@/utils/avatar'
+import AppButton from '@/Components/UI/AppButton.vue'
+import AppCard from '@/Components/UI/AppCard.vue'
+import SectionHeader from '@/Components/UI/SectionHeader.vue'
+import StatusPill from '@/Components/UI/StatusPill.vue'
+import SisaIdPassStage from '@/Components/Instructor/SisaIdPassStage.vue'
+import { type SisaIdCardData } from '@/Components/Instructor/SisaIdCard.vue'
 import { formatPhilippineDateTime } from '@/utils/philippineTime'
 import {
-  CheckBadgeIcon,
+  ArrowRightIcon,
   ClockIcon,
   ExclamationTriangleIcon,
   ShieldCheckIcon,
   ShieldExclamationIcon,
-  StarIcon,
+  UserIcon,
 } from '@heroicons/vue/24/outline'
 
 interface Certification {
@@ -49,6 +53,7 @@ interface Instructor {
 interface Props {
   instructor: Instructor
   verification: Verification
+  idCard: SisaIdCardData
   recentReviews: Array<{
     id: number
     rating: number | null
@@ -60,23 +65,81 @@ interface Props {
 const props = defineProps<Props>()
 
 const page = usePage()
-const isAuthenticated = computed(() => Boolean((page.props.auth as any)?.user))
+const authUser = computed(() => (page.props.auth as any)?.user ?? null)
+const isAuthenticated = computed(() => Boolean(authUser.value))
+const isStudent = computed(() => authUser.value?.role === 'student')
+const canStudentBook = computed(() => !isAuthenticated.value || isStudent.value)
 
-const statusIcon = computed(() => {
-  if (props.verification.status === 'verified') return ShieldCheckIcon
-  if (props.verification.status === 'suspended') return ShieldExclamationIcon
-  if (props.verification.status === 'pending') return ClockIcon
-  return ExclamationTriangleIcon
+const statusVariant = computed<'verified' | 'critical' | 'pending' | 'neutral'>(() => {
+  if (props.verification.status === 'verified') return 'verified'
+  if (props.verification.status === 'suspended' || props.verification.status === 'rejected') return 'critical'
+  if (props.verification.status === 'pending') return 'pending'
+  return 'neutral'
 })
 
-const statusPanelClass = computed(() => {
+function formatCardDate(raw: string): string {
+  const match = raw.trim().match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/)
+  if (!match) return raw
+  const [, day, month, year] = match
+  const capitalized = month.charAt(0).toUpperCase() + month.slice(1).toLowerCase()
+  return `${day} ${capitalized} ${year}`
+}
+
+const levelMeta = computed(() => {
+  const lvl = Number(props.idCard.level ?? props.instructor.level ?? 1)
+  if (lvl === 2) {
+    return {
+      subtitle: 'Authorized for Beginner & Intermediate Zones',
+      ratio: 'Up to 2 Intermediate / 1 Beginner',
+    }
+  }
+  if (lvl >= 3) {
+    return {
+      subtitle: 'Authorized for All Siargao Surf Zones',
+      ratio: 'Up to 3 Same-Level Students',
+    }
+  }
+  return {
+    subtitle: 'Authorized for Beginner Safe Zones',
+    ratio: '1 Student / Session',
+  }
+})
+
+const standingMeta = computed(() => {
   if (props.verification.status === 'verified') {
-    return 'bg-emerald-700 text-white'
+    return {
+      icon: ShieldCheckIcon,
+      iconWrapClass: 'bg-emerald-50 text-emerald-700',
+      standingText: 'Authorised to Teach',
+      standingClass: 'text-emerald-700',
+      alertClasses: '',
+    }
   }
-  if (props.verification.status === 'suspended') {
-    return 'bg-rose-700 text-white'
+  if (props.verification.status === 'suspended' || props.verification.status === 'rejected') {
+    return {
+      icon: ShieldExclamationIcon,
+      iconWrapClass: 'bg-rose-50 text-rose-700',
+      standingText: `${props.verification.label} · Not Authorised`,
+      standingClass: 'text-rose-700',
+      alertClasses: 'border-rose-200 bg-rose-50 text-rose-900',
+    }
   }
-  return 'bg-amber-600 text-white'
+  if (props.verification.status === 'pending') {
+    return {
+      icon: ClockIcon,
+      iconWrapClass: 'bg-amber-50 text-amber-700',
+      standingText: 'Pending SISA Approval',
+      standingClass: 'text-amber-700',
+      alertClasses: 'border-amber-200 bg-amber-50 text-amber-900',
+    }
+  }
+  return {
+    icon: ExclamationTriangleIcon,
+    iconWrapClass: 'bg-amber-50 text-amber-700',
+    standingText: `${props.verification.label} · Not Authorised`,
+    standingClass: 'text-amber-700',
+    alertClasses: 'border-amber-200 bg-amber-50 text-amber-900',
+  }
 })
 
 const checkedAt = computed(() =>
@@ -90,176 +153,262 @@ const checkedAt = computed(() =>
   ),
 )
 
-const initials = computed(() =>
-  props.instructor.name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join(''),
-)
+const suspendedUntilLabel = computed(() => {
+  if (!props.verification.suspended_until) return null
+  return formatPhilippineDateTime(
+    props.verification.suspended_until,
+    {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    },
+    'en-PH',
+  )
+})
 
-const avatarUrl = computed(() => resolveAvatarUrl(props.instructor))
-
-const formatMoney = (value: number) =>
-  new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    maximumFractionDigits: 0,
-  }).format(value)
-
-const bookLabel = computed(() => (isAuthenticated.value ? 'Book Lesson Now' : 'Book Lesson (Sign in)'))
+const bookLabel = computed(() => (isAuthenticated.value ? 'Book Lesson' : 'Sign in to Book'))
 </script>
 
 <template>
   <Head :title="`Verify ${instructor.name} · SiaSurf`" />
 
-  <div class="min-h-screen bg-sand-50 px-4 py-8 text-deep-950 sm:px-6">
-    <main class="mx-auto w-full max-w-lg">
-      <div class="mb-5 flex items-center justify-between">
-        <Link href="/" class="inline-flex items-center">
-          <ApplicationLogo variant="horizontal" class="h-8 w-auto" />
-        </Link>
-        <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800 shadow-sm">
-          <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-600" aria-hidden="true"></span>
-          Live SISA check
-        </span>
-      </div>
-
-      <section class="overflow-hidden rounded-[2rem] border border-sand-200 bg-white shadow-lift">
-        <div :class="['flex items-start gap-3 px-6 py-5', statusPanelClass]">
-          <component :is="statusIcon" class="mt-0.5 h-6 w-6 shrink-0" aria-hidden="true" />
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <p class="text-sm font-black uppercase tracking-[0.12em]">{{ verification.label }}</p>
-              <span class="rounded-full bg-white/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white">
-                {{ verification.status === 'verified' ? 'Authorised' : 'Not authorised' }}
-              </span>
-            </div>
-            <p class="mt-1.5 text-sm leading-relaxed text-white/95">{{ verification.message }}</p>
-          </div>
+  <div class="flex min-h-[100dvh] flex-col bg-sand-50 text-deep-900">
+    <!-- Minimal Sticky Public Top Bar -->
+    <header class="scan-top-bar sticky top-0 z-20 border-b border-sand-200 bg-white/95 backdrop-blur">
+      <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div class="flex min-w-0 items-center gap-3">
+          <Link href="/" class="shrink-0 text-sm font-extrabold tracking-tight text-deep-950 hover:text-lagoon-700">
+            SIASURF
+          </Link>
+          <span class="hidden h-4 w-px bg-sand-300 sm:inline-block" aria-hidden="true"></span>
+          <span class="hidden text-xs font-medium text-stone-500 sm:inline">Official Beach QR Verification</span>
+          <span class="hidden rounded-control bg-sand-100 px-2.5 py-1 font-mono text-xs font-semibold text-stone-700 md:inline">
+            {{ idCard.sisa_id_code }}
+          </span>
         </div>
 
-        <div class="p-6 sm:p-8">
-          <div class="flex flex-col items-center text-center">
-            <div class="relative">
-              <img
-                v-if="avatarUrl"
-                :src="avatarUrl"
-                :alt="instructor.name"
-                class="h-28 w-28 rounded-[2rem] object-cover ring-4 ring-sand-100 shadow-card"
-              />
+        <StatusPill :variant="statusVariant">{{ verification.label }}</StatusPill>
+      </div>
+    </header>
+
+    <!-- Main 12-Column Responsive Stage -->
+    <main class="scan-main mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-8 lg:pb-10">
+      <div class="grid gap-6 lg:grid-cols-12 lg:items-start">
+        <!-- Left Hero: Interactive 3D ID Pass -->
+        <section class="lg:col-span-7">
+          <SectionHeader eyebrow="Official SISA ID" title="Interactive 3D ID pass" />
+
+          <SisaIdPassStage
+            class="mt-4"
+            :card="idCard"
+            :level="instructor.level"
+            :level-label="idCard.level_label || instructor.level_label"
+            :verification-status="verification.status"
+            :verification-label="verification.label"
+            card-width="clamp(220px, min(74vw, 330px), 330px)"
+          >
+            <template #footer>
+              <StatusPill :variant="statusVariant">{{ verification.label }}</StatusPill>
+              <p class="rounded-control bg-black/30 px-3 py-1.5 text-label text-white/80">
+                Live SISA check · {{ checkedAt }}
+              </p>
+            </template>
+          </SisaIdPassStage>
+        </section>
+
+        <!-- Right Column: Live Verification, Credential Details & Certifications -->
+        <section class="space-y-4 lg:col-span-5">
+          <SectionHeader eyebrow="Live record" title="Instructor verification" />
+
+          <!-- Card 1: Live Verification & Desktop Actions -->
+          <AppCard padding="md" class="mt-4">
+            <div class="flex items-start gap-3">
               <span
-                v-else
-                class="flex h-28 w-28 items-center justify-center rounded-[2rem] bg-deep-900 text-3xl font-black text-lagoon-300 ring-4 ring-sand-100 shadow-card"
-                aria-hidden="true"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+                :class="standingMeta.iconWrapClass"
               >
-                {{ initials }}
+                <component :is="standingMeta.icon" class="h-5 w-5" aria-hidden="true" />
               </span>
-              <span
-                class="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl ring-4 ring-white"
-                :class="verification.is_verified ? 'bg-emerald-600' : 'bg-rose-600'"
-                aria-hidden="true"
-              >
-                <CheckBadgeIcon v-if="verification.is_verified" class="h-5 w-5 text-white" />
-                <ExclamationTriangleIcon v-else class="h-5 w-5 text-white" />
-              </span>
+              <div class="min-w-0">
+                <h1 class="text-lg font-bold tracking-tight text-deep-950">
+                  {{ instructor.name }}
+                </h1>
+                <p class="text-body-sm font-medium text-stone-600">
+                  {{ idCard.level_label }} SISA Licensed Surfer · {{ levelMeta.subtitle }}
+                </p>
+                <p class="mt-1.5 text-body-sm text-stone-600">
+                  {{ verification.message }}
+                </p>
+                <p v-if="suspendedUntilLabel" class="mt-1 text-xs font-semibold text-rose-700">
+                  Suspended until {{ suspendedUntilLabel }}
+                </p>
+              </div>
             </div>
 
-            <h1 class="mt-4 text-2xl font-extrabold tracking-tight text-deep-950">{{ instructor.name }}</h1>
-            <div class="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-stone-600">
-              <span v-if="instructor.level_label">{{ instructor.level_label }}</span>
-              <span v-if="instructor.level_label" aria-hidden="true">·</span>
-              <span class="font-bold text-deep-900">{{ formatMoney(instructor.rate_per_hour) }}/hour</span>
-              <span v-if="instructor.reviews_count" aria-hidden="true">·</span>
-              <span v-if="instructor.reviews_count" class="inline-flex items-center gap-1 text-amber-700 font-bold">
-                <StarIcon class="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-                {{ instructor.average_rating.toFixed(1) }} ({{ instructor.reviews_count }})
-              </span>
+            <div class="mt-4 hidden border-t border-sand-200 pt-4 lg:block">
+              <div v-if="verification.can_book && canStudentBook" class="flex items-center gap-2.5">
+                <AppButton :href="route('bookings.create', instructor.id)" variant="primary" size="md" class="flex-1">
+                  <span>{{ bookLabel }}</span>
+                  <ArrowRightIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                </AppButton>
+                <AppButton :href="route('instructors.profile', instructor.id)" variant="secondary" size="md">
+                  <UserIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>Profile &amp; Reviews</span>
+                </AppButton>
+              </div>
+
+              <div v-else-if="verification.can_book && !canStudentBook">
+                <AppButton :href="route('instructors.profile', instructor.id)" variant="secondary" size="md" block>
+                  <UserIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>View Full Profile &amp; Reviews</span>
+                </AppButton>
+                <p class="mt-2 text-center text-xs text-stone-500">
+                  Previewing as {{ authUser?.role }} · Tourists and students see the Book Lesson button here.
+                </p>
+              </div>
+
+              <div v-else class="rounded-control border px-3.5 py-2.5 text-body-sm" :class="standingMeta.alertClasses">
+                <p class="font-bold">{{ verification.label }}</p>
+                <p class="mt-0.5 opacity-90">{{ verification.message }}</p>
+              </div>
             </div>
+          </AppCard>
 
-            <p v-if="instructor.bio" class="mt-4 text-sm leading-relaxed text-stone-600">
-              "{{ instructor.bio.length > 140 ? `${instructor.bio.slice(0, 140)}…` : instructor.bio }}"
-            </p>
-          </div>
+          <!-- Card 2: Credential Details -->
+          <AppCard padding="md">
+            <h3 class="text-body-lg font-semibold text-deep-900">Credential details</h3>
 
-          <div v-if="verification.certifications.length" class="mt-6 rounded-2xl border border-sand-200 bg-sand-50 p-4">
-            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-stone-500">
-              Verified certifications
-            </p>
-            <div class="mt-2 flex flex-wrap gap-2">
-              <span
+            <dl class="mt-3 grid grid-cols-2 gap-3 text-body-sm">
+              <div>
+                <dt class="text-xs text-stone-500">License Number</dt>
+                <dd class="mt-0.5 font-mono font-semibold text-deep-900">{{ idCard.sisa_id_code }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-stone-500">Standing</dt>
+                <dd class="mt-0.5 font-semibold" :class="standingMeta.standingClass">
+                  {{ standingMeta.standingText }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-stone-500">Date Issued</dt>
+                <dd class="mt-0.5 font-semibold text-deep-900">{{ formatCardDate(idCard.date_issued) }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-stone-500">Expiration Date</dt>
+                <dd
+                  class="mt-0.5 font-semibold"
+                  :class="verification.is_verified ? 'text-emerald-700' : 'text-deep-900'"
+                >
+                  {{ formatCardDate(idCard.exp_date) }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-stone-500">Max Ratio</dt>
+                <dd class="mt-0.5 font-semibold text-deep-900">{{ levelMeta.ratio }}</dd>
+              </div>
+              <div v-if="idCard.birthdate">
+                <dt class="text-xs text-stone-500">Birthdate</dt>
+                <dd class="mt-0.5 font-semibold text-deep-900">{{ formatCardDate(idCard.birthdate) }}</dd>
+              </div>
+              <div v-else-if="instructor.rate_per_hour > 0">
+                <dt class="text-xs text-stone-500">Starting Rate</dt>
+                <dd class="mt-0.5 font-semibold text-deep-900">
+                  ₱{{ Number(instructor.rate_per_hour).toLocaleString('en-PH') }}/hr
+                </dd>
+              </div>
+              <div v-if="instructor.reviews_count > 0">
+                <dt class="text-xs text-stone-500">Rating</dt>
+                <dd class="mt-0.5 font-semibold text-deep-900">
+                  ★ {{ instructor.average_rating.toFixed(1) }}
+                  <span class="font-normal text-stone-500">
+                    ({{ instructor.reviews_count }} {{ instructor.reviews_count === 1 ? 'review' : 'reviews' }})
+                  </span>
+                </dd>
+              </div>
+            </dl>
+          </AppCard>
+
+          <!-- Card 3: Certifications on file -->
+          <AppCard padding="md">
+            <h3 class="text-body-lg font-semibold text-deep-900">Certifications on file</h3>
+
+            <ul v-if="verification.certifications.length" class="mt-3 space-y-2">
+              <li
                 v-for="certificate in verification.certifications"
                 :key="certificate.id"
-                class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold"
-                :class="
-                  certificate.expired
-                    ? 'border-rose-200 bg-rose-50 text-rose-800'
-                    : 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                "
+                class="flex items-center justify-between gap-3 rounded-control border border-sand-200 bg-sand-50 px-3 py-2.5"
               >
-                {{ certificate.label }}
-                <span v-if="certificate.expired" class="text-rose-700">· expired</span>
-              </span>
-            </div>
-          </div>
-
-          <div class="mt-6 space-y-2.5">
-            <template v-if="verification.can_book">
-              <Link
-                :href="route('bookings.create', instructor.id)"
-                class="flex w-full items-center justify-center rounded-xl bg-coral-700 px-6 py-3.5 text-base font-bold text-white shadow-card transition-colors hover:bg-coral-800"
-              >
-                {{ bookLabel }} &rarr;
-              </Link>
-              <Link
-                v-if="!isAuthenticated"
-                :href="route('register')"
-                class="block pt-1 text-center text-xs font-bold uppercase tracking-[0.14em] text-lagoon-700 transition-colors hover:text-lagoon-800"
-              >
-                New to SiaSurf? Create a tourist account
-              </Link>
-              <Link
-                :href="route('instructors.profile', instructor.id)"
-                class="block text-center text-xs font-bold uppercase tracking-[0.14em] text-stone-500 transition-colors hover:text-deep-950"
-              >
-                View full profile &amp; reviews
-              </Link>
-            </template>
-
-            <div
-              v-else
-              class="rounded-2xl border border-sand-200 bg-sand-50 px-4 py-3 text-center text-xs font-semibold text-stone-600"
-            >
-              Booking is disabled until SISA restores this instructor to verified status.
-            </div>
-          </div>
-
-          <div v-if="verification.can_book && recentReviews.length" class="mt-6 border-t border-sand-200 pt-5">
-            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-stone-500">Recent reviews</p>
-            <ul class="mt-3 space-y-3">
-              <li v-for="review in recentReviews" :key="review.id" class="rounded-2xl border border-sand-200 bg-sand-50 p-3">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="truncate text-xs font-bold text-deep-900">{{ review.student_name }}</span>
-                  <span v-if="review.rating" class="inline-flex items-center gap-0.5 text-[11px] font-bold text-amber-700">
-                    {{ review.rating }} <StarIcon class="h-3 w-3 text-amber-500" aria-hidden="true" />
-                  </span>
-                </div>
-                <p class="mt-1 max-h-12 overflow-hidden text-xs leading-relaxed text-stone-600">{{ review.comment }}</p>
+                <span class="text-body-sm font-semibold text-deep-900">{{ certificate.label }}</span>
+                <StatusPill :variant="certificate.expired ? 'critical' : 'verified'" :dot="false">
+                  {{ certificate.expired ? 'Expired' : certificate.expires_at ? `Valid to ${certificate.expires_at}` : 'No expiry' }}
+                </StatusPill>
               </li>
             </ul>
-          </div>
-        </div>
-      </section>
 
-      <div class="mt-5 flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
-        <ShieldCheckIcon class="h-3.5 w-3.5 text-lagoon-700" aria-hidden="true" />
-        Status checked live at {{ checkedAt }}
+            <p
+              v-else
+              class="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-body-sm font-medium text-amber-900"
+            >
+              No verified certificate is on file.
+            </p>
+          </AppCard>
+        </section>
       </div>
-      <p class="mt-2 text-center text-[10px] leading-relaxed text-stone-500">
-        The QR is permanent. This page reads the current SISA record every time it is scanned.
-      </p>
     </main>
+
+    <!-- Mobile Sticky Bottom Action Bar (< lg) -->
+    <footer class="scan-mobile-dock fixed inset-x-0 bottom-0 z-30 border-t border-sand-200 bg-white/95 px-4 pt-2.5 backdrop-blur lg:hidden">
+      <div v-if="verification.can_book && canStudentBook" class="flex items-center gap-2">
+        <AppButton :href="route('bookings.create', instructor.id)" variant="primary" size="md" class="flex-1">
+          <span>{{ bookLabel }}</span>
+          <ArrowRightIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+        </AppButton>
+        <AppButton :href="route('instructors.profile', instructor.id)" variant="secondary" size="md">
+          <UserIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Profile</span>
+        </AppButton>
+      </div>
+
+      <div v-else-if="verification.can_book && !canStudentBook">
+        <AppButton :href="route('instructors.profile', instructor.id)" variant="secondary" size="md" block>
+          <UserIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>View Full Profile &amp; Reviews</span>
+        </AppButton>
+        <p class="mt-1 text-center text-[11px] text-stone-500">
+          Previewing as {{ authUser?.role }} · Tourists see Book Lesson here.
+        </p>
+      </div>
+
+      <div v-else class="rounded-control border px-3 py-2 text-xs" :class="standingMeta.alertClasses">
+        <p class="font-bold">{{ verification.label }}</p>
+        <p class="mt-0.5 leading-snug opacity-90">{{ verification.message }}</p>
+      </div>
+
+      <div class="mt-1.5 flex items-center justify-between text-[10px] font-medium text-stone-500">
+        <span class="truncate">Live SISA check · {{ checkedAt }}</span>
+        <Link href="/" class="shrink-0 pl-2 font-bold tracking-wide text-deep-900 hover:text-lagoon-700">
+          SIASURF
+        </Link>
+      </div>
+    </footer>
   </div>
 </template>
 
+<style scoped>
+.scan-top-bar {
+  padding-top: env(safe-area-inset-top);
+}
+
+.scan-main {
+  padding-bottom: calc(98px + env(safe-area-inset-bottom));
+}
+
+.scan-mobile-dock {
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 1024px) {
+  .scan-main {
+    padding-bottom: 2.5rem;
+  }
+}
+</style>
