@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import AppButton from '@/Components/UI/AppButton.vue'
@@ -7,6 +7,7 @@ import AppCard from '@/Components/UI/AppCard.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import SisaIdCard, { type SisaIdCardData } from '@/Components/Instructor/SisaIdCard.vue'
+import SisaIdPassStage from '@/Components/Instructor/SisaIdPassStage.vue'
 import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
@@ -51,33 +52,12 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const currentSide = ref<'front' | 'back'>('front')
 
 const statusVariant = computed(() => {
   if (props.verification.status === 'verified') return 'verified'
   if (props.verification.status === 'suspended') return 'critical'
   if (props.verification.status === 'pending') return 'pending'
   return 'neutral'
-})
-
-const levelStageStyle = computed(() => {
-  const lvl = Number(props.idCard.level ?? props.profile.level ?? 1)
-  if (lvl === 2) {
-    return {
-      background: 'radial-gradient(circle at 50% 42%, rgba(56, 86, 198, 0.28) 0%, rgba(26, 36, 118, 0.30) 42%, #090C24 88%), #090C24',
-      accentText: '#9EC5FF',
-    }
-  }
-  if (lvl >= 3) {
-    return {
-      background: 'radial-gradient(circle at 50% 42%, rgba(13, 148, 136, 0.28) 0%, rgba(11, 57, 72, 0.32) 42%, #051923 88%), #051923',
-      accentText: '#5EEAD4',
-    }
-  }
-  return {
-    background: 'radial-gradient(circle at 50% 42%, rgba(215, 92, 38, 0.28) 0%, rgba(130, 18, 28, 0.24) 42%, #130408 88%), #130408',
-    accentText: '#F6C57B',
-  }
 })
 
 const isLocalVerificationUrl = computed(() =>
@@ -130,34 +110,15 @@ const printPass = () => window.print()
         <section class="lg:col-span-7">
           <SectionHeader eyebrow="Official SISA ID" title="Interactive 3D ID pass" />
 
-          <div
-            class="mt-4 overflow-hidden rounded-card p-5 text-white shadow-lift sm:p-7"
-            :style="{ background: levelStageStyle.background }"
+          <SisaIdPassStage
+            class="mt-4"
+            :card="idCard"
+            :level="profile.level"
+            :level-label="profile.level_label"
+            :verification-status="verification.status"
+            :verification-label="verification.label"
           >
-            <div class="mb-5 flex flex-wrap items-center justify-between gap-2">
-              <div class="rounded-lg border border-white/20 bg-black/35 px-3 py-1.5 backdrop-blur-sm">
-                <p class="text-[10px] font-bold uppercase tracking-[0.16em]" :style="{ color: levelStageStyle.accentText }">
-                  {{ idCard.sisa_id_code }} · {{ profile.level_label }}
-                </p>
-                <p class="text-xs font-semibold text-white/90">
-                  {{ currentSide === 'back' ? 'Back Side (Guidelines)' : 'Front Side (Scanner QR)' }}
-                </p>
-              </div>
-              <span class="rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 text-xs font-medium text-white/85 backdrop-blur-sm">
-                Tap or swipe card to flip
-              </span>
-            </div>
-
-            <div class="flex justify-center py-2" style="--sisa-card-width: min(330px, 76vw);">
-              <SisaIdCard
-                :card="idCard"
-                :verification-status="verification.status"
-                :verification-label="verification.label"
-                @side-change="currentSide = $event"
-              />
-            </div>
-
-            <div class="mt-6 flex flex-col items-center gap-3 text-center">
+            <template #footer>
               <StatusPill :variant="statusVariant">{{ verification.label }}</StatusPill>
               <p
                 v-if="!isLocalVerificationUrl"
@@ -169,8 +130,8 @@ const printPass = () => window.print()
                 <ArrowTopRightOnSquareIcon class="mr-2 h-4 w-4" aria-hidden="true" />
                 Open public verification page
               </AppButton>
-            </div>
-          </div>
+            </template>
+          </SisaIdPassStage>
         </section>
 
         <section class="space-y-4 lg:col-span-5">

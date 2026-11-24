@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { QrCodeIcon } from '@heroicons/vue/24/outline'
+import { QrCodeIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import SisaCompassEmblem from '@/Components/Instructor/SisaCompassEmblem.vue'
 import { initialsOf, resolveAvatarUrl } from '@/utils/avatar'
 
@@ -173,6 +173,31 @@ const statusStamp = computed(() => {
 
 const cardEl = ref<HTMLElement | null>(null)
 const isFlipping = ref(false)
+const qrModalOpen = ref(false)
+
+function isShowingBack(): boolean {
+  return (Math.abs(flipIndex) % 2) === 1
+}
+
+function onQrPointerDown(e: PointerEvent) {
+  if (!props.card.qr_image_url || isShowingBack()) return
+  e.stopPropagation()
+}
+
+function openQrModal() {
+  if (!props.card.qr_image_url || isShowingBack()) return
+  qrModalOpen.value = true
+}
+
+function closeQrModal() {
+  qrModalOpen.value = false
+}
+
+function onWindowKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && qrModalOpen.value) {
+    closeQrModal()
+  }
+}
 let flipIndex = props.initialSide === 'back' ? 1 : 0
 let currentDeg = flipIndex * 180
 let activeAnim: Animation | null = null
@@ -284,6 +309,21 @@ function snapBack() {
   }
 }
 
+function flip() {
+  swiftFlip(1)
+}
+
+function flipTo(side: 'front' | 'back') {
+  const isBack = (Math.abs(flipIndex) % 2) === 1
+  if ((side === 'back') === isBack) return
+  swiftFlip(side === 'back' ? 1 : -1)
+}
+
+defineExpose({
+  flip,
+  flipTo,
+})
+
 function onPointerDown(e: PointerEvent) {
   if (!props.interactive || !cardEl.value) return
   if (e.button !== 0 && e.pointerType === 'mouse') return
@@ -374,6 +414,7 @@ onMounted(() => {
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('pointercancel', onPointerCancel)
+    window.addEventListener('keydown', onWindowKeyDown)
   }
 })
 
@@ -385,6 +426,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   window.removeEventListener('pointercancel', onPointerCancel)
+  window.removeEventListener('keydown', onWindowKeyDown)
 })
 </script>
 
@@ -542,15 +584,25 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="sisa-qr-footer">
-            <div class="sisa-qr-box">
+            <button
+              v-if="card.qr_image_url"
+              type="button"
+              class="sisa-qr-box sisa-qr-btn"
+              :aria-label="`Enlarge QR code for ${card.name}`"
+              title="Tap to enlarge QR code"
+              @pointerdown="onQrPointerDown"
+              @click.stop="openQrModal"
+              @keydown.stop
+            >
               <img
-                v-if="card.qr_image_url"
                 :src="card.qr_image_url"
                 :alt="`SISA Scanner QR Code for ${card.name}`"
                 class="sisa-qr-img"
                 draggable="false"
               />
-              <QrCodeIcon v-else class="sisa-qr-placeholder" aria-hidden="true" />
+            </button>
+            <div v-else class="sisa-qr-box">
+              <QrCodeIcon class="sisa-qr-placeholder" aria-hidden="true" />
             </div>
             <div class="sisa-id-number">{{ card.sisa_id_code }}</div>
           </div>
@@ -601,6 +653,52 @@ onBeforeUnmount(() => {
         />
       </div>
     </div>
+
+    <Teleport to="body">
+      <Transition name="sisa-qr-modal">
+        <div
+          v-if="qrModalOpen && card.qr_image_url"
+          class="sisa-qr-overlay print:hidden"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="`Enlarged SISA QR Code for ${card.name}`"
+          @click="closeQrModal"
+        >
+          <div class="sisa-qr-dialog" @click.stop>
+            <div class="sisa-qr-dialog-header">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-extrabold text-deep-900">{{ card.name.toUpperCase() }}</p>
+                <p class="text-[11px] font-semibold text-stone-500">SISA {{ card.level_label }} · Scan to verify</p>
+              </div>
+              <button
+                type="button"
+                class="sisa-qr-close"
+                aria-label="Close enlarged QR code"
+                @click="closeQrModal"
+              >
+                <XMarkIcon class="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div class="sisa-qr-dialog-frame">
+              <img
+                :src="card.qr_image_url"
+                :alt="`Enlarged SISA Scanner QR Code for ${card.name}`"
+                class="h-full w-full object-contain"
+                draggable="false"
+              />
+            </div>
+
+            <p class="mt-3 text-center font-mono text-sm font-bold tracking-widest text-deep-900">
+              {{ card.sisa_id_code }}
+            </p>
+            <p class="mt-0.5 text-center text-[11px] text-stone-500">
+              Tap anywhere outside to close
+            </p>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -611,7 +709,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   width: 100%;
-  filter: drop-shadow(0 26px 42px rgba(0, 0, 0, 0.68));
+  filter: drop-shadow(var(--sisa-card-shadow, 0 26px 42px rgba(0, 0, 0, 0.68)));
 }
 
 .sisa-card-3d {
@@ -679,6 +777,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   container-type: inline-size;
+  border: var(--sisa-face-border, none);
 }
 
 .sisa-face-static {
@@ -967,7 +1066,6 @@ onBeforeUnmount(() => {
 
 /* BACK FACE LAYOUT */
 .sisa-back-face {
-  position: relative;
   padding: 3.6cqw 0 4.5cqw;
   display: flex;
   flex-direction: column;
@@ -1072,5 +1170,103 @@ onBeforeUnmount(() => {
   height: 26cqw;
   object-fit: contain;
   pointer-events: none;
+}
+
+.sisa-qr-btn {
+  border: 0;
+  cursor: zoom-in;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sisa-qr-btn:hover {
+  transform: scale(1.05);
+}
+
+.sisa-qr-btn:active {
+  transform: scale(0.97);
+}
+
+.sisa-qr-btn:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.sisa-qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(6, 38, 51, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.sisa-qr-dialog {
+  width: min(340px, calc(100vw - 32px));
+  border-radius: 24px;
+  background: #ffffff;
+  padding: 18px 20px 20px;
+  box-shadow: 0 24px 60px rgba(6, 38, 51, 0.4);
+}
+
+.sisa-qr-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.sisa-qr-close {
+  display: inline-flex;
+  height: 36px;
+  width: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #f2eade;
+  color: #083344;
+  transition: background 0.15s ease;
+}
+
+.sisa-qr-close:hover {
+  background: #dfcfb4;
+}
+
+.sisa-qr-dialog-frame {
+  width: min(260px, 72vw);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid #e7e5e4;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sisa-qr-modal-enter-active,
+.sisa-qr-modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.sisa-qr-modal-enter-active .sisa-qr-dialog,
+.sisa-qr-modal-leave-active .sisa-qr-dialog {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+}
+
+.sisa-qr-modal-enter-from,
+.sisa-qr-modal-leave-to {
+  opacity: 0;
+}
+
+.sisa-qr-modal-enter-from .sisa-qr-dialog,
+.sisa-qr-modal-leave-to .sisa-qr-dialog {
+  transform: scale(0.9);
+  opacity: 0;
 }
 </style>
