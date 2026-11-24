@@ -3,14 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\CertificateStatus;
-use App\Enums\FineStatus;
 use App\Enums\InstructorStatus;
 use App\Enums\SuspensionStatus;
 use App\Enums\SuspensionType;
 use App\Events\InstructorStatusChanged;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
-use App\Models\InstructorFine;
 use App\Models\InstructorProfile;
 use App\Models\InstructorStatusLog;
 use App\Models\InstructorSuspension;
@@ -90,7 +88,7 @@ class InstructorController extends Controller
                 ->orderByRaw("CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END")
                 ->orderBy('name')
                 ->get()
-                ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+                ->map(fn(SurfSpot $spot): array => $spot->toMapPayload())
                 ->values()
                 ->all(),
         ]);
@@ -126,7 +124,6 @@ class InstructorController extends Controller
             'password' => Hash::make($validated['password']),
             'role' => 'instructor',
             'phone' => $validated['phone'] ?? null,
-            'email_verified_at' => now(),
         ]);
 
         $offerings = PricingService::normalizeOfferingsForLevel((int) $validated['level'], $validated, $hasOfferedServices);
@@ -147,7 +144,7 @@ class InstructorController extends Controller
         if (array_key_exists('surf_spot_ids', $validated)) {
             $profile->syncSurfSpotsAndLocation(
                 $validated['surf_spot_ids'] ?? [],
-                syncCoordinates: ! $request->filled('latitude') && ! $request->filled('longitude'),
+                syncCoordinates: !$request->filled('latitude') && !$request->filled('longitude'),
                 submittedArea: $validated['area'] ?? null,
             );
         }
@@ -165,15 +162,7 @@ class InstructorController extends Controller
      */
     public function show(User $instructor): Response
     {
-        abort_unless($instructor->isInstructor(), 404);
-
-        $instructor->load([
-            'instructorProfile.surfSpots',
-            'certificates',
-            'availabilities',
-            'instructorStrikes',
-            'instructorFines.incident',
-        ]);
+        $instructor->load(['instructorProfile.surfSpots', 'certificates', 'availabilities']);
 
         // Existing active instructors verified before the QR module existed may
         // not have an image on disk yet. Generate it lazily so the dossier is
@@ -181,89 +170,25 @@ class InstructorController extends Controller
         $profile = $instructor->instructorProfile;
         if ($profile && $profile->status === InstructorStatus::Active) {
             $path = $profile->qr_code_path;
-            if (! $path || ! Storage::disk('local')->exists($path)) {
+            if (!$path || !Storage::disk('local')->exists($path)) {
                 $this->qrCodeService->ensureInstructorQR($profile);
                 $instructor->load('instructorProfile.surfSpots');
                 $profile = $instructor->instructorProfile;
             }
         }
 
-        $auditTrail = [];
-        if ($instructor->created_at) {
-            $auditTrail[] = [
-                'label' => 'System registry',
-                'date' => $instructor->created_at->format('Y-m-d'),
-                'tone' => 'neutral',
-            ];
-        }
-        $latestCert = $instructor->certificates->sortByDesc('created_at')->first();
-        if ($latestCert?->created_at) {
-            $auditTrail[] = [
-                'label' => 'Certificate upload',
-                'date' => $latestCert->created_at->format('Y-m-d'),
-                'tone' => 'neutral',
-            ];
-        }
-        if ($profile?->verified_at) {
-            $auditTrail[] = [
-                'label' => 'SISA verification',
-                'date' => $profile->verified_at->format('Y-m-d'),
-                'tone' => 'positive',
-            ];
-        }
-        foreach ($instructor->instructorStrikes->sortByDesc('applied_at')->take(5) as $index => $strike) {
-            $auditTrail[] = [
-                'label' => 'Strike #'.($index + 1).' ('.($strike->weight ?? 1).' pt)',
-                'date' => ($strike->applied_at ?? $strike->created_at)?->format('Y-m-d') ?? '—',
-                'tone' => 'critical',
-            ];
-        }
-
-        $enforcedSuspension = $instructor->activeInstructorSuspension();
-        $fines = $instructor->instructorFines
-            ->sortByDesc('issued_at')
-            ->map(fn (InstructorFine $fine) => [
-                'id' => $fine->id,
-                'amount' => (float) $fine->amount,
-                'status' => $fine->status?->value,
-                'status_label' => $fine->status?->label(),
-                'reason' => $fine->reason,
-                'issued_at' => $fine->issued_at?->format('M d, Y'),
-                'paid_at' => $fine->paid_at?->format('M d, Y'),
-                'voided_at' => $fine->voided_at?->format('M d, Y'),
-                'settlement_note' => $fine->settlement_note,
-                'safety_incident_id' => $fine->safety_incident_id,
-            ])
-            ->values();
-
         return Inertia::render('Admin/Instructors/Show', [
             'instructor' => $instructor,
             'serviceRates' => $profile?->serviceRates() ?? [],
             'surfSpots' => $profile?->activeAllowedSurfSpots()
-                ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+                ->map(fn(SurfSpot $spot): array => $spot->toMapPayload())
                 ->values()
                 ->all() ?? [],
-            'auditTrail' => $auditTrail,
             'qrImageUrl' => $instructor->instructorProfile?->qr_code_path
                 ? route('qr.image', $instructor->id)
                 : null,
             'verificationUrl' => route('walkin.scan', $instructor->id),
-            'activeSuspension' => $enforcedSuspension ? [
-                'id' => $enforcedSuspension->id,
-                'type' => $enforcedSuspension->type?->value,
-                'tier_label' => $enforcedSuspension->tierLabel(),
-                'strike_tier' => $enforcedSuspension->strike_tier,
-                'status' => $enforcedSuspension->status?->value,
-                'status_label' => $enforcedSuspension->status?->label(),
-                'reason' => $enforcedSuspension->reason,
-                'starts_at' => $enforcedSuspension->starts_at?->format('M d, Y g:i A'),
-                'ends_at' => $enforcedSuspension->ends_at?->format('M d, Y g:i A'),
-                'requires_sisa_id_confiscation' => (bool) $enforcedSuspension->requires_sisa_id_confiscation,
-                'is_awaiting_reinstatement' => $enforcedSuspension->isAwaitingReinstatement(),
-            ] : null,
-            'fines' => $fines,
-            'hasDueFines' => $fines->contains(fn ($fine) => $fine['status'] === FineStatus::Due->value),
-            'canReinstate' => $profile?->status === InstructorStatus::Suspended,
+            'ledgerSummary' => app(\App\Services\EarningsLedgerService::class)->getInstructorSummary($instructor),
         ]);
     }
 
@@ -272,19 +197,17 @@ class InstructorController extends Controller
      */
     public function verify(Request $request, User $instructor): RedirectResponse
     {
-        abort_unless($instructor->isInstructor(), 404);
-
-        $profile = $instructor->instructorProfile;
-
-        if (! $profile) {
-            return back()->with('error', 'Instructor profile not found.');
-        }
-
-        $this->authorize('verify', $profile);
+        $this->authorize('verify', $instructor->instructorProfile);
 
         $validated = $request->validate([
             'notes' => 'nullable|string',
         ]);
+
+        $profile = $instructor->instructorProfile;
+
+        if (!$profile) {
+            return back()->with('error', 'Instructor profile not found.');
+        }
 
         $oldStatus = $profile->status;
 
@@ -296,7 +219,7 @@ class InstructorController extends Controller
                     'status' => CertificateStatus::Verified->value,
                     'verified_at' => now(),
                 ]);
-        } elseif (! $instructor->hasVerifiedCertificate()) {
+        } elseif (!$instructor->hasVerifiedCertificate()) {
             // If the admin clicked Verify & License without ticking individual
             // boxes, approve the instructor's pending certificates so they are
             // immediately discoverable in Find Instructor (BR-2.1).
@@ -309,7 +232,7 @@ class InstructorController extends Controller
         }
 
         // Final safety check: Does the instructor have ANY verified certificates now?
-        if (! $instructor->hasVerifiedCertificate()) {
+        if (!$instructor->hasVerifiedCertificate()) {
             return back()->with('error', 'Instructor must have at least one verified certificate before they can be licensed.');
         }
 
@@ -326,7 +249,7 @@ class InstructorController extends Controller
         try {
             $instructor->notify(new InstructorVerified($profile->fresh()));
         } catch (\Exception $e) {
-            \Log::error('Failed to send verification notification: '.$e->getMessage());
+            \Log::error('Failed to send verification notification: ' . $e->getMessage());
         }
 
         $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Active, 'Verification approved.');
@@ -339,19 +262,17 @@ class InstructorController extends Controller
      */
     public function reject(Request $request, User $instructor): RedirectResponse
     {
-        abort_unless($instructor->isInstructor(), 404);
-
-        $profile = $instructor->instructorProfile;
-
-        if (! $profile) {
-            return back()->with('error', 'Instructor profile not found.');
-        }
-
-        $this->authorize('verify', $profile);
+        $this->authorize('verify', $instructor->instructorProfile);
 
         $validated = $request->validate([
             'reason' => 'required|string',
         ]);
+
+        $profile = $instructor->instructorProfile;
+
+        if (!$profile) {
+            return back()->with('error', 'Instructor profile not found.');
+        }
 
         $oldStatus = $profile->status;
 
@@ -363,7 +284,7 @@ class InstructorController extends Controller
         try {
             $instructor->notify(new InstructorRejected($validated['reason']));
         } catch (\Exception $e) {
-            \Log::error('Failed to send rejection notification: '.$e->getMessage());
+            \Log::error('Failed to send rejection notification: ' . $e->getMessage());
         }
 
         $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Rejected, $validated['reason']);
@@ -376,20 +297,18 @@ class InstructorController extends Controller
      */
     public function suspend(Request $request, User $instructor, SuspensionService $suspensionService): RedirectResponse
     {
-        abort_unless($instructor->isInstructor(), 404);
-
-        $profile = $instructor->instructorProfile;
-
-        if (! $profile) {
-            return back()->with('error', 'Instructor profile not found.');
-        }
-
-        $this->authorize('suspend', $profile);
+        $this->authorize('suspend', $instructor->instructorProfile);
 
         $validated = $request->validate([
             'reason' => 'required|string|min:10|max:2000',
             'duration_days' => 'required|integer|min:1|max:365',
         ]);
+
+        $profile = $instructor->instructorProfile;
+
+        if (!$profile) {
+            return back()->with('error', 'Instructor profile not found.');
+        }
 
         $suspensionService->suspendManually(
             $instructor,
@@ -402,44 +321,33 @@ class InstructorController extends Controller
     }
 
     /**
-     * Approve reinstatement for a suspended instructor.
+     * Reactivate a suspended instructor.
      */
-    public function reactivate(Request $request, User $instructor, SuspensionService $suspensionService): RedirectResponse
+    public function reactivate(User $instructor, SuspensionService $suspensionService): RedirectResponse
     {
-        abort_unless($instructor->isInstructor(), 404);
+        $this->authorize('suspend', $instructor->instructorProfile);
 
         $profile = $instructor->instructorProfile;
 
-        if (! $profile) {
+        if (!$profile) {
             return back()->with('error', 'Instructor profile not found.');
         }
 
-        $this->authorize('suspend', $profile);
-
-        $validated = $request->validate([
-            'reinstatement_note' => 'nullable|string|max:2000',
-        ]);
-
-        $note = $validated['reinstatement_note'] ?? 'Reinstatement approved by SISA administrator.';
-
         $suspension = InstructorSuspension::where('instructor_id', $instructor->id)
-            ->enforced()
+            ->where('status', SuspensionStatus::Active->value)
             ->latest()
             ->first();
 
         if ($suspension) {
-            // Tier 3 (1-month) and legacy suspensions clear served strikes on reinstatement;
-            // Tier 2 (1-week) preserves the 2 active strikes and Manual holds leave strikes unchanged.
-            $liftedStatus = $suspension->isAwaitingReinstatement()
-                ? SuspensionStatus::Completed
-                : SuspensionStatus::RevokedByAdmin;
-            $resetStrikes = $suspension->shouldResetStrikesOnLift();
+            // Automatic/legacy suspensions clear the served strike slate;
+            // a manual suspension does not change the strike ledger.
+            $resetStrikes = $suspension->type !== SuspensionType::Manual;
 
             $suspensionService->lift(
                 $suspension,
-                $note,
-                $request->user(),
-                $liftedStatus,
+                'Reactivated by SISA.',
+                request()->user(),
+                SuspensionStatus::RevokedByAdmin,
                 $resetStrikes
             );
         } else {
@@ -457,83 +365,20 @@ class InstructorController extends Controller
                 'instructor_id' => $instructor->id,
                 'from_status' => $oldStatus?->value,
                 'to_status' => InstructorStatus::Active->value,
-                'reason' => $note,
-                'changed_by' => $request->user()?->id,
+                'reason' => 'Reactivated by SISA.',
+                'changed_by' => request()->user()?->id,
             ]);
 
             try {
                 $instructor->notify(new InstructorReactivated);
             } catch (\Throwable $e) {
-                \Log::error('Failed to send reactivation notification: '.$e->getMessage());
+                \Log::error('Failed to send reactivation notification: ' . $e->getMessage());
             }
 
-            $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Active, $note);
+            $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Active, 'Reactivated by SISA.');
         }
 
-        return back()->with('success', 'Instructor reinstatement approved.');
-    }
-
-    /**
-     * Record that an instructor settled a SISA fine outside the platform.
-     */
-    public function markFinePaid(Request $request, User $instructor, InstructorFine $fine): RedirectResponse
-    {
-        abort_unless($instructor->isInstructor() && $fine->instructor_id === $instructor->id, 404);
-
-        $profile = $instructor->instructorProfile;
-        if (! $profile) {
-            return back()->with('error', 'Instructor profile not found.');
-        }
-
-        $this->authorize('suspend', $profile);
-
-        if ($fine->status !== FineStatus::Due) {
-            return back()->with('error', 'Only an unpaid due fine can be marked as paid.');
-        }
-
-        $validated = $request->validate([
-            'settlement_note' => 'nullable|string|max:1000',
-        ]);
-
-        $fine->update([
-            'status' => FineStatus::Paid,
-            'paid_at' => now(),
-            'settled_by' => $request->user()->id,
-            'settlement_note' => $validated['settlement_note'] ?? 'Fine paid to SISA outside the system.',
-        ]);
-
-        return back()->with('success', 'Fine marked as paid.');
-    }
-
-    /**
-     * Waive an unpaid SISA fine recorded on an instructor's account.
-     */
-    public function waiveFine(Request $request, User $instructor, InstructorFine $fine): RedirectResponse
-    {
-        abort_unless($instructor->isInstructor() && $fine->instructor_id === $instructor->id, 404);
-
-        $profile = $instructor->instructorProfile;
-        if (! $profile) {
-            return back()->with('error', 'Instructor profile not found.');
-        }
-
-        $this->authorize('suspend', $profile);
-
-        if ($fine->status !== FineStatus::Due) {
-            return back()->with('error', 'Only an unpaid due fine can be waived.');
-        }
-
-        $validated = $request->validate([
-            'settlement_note' => 'required|string|min:5|max:1000',
-        ]);
-
-        $fine->update([
-            'status' => FineStatus::Waived,
-            'settled_by' => $request->user()->id,
-            'settlement_note' => $validated['settlement_note'],
-        ]);
-
-        return back()->with('success', 'Fine waived by SISA.');
+        return back()->with('success', 'Instructor reactivated successfully.');
     }
 
     /**
@@ -571,8 +416,6 @@ class InstructorController extends Controller
      */
     public function edit(User $instructor): Response
     {
-        abort_unless($instructor->isInstructor(), 404);
-
         $instructor->load('instructorProfile.surfSpots');
         $profile = $instructor->instructorProfile;
 
@@ -583,7 +426,7 @@ class InstructorController extends Controller
                 ->orderByRaw("CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END")
                 ->orderBy('name')
                 ->get()
-                ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+                ->map(fn(SurfSpot $spot): array => $spot->toMapPayload())
                 ->values()
                 ->all(),
             'selectedSurfSpotIds' => $profile?->activeAllowedSurfSpots()
@@ -599,26 +442,18 @@ class InstructorController extends Controller
      */
     public function update(Request $request, User $instructor): RedirectResponse
     {
-        abort_unless($instructor->isInstructor(), 404);
-
-        $profile = $instructor->instructorProfile;
-
-        if (! $profile) {
-            return back()->with('error', 'Instructor profile not found.');
-        }
-
-        $level = (int) $request->input('level', $profile->level?->value ?? 1);
+        $level = (int) $request->input('level', $instructor->instructorProfile?->level?->value ?? 1);
         $hasOfferedServices = $request->has('offered_services');
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,'.$instructor->id,
+            'email' => 'required|email|unique:users,email,' . $instructor->id,
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
             'level' => 'required|integer|in:1,2,3',
             ...PricingService::offeringValidationRules($level, $request->input('offered_services'), $hasOfferedServices),
             ...SurfSpot::instructorSelectionValidationRules($level, requireWhenPresent: false),
-            'status' => 'required|string|in:'.implode(',', array_column(InstructorStatus::cases(), 'value')),
+            'status' => 'required|string|in:' . implode(',', array_column(InstructorStatus::cases(), 'value')),
             'area' => 'nullable|string|max:100',
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',
@@ -626,19 +461,6 @@ class InstructorController extends Controller
         ], PricingService::offeringValidationMessages($level));
 
         $profile = $instructor->instructorProfile;
-        $wasSuspended = $profile->status === InstructorStatus::Suspended;
-        $becomingSuspended = $validated['status'] === InstructorStatus::Suspended->value;
-
-        if (($wasSuspended && ! $becomingSuspended) || (! $wasSuspended && $becomingSuspended)) {
-            return back()
-                ->withErrors([
-                    'status' => $becomingSuspended
-                        ? 'Use Suspend Profile on the instructor dossier so suspension rules and booking cancellations are applied.'
-                        : 'Use Approve Reinstatement on the instructor dossier to lift a suspension.',
-                ])
-                ->withInput();
-        }
-
         $wasActive = $profile->status === InstructorStatus::Active;
         $becomingActive = $validated['status'] === InstructorStatus::Active->value;
 
@@ -646,7 +468,7 @@ class InstructorController extends Controller
         // least one verified certificate. When an admin sets status to "Active
         // (Verified)" from Edit Dossier, approve any pending certificates so
         // the instructor does not end up active-but-hidden from tourists.
-        if ($becomingActive && ! $instructor->hasVerifiedCertificate()) {
+        if ($becomingActive && !$instructor->hasVerifiedCertificate()) {
             $verifiedPending = $instructor->certificates()
                 ->where('status', CertificateStatus::PendingVerification->value)
                 ->update([
@@ -654,7 +476,7 @@ class InstructorController extends Controller
                     'verified_at' => now(),
                 ]);
 
-            if (! $wasActive && $verifiedPending === 0) {
+            if (!$wasActive && $verifiedPending === 0) {
                 return back()
                     ->withErrors([
                         'status' => 'Cannot mark an instructor Active (Verified) without at least one uploaded certificate.',
@@ -694,7 +516,7 @@ class InstructorController extends Controller
         if (array_key_exists('surf_spot_ids', $validated)) {
             $profile->syncSurfSpotsAndLocation(
                 $validated['surf_spot_ids'] ?? [],
-                syncCoordinates: ! $request->filled('latitude') && ! $request->filled('longitude'),
+                syncCoordinates: !$request->filled('latitude') && !$request->filled('longitude'),
                 submittedArea: $validated['area'] ?? null,
             );
         }

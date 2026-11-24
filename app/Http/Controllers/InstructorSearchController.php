@@ -66,7 +66,7 @@ class InstructorSearchController extends Controller
         if ($skillLevel) {
             $allowedInstructorLevels = $skillLevel->instructorLevels();
             $bookableValues = array_map(
-                fn (SessionType $service): string => $service->value,
+                fn(SessionType $service): string => $service->value,
                 SessionType::bookableBy($skillLevel)
             );
             $allowedDifficulties = $skillLevel->allowedSurfSpotDifficulties();
@@ -111,14 +111,14 @@ class InstructorSearchController extends Controller
         // Fall back across other rate columns when an instructor opted out of Teaching.
         $viewerService = $skillLevel ? SessionType::recommendedFor($skillLevel, 3) : null;
         $priceExpr = match ($viewerService) {
-            SessionType::Guiding => 'COALESCE(guiding_rate, coaching_rate, rate_per_hour, '.SessionType::Guiding->defaultRate().')',
-            SessionType::Coaching => 'COALESCE(coaching_rate, guiding_rate, rate_per_hour, '.SessionType::Coaching->defaultRate().')',
-            default => 'COALESCE(rate_per_hour, guiding_rate, coaching_rate, '.SessionType::Teaching->defaultRate().')',
+            SessionType::Guiding => 'COALESCE(guiding_rate, coaching_rate, rate_per_hour, ' . SessionType::Guiding->defaultRate() . ')',
+            SessionType::Coaching => 'COALESCE(coaching_rate, guiding_rate, rate_per_hour, ' . SessionType::Coaching->defaultRate() . ')',
+            default => 'COALESCE(rate_per_hour, guiding_rate, coaching_rate, ' . SessionType::Teaching->defaultRate() . ')',
         };
         $qualifiedPriceExpr = match ($viewerService) {
-            SessionType::Guiding => 'COALESCE(instructor_profiles.guiding_rate, instructor_profiles.coaching_rate, instructor_profiles.rate_per_hour, '.SessionType::Guiding->defaultRate().')',
-            SessionType::Coaching => 'COALESCE(instructor_profiles.coaching_rate, instructor_profiles.guiding_rate, instructor_profiles.rate_per_hour, '.SessionType::Coaching->defaultRate().')',
-            default => 'COALESCE(instructor_profiles.rate_per_hour, instructor_profiles.guiding_rate, instructor_profiles.coaching_rate, '.SessionType::Teaching->defaultRate().')',
+            SessionType::Guiding => 'COALESCE(instructor_profiles.guiding_rate, instructor_profiles.coaching_rate, instructor_profiles.rate_per_hour, ' . SessionType::Guiding->defaultRate() . ')',
+            SessionType::Coaching => 'COALESCE(instructor_profiles.coaching_rate, instructor_profiles.guiding_rate, instructor_profiles.rate_per_hour, ' . SessionType::Coaching->defaultRate() . ')',
+            default => 'COALESCE(instructor_profiles.rate_per_hour, instructor_profiles.guiding_rate, instructor_profiles.coaching_rate, ' . SessionType::Teaching->defaultRate() . ')',
         };
 
         // Filter by price range (against the service this student actually books)
@@ -146,7 +146,7 @@ class InstructorSearchController extends Controller
         }
 
         // Full-text search on name and bio
-        if ($request->has('search') && ! empty($request->search)) {
+        if ($request->has('search') && !empty($request->search)) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -186,8 +186,8 @@ class InstructorSearchController extends Controller
         // Hidden (moderated) reviews are excluded so the directory rating
         // matches the rating shown on the public profile and the instructor
         // settings page.
-        $query->withAvg(['reviewsAsInstructor' => fn ($reviews) => $reviews->visible()], 'rating')
-            ->withCount(['reviewsAsInstructor' => fn ($reviews) => $reviews->visible()]);
+        $query->withAvg(['reviewsAsInstructor' => fn($reviews) => $reviews->visible()], 'rating')
+            ->withCount(['reviewsAsInstructor' => fn($reviews) => $reviews->visible()]);
 
         // The map is a directory, not a paginated table: show every matching
         // pin while the card list paginates. The cap prevents an accidental
@@ -195,7 +195,7 @@ class InstructorSearchController extends Controller
         $mapInstructors = (clone $query)
             ->limit(200)
             ->get()
-            ->map(fn (User $instructor) => $this->transformInstructor($instructor, [], $viewerService, $skillLevel))
+            ->map(fn(User $instructor) => $this->transformInstructor($instructor, [], $viewerService, $skillLevel))
             ->values();
 
         $instructors = $query->paginate(12)
@@ -208,7 +208,7 @@ class InstructorSearchController extends Controller
             now(),
         );
 
-        $instructors->through(fn (User $instructor) => $this->transformInstructor(
+        $instructors->through(fn(User $instructor) => $this->transformInstructor(
             $instructor,
             $openPeriods[$instructor->id] ?? [],
             $viewerService,
@@ -229,7 +229,7 @@ class InstructorSearchController extends Controller
             ->active()
             ->whereNotNull('area')
             ->where('area', '!=', '')
-            ->whereHas('instructorProfiles', fn ($q) => $q->where('status', InstructorStatus::Active->value))
+            ->whereHas('instructorProfiles', fn($q) => $q->where('status', InstructorStatus::Active->value))
             ->pluck('area');
 
         $areas = $profileAreas
@@ -285,7 +285,7 @@ class InstructorSearchController extends Controller
 
         $selectedSpots = $profile
             ? $profile->activeAllowedSurfSpots()
-                ->map(fn (SurfSpot $spot): array => [
+                ->map(fn(SurfSpot $spot): array => [
                     'id' => $spot->id,
                     'name' => $spot->name,
                     'area' => $spot->area,
@@ -295,11 +295,7 @@ class InstructorSearchController extends Controller
                 ->all()
             : [];
 
-        $publicInstructor = collect($instructor->toArray())
-            ->except(['email', 'phone', 'role', 'email_verified_at', 'remember_token'])
-            ->all();
-
-        return array_merge($publicInstructor, [
+        return array_merge($instructor->toArray(), [
             'total_reviews' => (int) ($instructor->reviews_as_instructor_count ?? 0),
             'average_rating' => round((float) ($instructor->reviews_as_instructor_avg_rating ?? 0), 1),
             'avatar_url' => $instructor->avatar_url,
@@ -316,7 +312,7 @@ class InstructorSearchController extends Controller
                 ? count($levelEnum->allowedSkillLevels()) === count(SkillLevel::cases())
                 : null,
             'available_today' => $openPeriods !== [],
-            'open_periods' => array_map(fn (string $period) => ucfirst($period), $openPeriods),
+            'open_periods' => array_map(fn(string $period) => ucfirst($period), $openPeriods),
             'map' => [
                 'latitude' => $profile?->latitude !== null ? (float) $profile->latitude : null,
                 'longitude' => $profile?->longitude !== null ? (float) $profile->longitude : null,
@@ -371,23 +367,16 @@ class InstructorSearchController extends Controller
             },
             'reviewsAsInstructor' => function ($q) {
                 $q->visible()
-                    ->with('student:id,name,avatar_path')
+                    ->with('student')
                     ->latest()
                     ->limit(10);
             },
             'availabilities' => function ($q) {
                 $q->where('is_available', true)
-                    ->where(function ($dateQuery) {
-                        $dateQuery->where('specific_date', '>=', now()->format('Y-m-d'))
-                            ->orWhereNull('specific_date');
-                    });
+                    ->where('specific_date', '>=', now()->format('Y-m-d'))
+                    ->orWhereNull('specific_date');
             },
         ]);
-
-        $instructor->makeHidden(['email', 'phone', 'role', 'email_verified_at', 'remember_token']);
-        $instructor->reviewsAsInstructor->each(function ($review) {
-            $review->student?->makeHidden(['email', 'phone', 'role', 'email_verified_at', 'remember_token']);
-        });
 
         // Calculate average rating
         $averageRating = $instructor->reviewsAsInstructor()->visible()->avg('rating') ?? 0;
@@ -398,9 +387,9 @@ class InstructorSearchController extends Controller
 
         if ($viewerSkill !== null && $profile !== null) {
             if ($profile->serviceOptionsFor($viewerSkill) === []) {
-                $studentBookingBlockReason = 'This instructor does not currently offer a lesson type available for your '.$viewerSkill->label().' skill level.';
+                $studentBookingBlockReason = 'This instructor does not currently offer a lesson type available for your ' . $viewerSkill->label() . ' skill level.';
             } elseif ($profile->bookableSurfSpotsFor($viewerSkill)->isEmpty()) {
-                $studentBookingBlockReason = 'This instructor does not currently teach in any surf zones permitted for your '.$viewerSkill->label().' skill level.';
+                $studentBookingBlockReason = 'This instructor does not currently teach in any surf zones permitted for your ' . $viewerSkill->label() . ' skill level.';
             }
         }
 
@@ -409,7 +398,7 @@ class InstructorSearchController extends Controller
             'serviceRates' => $profile?->serviceRates() ?? [],
             'startingRate' => $profile?->startingRate() ?? 0,
             'surfSpots' => $profile?->activeAllowedSurfSpots()
-                ->map(fn (SurfSpot $spot): array => $spot->toMapPayload())
+                ->map(fn(SurfSpot $spot): array => $spot->toMapPayload())
                 ->values()
                 ->all() ?? [],
             'studentBookingBlockReason' => $studentBookingBlockReason,
