@@ -22,6 +22,7 @@ import {
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
+import SurfZoneTabs from '@/Components/Molecules/SurfZoneTabs.vue'
 import { formatDateTime } from '@/utils/date'
 
 interface Certificate {
@@ -452,16 +453,7 @@ const getStatusVariant = (status: string) => {
                     </div>
 
                     <div v-if="surfSpots && surfSpots.length > 0" class="space-y-4">
-                        <div class="flex flex-wrap gap-2">
-                            <span
-                                v-for="spot in surfSpots"
-                                :key="spot.id"
-                                class="inline-flex items-center gap-1.5 rounded-full border border-ocean-200 bg-ocean-50 px-3 py-1 text-xs font-bold text-ocean-800"
-                            >
-                                {{ spot.name }}
-                                <span class="text-[10px] uppercase text-ocean-600">({{ spot.difficulty }})</span>
-                            </span>
-                        </div>
+                        <SurfZoneTabs :spots="surfSpots" />
                         <SurfZoneMap mode="view" :spots="surfSpots" height="280px" />
                     </div>
                     <p v-else class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs font-semibold text-slate-500">
