@@ -624,4 +624,68 @@ class InstructorOnboardingTest extends TestCase
                 ->where('defaultRole', 'student')
             );
     }
+
+    public function test_onboarding_validates_and_persists_birthday(): void
+    {
+        Storage::fake('local');
+        $user = $this->instructor('birthday-onboard@example.test');
+
+        $this->actingAs($user)
+            ->from('/instructor/onboarding')
+            ->post('/instructor/onboarding', [
+                'bio' => 'Young applicant',
+                'birthday' => now()->subYears(17)->toDateString(),
+                'level' => 1,
+                'rate_per_hour' => 600,
+                'certificates' => [UploadedFile::fake()->create('sisa_cert.pdf', 100, 'application/pdf')],
+            ])
+            ->assertSessionHasErrors('birthday');
+
+        $validBirthday = '2000-04-12';
+        $this->actingAs($user)
+            ->post('/instructor/onboarding', [
+                'bio' => 'Eligible instructor',
+                'birthday' => $validBirthday,
+                'level' => 1,
+                'rate_per_hour' => 600,
+                'certificates' => [UploadedFile::fake()->create('sisa_cert.pdf', 100, 'application/pdf')],
+            ])
+            ->assertRedirect(route('instructor.pending'));
+
+        $this->assertSame($validBirthday, $user->instructorProfile()->firstOrFail()->birthday?->format('Y-m-d'));
+    }
+
+    public function test_instructor_profile_update_validates_and_saves_birthday(): void
+    {
+        $user = $this->instructor('birthday-profile@example.test');
+        $user->instructorProfile()->create([
+            'bio' => 'Active instructor',
+            'level' => 1,
+            'status' => InstructorStatus::Active->value,
+            'rate_per_hour' => 600,
+        ]);
+
+        $this->actingAs($user)
+            ->from(route('instructor.profile.edit'))
+            ->patch(route('instructor.profile.update'), [
+                'name' => $user->name,
+                'bio' => 'Active instructor',
+                'birthday' => now()->subYears(16)->toDateString(),
+                'offered_services' => ['teaching'],
+                'rate_per_hour' => 600,
+            ])
+            ->assertSessionHasErrors('birthday');
+
+        $this->actingAs($user)
+            ->patch(route('instructor.profile.update'), [
+                'name' => $user->name,
+                'bio' => 'Active instructor',
+                'birthday' => '1997-08-24',
+                'offered_services' => ['teaching'],
+                'rate_per_hour' => 600,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('1997-08-24', $user->instructorProfile()->firstOrFail()->birthday?->format('Y-m-d'));
+    }
 }

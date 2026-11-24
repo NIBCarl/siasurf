@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Head, Link, usePage } from '@inertiajs/vue3'
-import ApplicationLogo from '@/Components/ApplicationLogo.vue'
-import { resolveAvatarUrl } from '@/utils/avatar'
+import SisaIdCard, { type SisaIdCardData } from '@/Components/Instructor/SisaIdCard.vue'
 import { formatPhilippineDateTime } from '@/utils/philippineTime'
 import {
   CheckBadgeIcon,
@@ -10,7 +9,6 @@ import {
   ExclamationTriangleIcon,
   ShieldCheckIcon,
   ShieldExclamationIcon,
-  StarIcon,
 } from '@heroicons/vue/24/outline'
 
 interface Certification {
@@ -49,6 +47,7 @@ interface Instructor {
 interface Props {
   instructor: Instructor
   verification: Verification
+  idCard: SisaIdCardData
   recentReviews: Array<{
     id: number
     rating: number | null
@@ -61,22 +60,64 @@ const props = defineProps<Props>()
 
 const page = usePage()
 const isAuthenticated = computed(() => Boolean((page.props.auth as any)?.user))
+const currentSide = ref<'front' | 'back'>('front')
 
-const statusIcon = computed(() => {
-  if (props.verification.status === 'verified') return ShieldCheckIcon
-  if (props.verification.status === 'suspended') return ShieldExclamationIcon
-  if (props.verification.status === 'pending') return ClockIcon
-  return ExclamationTriangleIcon
+const levelBackdrop = computed(() => {
+  const lvl = Number(props.idCard.level ?? props.instructor.level ?? 1)
+  if (lvl === 2) {
+    return {
+      bg: 'radial-gradient(circle at 50% 42%, rgba(56, 86, 198, 0.28) 0%, rgba(26, 36, 118, 0.30) 42%, #090C24 88%), #090C24',
+      headerBg: 'rgba(10, 14, 42, 0.74)',
+      headerBorder: 'rgba(176, 206, 255, 0.28)',
+      orgColor: '#9EC5FF',
+      hintBg: 'rgba(10, 14, 42, 0.64)',
+    }
+  }
+  if (lvl >= 3) {
+    return {
+      bg: 'radial-gradient(circle at 50% 42%, rgba(13, 148, 136, 0.28) 0%, rgba(11, 57, 72, 0.32) 42%, #051923 88%), #051923',
+      headerBg: 'rgba(5, 25, 35, 0.74)',
+      headerBorder: 'rgba(153, 246, 228, 0.28)',
+      orgColor: '#5EEAD4',
+      hintBg: 'rgba(5, 25, 35, 0.64)',
+    }
+  }
+  return {
+    bg: 'radial-gradient(circle at 50% 42%, rgba(215, 92, 38, 0.28) 0%, rgba(130, 18, 28, 0.24) 42%, #130408 88%), #130408',
+    headerBg: 'rgba(20, 6, 10, 0.72)',
+    headerBorder: 'rgba(255, 224, 178, 0.24)',
+    orgColor: '#F6C57B',
+    hintBg: 'rgba(20, 6, 10, 0.62)',
+  }
 })
 
-const statusPanelClass = computed(() => {
+const statusBadge = computed(() => {
   if (props.verification.status === 'verified') {
-    return 'bg-emerald-700 text-white'
+    return {
+      text: 'SISA Verified · Authorised',
+      classes: 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200',
+      icon: ShieldCheckIcon,
+    }
   }
-  if (props.verification.status === 'suspended') {
-    return 'bg-rose-700 text-white'
+  if (props.verification.status === 'suspended' || props.verification.status === 'rejected') {
+    return {
+      text: `${props.verification.label} · Not Authorised`,
+      classes: 'border-rose-400/40 bg-rose-500/25 text-rose-200',
+      icon: ShieldExclamationIcon,
+    }
   }
-  return 'bg-amber-600 text-white'
+  if (props.verification.status === 'pending') {
+    return {
+      text: 'Verification Pending',
+      classes: 'border-amber-400/40 bg-amber-500/20 text-amber-200',
+      icon: ClockIcon,
+    }
+  }
+  return {
+    text: `${props.verification.label} · Not Authorised`,
+    classes: 'border-amber-400/40 bg-amber-500/20 text-amber-200',
+    icon: ExclamationTriangleIcon,
+  }
 })
 
 const checkedAt = computed(() =>
@@ -90,176 +131,281 @@ const checkedAt = computed(() =>
   ),
 )
 
-const initials = computed(() =>
-  props.instructor.name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join(''),
-)
-
-const avatarUrl = computed(() => resolveAvatarUrl(props.instructor))
-
-const formatMoney = (value: number) =>
-  new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    maximumFractionDigits: 0,
-  }).format(value)
-
 const bookLabel = computed(() => (isAuthenticated.value ? 'Book Lesson Now' : 'Book Lesson (Sign in)'))
 </script>
 
 <template>
   <Head :title="`Verify ${instructor.name} · SiaSurf`" />
 
-  <div class="min-h-screen bg-sand-50 px-4 py-8 text-deep-950 sm:px-6">
-    <main class="mx-auto w-full max-w-lg">
-      <div class="mb-5 flex items-center justify-between">
-        <Link href="/" class="inline-flex items-center">
-          <ApplicationLogo variant="horizontal" class="h-8 w-auto" />
-        </Link>
-        <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800 shadow-sm">
-          <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-600" aria-hidden="true"></span>
-          Live SISA check
+  <div
+    class="scan-viewport"
+    :style="{ background: levelBackdrop.bg }"
+  >
+    <!-- Top Floating SISA Header Badge -->
+    <div
+      class="scan-id-header"
+      :style="{
+        background: levelBackdrop.headerBg,
+        borderColor: levelBackdrop.headerBorder,
+      }"
+    >
+      <div class="scan-org" :style="{ color: levelBackdrop.orgColor }">
+        Siargao Island Surfers Association
+      </div>
+      <div class="scan-name">
+        {{ instructor.name.toUpperCase() }} • {{ idCard.level_label }}
+      </div>
+      <div class="scan-meta">
+        <span>ID: {{ idCard.sisa_id_code }} • {{ currentSide === 'back' ? 'Back Side' : 'Front Side' }}</span>
+        <span
+          class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+          :class="statusBadge.classes"
+        >
+          <CheckBadgeIcon v-if="verification.is_verified" class="h-3 w-3" aria-hidden="true" />
+          <component :is="statusBadge.icon" v-else class="h-3 w-3" aria-hidden="true" />
+          {{ statusBadge.text }}
         </span>
       </div>
+    </div>
 
-      <section class="overflow-hidden rounded-[2rem] border border-sand-200 bg-white shadow-lift">
-        <div :class="['flex items-start gap-3 px-6 py-5', statusPanelClass]">
-          <component :is="statusIcon" class="mt-0.5 h-6 w-6 shrink-0" aria-hidden="true" />
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <p class="text-sm font-black uppercase tracking-[0.12em]">{{ verification.label }}</p>
-              <span class="rounded-full bg-white/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white">
-                {{ verification.status === 'verified' ? 'Authorised' : 'Not authorised' }}
-              </span>
-            </div>
-            <p class="mt-1.5 text-sm leading-relaxed text-white/95">{{ verification.message }}</p>
-          </div>
-        </div>
+    <!-- Top Right Tap/Swipe Hint -->
+    <div
+      class="scan-hint"
+      :style="{ background: levelBackdrop.hintBg }"
+    >
+      Tap or swipe to flip
+    </div>
 
-        <div class="p-6 sm:p-8">
-          <div class="flex flex-col items-center text-center">
-            <div class="relative">
-              <img
-                v-if="avatarUrl"
-                :src="avatarUrl"
-                :alt="instructor.name"
-                class="h-28 w-28 rounded-[2rem] object-cover ring-4 ring-sand-100 shadow-card"
-              />
-              <span
-                v-else
-                class="flex h-28 w-28 items-center justify-center rounded-[2rem] bg-deep-900 text-3xl font-black text-lagoon-300 ring-4 ring-sand-100 shadow-card"
-                aria-hidden="true"
-              >
-                {{ initials }}
-              </span>
-              <span
-                class="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl ring-4 ring-white"
-                :class="verification.is_verified ? 'bg-emerald-600' : 'bg-rose-600'"
-                aria-hidden="true"
-              >
-                <CheckBadgeIcon v-if="verification.is_verified" class="h-5 w-5 text-white" />
-                <ExclamationTriangleIcon v-else class="h-5 w-5 text-white" />
-              </span>
-            </div>
-
-            <h1 class="mt-4 text-2xl font-extrabold tracking-tight text-deep-950">{{ instructor.name }}</h1>
-            <div class="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-stone-600">
-              <span v-if="instructor.level_label">{{ instructor.level_label }}</span>
-              <span v-if="instructor.level_label" aria-hidden="true">·</span>
-              <span class="font-bold text-deep-900">{{ formatMoney(instructor.rate_per_hour) }}/hour</span>
-              <span v-if="instructor.reviews_count" aria-hidden="true">·</span>
-              <span v-if="instructor.reviews_count" class="inline-flex items-center gap-1 text-amber-700 font-bold">
-                <StarIcon class="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-                {{ instructor.average_rating.toFixed(1) }} ({{ instructor.reviews_count }})
-              </span>
-            </div>
-
-            <p v-if="instructor.bio" class="mt-4 text-sm leading-relaxed text-stone-600">
-              "{{ instructor.bio.length > 140 ? `${instructor.bio.slice(0, 140)}…` : instructor.bio }}"
-            </p>
-          </div>
-
-          <div v-if="verification.certifications.length" class="mt-6 rounded-2xl border border-sand-200 bg-sand-50 p-4">
-            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-stone-500">
-              Verified certifications
-            </p>
-            <div class="mt-2 flex flex-wrap gap-2">
-              <span
-                v-for="certificate in verification.certifications"
-                :key="certificate.id"
-                class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold"
-                :class="
-                  certificate.expired
-                    ? 'border-rose-200 bg-rose-50 text-rose-800'
-                    : 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                "
-              >
-                {{ certificate.label }}
-                <span v-if="certificate.expired" class="text-rose-700">· expired</span>
-              </span>
-            </div>
-          </div>
-
-          <div class="mt-6 space-y-2.5">
-            <template v-if="verification.can_book">
-              <Link
-                :href="route('bookings.create', instructor.id)"
-                class="flex w-full items-center justify-center rounded-xl bg-coral-700 px-6 py-3.5 text-base font-bold text-white shadow-card transition-colors hover:bg-coral-800"
-              >
-                {{ bookLabel }} &rarr;
-              </Link>
-              <Link
-                v-if="!isAuthenticated"
-                :href="route('register')"
-                class="block pt-1 text-center text-xs font-bold uppercase tracking-[0.14em] text-lagoon-700 transition-colors hover:text-lagoon-800"
-              >
-                New to SiaSurf? Create a tourist account
-              </Link>
-              <Link
-                :href="route('instructors.profile', instructor.id)"
-                class="block text-center text-xs font-bold uppercase tracking-[0.14em] text-stone-500 transition-colors hover:text-deep-950"
-              >
-                View full profile &amp; reviews
-              </Link>
-            </template>
-
-            <div
-              v-else
-              class="rounded-2xl border border-sand-200 bg-sand-50 px-4 py-3 text-center text-xs font-semibold text-stone-600"
-            >
-              Booking is disabled until SISA restores this instructor to verified status.
-            </div>
-          </div>
-
-          <div v-if="verification.can_book && recentReviews.length" class="mt-6 border-t border-sand-200 pt-5">
-            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-stone-500">Recent reviews</p>
-            <ul class="mt-3 space-y-3">
-              <li v-for="review in recentReviews" :key="review.id" class="rounded-2xl border border-sand-200 bg-sand-50 p-3">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="truncate text-xs font-bold text-deep-900">{{ review.student_name }}</span>
-                  <span v-if="review.rating" class="inline-flex items-center gap-0.5 text-[11px] font-bold text-amber-700">
-                    {{ review.rating }} <StarIcon class="h-3 w-3 text-amber-500" aria-hidden="true" />
-                  </span>
-                </div>
-                <p class="mt-1 max-h-12 overflow-hidden text-xs leading-relaxed text-stone-600">{{ review.comment }}</p>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <div class="mt-5 flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
-        <ShieldCheckIcon class="h-3.5 w-3.5 text-lagoon-700" aria-hidden="true" />
-        Status checked live at {{ checkedAt }}
-      </div>
-      <p class="mt-2 text-center text-[10px] leading-relaxed text-stone-500">
-        The QR is permanent. This page reads the current SISA record every time it is scanned.
-      </p>
+    <!-- Center 3D SISA Portrait ID Card -->
+    <main class="scan-stage">
+      <SisaIdCard
+        :card="idCard"
+        :verification-status="verification.status"
+        :verification-label="verification.label"
+        @side-change="currentSide = $event"
+      />
     </main>
+
+    <!-- Bottom Action Dock: Book Lesson Now & View Full Profile & Reviews (No Flip/Reset buttons) -->
+    <div
+      class="scan-dock"
+      :style="{
+        background: levelBackdrop.headerBg,
+        borderColor: levelBackdrop.headerBorder,
+      }"
+    >
+      <template v-if="verification.can_book">
+        <div class="scan-actions">
+          <Link
+            :href="route('bookings.create', instructor.id)"
+            class="scan-book-btn"
+          >
+            {{ bookLabel }} &rarr;
+          </Link>
+          <Link
+            :href="route('instructors.profile', instructor.id)"
+            class="scan-profile-btn"
+          >
+            View Full Profile &amp; Reviews
+          </Link>
+        </div>
+      </template>
+
+      <div v-else class="scan-blocked-box">
+        <p class="font-bold text-rose-200">{{ verification.label }}</p>
+        <p class="mt-0.5 text-xs text-white/85">{{ verification.message }}</p>
+      </div>
+
+      <div class="scan-footer-meta">
+        <span>Live SISA check · {{ checkedAt }}</span>
+        <Link href="/" class="underline decoration-white/30 underline-offset-2 hover:text-white">
+          SiaSurf
+        </Link>
+      </div>
+    </div>
   </div>
 </template>
 
+<style scoped>
+.scan-viewport {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  padding: 96px 16px 132px;
+  --sisa-card-width: min(370px, 84vw, calc(60dvh * 1080 / 1712));
+}
+
+.scan-id-header {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  left: 16px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid;
+  backdrop-filter: blur(10px);
+  z-index: 30;
+  max-width: calc(100vw - 210px);
+}
+
+.scan-org {
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.scan-name {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scan-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.scan-hint {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: 16px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  z-index: 30;
+}
+
+.scan-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.scan-dock {
+  position: fixed;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid;
+  backdrop-filter: blur(12px);
+  z-index: 30;
+}
+
+.scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scan-book-btn {
+  flex: 1 1 180px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #c2410c;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 16px;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.scan-book-btn:hover {
+  background: #9a3412;
+}
+
+.scan-book-btn:active {
+  transform: scale(0.98);
+}
+
+.scan-profile-btn {
+  flex: 1 1 180px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 14px;
+  transition: background 0.15s ease;
+}
+
+.scan-profile-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.scan-blocked-box {
+  text-align: center;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.scan-footer-meta {
+  margin-top: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.68);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 640px) {
+  .scan-viewport {
+    padding: 110px 12px 158px;
+    --sisa-card-width: min(340px, 82vw, calc(54dvh * 1080 / 1712));
+  }
+
+  .scan-id-header {
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100vw - 24px);
+    max-width: 440px;
+    text-align: center;
+  }
+
+  .scan-meta {
+    justify-content: center;
+  }
+
+  .scan-hint {
+    top: auto;
+    right: auto;
+    left: 50%;
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 114px);
+    transform: translateX(-50%);
+    font-size: 11px;
+    padding: 4px 11px;
+    white-space: nowrap;
+  }
+}
+</style>

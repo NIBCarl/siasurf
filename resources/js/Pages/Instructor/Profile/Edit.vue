@@ -21,6 +21,7 @@ import {
 
 interface InstructorProfile {
   bio: string
+  birthday?: string | null
   level: number
   offered_services?: string[] | null
   rate_per_hour: number | null
@@ -107,8 +108,15 @@ const coachingBand = computed<ServiceBand>(() => pricing.value.services?.coachin
 const instructorLevel = computed(() => Number(user.instructor_profile?.level ?? 1))
 const flashSuccess = computed(() => (page.props.flash as any)?.success ?? null)
 
+const maxBirthday = computed(() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 18)
+  return d.toISOString().split('T')[0]
+})
+
 const form = useForm({
   name: user.name,
+  birthday: user.instructor_profile?.birthday || '',
   bio: user.instructor_profile?.bio || '',
   offered_services: [...(props.offeredServices?.length ? props.offeredServices : props.allowedServices)] as string[],
   rate_per_hour: Number(user.instructor_profile?.rate_per_hour) || teachingBand.value.default,
@@ -353,6 +361,19 @@ const certificateVariant = (status: string): BadgeVariant => {
                   required
                 />
                 <InputError class="mt-2" :message="form.errors.name" />
+              </div>
+
+              <div>
+                <InputLabel for="birthday" value="Date of birth" />
+                <TextInput
+                  id="birthday"
+                  type="date"
+                  class="mt-1 block w-full max-w-xs"
+                  v-model="form.birthday"
+                  :max="maxBirthday"
+                />
+                <p class="mt-1 text-label text-stone-500">Displayed on your official SISA Instructor ID card (18+).</p>
+                <InputError class="mt-2" :message="form.errors.birthday" />
               </div>
 
               <div>
