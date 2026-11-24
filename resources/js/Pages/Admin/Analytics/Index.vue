@@ -98,7 +98,7 @@ const exportReport = () => {
                                 <svg class="w-3 h-3 text-slate-300 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
                                     <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/>
                                 </svg>
-                                <span class="ml-1 text-sm font-bold text-ocean-600 md:ml-2">Insights</span>
+                                <span class="ml-1 text-sm font-bold text-lagoon-700 md:ml-2">Insights</span>
                             </div>
                         </li>
                     </ol>
@@ -118,7 +118,7 @@ const exportReport = () => {
                     type="button"
                     :disabled="refreshing"
                     @click="syncData"
-                    class="px-4 py-2 bg-ocean-600 text-white rounded-xl text-sm font-bold hover:bg-ocean-700 transition-colors shadow-lg shadow-ocean-600/20 disabled:opacity-60"
+                    class="px-4 py-2 bg-coral-700 text-white rounded-xl text-sm font-bold hover:bg-coral-800 transition-colors shadow-card disabled:opacity-60"
                 >
                     {{ refreshing ? 'Syncing...' : 'Sync Data' }}
                 </button>
@@ -183,41 +183,39 @@ const exportReport = () => {
             </div>
 
             <!-- Distribution Card -->
-            <div class="md:col-span-2 bg-slate-900 rounded-[2.5rem] p-8 border border-slate-800 shadow-xl relative overflow-hidden group">
-                <div class="absolute inset-0 bg-gradient-to-br from-ocean-600/10 to-transparent"></div>
-                
+            <div class="md:col-span-2 bg-white rounded-[2.5rem] p-8 border border-sand-200 border-t-4 border-t-deep-900 shadow-sm relative overflow-hidden group">
                 <div class="relative z-10 h-full flex flex-col">
-                    <div class="mb-6 text-white">
-                        <h3 class="text-xl font-bold">Booking Status Distribution</h3>
-                        <p class="text-slate-400 text-sm">Live breakdown across booking states</p>
+                    <div class="mb-6">
+                        <h3 class="text-xl font-bold text-deep-950">Booking Status Distribution</h3>
+                        <p class="text-stone-500 text-sm">Live breakdown across booking states</p>
                     </div>
                     
                     <div class="flex-grow flex items-center justify-center p-2">
-                        <BookingDistributionChart :dark="true" class="w-full" />
+                        <BookingDistributionChart :dark="false" class="w-full" />
                     </div>
 
-                    <div class="mt-6 pt-6 border-t border-white/10 space-y-3">
+                    <div class="mt-6 pt-6 border-t border-sand-200 space-y-3">
                         <div class="flex items-center justify-between text-xs">
-                            <span class="text-slate-300">{{ summary.dominant_skill_label }} focus</span>
-                            <span class="text-ocean-300 font-bold">{{ summary.dominant_skill_pct }}%</span>
+                            <span class="text-stone-600 font-medium">{{ summary.dominant_skill_label }} focus</span>
+                            <span class="text-lagoon-700 font-bold">{{ summary.dominant_skill_pct }}%</span>
                         </div>
-                        <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-ocean-400 h-full transition-all duration-500" :style="{ width: `${summary.dominant_skill_pct}%` }"></div>
+                        <div class="w-full bg-sand-100 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-lagoon-600 h-full transition-all duration-500" :style="{ width: `${summary.dominant_skill_pct}%` }"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Regional Hotspots -->
-            <div class="md:col-span-6 lg:col-span-3 bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm overflow-hidden group">
+            <div class="md:col-span-6 lg:col-span-3 bg-white rounded-[2.5rem] p-8 border border-sand-200 shadow-sm overflow-hidden group">
                 <div class="flex items-center justify-between mb-8">
                     <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-reef-50 rounded-2xl flex items-center justify-center">
-                            <MapPinIcon class="w-6 h-6 text-reef-600" />
+                        <div class="w-12 h-12 bg-lagoon-50 rounded-2xl flex items-center justify-center">
+                            <MapPinIcon class="w-6 h-6 text-lagoon-700" />
                         </div>
                         <div>
-                            <h3 class="text-xl font-bold text-slate-900">Regional Hotspots</h3>
-                            <p class="text-slate-500 text-sm">Most booked surf spots</p>
+                            <h3 class="text-xl font-bold text-deep-950">Regional Hotspots</h3>
+                            <p class="text-stone-500 text-sm">Most booked surf spots</p>
                         </div>
                     </div>
                 </div>
@@ -230,23 +228,23 @@ const exportReport = () => {
             <!-- Secondary Insights -->
             <div class="md:col-span-6 lg:col-span-3 grid grid-cols-2 gap-6">
                 <!-- Data Insight 1 -->
-                <div class="bg-reef-600 rounded-[2rem] p-6 text-white relative overflow-hidden group shadow-lg shadow-reef-600/20">
-                    <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-125 transition-transform duration-700">
-                        <UserIcon class="w-24 h-24" />
+                <div class="bg-white rounded-[2rem] p-6 border border-sand-200 border-t-4 border-t-lagoon-600 text-deep-950 relative overflow-hidden group shadow-sm">
+                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
+                        <UserIcon class="w-24 h-24 text-lagoon-700" />
                     </div>
-                    <p class="text-white/80 text-sm font-bold uppercase tracking-wider mb-1">Peak Student Age</p>
-                    <h4 class="text-3xl font-bold">{{ summary.peak_age_group }}</h4>
-                    <p class="text-white/80 text-xs mt-4">{{ summary.peak_age_note }}</p>
+                    <p class="text-stone-500 text-sm font-bold uppercase tracking-wider mb-1">Peak Student Age</p>
+                    <h4 class="text-3xl font-bold text-lagoon-700">{{ summary.peak_age_group }}</h4>
+                    <p class="text-stone-600 text-xs mt-4">{{ summary.peak_age_note }}</p>
                 </div>
 
                 <!-- Data Insight 2 -->
-                <div class="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm relative overflow-hidden group text-slate-900">
+                <div class="bg-white rounded-[2rem] p-6 border border-sand-200 border-t-4 border-t-deep-800 shadow-sm relative overflow-hidden group text-deep-950">
                     <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
-                        <CalendarIcon class="w-24 h-24 text-ocean-600" />
+                        <CalendarIcon class="w-24 h-24 text-deep-900" />
                     </div>
-                    <p class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Busiest Day</p>
-                    <h4 class="text-3xl font-bold text-ocean-600">{{ summary.busiest_day }}</h4>
-                    <p class="text-slate-600 text-xs mt-4">{{ summary.busiest_day_note }}</p>
+                    <p class="text-stone-500 text-sm font-bold uppercase tracking-wider mb-1">Busiest Day</p>
+                    <h4 class="text-3xl font-bold text-deep-900">{{ summary.busiest_day }}</h4>
+                    <p class="text-stone-600 text-xs mt-4">{{ summary.busiest_day_note }}</p>
                 </div>
             </div>
 

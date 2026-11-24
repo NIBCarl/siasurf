@@ -530,19 +530,25 @@ const timelineEvents = computed(() => {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <!-- Payment Status -->
                     <div
-                        class="rounded-[2.5rem] p-10 text-white relative overflow-hidden group shadow-xl"
-                        :class="isUnderpaid ? 'bg-rose-600 shadow-rose-600/20' : 'bg-ocean-600 shadow-ocean-600/20'"
+                        class="rounded-[2.5rem] border bg-white p-10 text-deep-950 relative overflow-hidden group shadow-sm border-t-4"
+                        :class="isUnderpaid ? 'border-rose-200 border-t-rose-600 bg-rose-50/30' : 'border-sand-200 border-t-lagoon-600'"
                     >
-                        <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:rotate-12 transition-transform duration-700">
-                            <CreditCardIcon class="w-40 h-40" />
+                        <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:rotate-12 transition-transform duration-700">
+                            <CreditCardIcon class="w-40 h-40 text-lagoon-700" />
                         </div>
                         
                         <div class="relative z-10 h-full flex flex-col">
                             <div class="flex items-center justify-between mb-8">
-                                <h3 class="text-[10px] font-bold uppercase opacity-60 tracking-widest">
+                                <h3
+                                    class="text-[10px] font-bold uppercase tracking-widest"
+                                    :class="isUnderpaid ? 'text-rose-700' : 'text-stone-500'"
+                                >
                                     {{ isUnderpaid ? 'Underpaid Violation Alert' : 'Payment Settlement' }}
                                 </h3>
-                                <div class="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
+                                <div
+                                    class="w-8 h-8 rounded-lg flex items-center justify-center"
+                                    :class="isUnderpaid ? 'bg-rose-100 text-rose-700' : 'bg-lagoon-50 text-lagoon-700'"
+                                >
                                     <CreditCardIcon class="w-4 h-4" />
                                 </div>
                             </div>
@@ -550,73 +556,73 @@ const timelineEvents = computed(() => {
                             <div v-if="booking.payment" class="space-y-6">
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
-                                        <p class="text-[10px] font-black uppercase opacity-40 mb-1">Method</p>
-                                        <p class="text-xl font-black tracking-tight uppercase">{{ booking.payment.payment_method }}</p>
+                                        <p class="text-[10px] font-black uppercase text-stone-400 mb-1">Method</p>
+                                        <p class="text-xl font-black tracking-tight uppercase text-deep-950">{{ booking.payment.payment_method }}</p>
                                     </div>
                                     <div>
-                                        <p class="text-[10px] font-black uppercase opacity-40 mb-1">Status</p>
-                                        <p class="text-xl font-black tracking-tight uppercase">{{ booking.payment.status.replace(/_/g, ' ') }}</p>
+                                        <p class="text-[10px] font-black uppercase text-stone-400 mb-1">Status</p>
+                                        <p class="text-xl font-black tracking-tight uppercase text-deep-950">{{ booking.payment.status.replace(/_/g, ' ') }}</p>
                                     </div>
                                 </div>
-                                <div class="pt-6 border-t border-white/10">
+                                <div class="pt-6 border-t border-sand-200">
                                     <template v-if="isUnderpaid">
-                                        <p class="text-3xl font-black tracking-tighter">
+                                        <p class="text-3xl font-black tracking-tighter text-rose-700">
                                             ₱{{ paidAmount.toLocaleString() }}
-                                            <span class="text-lg font-bold opacity-75">paid of ₱{{ totalAmount.toLocaleString() }}</span>
+                                            <span class="text-lg font-bold text-stone-500">paid of ₱{{ totalAmount.toLocaleString() }}</span>
                                         </p>
-                                        <p class="mt-1 inline-block rounded-lg bg-white/20 px-2.5 py-1 text-xs font-black uppercase tracking-wider text-white">
+                                        <p class="mt-2 inline-block rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-black uppercase tracking-wider text-rose-800">
                                             Shortfall Owed: ₱{{ shortfallAmount.toLocaleString() }}
                                         </p>
                                     </template>
                                     <template v-else>
-                                        <p class="text-4xl font-black tracking-tighter">
+                                        <p class="text-4xl font-black tracking-tighter text-deep-950">
                                             ₱{{ (booking.payment.status === 'completed' ? paidAmount : totalAmount).toLocaleString() }}
                                         </p>
                                     </template>
-                                    <p v-if="booking.payment.paid_at" class="text-[10px] font-bold opacity-60 mt-2">
+                                    <p v-if="booking.payment.paid_at" class="text-[10px] font-bold text-stone-500 mt-2">
                                         Processed on {{ new Date(booking.payment.paid_at).toLocaleDateString() }}
                                     </p>
                                 </div>
 
                                 <!-- Instructor Payment / Underpayment Note -->
-                                <div v-if="booking.payment.notes" class="rounded-2xl bg-white/15 p-3.5 text-xs">
-                                    <p class="text-[10px] font-black uppercase tracking-widest opacity-75">Instructor Payment Note</p>
-                                    <p class="mt-1 font-semibold leading-relaxed">{{ booking.payment.notes }}</p>
+                                <div v-if="booking.payment.notes" class="rounded-2xl border border-sand-200 bg-sand-50 p-3.5 text-xs">
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">Instructor Payment Note</p>
+                                    <p class="mt-1 font-semibold leading-relaxed text-deep-900">{{ booking.payment.notes }}</p>
                                 </div>
 
                                 <!-- Admin Enforcement Actions for Underpaid Student -->
                                 <div v-if="isUnderpaid" class="space-y-2 pt-2">
                                     <button
                                         type="button"
-                                        class="w-full rounded-xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-rose-700 transition hover:bg-rose-50"
+                                        class="w-full rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white transition hover:bg-rose-700"
                                         @click="toggleStudentBan"
                                     >
                                         {{ booking.student.student_profile?.status === 'banned' ? 'Student Banned (Click to Lift Ban)' : 'Ban Student for Non-Payment' }}
                                     </button>
                                     <button
                                         type="button"
-                                        class="w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-wider text-white transition hover:bg-white/20"
+                                        class="w-full rounded-xl border border-sand-300 bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-deep-900 transition hover:bg-sand-100"
                                         @click="settleRemainingBalance"
                                     >
                                         Mark Remaining ₱{{ shortfallAmount.toLocaleString() }} Settled
                                     </button>
                                     <Link
                                         :href="route('admin.students.show', booking.student.id)"
-                                        class="block w-full text-center text-[11px] font-bold uppercase tracking-wider underline opacity-90 hover:opacity-100 pt-1"
+                                        class="block w-full text-center text-[11px] font-bold uppercase tracking-wider text-lagoon-700 underline hover:text-lagoon-800 pt-1"
                                     >
                                         Open {{ booking.student.name }}'s Student Dossier →
                                     </Link>
                                 </div>
 
                                 <!-- GCash receipt: full image + one-click approval -->
-                                <div v-if="receiptUrl" class="rounded-2xl bg-white/10 p-3">
+                                <div v-if="receiptUrl" class="rounded-2xl border border-sand-200 bg-sand-50 p-3">
                                     <div class="flex items-center justify-between gap-2">
-                                        <p class="text-[10px] font-black uppercase tracking-widest opacity-60">GCash receipt</p>
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">GCash receipt</p>
                                         <a
                                             :href="receiptUrl"
                                             target="_blank"
                                             rel="noopener"
-                                            class="text-[10px] font-bold uppercase tracking-wider underline underline-offset-2"
+                                            class="text-[10px] font-bold uppercase tracking-wider text-lagoon-700 underline underline-offset-2 hover:text-lagoon-800"
                                         >
                                             Open full image
                                         </a>
@@ -626,56 +632,56 @@ const timelineEvents = computed(() => {
                                         <img
                                             :src="receiptUrl"
                                             alt="GCash receipt uploaded by the student"
-                                            class="h-48 w-full rounded-xl bg-white object-contain"
+                                            class="h-48 w-full rounded-xl border border-sand-200 bg-white object-contain"
                                         />
                                     </a>
 
-                                    <p v-if="booking.payment.receipt_reference" class="mt-2 text-xs opacity-80">
+                                    <p v-if="booking.payment.receipt_reference" class="mt-2 text-xs text-deep-900">
                                         Ref: <span class="font-mono">{{ booking.payment.receipt_reference }}</span>
                                     </p>
-                                    <p v-if="booking.payment.receipt_uploaded_at" class="mt-1 text-[10px] opacity-60">
+                                    <p v-if="booking.payment.receipt_uploaded_at" class="mt-1 text-[10px] text-stone-500">
                                         Uploaded {{ new Date(booking.payment.receipt_uploaded_at).toLocaleString() }}
                                     </p>
 
                                     <button
                                         v-if="canVerifyReceipt"
                                         type="button"
-                                        class="mt-3 w-full rounded-xl bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-ocean-700 transition hover:bg-ocean-50"
+                                        class="mt-3 w-full rounded-xl bg-coral-700 px-4 py-2 text-xs font-black uppercase tracking-wider text-white transition hover:bg-coral-800"
                                         @click="verifyReceipt"
                                     >
                                         Approve payment
                                     </button>
                                     <p
                                         v-else-if="booking.payment.status === 'completed'"
-                                        class="mt-2 text-[10px] font-bold uppercase tracking-wider text-emerald-200"
+                                        class="mt-2 text-[10px] font-bold uppercase tracking-wider text-emerald-700"
                                     >
                                         Receipt verified
                                     </p>
                                 </div>
 
                                 <!-- Refund Oversight & Action -->
-                                <div v-if="booking.latest_refund" class="rounded-2xl bg-white/15 p-3.5 text-xs space-y-2">
+                                <div v-if="booking.latest_refund" class="rounded-2xl border border-sand-200 bg-sand-50 p-3.5 text-xs space-y-2">
                                     <div class="flex items-center justify-between gap-2">
-                                        <p class="text-[10px] font-black uppercase tracking-widest opacity-75">
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-stone-500">
                                             Refund Record · {{ booking.latest_refund.status_label }}
                                         </p>
-                                        <span class="font-black">₱{{ Number(booking.latest_refund.amount).toLocaleString() }}</span>
+                                        <span class="font-black text-deep-950">₱{{ Number(booking.latest_refund.amount).toLocaleString() }}</span>
                                     </div>
-                                    <p class="opacity-90">{{ booking.latest_refund.basis_label }} ({{ booking.latest_refund.refund_percentage }}%)</p>
-                                    <p v-if="Number(booking.latest_refund.service_fee_retained) > 0" class="opacity-75">
+                                    <p class="text-deep-900">{{ booking.latest_refund.basis_label }} ({{ booking.latest_refund.refund_percentage }}%)</p>
+                                    <p v-if="Number(booking.latest_refund.service_fee_retained) > 0" class="text-stone-600">
                                         Retained Fee: ₱{{ Number(booking.latest_refund.service_fee_retained).toLocaleString() }}
                                     </p>
-                                    <p v-if="booking.latest_refund.paymongo_refund_id" class="font-mono text-[10px] opacity-80">
+                                    <p v-if="booking.latest_refund.paymongo_refund_id" class="font-mono text-[10px] text-stone-600">
                                         Ref: {{ booking.latest_refund.paymongo_refund_id }}
                                     </p>
-                                    <p v-if="booking.latest_refund.failure_reason" class="text-rose-200 font-semibold">
+                                    <p v-if="booking.latest_refund.failure_reason" class="text-rose-700 font-semibold">
                                         {{ booking.latest_refund.failure_reason }}
                                     </p>
                                     <div class="flex flex-wrap gap-2 pt-1">
                                         <button
                                             v-if="booking.latest_refund.status === 'failed' && booking.latest_refund.gateway !== 'manual_gcash'"
                                             type="button"
-                                            class="rounded-lg bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-ocean-700"
+                                            class="rounded-lg bg-coral-700 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white hover:bg-coral-800"
                                             @click="retryRefund(booking.latest_refund.id)"
                                         >
                                             Retry PayMongo Refund
@@ -683,7 +689,7 @@ const timelineEvents = computed(() => {
                                         <button
                                             v-if="booking.latest_refund.status === 'manual_required' || booking.latest_refund.status === 'failed'"
                                             type="button"
-                                            class="rounded-lg border border-white/40 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white"
+                                            class="rounded-lg border border-sand-300 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-deep-900 hover:bg-sand-100"
                                             @click="completeManualRefund(booking.latest_refund.id)"
                                         >
                                             Mark Manual Completed
@@ -694,39 +700,39 @@ const timelineEvents = computed(() => {
                                 <button
                                     v-if="canAdminRefund"
                                     type="button"
-                                    class="w-full rounded-xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-ocean-700 transition hover:bg-ocean-50"
+                                    class="w-full rounded-xl bg-coral-700 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white transition hover:bg-coral-800"
                                     @click="openRefundModal"
                                 >
                                     Issue SISA Refund
                                 </button>
                             </div>
-                            <div v-else class="flex flex-col items-center justify-center py-8 opacity-40 italic">
+                            <div v-else class="flex flex-col items-center justify-center py-8 text-stone-400 italic">
                                 <p class="text-sm font-bold">Awaiting Transaction</p>
                             </div>
                         </div>
                     </div>
 
                     <!-- Legal Compliance -->
-                    <div class="bg-slate-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden group border border-slate-800 shadow-xl">
-                        <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:-rotate-12 transition-transform duration-700">
-                            <ShieldCheckIcon class="w-40 h-40" />
+                    <div class="bg-white rounded-[2.5rem] p-10 text-deep-950 relative overflow-hidden group border border-sand-200 border-t-4 border-t-deep-900 shadow-sm">
+                        <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:-rotate-12 transition-transform duration-700">
+                            <ShieldCheckIcon class="w-40 h-40 text-deep-900" />
                         </div>
 
                         <div class="relative z-10 h-full flex flex-col">
                             <div class="flex items-center justify-between mb-8">
-                                <h3 class="text-[10px] font-bold uppercase opacity-60 tracking-widest">Legal Compliance</h3>
-                                <div class="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center">
+                                <h3 class="text-[10px] font-bold uppercase text-stone-500 tracking-widest">Legal Compliance</h3>
+                                <div class="w-8 h-8 bg-sand-100 text-deep-900 rounded-lg flex items-center justify-center">
                                     <ShieldCheckIcon class="w-4 h-4" />
                                 </div>
                             </div>
 
                             <div v-if="(booking.waivers && booking.waivers.length > 0) || booking.waiver" class="space-y-6 text-center py-4">
-                                <div class="w-16 h-16 bg-ocean-500/20 rounded-full flex items-center justify-center mx-auto ring-4 ring-ocean-500/10">
-                                    <DocumentTextIcon class="w-8 h-8 text-ocean-400" />
+                                <div class="w-16 h-16 bg-lagoon-50 rounded-full flex items-center justify-center mx-auto ring-4 ring-lagoon-100">
+                                    <DocumentTextIcon class="w-8 h-8 text-lagoon-700" />
                                 </div>
                                 <div class="space-y-1">
-                                    <p class="text-sm font-black text-ocean-400">Electronic Waiver Active</p>
-                                    <p v-if="booking.waiver" class="text-[10px] font-bold opacity-30 tracking-tight">Signed: {{ new Date(booking.waiver.signed_at).toLocaleString() }}</p>
+                                    <p class="text-sm font-black text-lagoon-700">Electronic Waiver Active</p>
+                                    <p v-if="booking.waiver" class="text-[10px] font-bold text-stone-500 tracking-tight">Signed: {{ new Date(booking.waiver.signed_at).toLocaleString() }}</p>
                                 </div>
                                 <div class="pt-2 space-y-2">
                                     <template v-if="booking.waivers && booking.waivers.length > 0">
@@ -734,7 +740,7 @@ const timelineEvents = computed(() => {
                                             <a
                                                 :href="route('waivers.view', w.id)"
                                                 target="_blank"
-                                                class="inline-block px-5 py-2 bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5"
+                                                class="inline-block px-5 py-2 bg-sand-50 text-deep-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-sand-100 transition-all border border-sand-300"
                                             >
                                                 {{ w.type === 'parental_consent' ? 'Consent' : 'Waiver' }}
                                                 <template v-if="w.participant_name"> · {{ w.participant_name }}</template>
@@ -745,14 +751,14 @@ const timelineEvents = computed(() => {
                                         v-else-if="booking.waiver"
                                         :href="route('waivers.view', booking.waiver.id)"
                                         target="_blank"
-                                        class="inline-block px-8 py-2.5 bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5"
+                                        class="inline-block px-8 py-2.5 bg-sand-50 text-deep-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-sand-100 transition-all border border-sand-300"
                                     >
                                         Open Document
                                     </a>
                                 </div>
                             </div>
-                            <div v-else class="flex flex-col items-center justify-center py-8 text-rose-400 italic">
-                                <InformationCircleIcon class="w-10 h-10 mb-2 opacity-50" />
+                            <div v-else class="flex flex-col items-center justify-center py-8 text-rose-700 italic">
+                                <InformationCircleIcon class="w-10 h-10 mb-2 opacity-60" />
                                 <p class="text-sm font-bold uppercase tracking-widest">Waiver Missing</p>
                             </div>
                         </div>
@@ -790,9 +796,9 @@ const timelineEvents = computed(() => {
                         </p>
                     </div>
 
-                    <div class="mt-10 p-4 bg-slate-900 rounded-2xl text-[10px] text-slate-400 text-center uppercase font-black tracking-widest leading-relaxed">
+                    <div class="mt-10 p-4 bg-sand-50 border border-sand-200 rounded-2xl text-[10px] text-stone-500 text-center uppercase font-black tracking-widest leading-relaxed">
                         Data Cryptographically Signed <br/> 
-                        <span class="text-ocean-400">SIASURF-SECURE-ENCLAVE</span>
+                        <span class="text-lagoon-700">SIASURF-SECURE-ENCLAVE</span>
                     </div>
                 </div>
             </div>
