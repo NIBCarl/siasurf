@@ -129,13 +129,13 @@ const exportReport = () => {
         <div class="grid grid-cols-1 md:grid-cols-6 gap-6">
             
             <!-- Main Revenue Card -->
-            <div class="md:col-span-4 bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-500">
+            <div class="min-w-0 md:col-span-4 bg-white rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 border border-slate-100 shadow-sm relative overflow-hidden group/card">
+                <div class="pointer-events-none absolute top-0 right-0 p-8 opacity-5 group-hover/card:scale-110 transition-transform duration-500">
                     <ArrowTrendingUpIcon class="w-32 h-32 text-ocean-600" />
                 </div>
                 
                 <div class="relative z-10">
-                    <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
                         <div>
                             <h3 class="text-xl font-bold text-slate-900">Revenue Velocity</h3>
                             <p class="text-slate-500 text-sm">
@@ -183,7 +183,7 @@ const exportReport = () => {
             </div>
 
             <!-- Distribution Card -->
-            <div class="md:col-span-2 bg-white rounded-[2.5rem] p-8 border border-sand-200 border-t-4 border-t-deep-900 shadow-sm relative overflow-hidden group">
+            <div class="min-w-0 md:col-span-2 bg-white rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 border border-sand-200 border-t-4 border-t-deep-900 shadow-sm relative overflow-hidden group/dist">
                 <div class="relative z-10 h-full flex flex-col">
                     <div class="mb-6">
                         <h3 class="text-xl font-bold text-deep-950">Booking Status Distribution</h3>
@@ -207,13 +207,13 @@ const exportReport = () => {
             </div>
 
             <!-- Regional Hotspots -->
-            <div class="md:col-span-6 lg:col-span-3 bg-white rounded-[2.5rem] p-8 border border-sand-200 shadow-sm overflow-hidden group">
-                <div class="flex items-center justify-between mb-8">
+            <div class="min-w-0 md:col-span-6 lg:col-span-3 bg-white rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 border border-sand-200 shadow-sm overflow-hidden group/hotspots">
+                <div class="flex items-center justify-between mb-6 sm:mb-8">
                     <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-lagoon-50 rounded-2xl flex items-center justify-center">
+                        <div class="w-12 h-12 shrink-0 bg-lagoon-50 rounded-2xl flex items-center justify-center">
                             <MapPinIcon class="w-6 h-6 text-lagoon-700" />
                         </div>
-                        <div>
+                        <div class="min-w-0">
                             <h3 class="text-xl font-bold text-deep-950">Regional Hotspots</h3>
                             <p class="text-stone-500 text-sm">Most booked surf spots</p>
                         </div>
@@ -226,25 +226,25 @@ const exportReport = () => {
             </div>
 
             <!-- Secondary Insights -->
-            <div class="md:col-span-6 lg:col-span-3 grid grid-cols-2 gap-6">
+            <div class="min-w-0 md:col-span-6 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <!-- Data Insight 1 -->
-                <div class="bg-white rounded-[2rem] p-6 border border-sand-200 border-t-4 border-t-lagoon-600 text-deep-950 relative overflow-hidden group shadow-sm">
-                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
+                <div class="min-w-0 bg-white rounded-[2rem] p-5 sm:p-6 border border-sand-200 border-t-4 border-t-lagoon-600 text-deep-950 relative overflow-hidden group/age shadow-sm">
+                    <div class="pointer-events-none absolute -right-4 -bottom-4 opacity-5 group-hover/age:scale-125 transition-transform duration-700">
                         <UserIcon class="w-24 h-24 text-lagoon-700" />
                     </div>
-                    <p class="text-stone-500 text-sm font-bold uppercase tracking-wider mb-1">Peak Student Age</p>
-                    <h4 class="text-3xl font-bold text-lagoon-700">{{ summary.peak_age_group }}</h4>
-                    <p class="text-stone-600 text-xs mt-4">{{ summary.peak_age_note }}</p>
+                    <p class="text-stone-500 text-xs sm:text-sm font-bold uppercase tracking-wider mb-1">Peak Student Age</p>
+                    <h4 class="text-2xl sm:text-3xl font-bold text-lagoon-700 break-words">{{ summary.peak_age_group }}</h4>
+                    <p class="text-stone-600 text-xs mt-3 sm:mt-4">{{ summary.peak_age_note }}</p>
                 </div>
 
                 <!-- Data Insight 2 -->
-                <div class="bg-white rounded-[2rem] p-6 border border-sand-200 border-t-4 border-t-deep-800 shadow-sm relative overflow-hidden group text-deep-950">
-                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
+                <div class="min-w-0 bg-white rounded-[2rem] p-5 sm:p-6 border border-sand-200 border-t-4 border-t-deep-800 shadow-sm relative overflow-hidden group/day text-deep-950">
+                    <div class="pointer-events-none absolute -right-4 -bottom-4 opacity-5 group-hover/day:scale-125 transition-transform duration-700">
                         <CalendarIcon class="w-24 h-24 text-deep-900" />
                     </div>
-                    <p class="text-stone-500 text-sm font-bold uppercase tracking-wider mb-1">Busiest Day</p>
-                    <h4 class="text-3xl font-bold text-deep-900">{{ summary.busiest_day }}</h4>
-                    <p class="text-stone-600 text-xs mt-4">{{ summary.busiest_day_note }}</p>
+                    <p class="text-stone-500 text-xs sm:text-sm font-bold uppercase tracking-wider mb-1">Busiest Day</p>
+                    <h4 class="text-2xl sm:text-3xl font-bold text-deep-900 break-words">{{ summary.busiest_day }}</h4>
+                    <p class="text-stone-600 text-xs mt-3 sm:mt-4">{{ summary.busiest_day_note }}</p>
                 </div>
             </div>
 

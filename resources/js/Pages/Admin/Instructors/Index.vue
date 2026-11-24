@@ -192,7 +192,67 @@ const paginationLabel = (label: string) =>
 
             <!-- Roster -->
             <AppCard v-if="instructors.data.length" padding="none" class="overflow-hidden">
-                <div class="overflow-x-auto">
+                <!-- Mobile card layout -->
+                <div class="divide-y divide-sand-200 md:hidden">
+                    <div
+                        v-for="instructor in instructors.data"
+                        :key="`mob-${instructor.id}`"
+                        class="space-y-3 p-4"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex min-w-0 items-center gap-3">
+                                <img
+                                    v-if="avatarUrl(instructor)"
+                                    :src="avatarUrl(instructor) || undefined"
+                                    alt=""
+                                    class="h-11 w-11 shrink-0 rounded-control object-cover"
+                                />
+                                <span
+                                    v-else
+                                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-deep-950 text-body font-semibold text-lagoon-200"
+                                >
+                                    {{ initials(instructor.name) }}
+                                </span>
+
+                                <div class="min-w-0">
+                                    <p class="truncate text-body font-semibold text-deep-900">
+                                        {{ instructor.name }}
+                                    </p>
+                                    <p class="truncate text-label text-stone-500">{{ instructor.email }}</p>
+                                </div>
+                            </div>
+
+                            <div class="shrink-0 text-right">
+                                <p class="metric text-body font-semibold text-deep-900">
+                                    ₱{{ formatAmount(instructor.instructor_profile.rate_per_hour) }}
+                                </p>
+                                <p class="text-label text-stone-500">per hr</p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <StatusPill :variant="statusMeta(instructor.instructor_profile.status).variant">
+                                {{ statusMeta(instructor.instructor_profile.status).label }}
+                            </StatusPill>
+                            <StatusPill variant="neutral" :dot="false">
+                                {{ levelLabel(instructor.instructor_profile.level) }}
+                            </StatusPill>
+                        </div>
+
+                        <AppButton
+                            :href="route('admin.instructors.show', instructor.id)"
+                            variant="secondary"
+                            size="sm"
+                            block
+                        >
+                            Open dossier
+                            <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                        </AppButton>
+                    </div>
+                </div>
+
+                <!-- Desktop table layout -->
+                <div class="hidden overflow-x-auto md:block">
                     <table class="w-full min-w-[820px] text-left">
                         <thead class="bg-sand-100">
                             <tr>

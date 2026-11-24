@@ -153,32 +153,92 @@ const paginationLabel = (label: string) =>
       </div>
 
       <!-- Summary KPIs -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="min-w-0 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Completed Refunds</p>
-          <p class="mt-2 text-2xl font-black text-slate-900">{{ money(stats.total_refunded_amount) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-slate-900 break-words">{{ money(stats.total_refunded_amount) }}</p>
           <p class="text-xs text-slate-500 mt-1">{{ stats.completed }} completed</p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="min-w-0 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Retained 7% Fees</p>
-          <p class="mt-2 text-2xl font-black text-ocean-700">{{ money(stats.total_service_fees_retained) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-ocean-700 break-words">{{ money(stats.total_service_fees_retained) }}</p>
           <p class="text-xs text-slate-500 mt-1">Never refunded</p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="min-w-0 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Manual Queue</p>
-          <p class="mt-2 text-2xl font-black text-amber-600">{{ stats.manual_required }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-amber-600">{{ stats.manual_required }}</p>
           <p class="text-xs text-slate-500 mt-1">Awaiting SISA confirmation</p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="min-w-0 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Gateway Issues</p>
-          <p class="mt-2 text-2xl font-black text-rose-600">{{ stats.failed }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-rose-600">{{ stats.failed }}</p>
           <p class="text-xs text-slate-500 mt-1">{{ stats.requested + stats.processing }} in flight</p>
         </div>
       </div>
 
       <!-- Table -->
       <div v-if="refunds.data.length > 0" class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
+        <!-- Mobile card list -->
+        <div class="divide-y divide-slate-100 md:hidden">
+          <div v-for="refund in refunds.data" :key="`mob-${refund.id}`" class="p-4 space-y-3 text-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <Link :href="route('admin.bookings.show', refund.booking_id)" class="font-mono font-bold text-lagoon-700 hover:underline">
+                  #SURF-{{ String(refund.booking_id).padStart(5, '0') }}
+                </Link>
+                <p class="text-xs text-slate-500 truncate">{{ refund.booking?.surf_spot?.name ?? '—' }}</p>
+              </div>
+              <Badge :variant="statusVariant(refund.status)" size="sm" class="shrink-0">
+                {{ refund.status_label }}
+              </Badge>
+            </div>
+
+            <div class="flex items-start justify-between gap-3 rounded-xl bg-slate-50 p-3">
+              <div class="min-w-0">
+                <p class="font-bold text-slate-900 truncate">{{ refund.booking?.student?.name ?? '—' }}</p>
+                <p class="text-xs text-slate-500 truncate">Instructor: {{ refund.booking?.instructor?.name ?? '—' }}</p>
+              </div>
+              <div class="shrink-0 text-right">
+                <p class="font-extrabold text-slate-900">{{ money(refund.amount) }}</p>
+                <p class="text-[11px] text-slate-500">Fee kept: {{ money(refund.service_fee_retained) }}</p>
+              </div>
+            </div>
+
+            <div>
+              <p class="text-xs font-semibold text-slate-800">{{ refund.basis_label }}</p>
+              <p class="text-xs text-slate-500">{{ refund.refund_percentage }}% of {{ money(refund.lesson_price) }} · {{ refund.gateway }}</p>
+              <p v-if="refund.paymongo_refund_id" class="mt-1 font-mono text-[11px] text-slate-500 break-all">
+                {{ refund.paymongo_refund_id }}
+              </p>
+              <p v-if="refund.failure_reason" class="mt-1 text-xs text-rose-600 break-words">
+                {{ refund.failure_reason }}
+              </p>
+            </div>
+
+            <div v-if="(refund.status === 'failed' && refund.gateway !== 'manual_gcash') || refund.status === 'manual_required' || refund.status === 'failed'" class="flex flex-wrap gap-2 pt-1">
+              <BaseButton
+                v-if="refund.status === 'failed' && refund.gateway !== 'manual_gcash'"
+                size="sm"
+                variant="secondary"
+                class="flex-1 justify-center"
+                @click="retryRefund(refund)"
+              >
+                Retry
+              </BaseButton>
+              <BaseButton
+                v-if="refund.status === 'manual_required' || refund.status === 'failed'"
+                size="sm"
+                variant="primary"
+                class="flex-1 justify-center"
+                @click="openManualModal(refund)"
+              >
+                Complete Manual
+              </BaseButton>
+            </div>
+          </div>
+        </div>
+
+        <div class="hidden overflow-x-auto md:block">
           <table class="w-full min-w-[900px] text-left">
             <thead class="bg-slate-50 border-b border-slate-100">
               <tr>

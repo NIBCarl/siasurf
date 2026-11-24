@@ -130,7 +130,63 @@ const paginationLabel = (label: string) =>
             </AppCard>
 
             <AppCard v-if="students.data.length" padding="none" class="overflow-hidden">
-                <div class="overflow-x-auto">
+                <!-- Mobile card layout -->
+                <div class="divide-y divide-sand-200 md:hidden">
+                    <div
+                        v-for="student in students.data"
+                        :key="`mob-${student.id}`"
+                        class="space-y-3 p-4"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex min-w-0 items-center gap-3">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-deep-950 text-body font-semibold text-lagoon-200">
+                                    {{ initials(student.name) }}
+                                </span>
+                                <div class="min-w-0">
+                                    <p class="truncate text-body font-semibold text-deep-900">{{ student.name }}</p>
+                                    <p class="text-label text-stone-500">UID-{{ student.id }}</p>
+                                    <p class="truncate text-body-sm text-deep-900">{{ student.email }}</p>
+                                    <p v-if="student.phone" class="truncate text-label text-stone-500">{{ student.phone }}</p>
+                                </div>
+                            </div>
+
+                            <div class="shrink-0 text-center">
+                                <span class="metric inline-flex h-9 min-w-9 items-center justify-center rounded-control border border-sand-300 bg-sand-50 px-2 text-body-sm font-semibold text-deep-900">
+                                    {{ student.bookings_as_student_count }}
+                                </span>
+                                <p class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-stone-500">Sessions</p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <StatusPill variant="neutral" :dot="false">
+                                {{ skillLabel(student.student_profile?.skill_level) }}
+                            </StatusPill>
+                            <StatusPill :variant="statusMeta(student.student_profile?.status).variant">
+                                {{ statusMeta(student.student_profile?.status).label }}
+                            </StatusPill>
+                            <StatusPill
+                                v-if="(student.underpaid_bookings_count ?? 0) > 0"
+                                variant="critical"
+                            >
+                                {{ student.underpaid_bookings_count }} Underpaid
+                            </StatusPill>
+                        </div>
+
+                        <AppButton
+                            :href="route('admin.students.show', student.id)"
+                            variant="secondary"
+                            size="sm"
+                            block
+                        >
+                            Open dossier
+                            <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                        </AppButton>
+                    </div>
+                </div>
+
+                <!-- Desktop table layout -->
+                <div class="hidden overflow-x-auto md:block">
                     <table class="w-full min-w-[860px] text-left">
                         <thead class="bg-sand-100">
                             <tr>

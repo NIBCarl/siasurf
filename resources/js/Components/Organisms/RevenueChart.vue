@@ -13,9 +13,12 @@ const revenueData = ref({
 const isLoading = ref(true)
 const hasError = ref(false)
 
+const activeIndex = ref<number | null>(null)
+
 const loadRevenue = async () => {
     isLoading.value = true
     hasError.value = false
+    activeIndex.value = null
 
     try {
         const response = await fetch(`/admin/api/dashboard/revenue?period=${encodeURIComponent(props.period)}`)
@@ -34,6 +37,25 @@ onMounted(loadRevenue)
 
 const maxValue = computed(() => Math.max(...revenueData.value.data.map(Number), 1))
 const hasData = computed(() => revenueData.value.data.some((value) => Number(value) > 0))
+
+const resolvedActiveIndex = computed<number | null>(() => {
+    const len = revenueData.value.data.length
+    if (len === 0) return null
+    if (activeIndex.value !== null && activeIndex.value >= 0 && activeIndex.value < len) {
+        return activeIndex.value
+    }
+    const lastNonZero = revenueData.value.data
+        .map(Number)
+        .reduce((acc, value, idx) => (value > 0 ? idx : acc), -1)
+    return lastNonZero >= 0 ? lastNonZero : len - 1
+})
+
+const activeLabel = computed(() =>
+    resolvedActiveIndex.value === null ? '' : (revenueData.value.labels[resolvedActiveIndex.value] ?? ''),
+)
+const activeValue = computed(() =>
+    resolvedActiveIndex.value === null ? 0 : Number(revenueData.value.data[resolvedActiveIndex.value] ?? 0),
+)
 
 const barHeight = (value: number) => `${(Number(value) / maxValue.value) * 100}%`
 
@@ -59,30 +81,45 @@ const formatCurrency = (value: number) => {
         </div>
 
         <div v-else class="flex h-full flex-col">
-            <div class="flex flex-1 items-end gap-2">
-                <div
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <span class="text-label text-stone-500">Tap any month bar to inspect</span>
+                <span
+                    v-if="activeLabel"
+                    class="rounded-control bg-deep-900 px-2.5 py-1 font-mono text-label font-semibold text-white"
+                >
+                    {{ activeLabel }}: {{ formatCurrency(activeValue) }}
+                </span>
+            </div>
+
+            <div class="flex flex-1 items-end gap-1.5 sm:gap-2">
+                <button
                     v-for="(value, index) in revenueData.data"
                     :key="index"
-                    class="group flex h-full flex-1 flex-col justify-end"
+                    type="button"
+                    class="group/bar flex h-full min-w-0 flex-1 flex-col justify-end rounded-t focus:outline-none focus-visible:ring-2 focus-visible:ring-lagoon-600"
+                    :aria-label="`${revenueData.labels[index] ?? 'Month'}: ${formatCurrency(value)}`"
+                    @click="activeIndex = index"
                 >
                     <div
-                        class="relative w-full rounded-t bg-lagoon-500 transition-colors hover:bg-lagoon-600"
+                        class="relative w-full min-h-[6px] rounded-t transition-colors"
+                        :class="resolvedActiveIndex === index ? 'bg-deep-900' : 'bg-lagoon-500 hover:bg-lagoon-600'"
                         :style="{ height: barHeight(value) }"
                     >
                         <div
-                            class="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-control bg-deep-950 px-2 py-1 text-label font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100"
+                            class="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-control bg-deep-950 px-2 py-1 text-label font-semibold text-white opacity-0 transition-opacity sm:block sm:group-hover/bar:opacity-100"
                         >
                             {{ formatCurrency(value) }}
                         </div>
                     </div>
-                </div>
+                </button>
             </div>
 
-            <div class="mt-2 flex gap-2 border-t border-sand-200 pt-2">
+            <div class="mt-2 flex gap-1.5 border-t border-sand-200 pt-2 sm:gap-2">
                 <span
                     v-for="(label, index) in revenueData.labels"
                     :key="index"
-                    class="flex-1 truncate text-center text-label text-stone-500"
+                    class="flex-1 truncate text-center text-label"
+                    :class="resolvedActiveIndex === index ? 'font-bold text-deep-900' : 'text-stone-500'"
                     :title="label"
                 >
                     {{ label.split(' ')[0] }}

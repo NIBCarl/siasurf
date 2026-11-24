@@ -256,83 +256,152 @@ const pickerSpots = computed<MapSpot[]>(() =>
         </button>
       </form>
 
-      <div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/5">
-        <table class="min-w-full divide-y divide-slate-100 text-sm">
-          <thead class="bg-slate-50/70 text-xs uppercase tracking-wider text-slate-500">
-            <tr>
-              <th class="px-5 py-3 text-left font-bold">Break</th>
-              <th class="px-5 py-3 text-left font-bold">Area</th>
-              <th class="px-5 py-3 text-left font-bold">Coast / zone</th>
-              <th class="px-5 py-3 text-left font-bold">Level</th>
-              <th class="px-5 py-3 text-left font-bold">Coordinates</th>
-              <th class="px-5 py-3 text-left font-bold">Status</th>
-              <th class="px-5 py-3 text-right font-bold">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr v-for="spot in spots.data" :key="spot.id" class="hover:bg-slate-50/60">
-              <td class="px-5 py-3">
-                <p class="font-semibold text-slate-900">{{ spot.name }}</p>
-                <p v-if="spot.break_type" class="text-xs text-slate-400">{{ spot.break_type }}</p>
-              </td>
-              <td class="px-5 py-3 text-slate-600">
-                <p>{{ spot.area ?? '—' }}</p>
-                <p v-if="spot.barangay" class="text-xs text-slate-400">{{ spot.barangay }}</p>
-              </td>
-              <td class="px-5 py-3 text-slate-600">
-                <p>{{ spot.side_label ?? '—' }}</p>
-                <p v-if="spot.section_label" class="text-xs text-slate-400">{{ spot.section_label }}</p>
-              </td>
-              <td class="px-5 py-3">
-                <Badge :variant="difficultyVariant(spot.difficulty)" class="capitalize">
-                  {{ spot.difficulty }}
-                </Badge>
-                <span v-if="spot.is_safe_zone" class="ml-1 text-[10px] font-bold uppercase text-emerald-600">safe</span>
-              </td>
-              <td class="px-5 py-3 font-mono text-xs text-slate-500">
-                <span v-if="spot.latitude !== null">{{ spot.latitude }}, {{ spot.longitude }}</span>
-                <span v-else class="text-rose-500">missing</span>
-                <p v-if="spot.plus_code" class="mt-0.5 text-[10px] text-slate-400">{{ spot.plus_code }}</p>
-                <a
-                  v-if="spot.latitude !== null && spot.longitude !== null"
-                  :href="`https://www.google.com/maps/search/?api=1&query=${spot.latitude},${spot.longitude}`"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="mt-0.5 inline-block text-[10px] font-semibold text-sky-600 hover:text-sky-800"
-                >
-                  Open in Maps
-                </a>
-              </td>
-              <td class="px-5 py-3">
-                <Badge :variant="spot.is_active ? 'success' : 'default'">
-                  {{ spot.is_active ? 'Active' : 'Inactive' }}
-                </Badge>
-              </td>
-              <td class="px-5 py-3 text-right whitespace-nowrap">
-                <button
-                  type="button"
-                  class="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-teal-600"
-                  title="Edit"
-                  @click="openEdit(spot)"
-                >
-                  <PencilSquareIcon class="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  class="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
-                  title="Remove"
-                  @click="destroy(spot)"
-                >
-                  <TrashIcon class="h-4 w-4" />
-                </button>
-              </td>
-            </tr>
+      <div class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-900/5 overflow-hidden">
+        <template v-if="spots.data.length > 0">
+          <!-- Mobile card layout -->
+          <div class="divide-y divide-slate-100 md:hidden">
+            <div v-for="spot in spots.data" :key="`mob-${spot.id}`" class="p-4 space-y-2.5 text-sm">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-bold text-slate-900">{{ spot.name }}</p>
+                  <p v-if="spot.break_type" class="text-xs text-slate-500">{{ spot.break_type }}</p>
+                </div>
+                <div class="flex shrink-0 items-center gap-1.5">
+                  <Badge :variant="difficultyVariant(spot.difficulty)" class="capitalize">
+                    {{ spot.difficulty }}
+                  </Badge>
+                  <Badge :variant="spot.is_active ? 'success' : 'default'">
+                    {{ spot.is_active ? 'Active' : 'Inactive' }}
+                  </Badge>
+                </div>
+              </div>
 
-            <tr v-if="spots.data.length === 0">
-              <td colspan="7" class="px-5 py-10 text-center text-slate-500">No surf spots match.</td>
-            </tr>
-          </tbody>
-        </table>
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                <span>{{ spot.area ?? '—' }}<template v-if="spot.barangay"> · {{ spot.barangay }}</template></span>
+                <span v-if="spot.side_label">{{ spot.side_label }}<template v-if="spot.section_label"> · {{ spot.section_label }}</template></span>
+                <span v-if="spot.is_safe_zone" class="text-[10px] font-bold uppercase text-emerald-600">Safe zone</span>
+              </div>
+
+              <div class="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs">
+                <div class="min-w-0 font-mono text-[11px] text-slate-600">
+                  <span v-if="spot.latitude !== null" class="block truncate">{{ spot.latitude }}, {{ spot.longitude }}</span>
+                  <span v-else class="text-rose-500">missing coords</span>
+                  <span v-if="spot.plus_code" class="block text-[10px] text-slate-400">{{ spot.plus_code }}</span>
+                  <a
+                    v-if="spot.latitude !== null && spot.longitude !== null"
+                    :href="`https://www.google.com/maps/search/?api=1&query=${spot.latitude},${spot.longitude}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-0.5 inline-block text-[11px] font-sans font-semibold text-sky-600 hover:text-sky-800"
+                  >
+                    Open in Maps
+                  </a>
+                </div>
+
+                <div class="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-teal-700"
+                    title="Edit"
+                    aria-label="Edit surf spot"
+                    @click="openEdit(spot)"
+                  >
+                    <PencilSquareIcon class="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-600 hover:bg-rose-100 hover:text-rose-700"
+                    title="Remove"
+                    aria-label="Remove surf spot"
+                    @click="destroy(spot)"
+                  >
+                    <TrashIcon class="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Desktop table layout -->
+          <div class="hidden overflow-x-auto md:block">
+            <table class="min-w-full divide-y divide-slate-100 text-sm">
+              <thead class="bg-slate-50/70 text-xs uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th class="px-5 py-3 text-left font-bold">Break</th>
+                  <th class="px-5 py-3 text-left font-bold">Area</th>
+                  <th class="px-5 py-3 text-left font-bold">Coast / zone</th>
+                  <th class="px-5 py-3 text-left font-bold">Level</th>
+                  <th class="px-5 py-3 text-left font-bold">Coordinates</th>
+                  <th class="px-5 py-3 text-left font-bold">Status</th>
+                  <th class="px-5 py-3 text-right font-bold">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="spot in spots.data" :key="spot.id" class="hover:bg-slate-50/60">
+                  <td class="px-5 py-3">
+                    <p class="font-semibold text-slate-900">{{ spot.name }}</p>
+                    <p v-if="spot.break_type" class="text-xs text-slate-400">{{ spot.break_type }}</p>
+                  </td>
+                  <td class="px-5 py-3 text-slate-600">
+                    <p>{{ spot.area ?? '—' }}</p>
+                    <p v-if="spot.barangay" class="text-xs text-slate-400">{{ spot.barangay }}</p>
+                  </td>
+                  <td class="px-5 py-3 text-slate-600">
+                    <p>{{ spot.side_label ?? '—' }}</p>
+                    <p v-if="spot.section_label" class="text-xs text-slate-400">{{ spot.section_label }}</p>
+                  </td>
+                  <td class="px-5 py-3">
+                    <Badge :variant="difficultyVariant(spot.difficulty)" class="capitalize">
+                      {{ spot.difficulty }}
+                    </Badge>
+                    <span v-if="spot.is_safe_zone" class="ml-1 text-[10px] font-bold uppercase text-emerald-600">safe</span>
+                  </td>
+                  <td class="px-5 py-3 font-mono text-xs text-slate-500">
+                    <span v-if="spot.latitude !== null">{{ spot.latitude }}, {{ spot.longitude }}</span>
+                    <span v-else class="text-rose-500">missing</span>
+                    <p v-if="spot.plus_code" class="mt-0.5 text-[10px] text-slate-400">{{ spot.plus_code }}</p>
+                    <a
+                      v-if="spot.latitude !== null && spot.longitude !== null"
+                      :href="`https://www.google.com/maps/search/?api=1&query=${spot.latitude},${spot.longitude}`"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="mt-0.5 inline-block text-[10px] font-semibold text-sky-600 hover:text-sky-800"
+                    >
+                      Open in Maps
+                    </a>
+                  </td>
+                  <td class="px-5 py-3">
+                    <Badge :variant="spot.is_active ? 'success' : 'default'">
+                      {{ spot.is_active ? 'Active' : 'Inactive' }}
+                    </Badge>
+                  </td>
+                  <td class="px-5 py-3 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      class="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-teal-600"
+                      title="Edit"
+                      @click="openEdit(spot)"
+                    >
+                      <PencilSquareIcon class="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+                      title="Remove"
+                      @click="destroy(spot)"
+                    >
+                      <TrashIcon class="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
+        <div v-else class="px-5 py-12 text-center text-sm text-slate-500">
+          No surf spots match.
+        </div>
       </div>
     </div>
 
