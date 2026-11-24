@@ -4,6 +4,8 @@ namespace App\Notifications;
 
 use App\Enums\RefundStatus;
 use App\Models\Refund;
+use App\Models\User;
+use App\Notifications\Concerns\ResolvesNotificationUrl;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -11,7 +13,7 @@ use Illuminate\Notifications\Notification;
 
 class RefundStatusNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, ResolvesNotificationUrl;
 
     public function __construct(public Refund $refund)
     {
@@ -54,8 +56,13 @@ class RefundStatusNotification extends Notification implements ShouldQueue
             $mail->line("Gateway Refund Ref: {$this->refund->paymongo_refund_id}");
         }
 
-        if ($booking) {
-            $mail->action('View Booking', route('student.bookings.show', $booking->id));
+        if ($notifiable instanceof User && $notifiable->isAdmin()) {
+            $mail->action('View Refunds', route('admin.refunds.index'));
+        } elseif ($booking) {
+            $mail->action(
+                'View Booking',
+                $this->bookingUrl($notifiable, $booking->id) ?? $this->dashboardUrl($notifiable)
+            );
         }
 
         return $mail->line('Thank you for surfing safely with SiaSurf.');
@@ -66,6 +73,10 @@ class RefundStatusNotification extends Notification implements ShouldQueue
         $ref = '#SURF-' . str_pad((string) $this->refund->booking_id, 5, '0', STR_PAD_LEFT);
         $amount = '₱' . number_format((float) $this->refund->amount, 2);
 
+        $url = ($notifiable instanceof User && $notifiable->isAdmin())
+            ? route('admin.refunds.index')
+            : ($this->bookingUrl($notifiable, $this->refund->booking_id) ?? $this->dashboardUrl($notifiable));
+
         return [
             'booking_id' => $this->refund->booking_id,
             'refund_id' => $this->refund->id,
@@ -74,6 +85,7 @@ class RefundStatusNotification extends Notification implements ShouldQueue
             'service_fee_retained' => (float) $this->refund->service_fee_retained,
             'message' => "Refund of {$amount} for {$ref}: {$this->refund->status_label}.",
             'type' => 'refund_status_updated',
+            'url' => $url,
         ];
     }
 }

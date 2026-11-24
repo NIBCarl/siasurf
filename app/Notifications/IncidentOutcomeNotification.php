@@ -81,6 +81,9 @@ class IncidentOutcomeNotification extends Notification implements ShouldQueue
             'handled_externally' => $this->incident->isExternallyHandled(),
             'decision_reason' => $this->incident->decision_reason ?? $this->incident->rejection_reason,
             'message' => 'Your session report has been reviewed by SISA.',
+            'url' => $this->incident->booking_id
+                ? route('student.bookings.show', $this->incident->booking_id)
+                : route('student.dashboard'),
         ];
     }
 }

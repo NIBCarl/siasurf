@@ -60,6 +60,7 @@ class SuspensionNotification extends Notification implements ShouldQueue
             'incident_id' => $this->incident->id,
             'severity' => $this->incident->severity->value,
             'message' => 'Your instructor account has been suspended due to safety violations.',
+            'url' => route('instructor.suspended'),
         ];
     }
 }

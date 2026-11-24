@@ -61,6 +61,7 @@ class InstructorStrikeRecordedNotification extends Notification implements Shoul
             'weight' => $this->strike->weight,
             'active_total' => $this->activeTotal,
             'message' => 'SISA recorded '.$this->strike->weight.' strike(s) on your instructor record (Active total: '.$this->activeTotal.').',
+            'url' => route('instructor.dashboard'),
         ];
     }
 }

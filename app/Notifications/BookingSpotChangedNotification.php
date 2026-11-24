@@ -56,6 +56,7 @@ class BookingSpotChangedNotification extends Notification implements ShouldQueue
             'reason' => $this->reason,
             'message' => "Booking {$ref} surf spot changed from {$this->previousSpotName} to {$this->newSpotName}: {$this->reason}",
             'type' => 'booking_spot_changed',
+            'url' => route('student.bookings.show', $this->booking->id),
         ];
     }
 }

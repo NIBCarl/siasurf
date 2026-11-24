@@ -54,6 +54,7 @@ class BookingChangeRequestedNotification extends Notification implements ShouldQ
             'type' => 'booking_change_requested',
             'change_type' => $this->changeRequest->type->value,
             'message' => $this->changeRequest->type->label() . ' request for booking #' . $this->changeRequest->booking_id . ' needs admin approval.',
+            'url' => route('admin.change-requests.index'),
         ];
     }
 }

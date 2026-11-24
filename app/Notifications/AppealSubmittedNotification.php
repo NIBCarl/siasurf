@@ -40,6 +40,7 @@ class AppealSubmittedNotification extends Notification implements ShouldQueue
             'appeal_id' => $this->appeal->id,
             'instructor_id' => $this->appeal->instructor_id,
             'message' => 'An instructor appeal is awaiting SISA review.',
+            'url' => route('admin.appeals.show', $this->appeal),
         ];
     }
 }

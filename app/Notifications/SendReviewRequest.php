@@ -29,7 +29,7 @@ class SendReviewRequest extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['database', 'mail'];
     }
 
     /**
@@ -58,11 +58,15 @@ class SendReviewRequest extends Notification implements ShouldQueue
      */
     public function toArray(object $notifiable): array
     {
+        $instructorName = $this->booking->instructor?->name ?? 'your instructor';
+
         return [
             'booking_id' => $this->booking->id,
             'instructor_id' => $this->booking->instructor_id,
-            'instructor_name' => $this->booking->instructor->name,
+            'instructor_name' => $instructorName,
             'type' => 'review_request',
+            'message' => "How was your surf lesson with {$instructorName}? Share your feedback.",
+            'url' => route('student.feedback.create', $this->booking->id),
         ];
     }
 }

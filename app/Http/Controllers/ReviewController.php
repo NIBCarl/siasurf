@@ -8,6 +8,7 @@ use App\Http\Resources\ReviewResource;
 use App\Models\Booking;
 use App\Models\Review;
 use App\Models\User;
+use App\Notifications\ReviewModeratedNotification;
 use App\Notifications\ReviewReceivedNotification;
 use App\Notifications\ReviewResponseNotification;
 use Illuminate\Http\RedirectResponse;
@@ -270,6 +271,11 @@ class ReviewController extends Controller
             'reason' => 'required_if:action,hide|nullable|string|max:500',
         ]);
 
+        $review->loadMissing(['student', 'instructor']);
+        $student = $review->student;
+        $bookingId = $review->booking_id;
+        $instructorName = $review->instructor?->name ?? 'your instructor';
+
         switch ($validated['action']) {
             case 'hide':
                 $review->update([
@@ -299,6 +305,23 @@ class ReviewController extends Controller
                 $review->delete();
                 $message = 'Review has been deleted.';
                 break;
+        }
+
+        if ($student) {
+            try {
+                $student->notify(new ReviewModeratedNotification(
+                    $validated['action'],
+                    $bookingId,
+                    $instructorName,
+                    $validated['reason'] ?? null,
+                ));
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify student of review moderation.', [
+                    'booking_id' => $bookingId,
+                    'action' => $validated['action'],
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         }
 
         return redirect()->back()->with('success', $message);

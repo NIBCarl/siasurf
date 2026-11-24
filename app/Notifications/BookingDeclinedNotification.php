@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Booking;
+use App\Notifications\Concerns\ResolvesNotificationUrl;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -14,7 +15,7 @@ use Illuminate\Notifications\Notification;
  */
 class BookingDeclinedNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, ResolvesNotificationUrl;
 
     protected Booking $booking;
     protected bool $expired;
@@ -71,6 +72,8 @@ class BookingDeclinedNotification extends Notification implements ShouldQueue
             'message' => $this->expired
                 ? 'Booking request expired - no instructor response within 2 hours.'
                 : 'Booking request was declined: ' . ($this->booking->decline_reason ?? 'No reason given.'),
+            'url' => $this->bookingUrl($notifiable, $this->booking->id)
+                ?? $this->dashboardUrl($notifiable),
         ];
     }
 }

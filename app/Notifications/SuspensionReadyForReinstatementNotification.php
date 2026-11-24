@@ -39,6 +39,7 @@ class SuspensionReadyForReinstatementNotification extends Notification implement
             'suspension_id' => $this->suspension->id,
             'instructor_id' => $this->suspension->instructor_id,
             'message' => ($this->suspension->instructor?->name ?? 'An instructor').' has completed their suspension period and awaits SISA reinstatement.',
+            'url' => route('admin.instructors.show', $this->suspension->instructor_id),
         ];
     }
 }

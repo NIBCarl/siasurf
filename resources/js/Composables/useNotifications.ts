@@ -24,6 +24,7 @@ export interface AppNotification {
 const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
     incident_report: 'error',
     incident_outcome: 'error',
+    critical_incident_notice: 'error',
     certificate_expired: 'error',
     student_account_banned: 'error',
     booking_awaiting_payment: 'warning',
@@ -39,6 +40,8 @@ const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
     skill_upgrade_rejected: 'warning',
     gcash_receipt_rejected: 'warning',
     cash_underpayment_flagged: 'warning',
+    review_hidden: 'warning',
+    review_deleted: 'warning',
     account_suspended: 'warning',
     instructor_suspended: 'warning',
     strike_recorded: 'warning',
@@ -47,11 +50,13 @@ const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
     cash_remittance_overdue: 'warning',
     booking_confirmed: 'success',
     payment_received: 'success',
+    session_completed: 'success',
     instructor_verified: 'success',
     certificate_verified: 'success',
     skill_upgrade_approved: 'success',
     student_account_unbanned: 'success',
     review_received: 'success',
+    review_restored: 'success',
     fine_settled: 'success',
     strike_revoked: 'success',
     account_reactivated: 'success',
@@ -62,8 +67,10 @@ const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
 const TITLE_BY_TYPE: Record<string, string> = {
     incident_report: 'Safety Incident Reported',
     incident_outcome: 'Incident Outcome',
+    critical_incident_notice: 'Critical Safety Notice',
     new_user_registered: 'New User Registered',
     instructor_pending_verification: 'Instructor Verification Needed',
+    instructor_level_updated: 'Certification Level Updated',
     certificate_submitted: 'Certificate Submitted',
     certificate_verified: 'Certificate Verified',
     certificate_rejected: 'Certificate Rejected',
@@ -79,6 +86,9 @@ const TITLE_BY_TYPE: Record<string, string> = {
     student_account_unbanned: 'Account Reinstated',
     review_received: 'New Lesson Review',
     review_response: 'Instructor Replied to Review',
+    review_hidden: 'Review Hidden',
+    review_restored: 'Review Restored',
+    review_deleted: 'Review Removed',
     fine_settled: 'Fine Settled',
     strike_revoked: 'Strike Revoked',
     booking_requested: 'New Booking Request',
@@ -98,6 +108,7 @@ const TITLE_BY_TYPE: Record<string, string> = {
     payout_recorded: 'Payout Recorded',
     cash_remittance_overdue: 'Cash Remittance Overdue',
     session_attendance: 'Attendance Recorded',
+    session_completed: 'Session Completed',
     instructor_rejected: 'Application Rejected',
     instructor_verified: 'Instructor Verified',
     account_suspended: 'Account Suspended',
@@ -319,18 +330,7 @@ export function useNotifications() {
                     toNotification(e, 'Payment Received', 'success'))
                 .listen('.refund.updated', (e: any) =>
                     toNotification(e, 'Refund Update', 'info'))
-                .listen('.chat.message', (e: any) => {
-                    toNotification(
-                        {
-                            title: 'New message',
-                            message: `${e?.message?.sender_name ?? 'SiaSurf'}: ${e?.message?.body ?? 'Open your booking to read it.'}`,
-                            type: 'info',
-                        },
-                        'New message',
-                        'info',
-                    )
-                    refreshChatBadge()
-                })
+                .listen('.chat.message', () => refreshChatBadge())
         }
 
         if (userRole === 'instructor') {
@@ -357,18 +357,7 @@ export function useNotifications() {
                     toNotification(e, 'Payment Received', 'success'))
                 .listen('.refund.updated', (e: any) =>
                     toNotification(e, 'Refund Update', 'info'))
-                .listen('.chat.message', (e: any) => {
-                    toNotification(
-                        {
-                            title: 'New message',
-                            message: `${e?.message?.sender_name ?? 'SiaSurf'}: ${e?.message?.body ?? 'Open your booking to read it.'}`,
-                            type: 'info',
-                        },
-                        'New message',
-                        'info',
-                    )
-                    refreshChatBadge()
-                })
+                .listen('.chat.message', () => refreshChatBadge())
                 .listen('.instructor.status.changed', (e: any) =>
                     toNotification(e, 'Status Update', e?.new_status === 'active' ? 'success' : 'warning'))
         }

@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Booking;
+use App\Notifications\Concerns\ResolvesNotificationUrl;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -10,7 +11,7 @@ use Illuminate\Notifications\Notification;
 
 class BookingCancelledNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, ResolvesNotificationUrl;
 
     protected Booking $booking;
     protected ?string $reason;
@@ -70,7 +71,10 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
         }
 
         return $mail
-            ->action('View Booking', route('student.bookings.show', $this->booking->id))
+            ->action(
+                'View Booking',
+                $this->bookingUrl($notifiable, $this->booking->id) ?? $this->dashboardUrl($notifiable)
+            )
             ->line('If you have any questions, please contact support.');
     }
 
@@ -87,6 +91,8 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
             'reason' => $this->reason,
             'refund_summary' => $this->refundSummary,
             'type' => 'booking_cancelled',
+            'url' => $this->bookingUrl($notifiable, $this->booking->id)
+                ?? $this->dashboardUrl($notifiable),
         ];
     }
 }

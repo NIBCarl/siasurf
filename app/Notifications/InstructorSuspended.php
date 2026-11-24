@@ -69,6 +69,7 @@ class InstructorSuspended extends Notification
             'strike_tier' => $this->strikeTier,
             'requires_sisa_id_confiscation' => $this->requiresSisaIdConfiscation,
             'message' => 'Your instructor account has been suspended for '.$this->duration.' day(s). Reinstatement requires SISA approval.',
+            'url' => route('instructor.suspended'),
         ];
     }
 }

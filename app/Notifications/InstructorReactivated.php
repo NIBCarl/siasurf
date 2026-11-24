@@ -46,6 +46,7 @@ class InstructorReactivated extends Notification implements ShouldQueue
         return [
             'type' => 'account_reactivated',
             'message' => 'Your instructor account has been reactivated!',
+            'url' => route('instructor.dashboard'),
         ];
     }
 }

@@ -19,6 +19,7 @@ use App\Models\SurfSpot;
 use App\Models\User;
 use App\Notifications\BookingDeclinedNotification;
 use App\Notifications\SessionAttendanceNotification;
+use App\Notifications\SessionCompletedNotification;
 use App\Notifications\SkillUpgradeRequestedNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
@@ -405,6 +406,23 @@ class BookingController extends Controller
 
             $locked->complete(auth()->id());
             app(BookingEventService::class)->recordCompleted($locked, auth()->id());
+
+            DB::afterCommit(function () use ($locked): void {
+                $completed = $locked->fresh(['student', 'instructor', 'surfSpot']);
+                if (! $completed?->student) {
+                    return;
+                }
+
+                try {
+                    $completed->student->notify(new SessionCompletedNotification($completed));
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to notify student of completed session.', [
+                        'booking_id' => $completed->id,
+                        'student_id' => $completed->student_id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            });
 
             // If this is an unpaid Cash on Hand booking and the instructor confirmed
             // cash collection in the completion modal, record the cash payment and

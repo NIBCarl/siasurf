@@ -46,7 +46,7 @@ class InstructorVerified extends Notification
             ->line('Your instructor account has been verified by SISA admin.')
             ->line('You are now a Level ' . $levelValue . ' certified instructor.')
             ->line('Your QR code has been generated and is available in your profile.')
-            ->action('View Profile', url('/instructor/profile'))
+            ->action('View Profile', route('instructor.profile.edit'))
             ->line('You can now start accepting bookings from students.');
     }
 
@@ -62,6 +62,7 @@ class InstructorVerified extends Notification
             'profile_id' => $this->profile->id,
             'level' => $this->profile->level->value,
             'message' => 'Your instructor account has been verified!',
+            'url' => route('instructor.profile.edit'),
         ];
     }
 }

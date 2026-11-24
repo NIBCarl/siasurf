@@ -38,11 +38,16 @@ class AppealResolvedNotification extends Notification implements ShouldQueue
 
     public function toArray(object $notifiable): array
     {
+        $approved = $this->appeal->status === \App\Enums\AppealStatus::Approved;
+
         return [
             'type' => 'appeal_resolved',
             'appeal_id' => $this->appeal->id,
             'status' => $this->appeal->status?->value,
             'message' => 'Your suspension appeal has been decided.',
+            'url' => $approved
+                ? route('instructor.dashboard')
+                : route('instructor.suspended'),
         ];
     }
 }

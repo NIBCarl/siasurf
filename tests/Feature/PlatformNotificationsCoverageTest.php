@@ -113,6 +113,7 @@ class PlatformNotificationsCoverageTest extends TestCase
             'end_time' => '10:00',
             'duration_hours' => 2,
             'skill_level' => SkillLevel::Beginner->value,
+            'student_age' => 25,
             'session_type' => SessionType::Teaching->value,
             'status' => BookingStatus::Confirmed,
         ], $overrides));

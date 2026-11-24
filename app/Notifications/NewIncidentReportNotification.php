@@ -66,6 +66,7 @@ class NewIncidentReportNotification extends Notification implements ShouldQueue
             'category' => $this->incident->category,
             'suggested_outcome' => $this->incident->suggested_outcome?->value,
             'message' => 'A new student safety report is awaiting SISA review.',
+            'url' => route('admin.incidents.show', $this->incident),
         ];
     }
 }

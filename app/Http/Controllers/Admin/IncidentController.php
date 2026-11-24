@@ -18,6 +18,7 @@ use App\Http\Requests\StoreIncidentRequest;
 use App\Models\Booking;
 use App\Models\SafetyIncident;
 use App\Models\User;
+use App\Notifications\CriticalIncidentNoticeNotification;
 use App\Notifications\IncidentOutcomeNotification;
 use App\Notifications\InstructorStrikeRecordedNotification;
 use App\Notifications\StrikeRevokedNotification;
@@ -147,6 +148,15 @@ class IncidentController extends Controller
                     (int) $validated['manual_hold_days'],
                     $request->user()
                 );
+            } else {
+                try {
+                    $instructor->notify(new CriticalIncidentNoticeNotification($incident->fresh()));
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to notify instructor of critical incident.', [
+                        'incident_id' => $incident->id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
             }
         } else {
             $strike = $strikeService->applyForIncident($incident->fresh(), $request->user());
@@ -289,6 +299,15 @@ class IncidentController extends Controller
                     (int) $validated['manual_hold_days'],
                     $request->user()
                 );
+            } elseif ($incident->instructor) {
+                try {
+                    $incident->instructor->notify(new CriticalIncidentNoticeNotification($incident));
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to notify instructor of critical incident.', [
+                        'incident_id' => $incident->id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
             }
 
             $this->notifyReporter($incident);

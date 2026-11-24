@@ -17,6 +17,7 @@ use App\Models\InstructorSuspension;
 use App\Models\SurfSpot;
 use App\Models\User;
 use App\Notifications\FineSettledNotification;
+use App\Notifications\InstructorLevelUpdatedNotification;
 use App\Notifications\InstructorReactivated;
 use App\Notifications\InstructorRejected;
 use App\Notifications\InstructorVerified;
@@ -681,6 +682,8 @@ class InstructorController extends Controller
         ]);
 
         $profile = $instructor->instructorProfile;
+        $oldStatus = $profile->status;
+        $oldLevel = $profile->level?->value;
         $wasSuspended = $profile->status === InstructorStatus::Suspended;
         $becomingSuspended = $validated['status'] === InstructorStatus::Suspended->value;
 
@@ -770,6 +773,49 @@ class InstructorController extends Controller
         if ($becomingActive && empty($profile->qr_code_path)) {
             $qrPath = $this->qrCodeService->generateInstructorQR($profile->fresh());
             $profile->update(['qr_code_path' => $qrPath]);
+        }
+
+        $freshProfile = $profile->fresh();
+
+        if (! $wasActive && $becomingActive && $freshProfile) {
+            try {
+                $instructor->notify(new InstructorVerified($freshProfile));
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to send verification notification.', [
+                    'instructor_id' => $instructor->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
+            if ($oldStatus) {
+                $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Active, 'Verification approved.');
+            }
+        } elseif ($oldStatus && $oldStatus->value !== $validated['status']) {
+            $newStatus = InstructorStatus::from($validated['status']);
+
+            if ($newStatus === InstructorStatus::Rejected) {
+                try {
+                    $instructor->notify(new InstructorRejected('Your instructor application status was updated to rejected by SISA.'));
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to send rejection notification.', [
+                        'instructor_id' => $instructor->id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
+            $this->broadcastStatusChange($instructor, $oldStatus, $newStatus, 'Status updated by SISA administrator.');
+        }
+
+        if ($oldLevel !== null && (int) $validated['level'] !== (int) $oldLevel) {
+            try {
+                $instructor->notify(new InstructorLevelUpdatedNotification((int) $oldLevel, (int) $validated['level']));
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to send level update notification.', [
+                    'instructor_id' => $instructor->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         }
 
         return redirect()

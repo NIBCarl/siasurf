@@ -50,6 +50,7 @@ class BookingNoShowNotification extends Notification implements ShouldQueue
             'retained_amount' => $this->retainedLessonPrice,
             'message' => "Booking {$ref} was marked as no-show. No refund applies.",
             'type' => 'booking_no_show',
+            'url' => route('student.bookings.show', $this->booking->id),
         ];
     }
 }
