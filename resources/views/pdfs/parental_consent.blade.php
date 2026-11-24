@@ -23,6 +23,11 @@
             margin: 0;
             font-size: 28px;
         }
+        .header-logo {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 8px;
+        }
         .minor-notice {
             background: #DBEAFE;
             border: 2px solid #3B82F6;
@@ -101,6 +106,9 @@
 </head>
 <body>
     <div class="header">
+        @if(!empty($logo_data_uri))
+            <img src="{{ $logo_data_uri }}" alt="{{ $company_name }} Logo" class="header-logo">
+        @endif
         <h1>{{ $company_name }} - PARENTAL CONSENT FORM</h1>
         <p style="font-size: 14px; color: #666;">Consent ID: {{ $waiver_id }}</p>
     </div>

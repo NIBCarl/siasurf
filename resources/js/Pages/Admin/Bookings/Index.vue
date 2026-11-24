@@ -256,7 +256,107 @@ const paginationLabel = (label: string) =>
             </div>
 
             <AppCard v-if="bookings.data.length" padding="none" class="overflow-hidden">
-                <div class="overflow-x-auto">
+                <!-- Mobile cards -->
+                <div class="md:hidden divide-y divide-sand-200">
+                    <div
+                        v-for="booking in bookings.data"
+                        :key="`mobile-booking-${booking.id}`"
+                        class="p-4 space-y-3"
+                    >
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="font-mono text-body-sm font-semibold text-deep-900">
+                                    #SURF-{{ booking.id.toString().padStart(5, '0') }}
+                                </p>
+                                <p class="text-body-sm font-semibold text-deep-950 truncate">
+                                    {{ booking.student.name }}
+                                </p>
+                                <p class="text-label text-stone-600 truncate">
+                                    Instructor: {{ booking.instructor.name }}
+                                </p>
+                                <p v-if="booking.created_at" class="text-[11px] text-stone-500">
+                                    Booked {{ formatPhilippineDateTime(booking.created_at) }}
+                                </p>
+                            </div>
+                            <div class="shrink-0 text-right">
+                                <template v-if="booking.payment_status === 'underpaid' || booking.payment?.status === 'underpaid'">
+                                    <span class="metric text-body font-semibold text-rose-700">
+                                        ₱{{ formatAmount(booking.payment?.amount ?? 0) }}
+                                    </span>
+                                    <span class="block text-label text-stone-500">
+                                        of ₱{{ formatAmount(booking.total_amount) }}
+                                    </span>
+                                </template>
+                                <span v-else class="metric text-body font-semibold text-deep-900">
+                                    ₱{{ formatAmount(booking.total_amount) }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="rounded-control border border-sand-200 bg-sand-50/70 px-3 py-2 text-label text-stone-700 space-y-0.5">
+                            <p class="font-semibold text-deep-900">
+                                {{ formatDate(booking.date) }} · {{ slotLabel(booking) }}
+                            </p>
+                            <p>{{ booking.surf_spot.name }}</p>
+                            <p
+                                v-if="booking.is_rescheduled || booking.rescheduled_by_instructor_at"
+                                class="font-semibold text-amber-800"
+                            >
+                                Rescheduled to {{ formatDate(booking.date) }}
+                                <template v-if="booking.original_date && booking.original_date !== booking.date">
+                                    (was {{ formatDate(booking.original_date) }})
+                                </template>
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <StatusPill :variant="statusMeta(booking.status).variant">
+                                {{ statusMeta(booking.status).label }}
+                            </StatusPill>
+                            <StatusPill
+                                v-if="booking.is_rescheduled || booking.rescheduled_by_instructor_at"
+                                variant="pending"
+                            >
+                                Rescheduled
+                            </StatusPill>
+                            <StatusPill
+                                v-if="booking.payment_status === 'underpaid' || booking.payment?.status === 'underpaid'"
+                                variant="critical"
+                            >
+                                Underpaid · Owes ₱{{ formatAmount(Math.max(0, Number(booking.total_amount) - Number(booking.payment?.amount ?? 0))) }}
+                            </StatusPill>
+                            <StatusPill v-if="hasCompletedMilestone(booking, 'booking_confirmed')" variant="verified" :dot="false">
+                                Confirmed
+                            </StatusPill>
+                            <StatusPill v-if="hasCompletedMilestone(booking, 'payment_completed')" variant="verified" :dot="false">
+                                Paid
+                            </StatusPill>
+                            <StatusPill v-if="hasCompletedMilestone(booking, 'booking_rescheduled')" variant="pending" :dot="false">
+                                Rescheduled
+                            </StatusPill>
+                        </div>
+
+                        <p v-if="booking.latest_event" class="text-[11px] text-stone-500">
+                            {{ booking.latest_event.title }}
+                            <template v-if="booking.latest_event.occurred_at">
+                                · {{ formatPhilippineDateTime(booking.latest_event.occurred_at) }}
+                            </template>
+                        </p>
+
+                        <AppButton
+                            :href="route('admin.bookings.show', booking.id)"
+                            variant="secondary"
+                            size="sm"
+                            class="w-full min-h-[44px] justify-center"
+                        >
+                            Audit
+                            <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
+                        </AppButton>
+                    </div>
+                </div>
+
+                <!-- Desktop table -->
+                <div class="hidden md:block overflow-x-auto">
                     <table class="w-full min-w-[900px] text-left">
                         <thead class="bg-sand-100">
                             <tr>

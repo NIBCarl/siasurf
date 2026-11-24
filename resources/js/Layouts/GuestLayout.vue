@@ -31,7 +31,10 @@ import { Link } from '@inertiajs/vue3';
                 <!-- Logo -->
                 <div class="flex justify-center lg:justify-start">
                     <Link href="/">
-                        <ApplicationLogo class="h-16 w-auto fill-current text-ocean-600 transition-transform duration-300 hover:scale-110" />
+                        <ApplicationLogo
+                            variant="horizontal"
+                            class="h-12 w-auto transition-transform duration-300 hover:scale-105"
+                        />
                     </Link>
                 </div>
 

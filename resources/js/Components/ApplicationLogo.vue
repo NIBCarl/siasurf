@@ -1,7 +1,34 @@
+<script setup lang="ts">
+import { computed } from 'vue';
+
+type LogoVariant = 'mark' | 'badge' | 'horizontal' | 'horizontal-dark';
+
+const props = withDefaults(
+    defineProps<{
+        variant?: LogoVariant;
+        alt?: string;
+    }>(),
+    {
+        variant: 'mark',
+        alt: 'SiaSurf',
+    },
+);
+
+const LOGO_SOURCES: Record<LogoVariant, string> = {
+    mark: '/images/logo-mark.png',
+    badge: '/images/logo-badge.png',
+    horizontal: '/images/logo-horizontal.png',
+    'horizontal-dark': '/images/logo-horizontal-dark.png',
+};
+
+const src = computed(() => LOGO_SOURCES[props.variant]);
+</script>
+
 <template>
-    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="fill-current">
-        <!-- Simple Stylized Ocean Wave -->
-        <path d="M10 60 Q 30 40, 50 60 T 90 60" fill="none" class="stroke-current" stroke-width="8" stroke-linecap="round"/>
-        <path d="M10 40 Q 30 20, 50 40 T 90 40" fill="none" class="stroke-current opacity-40" stroke-width="8" stroke-linecap="round"/>
-    </svg>
+    <img
+        :src="src"
+        :alt="alt"
+        :class="['block select-none', variant === 'badge' ? 'object-cover' : 'object-contain']"
+        decoding="async"
+    />
 </template>

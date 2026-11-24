@@ -72,6 +72,13 @@
             color: #4A4A4A;
             line-height: 1;
         }
+        .merchant-logo {
+            width: 64pt;
+            height: 64pt;
+            border-radius: 14pt;
+            display: block;
+            margin: 0 auto;
+        }
         .merchant-name {
             font-size: 13pt;
             font-weight: bold;
@@ -256,7 +263,13 @@
 
                     <table class="monogram-table" align="center">
                         <tr>
-                            <td class="monogram-circle">{{ $monogram }}</td>
+                            @if(!empty($logo_data_uri))
+                                <td style="text-align: center; padding: 0; line-height: 0;">
+                                    <img src="{{ $logo_data_uri }}" alt="{{ $company_name }}" class="merchant-logo">
+                                </td>
+                            @else
+                                <td class="monogram-circle">{{ $monogram }}</td>
+                            @endif
                         </tr>
                     </table>
 

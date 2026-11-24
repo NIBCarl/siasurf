@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head, Link, usePage } from '@inertiajs/vue3'
+import ApplicationLogo from '@/Components/ApplicationLogo.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { formatPhilippineDateTime } from '@/utils/philippineTime'
 import {
@@ -116,8 +117,8 @@ const bookLabel = computed(() => (isAuthenticated.value ? 'Book Lesson Now' : 'B
   <div class="min-h-screen bg-sand-50 px-4 py-8 text-deep-950 sm:px-6">
     <main class="mx-auto w-full max-w-lg">
       <div class="mb-5 flex items-center justify-between">
-        <Link href="/" class="text-sm font-extrabold uppercase tracking-[0.2em] text-deep-900 hover:text-lagoon-700">
-          SiaSurf
+        <Link href="/" class="inline-flex items-center">
+          <ApplicationLogo variant="horizontal" class="h-8 w-auto" />
         </Link>
         <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800 shadow-sm">
           <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-600" aria-hidden="true"></span>

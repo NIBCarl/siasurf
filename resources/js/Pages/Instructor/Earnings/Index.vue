@@ -284,7 +284,7 @@ const paginationLabel = (label: string) =>
               If your cash fees exceed GCash earnings, remit the net balance within <strong>{{ remittanceDays }} days</strong>.
             </p>
           </div>
-          <div class="flex shrink-0 items-center gap-2 rounded-card border border-sand-200 bg-white px-4 py-2.5 text-body-sm">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-card border border-sand-200 bg-white px-3.5 sm:px-4 py-2.5 text-body-sm w-full lg:w-auto">
             <span class="text-stone-600">GCash</span>
             <strong class="text-lagoon-700">{{ money(summary.unsettled_gcash_earnings) }}</strong>
             <span class="text-stone-400">−</span>
@@ -298,7 +298,7 @@ const paginationLabel = (label: string) =>
 
       <!-- Tabs -->
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-sand-200 pb-3">
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <button
             type="button"
             @click="activeTab = 'ledger'"
@@ -342,7 +342,92 @@ const paginationLabel = (label: string) =>
       <!-- Tab 1: Daily Earnings Ledger -->
       <section v-if="activeTab === 'ledger'">
         <AppCard v-if="ledgers.data.length" padding="none" class="overflow-hidden">
-          <div class="overflow-x-auto">
+          <!-- Mobile cards -->
+          <div class="md:hidden divide-y divide-sand-200">
+            <div v-for="row in ledgers.data" :key="`mobile-earn-${row.id}`" class="p-4 space-y-3">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-semibold text-deep-950">{{ formatDate(row.ledger_date) }}</p>
+                  <p class="text-label text-stone-500">
+                    {{ row.completed_bookings_count }} lessons ({{ row.gcash_bookings_count }} GCash · {{ row.cash_bookings_count }} Cash)
+                  </p>
+                </div>
+                <StatusPill :variant="ledgerStatusVariant(row.effective_status)" class="shrink-0">
+                  {{ row.effective_status_label }}
+                </StatusPill>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 rounded-control border border-sand-200 bg-sand-50/70 p-3 text-xs">
+                <div>
+                  <p class="text-[10px] font-bold uppercase text-stone-500">GCash earned</p>
+                  <p class="font-semibold text-lagoon-700 mt-0.5">{{ money(row.gcash_earnings) }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[10px] font-bold uppercase text-stone-500">Cash earned</p>
+                  <p class="font-medium text-stone-700 mt-0.5">{{ money(row.cash_earnings) }}</p>
+                </div>
+                <div>
+                  <p class="text-[10px] font-bold uppercase text-stone-500">Cash fee owed</p>
+                  <p class="font-semibold text-amber-700 mt-0.5">{{ money(row.cash_service_fees_owed) }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[10px] font-bold uppercase text-stone-500">Net payable</p>
+                  <p class="font-bold mt-0.5" :class="Number(row.net_payable) < 0 ? 'text-rose-700' : 'text-deep-950'">{{ money(row.net_payable) }}</p>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span :class="row.is_overdue ? 'font-semibold text-rose-700' : 'text-stone-600'">
+                  {{ dueText(row) }}
+                </span>
+                <button
+                  type="button"
+                  @click="toggleExpand(row.id)"
+                  class="inline-flex min-h-[36px] items-center gap-1 rounded-control border border-sand-200 bg-white px-2.5 py-1 text-label font-semibold text-lagoon-700 hover:bg-lagoon-50"
+                >
+                  {{ expandedDays[row.id] ? 'Hide' : 'Bookings' }}
+                  <ChevronUpIcon v-if="expandedDays[row.id]" class="h-3.5 w-3.5" />
+                  <ChevronDownIcon v-else class="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div v-if="expandedDays[row.id]" class="rounded-control border border-sand-200 bg-sand-50/90 p-3 space-y-2">
+                <div v-if="row.bookings?.length" class="space-y-2">
+                  <div
+                    v-for="b in row.bookings"
+                    :key="`mobile-b-${b.id}`"
+                    class="rounded-control border border-sand-200 bg-white p-2.5 text-xs space-y-1"
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-1.5">
+                      <Link
+                        :href="route('instructor.bookings.show', b.id)"
+                        class="font-mono font-semibold text-lagoon-700 hover:underline"
+                      >
+                        #SURF-{{ String(b.id).padStart(5, '0') }}
+                      </Link>
+                      <StatusPill variant="neutral" :dot="false">
+                        {{ b.payment?.payment_method === 'cash' ? 'Cash' : 'GCash' }}
+                        <template v-if="b.ledger_entry_type === 'gcash_retained'"> · Retained</template>
+                      </StatusPill>
+                    </div>
+                    <p class="font-medium text-deep-900">{{ b.student?.name ?? 'Student' }} · {{ b.surf_spot?.name ?? 'Surf spot' }}</p>
+                    <p v-if="b.payment?.payment_method === 'cash'" class="text-stone-700">
+                      Cash: <strong>{{ money(b.lesson_price) }}</strong> · Fee: <strong class="text-amber-700">{{ money(b.service_fee_amount) }}</strong>
+                    </p>
+                    <p v-else class="text-stone-700">
+                      GCash credited:
+                      <strong class="text-lagoon-700">
+                        {{ money(b.ledger_entry_type === 'gcash_retained' ? b.instructor_retained_amount : b.lesson_price) }}
+                      </strong>
+                    </p>
+                  </div>
+                </div>
+                <p v-else class="text-body-sm text-stone-500">No individual booking lines attached.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="hidden md:block overflow-x-auto">
             <table class="w-full min-w-[820px] text-left">
               <thead class="border-b border-sand-200 bg-sand-50">
                 <tr>
@@ -486,7 +571,40 @@ const paginationLabel = (label: string) =>
       <!-- Tab 2: Payout & Remittance History -->
       <section v-if="activeTab === 'payouts'">
         <AppCard v-if="payouts.data.length" padding="none" class="overflow-hidden">
-          <div class="overflow-x-auto">
+          <!-- Mobile cards -->
+          <div class="md:hidden divide-y divide-sand-200">
+            <div v-for="p in payouts.data" :key="`mobile-hist-${p.id}`" class="p-4 space-y-2.5">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-mono font-semibold text-deep-950">{{ p.reference_code }}</p>
+                  <p class="text-label text-stone-500">{{ formatDate(p.paid_at) }} · {{ p.payment_channel_label }}</p>
+                </div>
+                <StatusPill :variant="p.settlement_type === 'payout' ? 'verified' : p.settlement_type === 'remittance' ? 'pending' : 'neutral'" class="shrink-0">
+                  {{ p.settlement_type_label }}
+                </StatusPill>
+              </div>
+              <div class="grid grid-cols-2 gap-2 rounded-control border border-sand-200 bg-sand-50/70 p-3 text-xs">
+                <div>
+                  <p class="text-[10px] font-bold uppercase text-stone-500">GCash settled</p>
+                  <p class="font-semibold text-lagoon-700">{{ money(p.gcash_earnings_settled) }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[10px] font-bold uppercase text-stone-500">Cash fees</p>
+                  <p class="font-semibold text-amber-700">{{ money(p.cash_fees_settled) }}</p>
+                </div>
+                <div class="col-span-2 flex items-center justify-between border-t border-sand-200 pt-2">
+                  <span class="text-stone-600">{{ formatDate(p.period_start) }} – {{ formatDate(p.period_end) }} ({{ p.ledger_days_count }}d)</span>
+                  <span class="font-bold text-deep-950">{{ money(p.net_payout_amount) }}</span>
+                </div>
+              </div>
+              <p class="text-xs text-stone-600">
+                Recorded by {{ p.recorded_by?.name ?? 'SISA Admin' }}
+                <span v-if="p.receipt_reference" class="font-mono text-label text-stone-500"> · Ref: {{ p.receipt_reference }}</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="hidden md:block overflow-x-auto">
             <table class="w-full min-w-[760px] text-left">
               <thead class="border-b border-sand-200 bg-sand-50">
                 <tr>

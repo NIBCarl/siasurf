@@ -309,7 +309,7 @@ const getStatusVariant = (status: string) => {
                 No Certificates Uploaded
             </div>
 
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
                 <BaseButton 
                     v-if="instructor.instructor_profile.status === 'pending_verification'" 
                     @click="confirmVerify" 
@@ -364,38 +364,38 @@ const getStatusVariant = (status: string) => {
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 ring-1 ring-slate-100 p-1 rounded-[3rem] bg-slate-50/50">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 ring-1 ring-slate-100 p-1 rounded-3xl sm:rounded-[3rem] bg-slate-50/50">
             <!-- Left Column: Biography & Documents -->
-            <div class="lg:col-span-8 space-y-8">
+            <div class="lg:col-span-8 min-w-0 space-y-6 sm:space-y-8">
                 <!-- Profile Identity Card -->
-                <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 relative overflow-hidden">
+                <div class="bg-white rounded-3xl sm:rounded-[2.5rem] p-5 sm:p-10 shadow-sm border border-slate-100 relative overflow-hidden">
                     <div class="absolute top-0 right-0 p-8 text-slate-50 opacity-10">
                         <IdentificationIcon class="w-40 h-40" />
                     </div>
                     
                     <div class="relative z-10">
-                        <div class="flex items-center gap-4 mb-8">
-                            <div class="w-20 h-20 bg-ocean-100 rounded-[2rem] flex items-center justify-center border-4 border-white shadow-xl">
-                                <UserIcon class="w-10 h-10 text-ocean-600" />
+                        <div class="flex items-center gap-4 mb-6 sm:mb-8 min-w-0">
+                            <div class="w-16 h-16 sm:w-20 sm:h-20 shrink-0 bg-ocean-100 rounded-2xl sm:rounded-[2rem] flex items-center justify-center border-4 border-white shadow-xl">
+                                <UserIcon class="w-8 h-8 sm:w-10 sm:h-10 text-ocean-600" />
                             </div>
-                            <div>
-                                <h2 class="text-2xl font-extrabold text-slate-900 leading-none mb-2">{{ instructor.name }}</h2>
-                                <div class="flex gap-4">
-                                    <span class="flex items-center gap-1.5 text-xs font-bold text-slate-400">
-                                        <EnvelopeIcon class="w-3.5 h-3.5" />
+                            <div class="min-w-0 flex-1">
+                                <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight mb-2 break-words">{{ instructor.name }}</h2>
+                                <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+                                    <span class="flex items-center gap-1.5 text-xs font-bold text-slate-400 break-all sm:break-words">
+                                        <EnvelopeIcon class="w-3.5 h-3.5 shrink-0" />
                                         {{ instructor.email }}
                                     </span>
                                     <span class="flex items-center gap-1.5 text-xs font-bold text-slate-400">
-                                        <PhoneIcon class="w-3.5 h-3.5" />
+                                        <PhoneIcon class="w-3.5 h-3.5 shrink-0" />
                                         {{ instructor.phone || 'NO CONTACT' }}
                                     </span>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="space-y-6">
+                        <div class="space-y-4 sm:space-y-6">
                             <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em]">Operational Biography</h3>
-                            <div class="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 italic text-slate-600 leading-relaxed text-lg shadow-inner">
+                            <div class="bg-slate-50 p-5 sm:p-8 rounded-2xl sm:rounded-[2rem] border border-slate-100 italic text-slate-600 leading-relaxed text-base sm:text-lg shadow-inner break-words [overflow-wrap:anywhere]">
                                 "{{ instructor.instructor_profile.bio || 'No biography provided.' }}"
                             </div>
                         </div>
@@ -521,83 +521,136 @@ const getStatusVariant = (status: string) => {
                 </div>
 
                 <!-- Documentation Audit table -->
-                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-                    <div class="p-8 border-b border-slate-50 flex items-center justify-between">
+                <div class="bg-white rounded-3xl sm:rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+                    <div class="p-5 sm:p-8 border-b border-slate-50 flex flex-wrap items-center justify-between gap-3">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 bg-ocean-50 text-ocean-600 rounded-xl flex items-center justify-center">
+                            <div class="w-10 h-10 bg-ocean-50 text-ocean-600 rounded-xl flex items-center justify-center shrink-0">
                                 <DocumentTextIcon class="w-6 h-6" />
                             </div>
                             <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest">Document Registry</h3>
                         </div>
                         <span class="px-3 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-500 uppercase">{{ instructor.certificates.length }} FILES AUDITED</span>
                     </div>
-                    
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="bg-slate-50/50 border-b border-slate-50">
-                                <th class="pl-8 pr-4 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Certificate Type</th>
-                                <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Audit Status</th>
-                                <th class="pl-4 pr-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Verification</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-50">
-                            <tr v-for="cert in instructor.certificates" :key="cert.id" class="group hover:bg-slate-50 transition-colors">
-                                <td class="pl-8 pr-4 py-6">
-                                    <div class="flex items-center gap-4">
-                                        <div v-if="instructor.instructor_profile.status === 'pending_verification' && cert.status !== 'verified'" class="flex items-center">
-                                            <input 
-                                                type="checkbox" 
-                                                :id="'cert-' + cert.id"
-                                                :checked="verifyForm.certificate_ids.includes(cert.id)"
-                                                @change="toggleCertificate(cert.id)"
-                                                class="w-5 h-5 rounded border-slate-200 text-ocean-600 focus:ring-ocean-500 transition-all"
-                                            />
+
+                    <!-- Mobile certificate cards -->
+                    <div class="md:hidden divide-y divide-slate-100">
+                        <div v-for="cert in instructor.certificates" :key="`mobile-cert-${cert.id}`" class="p-4 space-y-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <div v-if="instructor.instructor_profile.status === 'pending_verification' && cert.status !== 'verified'" class="flex items-center shrink-0">
+                                        <input
+                                            type="checkbox"
+                                            :id="'mobile-cert-' + cert.id"
+                                            :checked="verifyForm.certificate_ids.includes(cert.id)"
+                                            @change="toggleCertificate(cert.id)"
+                                            class="w-5 h-5 rounded border-slate-200 text-ocean-600 focus:ring-ocean-500 transition-all"
+                                        />
+                                    </div>
+                                    <div class="w-9 h-9 shrink-0 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center text-[10px] font-black">PDF</div>
+                                    <label :for="'mobile-cert-' + cert.id" class="text-sm font-black text-slate-900 uppercase tracking-tight break-words cursor-pointer">
+                                        {{ cert.type.replace('_', ' ') }}
+                                    </label>
+                                </div>
+                                <Badge :variant="cert.status === 'verified' ? 'ocean' : 'warning'" size="sm" class="shrink-0">
+                                    {{ cert.status.toUpperCase() }}
+                                </Badge>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <a :href="route('admin.certificates.show', cert.id)" target="_blank" class="flex-1 min-w-[120px]">
+                                    <BaseButton size="sm" variant="secondary" outline class="w-full min-h-[44px] justify-center rounded-lg">
+                                        <ArrowUpTrayIcon class="w-4 h-4 mr-1 text-slate-400" />
+                                        Inspect
+                                    </BaseButton>
+                                </a>
+                                <BaseButton
+                                    v-if="cert.status !== 'verified'"
+                                    @click="verifyCert(cert.id)"
+                                    size="sm"
+                                    variant="success"
+                                    class="flex-1 min-w-[140px] min-h-[44px] justify-center rounded-lg shadow-sm"
+                                >
+                                    Sign Final Audit
+                                </BaseButton>
+                            </div>
+                        </div>
+                        <div v-if="instructor.certificates.length === 0" class="p-8 text-center">
+                            <div class="flex flex-col items-center">
+                                <ExclamationTriangleIcon class="w-8 h-8 text-amber-500 mb-3" />
+                                <p class="text-sm font-black text-slate-900">No Critical Documents Found</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Instructor registration incomplete or pending upload.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Desktop table -->
+                    <div class="hidden md:block overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="bg-slate-50/50 border-b border-slate-50">
+                                    <th class="pl-8 pr-4 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Certificate Type</th>
+                                    <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Audit Status</th>
+                                    <th class="pl-4 pr-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Verification</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50">
+                                <tr v-for="cert in instructor.certificates" :key="cert.id" class="group hover:bg-slate-50 transition-colors">
+                                    <td class="pl-8 pr-4 py-6">
+                                        <div class="flex items-center gap-4">
+                                            <div v-if="instructor.instructor_profile.status === 'pending_verification' && cert.status !== 'verified'" class="flex items-center">
+                                                <input 
+                                                    type="checkbox" 
+                                                    :id="'cert-' + cert.id"
+                                                    :checked="verifyForm.certificate_ids.includes(cert.id)"
+                                                    @change="toggleCertificate(cert.id)"
+                                                    class="w-5 h-5 rounded border-slate-200 text-ocean-600 focus:ring-ocean-500 transition-all"
+                                                />
+                                            </div>
+                                            <div class="w-10 h-10 bg-slate-100 text-slate-400 group-hover:bg-ocean-100 group-hover:text-ocean-600 rounded-xl flex items-center justify-center text-[10px] font-black shadow-inner transition-all">PDF</div>
+                                            <label :for="'cert-' + cert.id" class="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-ocean-600 transition-colors cursor-pointer">{{ cert.type.replace('_', ' ') }}</label>
                                         </div>
-                                        <div class="w-10 h-10 bg-slate-100 text-slate-400 group-hover:bg-ocean-100 group-hover:text-ocean-600 rounded-xl flex items-center justify-center text-[10px] font-black shadow-inner transition-all">PDF</div>
-                                        <label :for="'cert-' + cert.id" class="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-ocean-600 transition-colors cursor-pointer">{{ cert.type.replace('_', ' ') }}</label>
-                                    </div>
-                                </td>
-                                <td class="px-4 py-6 text-center">
-                                    <Badge :variant="cert.status === 'verified' ? 'ocean' : 'warning'" size="sm">
-                                        {{ cert.status.toUpperCase() }}
-                                    </Badge>
-                                </td>
-                                <td class="pl-4 pr-8 py-6 text-right">
-                                    <div class="flex justify-end gap-2">
-                                        <a :href="route('admin.certificates.show', cert.id)" target="_blank">
-                                            <BaseButton size="sm" variant="secondary" outline class="rounded-lg">
-                                                <ArrowUpTrayIcon class="w-4 h-4 mr-1 text-slate-400" />
-                                                Inspect
+                                    </td>
+                                    <td class="px-4 py-6 text-center">
+                                        <Badge :variant="cert.status === 'verified' ? 'ocean' : 'warning'" size="sm">
+                                            {{ cert.status.toUpperCase() }}
+                                        </Badge>
+                                    </td>
+                                    <td class="pl-4 pr-8 py-6 text-right">
+                                        <div class="flex justify-end gap-2">
+                                            <a :href="route('admin.certificates.show', cert.id)" target="_blank">
+                                                <BaseButton size="sm" variant="secondary" outline class="rounded-lg">
+                                                    <ArrowUpTrayIcon class="w-4 h-4 mr-1 text-slate-400" />
+                                                    Inspect
+                                                </BaseButton>
+                                            </a>
+                                            <BaseButton 
+                                                v-if="cert.status !== 'verified'" 
+                                                @click="verifyCert(cert.id)" 
+                                                size="sm" 
+                                                variant="success"
+                                                class="rounded-lg shadow-sm"
+                                            >
+                                                Sign Final Audit
                                             </BaseButton>
-                                        </a>
-                                        <BaseButton 
-                                            v-if="cert.status !== 'verified'" 
-                                            @click="verifyCert(cert.id)" 
-                                            size="sm" 
-                                            variant="success"
-                                            class="rounded-lg shadow-sm"
-                                        >
-                                            Sign Final Audit
-                                        </BaseButton>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr v-if="instructor.certificates.length === 0">
-                                <td colspan="3" class="p-12 text-center">
-                                    <div class="flex flex-col items-center">
-                                        <ExclamationTriangleIcon class="w-8 h-8 text-amber-500 mb-3" />
-                                        <p class="text-sm font-black text-slate-900">No Critical Documents Found</p>
-                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Instructor registration incomplete or pending upload.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr v-if="instructor.certificates.length === 0">
+                                    <td colspan="3" class="p-12 text-center">
+                                        <div class="flex flex-col items-center">
+                                            <ExclamationTriangleIcon class="w-8 h-8 text-amber-500 mb-3" />
+                                            <p class="text-sm font-black text-slate-900">No Critical Documents Found</p>
+                                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Instructor registration incomplete or pending upload.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
             <!-- Right Column: Verification & Intelligence -->
-            <div class="lg:col-span-4 space-y-8">
+            <div class="lg:col-span-4 min-w-0 space-y-6 sm:space-y-8">
                 <!-- QR Identification Card -->
                 <div class="bg-ocean-600 rounded-[2.5rem] p-10 text-white relative overflow-hidden shadow-2xl shadow-ocean-600/20 group">
                     <!-- Abstract water patterns -->

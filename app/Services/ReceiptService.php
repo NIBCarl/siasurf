@@ -45,6 +45,7 @@ class ReceiptService
             'company_name' => config('app.name', 'SiaSurf'),
             'company_address' => 'Siargao Island, Surigao del Norte, Philippines',
             'company_email' => config('app.admin_email', 'admin@siasurf.com'),
+            'logo_data_uri' => $this->logoDataUri(),
             'page_height' => $pageHeight,
         ];
 
@@ -77,6 +78,7 @@ class ReceiptService
             'company_name' => config('app.name', 'SiaSurf'),
             'company_address' => 'Siargao Island, Surigao del Norte, Philippines',
             'company_email' => config('app.admin_email', 'admin@siasurf.com'),
+            'logo_data_uri' => $this->logoDataUri(),
         ];
 
         $pdf = PDF::loadView('pdfs.invoice', $data);
@@ -120,5 +122,30 @@ class ReceiptService
             Storage::disk('local')->path($receiptPath),
             "SiaSurf_Receipt_{$booking->id}.pdf"
         );
+    }
+
+    /**
+     * Inline the SiaSurf badge/logo as a data URI for offline DomPDF rendering.
+     */
+    private function logoDataUri(): ?string
+    {
+        foreach (['images/logo-badge.png', config('waiver.logo_path', 'images/logo.png')] as $relative) {
+            $fullPath = public_path($relative);
+            if (! is_file($fullPath) || ! is_readable($fullPath)) {
+                continue;
+            }
+
+            $binary = @file_get_contents($fullPath);
+            if ($binary === false) {
+                continue;
+            }
+
+            $info = @getimagesizefromstring($binary);
+            $mime = is_array($info) && ! empty($info['mime']) ? $info['mime'] : 'image/png';
+
+            return 'data:' . $mime . ';base64,' . base64_encode($binary);
+        }
+
+        return null;
     }
 }

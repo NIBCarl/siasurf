@@ -218,31 +218,31 @@ const statusVariant = (status: string) => {
       </div>
 
       <!-- Summary KPIs -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm min-w-0">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Open GCash Earnings</p>
-          <p class="mt-2 text-2xl font-black text-emerald-700">{{ money(summary.unsettled_gcash_earnings) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-emerald-700 break-words">{{ money(summary.unsettled_gcash_earnings) }}</p>
           <p class="text-xs text-slate-500 mt-1">{{ summary.unsettled_days_count }} unsettled day(s)</p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm min-w-0">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Cash Service Fees Owed</p>
-          <p class="mt-2 text-2xl font-black text-amber-600">{{ money(summary.unsettled_cash_fees_owed) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-amber-600 break-words">{{ money(summary.unsettled_cash_fees_owed) }}</p>
           <p class="text-xs text-slate-500 mt-1">
             {{ summary.earliest_remittance_due_date ? `Earliest due ${formatDate(summary.earliest_remittance_due_date)}` : 'No open cash fees' }}
           </p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm min-w-0">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Net Payable (GCash − Fees)</p>
-          <p class="mt-2 text-2xl font-black" :class="summary.net_payable < 0 ? 'text-rose-600' : 'text-slate-900'">
+          <p class="mt-2 text-lg sm:text-2xl font-black break-words" :class="summary.net_payable < 0 ? 'text-rose-600' : 'text-slate-900'">
             {{ money(summary.net_payable) }}
           </p>
           <p class="text-xs text-slate-500 mt-1">
             {{ summary.net_payable > 0 ? 'SISA pays instructor' : summary.net_payable < 0 ? 'Instructor remits to SISA' : 'Balanced / Clear' }}
           </p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm min-w-0">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Settled To Date</p>
-          <p class="mt-2 text-2xl font-black text-slate-900">{{ money(summary.total_payouts_disbursed) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-slate-900 break-words">{{ money(summary.total_payouts_disbursed) }}</p>
           <p class="text-xs text-slate-500 mt-1">Remitted: {{ money(summary.total_remittances_collected) }}</p>
         </div>
       </div>
@@ -295,7 +295,7 @@ const statusVariant = (status: string) => {
       <div class="space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <h2 class="text-xl font-extrabold text-slate-900">Daily Earnings Ledger</h2>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
             <button
               v-for="tab in ['all', 'unsettled', 'overdue', 'settled']"
               :key="tab"
@@ -311,8 +311,45 @@ const statusVariant = (status: string) => {
           </div>
         </div>
 
-        <div v-if="ledgers.data.length > 0" class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-          <div class="overflow-x-auto">
+        <div v-if="ledgers.data.length > 0" class="bg-white rounded-3xl sm:rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+          <!-- Mobile cards -->
+          <div class="md:hidden divide-y divide-slate-100">
+            <div v-for="row in ledgers.data" :key="`mobile-ledger-${row.id}`" class="p-4 space-y-2.5">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-bold text-slate-900">{{ formatDate(row.ledger_date) }}</p>
+                  <p class="text-xs text-slate-500">{{ row.completed_bookings_count }} ({{ row.gcash_bookings_count }} GCash, {{ row.cash_bookings_count }} Cash)</p>
+                </div>
+                <Badge :variant="statusVariant(row.effective_status)" size="sm" class="shrink-0">{{ row.effective_status_label }}</Badge>
+              </div>
+              <div class="grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-3 text-xs">
+                <div>
+                  <p class="text-[10px] font-bold uppercase text-slate-400">GCash</p>
+                  <p class="font-semibold text-emerald-700">{{ money(row.gcash_earnings) }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[10px] font-bold uppercase text-slate-400">Cash Earned</p>
+                  <p class="font-medium text-slate-700">{{ money(row.cash_earnings) }}</p>
+                </div>
+                <div>
+                  <p class="text-[10px] font-bold uppercase text-slate-400">Cash Fee Owed</p>
+                  <p class="font-semibold text-amber-700">{{ money(row.cash_service_fees_owed) }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[10px] font-bold uppercase text-slate-400">Net Payable</p>
+                  <p class="font-extrabold" :class="Number(row.net_payable) < 0 ? 'text-rose-600' : 'text-slate-900'">{{ money(row.net_payable) }}</p>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span :class="row.is_overdue ? 'font-bold text-rose-600' : 'text-slate-600'">
+                  Due: {{ row.remittance_due_date ? formatDate(row.remittance_due_date) : '—' }}
+                </span>
+                <span v-if="row.payout" class="font-mono text-[11px] text-slate-500">{{ row.payout.reference_code }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hidden md:block overflow-x-auto">
             <table class="w-full min-w-[840px] text-left">
               <thead class="bg-slate-50 border-b border-slate-100">
                 <tr>
@@ -358,8 +395,31 @@ const statusVariant = (status: string) => {
       <!-- Payout History -->
       <div class="space-y-4">
         <h2 class="text-xl font-extrabold text-slate-900">Recorded Settlements</h2>
-        <div v-if="payouts.data.length > 0" class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-          <div class="overflow-x-auto">
+        <div v-if="payouts.data.length > 0" class="bg-white rounded-3xl sm:rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+          <!-- Mobile cards -->
+          <div class="md:hidden divide-y divide-slate-100">
+            <div v-for="p in payouts.data" :key="`mobile-settle-${p.id}`" class="p-4 space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-mono font-bold text-slate-900 text-sm">{{ p.reference_code }}</p>
+                  <p class="text-xs text-slate-500">{{ formatDate(p.paid_at) }}</p>
+                </div>
+                <Badge :variant="p.settlement_type === 'payout' ? 'success' : p.settlement_type === 'remittance' ? 'warning' : 'info'" size="sm" class="shrink-0">
+                  {{ p.settlement_type_label }}
+                </Badge>
+              </div>
+              <div class="flex items-center justify-between gap-2 text-xs">
+                <span class="text-slate-600">{{ p.payment_channel_label }} · {{ formatDate(p.period_start) }} – {{ formatDate(p.period_end) }} ({{ p.ledger_days_count }}d)</span>
+                <span class="font-extrabold text-sm text-slate-900 shrink-0">{{ money(p.net_payout_amount) }}</span>
+              </div>
+              <p class="text-xs text-slate-600">
+                By {{ p.recorded_by?.name ?? 'SISA Admin' }}
+                <span v-if="p.receipt_reference" class="font-mono text-slate-400"> · Ref: {{ p.receipt_reference }}</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="hidden md:block overflow-x-auto">
             <table class="w-full min-w-[760px] text-left">
               <thead class="bg-slate-50 border-b border-slate-100">
                 <tr>

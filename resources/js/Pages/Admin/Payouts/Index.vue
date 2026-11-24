@@ -205,25 +205,25 @@ const paginationLabel = (label: string) =>
       </div>
 
       <!-- KPI Cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm min-w-0">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Unsettled GCash Payable</p>
-          <p class="mt-2 text-2xl font-black text-emerald-700">{{ money(platformStats.total_unsettled_gcash_payable) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-emerald-700 break-words">{{ money(platformStats.total_unsettled_gcash_payable) }}</p>
           <p class="text-xs text-slate-500 mt-1">{{ platformStats.unsettled_instructors_count }} instructor(s) with open balances</p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm min-w-0">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Cash Fees Owed to SISA</p>
-          <p class="mt-2 text-2xl font-black text-amber-600">{{ money(platformStats.total_unsettled_cash_fees_owed) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-amber-600 break-words">{{ money(platformStats.total_unsettled_cash_fees_owed) }}</p>
           <p class="text-xs text-slate-500 mt-1">7% fee on beach cash lessons</p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm min-w-0">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Net Platform Payable</p>
-          <p class="mt-2 text-2xl font-black text-slate-900">{{ money(platformStats.net_platform_payable) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-slate-900 break-words">{{ money(platformStats.net_platform_payable) }}</p>
           <p class="text-xs text-slate-500 mt-1">GCash earnings − cash fees owed</p>
         </div>
-        <div class="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+        <div class="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm min-w-0">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Overdue Remittances</p>
-          <p class="mt-2 text-2xl font-black text-rose-600">{{ money(platformStats.overdue_cash_fees_total) }}</p>
+          <p class="mt-2 text-lg sm:text-2xl font-black text-rose-600 break-words">{{ money(platformStats.overdue_cash_fees_total) }}</p>
           <p class="text-xs text-slate-500 mt-1">{{ platformStats.overdue_instructors_count }} instructor(s) past {{ remittanceDays }} days</p>
         </div>
       </div>
@@ -235,9 +235,9 @@ const paginationLabel = (label: string) =>
             v-model="searchText"
             type="text"
             placeholder="Search instructor name or email..."
-            class="w-full rounded-2xl border-slate-200 text-sm focus:border-ocean-500 focus:ring-ocean-500"
+            class="w-full rounded-2xl border-slate-200 text-base sm:text-sm focus:border-ocean-500 focus:ring-ocean-500"
           />
-          <BaseButton type="submit" variant="secondary">Search</BaseButton>
+          <BaseButton type="submit" variant="secondary" class="shrink-0">Search</BaseButton>
         </form>
         <p class="text-xs font-semibold text-slate-500">
           This month: <strong>{{ money(platformStats.disbursed_this_month) }}</strong> paid out ·
@@ -246,8 +246,69 @@ const paginationLabel = (label: string) =>
       </div>
 
       <!-- Instructor Balances Table -->
-      <div v-if="instructors.length > 0" class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
+      <div v-if="instructors.length > 0" class="bg-white rounded-3xl sm:rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+        <!-- Mobile cards -->
+        <div class="md:hidden divide-y divide-slate-100">
+          <div v-for="row in instructors" :key="`mobile-bal-${row.id}`" class="p-4 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <Link :href="route('admin.payouts.show', row.id)" class="font-bold text-slate-900 hover:text-ocean-700 hover:underline break-words">
+                  {{ row.name }}
+                </Link>
+                <p class="text-xs text-slate-500 break-all">{{ row.email }}</p>
+              </div>
+              <Badge :variant="directionVariant(row)" size="sm" class="shrink-0">
+                {{ directionLabel(row) }}
+              </Badge>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-3 text-xs">
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Open Days</p>
+                <p class="font-semibold text-slate-800 mt-0.5">{{ row.summary.unsettled_days_count }} day(s)</p>
+              </div>
+              <div class="text-right">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Net Payable</p>
+                <p class="font-extrabold mt-0.5" :class="row.summary.net_payable < 0 ? 'text-rose-600' : 'text-slate-900'">
+                  {{ money(row.summary.net_payable) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">GCash Earnings</p>
+                <p class="font-semibold text-emerald-700 mt-0.5">{{ money(row.summary.unsettled_gcash_earnings) }}</p>
+              </div>
+              <div class="text-right">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cash Fees Owed</p>
+                <p class="font-semibold text-amber-700 mt-0.5">{{ money(row.summary.unsettled_cash_fees_owed) }}</p>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-500">
+              Remittance due:
+              <span v-if="row.summary.earliest_remittance_due_date" :class="row.summary.has_overdue_remittance ? 'font-bold text-rose-600' : 'font-medium text-slate-700'">
+                {{ formatDate(row.summary.earliest_remittance_due_date) }}
+              </span>
+              <span v-else>—</span>
+            </p>
+
+            <div class="flex flex-col sm:flex-row gap-2">
+              <Link :href="route('admin.payouts.show', row.id)" class="flex-1">
+                <BaseButton size="sm" variant="secondary" class="w-full min-h-[44px] justify-center">Daily Ledger</BaseButton>
+              </Link>
+              <BaseButton
+                v-if="row.summary.unsettled_days_count > 0"
+                size="sm"
+                variant="primary"
+                class="w-full flex-1 min-h-[44px] justify-center"
+                @click="openSettleModal(row)"
+              >
+                Record Settlement
+              </BaseButton>
+            </div>
+          </div>
+        </div>
+
+        <div class="hidden md:block overflow-x-auto">
           <table class="w-full min-w-[920px] text-left">
             <thead class="bg-slate-50 border-b border-slate-100">
               <tr>
@@ -322,8 +383,40 @@ const paginationLabel = (label: string) =>
       <!-- Recent Settlements Log -->
       <div class="space-y-4">
         <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Recent In-Person Settlements</h2>
-        <div v-if="payouts.data.length > 0" class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-          <div class="overflow-x-auto">
+        <div v-if="payouts.data.length > 0" class="bg-white rounded-3xl sm:rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+          <!-- Mobile cards -->
+          <div class="md:hidden divide-y divide-slate-100">
+            <div v-for="p in payouts.data" :key="`mobile-pay-${p.id}`" class="p-4 space-y-2.5">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-mono font-bold text-slate-900 text-sm">{{ p.reference_code }}</p>
+                  <p class="text-xs text-slate-500">{{ formatDate(p.paid_at) }}</p>
+                </div>
+                <Badge :variant="p.settlement_type === 'payout' ? 'success' : p.settlement_type === 'remittance' ? 'warning' : 'info'" size="sm" class="shrink-0">
+                  {{ p.settlement_type_label }}
+                </Badge>
+              </div>
+              <div class="flex items-center justify-between gap-2 text-sm">
+                <Link :href="route('admin.payouts.show', p.instructor_id)" class="font-bold text-ocean-700 hover:underline break-words">
+                  {{ p.instructor?.name ?? 'Instructor' }}
+                </Link>
+                <span class="font-extrabold text-slate-900 shrink-0">{{ money(p.net_payout_amount) }}</span>
+              </div>
+              <div class="rounded-2xl bg-slate-50 p-3 text-xs space-y-1">
+                <p class="text-slate-600">{{ p.payment_channel_label }} · {{ formatDate(p.period_start) }} – {{ formatDate(p.period_end) }} ({{ p.ledger_days_count }}d)</p>
+                <p class="flex flex-wrap gap-3">
+                  <span class="font-semibold text-emerald-700">+ {{ money(p.gcash_earnings_settled) }}</span>
+                  <span class="font-semibold text-amber-700">− {{ money(p.cash_fees_settled) }}</span>
+                </p>
+                <p class="text-slate-600">
+                  By <span class="font-semibold text-slate-800">{{ p.recorded_by?.name ?? 'SISA Admin' }}</span>
+                  <span v-if="p.receipt_reference" class="font-mono text-slate-400"> · Ref: {{ p.receipt_reference }}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="hidden md:block overflow-x-auto">
             <table class="w-full min-w-[860px] text-left">
               <thead class="bg-slate-50 border-b border-slate-100">
                 <tr>

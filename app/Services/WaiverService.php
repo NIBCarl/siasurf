@@ -429,6 +429,7 @@ class WaiverService
             'signed_at' => $phSignedAt->format('F d, Y'),
             'signed_at_datetime' => $phSignedAt->format('F d, Y h:i A'),
             'company_name' => config('app.name', 'SiaSurf'),
+            'logo_data_uri' => $this->logoDataUri(),
             'waiver_id' => 'WVR-PC-' . str_pad((string) $booking->id, 6, '0', STR_PAD_LEFT),
         ];
 
