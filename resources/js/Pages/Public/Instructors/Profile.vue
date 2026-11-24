@@ -109,7 +109,7 @@ const instructorLevelDescription: Record<number, string> = {
 
         <Head :title="`${instructor.name} | Surf Instructor`" />
 
-        <div class="mb-10 flex items-center justify-between px-4">
+        <div class="mb-6 sm:mb-10 flex flex-wrap items-center justify-between gap-3 px-0 sm:px-4">
             <Link :href="route('instructors.search')" class="flex items-center gap-3 text-sm font-black text-slate-400 transition-all hover:text-ocean-600 group">
                 <div class="p-2 rounded-xl bg-white border border-slate-100 group-hover:border-ocean-100 group-hover:bg-ocean-50 transition-all">
                     <ArrowLeftIcon class="h-4 w-4" />
@@ -121,7 +121,7 @@ const instructorLevelDescription: Record<number, string> = {
                 <Link
                     v-if="!studentBookingBlockReason"
                     :href="route('bookings.create', instructor.id)" 
-                    class="rounded-2xl bg-coral-700 px-8 py-3.5 text-sm font-black text-white shadow-card transition-all hover:bg-coral-800 active:scale-95"
+                    class="rounded-2xl bg-coral-700 px-5 sm:px-8 py-3 sm:py-3.5 text-sm font-black text-white shadow-card transition-all hover:bg-coral-800 active:scale-95"
                 >
                     Book This Expert
                 </Link>
@@ -134,13 +134,13 @@ const instructorLevelDescription: Record<number, string> = {
             </div>
         </div>
 
-        <div class="grid gap-12 lg:grid-cols-3">
+        <div class="grid gap-6 sm:gap-8 lg:grid-cols-3 lg:gap-12" :class="canBook ? 'pb-24 lg:pb-0' : ''">
             <!-- Left Column: Primary Info -->
-            <div class="lg:col-span-2 space-y-12">
-                <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
-                    <div class="flex flex-col items-center md:items-start gap-10 md:flex-row">
-                        <div class="relative group">
-                            <div class="h-48 w-48 overflow-hidden rounded-[2.5rem] border-8 border-slate-50 bg-sand-50 shadow-2xl transition-transform duration-500 group-hover:scale-105">
+            <div class="min-w-0 lg:col-span-2 space-y-6 sm:space-y-8 lg:space-y-12">
+                <div class="bg-white rounded-3xl sm:rounded-[2.5rem] p-5 sm:p-8 lg:p-10 shadow-sm border border-slate-100">
+                    <div class="flex flex-col items-center md:items-start gap-6 sm:gap-10 md:flex-row">
+                        <div class="relative group shrink-0">
+                            <div class="h-36 w-36 sm:h-48 sm:w-48 overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] border-8 border-slate-50 bg-sand-50 shadow-2xl transition-transform duration-500 group-hover:scale-105">
                                 <img 
                                     v-if="instructorAvatar" 
                                     :src="instructorAvatar" 
@@ -151,22 +151,22 @@ const instructorLevelDescription: Record<number, string> = {
                                     {{ instructorInitials }}
                                 </div>
                             </div>
-                            <div class="absolute -bottom-2 -right-2 flex h-14 w-14 items-center justify-center rounded-3xl bg-ocean-600 text-white shadow-2xl shadow-ocean-200 border-4 border-white rotate-12 group-hover:rotate-0 transition-transform">
-                                <CheckBadgeIcon class="h-8 w-8" />
+                            <div class="absolute -bottom-2 -right-2 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl sm:rounded-3xl bg-ocean-600 text-white shadow-2xl shadow-ocean-200 border-4 border-white rotate-12 group-hover:rotate-0 transition-transform">
+                                <CheckBadgeIcon class="h-7 w-7 sm:h-8 sm:w-8" />
                             </div>
                         </div>
 
-                        <div class="flex-1 text-center md:text-left">
+                        <div class="min-w-0 flex-1 text-center md:text-left">
                             <div class="mb-4">
-                                <span class="inline-block rounded-xl bg-sand-100 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-sand-700 mb-4">
+                                <span class="inline-block rounded-xl bg-sand-100 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-sand-700 mb-3 sm:mb-4">
                                     Verified Surf Professional
                                 </span>
-                                <h1 class="text-5xl font-extrabold text-slate-900 capitalize tracking-tight leading-tight">
+                                <h1 class="text-3xl sm:text-5xl font-extrabold text-slate-900 capitalize tracking-tight leading-tight break-words">
                                     {{ instructor.name }}
                                 </h1>
                             </div>
                             
-                            <div class="flex flex-wrap items-center justify-center md:justify-start gap-6 text-slate-500">
+                            <div class="flex flex-wrap items-center justify-center md:justify-start gap-4 sm:gap-6 text-slate-500">
                                 <div v-if="totalReviews > 0" class="flex items-center gap-2 font-black text-xs uppercase tracking-widest text-lagoon-700">
                                     <ChatBubbleLeftRightIcon class="h-5 w-5" />
                                     <span>{{ totalReviews }} reviews</span>
@@ -190,16 +190,16 @@ const instructorLevelDescription: Record<number, string> = {
                         </div>
                     </div>
 
-                    <div class="mt-12 pt-10 border-t border-slate-50">
-                        <h2 class="mb-6 text-xl font-extrabold text-slate-900 uppercase tracking-widest">Professional Bio</h2>
-                        <p class="text-lg leading-relaxed text-slate-600 font-medium italic">
+                    <div class="mt-8 pt-6 sm:mt-12 sm:pt-10 border-t border-slate-50">
+                        <h2 class="mb-4 sm:mb-6 text-lg sm:text-xl font-extrabold text-slate-900 uppercase tracking-widest">Professional Bio</h2>
+                        <p class="text-base sm:text-lg leading-relaxed text-slate-600 font-medium italic break-words">
                             "{{ instructor.instructor_profile.bio || 'This instructor is a dedicated member of the Siargao surfing community, certified to provide professional and safe surfing lessons for various skill levels.' }}"
                         </p>
                     </div>
                 </div>
 
                 <!-- Weekly Availability (FR 1.8.2) -->
-                <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+                <div class="bg-white rounded-3xl sm:rounded-[2.5rem] p-5 sm:p-8 lg:p-10 shadow-sm border border-slate-100">
                     <div class="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <h2 class="text-xl font-extrabold text-slate-900 uppercase tracking-widest">Weekly Schedule</h2>
                         <div class="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
@@ -262,7 +262,7 @@ const instructorLevelDescription: Record<number, string> = {
                 </div>
 
                 <!-- Surf zones & teaching location -->
-                <div v-if="(props.surfSpots ?? []).length > 0" class="rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm">
+                <div v-if="(props.surfSpots ?? []).length > 0" class="rounded-3xl sm:rounded-[2.5rem] border border-slate-100 bg-white p-5 sm:p-8 lg:p-10 shadow-sm">
                     <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                         <div>
                             <p class="text-[10px] font-black uppercase tracking-[0.2em] text-ocean-500">Where you can surf</p>
@@ -273,12 +273,12 @@ const instructorLevelDescription: Record<number, string> = {
                                 <span v-if="instructor.instructor_profile.meeting_point">· {{ instructor.instructor_profile.meeting_point }}</span>
                             </p>
                         </div>
-                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 w-fit">
                             {{ props.surfSpots!.length }} selected surf zone{{ props.surfSpots!.length === 1 ? '' : 's' }}
                         </span>
                     </div>
 
-                    <SurfZoneTabs :spots="props.surfSpots!" class="mb-5" />
+                    <SurfZoneTabs :spots="props.surfSpots!" :initial-limit="4" class="mb-5" />
 
                     <SurfZoneMap
                         mode="view"
@@ -288,7 +288,7 @@ const instructorLevelDescription: Record<number, string> = {
                 </div>
 
                 <!-- Teaching location fallback when no surf zones configured -->
-                <div v-else-if="mapInstructors.length" class="rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm">
+                <div v-else-if="mapInstructors.length" class="rounded-3xl sm:rounded-[2.5rem] border border-slate-100 bg-white p-5 sm:p-8 lg:p-10 shadow-sm">
                     <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                         <div>
                             <p class="text-[10px] font-black uppercase tracking-[0.2em] text-ocean-500">Find your coach</p>
@@ -299,7 +299,7 @@ const instructorLevelDescription: Record<number, string> = {
                                 <span v-if="instructor.instructor_profile.meeting_point">· {{ instructor.instructor_profile.meeting_point }}</span>
                             </p>
                         </div>
-                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 w-fit">
                             Live directory pin
                         </span>
                     </div>
@@ -313,12 +313,12 @@ const instructorLevelDescription: Record<number, string> = {
                 </div>
 
                 <!-- Certificates -->
-                <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
-                    <h2 class="mb-8 text-xl font-extrabold text-slate-900 uppercase tracking-widest">Verified Credentials</h2>
-                    <div class="grid gap-6 sm:grid-cols-2">
-                        <div v-for="cert in instructor.certificates" :key="cert.id" class="flex items-center gap-5 rounded-3xl border border-slate-50 bg-slate-50/50 p-6 transition-all hover:bg-white hover:shadow-xl hover:shadow-slate-100 group">
-                            <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white text-ocean-600 shadow-sm group-hover:scale-110 transition-transform">
-                                <AcademicCapIcon class="h-8 w-8" />
+                <div class="bg-white rounded-3xl sm:rounded-[2.5rem] p-5 sm:p-8 lg:p-10 shadow-sm border border-slate-100">
+                    <h2 class="mb-6 sm:mb-8 text-lg sm:text-xl font-extrabold text-slate-900 uppercase tracking-widest">Verified Credentials</h2>
+                    <div class="grid gap-4 sm:gap-6 sm:grid-cols-2">
+                        <div v-for="cert in instructor.certificates" :key="cert.id" class="flex items-center gap-5 rounded-3xl border border-slate-50 bg-slate-50/50 p-5 sm:p-6 transition-all hover:bg-white hover:shadow-xl hover:shadow-slate-100 group">
+                            <div class="flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-2xl bg-white text-ocean-600 shadow-sm group-hover:scale-110 transition-transform">
+                                <AcademicCapIcon class="h-7 w-7 sm:h-8 sm:w-8" />
                             </div>
                             <div>
                                 <div class="font-black text-slate-900 uppercase text-xs tracking-widest mb-1">{{ cert.type }}</div>
@@ -332,17 +332,17 @@ const instructorLevelDescription: Record<number, string> = {
                 </div>
 
                 <!-- Reviews -->
-                <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
-                    <div class="mb-10 flex items-center justify-between">
-                        <h2 class="text-xl font-extrabold text-slate-900 uppercase tracking-widest">Student Feedback</h2>
-                        <div class="flex items-center gap-3 rounded-2xl bg-slate-900 px-6 py-2.5 text-xs font-black text-white uppercase tracking-widest">
+                <div class="bg-white rounded-3xl sm:rounded-[2.5rem] p-5 sm:p-8 lg:p-10 shadow-sm border border-slate-100">
+                    <div class="mb-8 sm:mb-10 flex flex-wrap items-center justify-between gap-3">
+                        <h2 class="text-lg sm:text-xl font-extrabold text-slate-900 uppercase tracking-widest">Student Feedback</h2>
+                        <div class="flex items-center gap-3 rounded-2xl bg-slate-900 px-5 sm:px-6 py-2.5 text-xs font-black text-white uppercase tracking-widest">
                             <ChatBubbleLeftRightIcon class="h-4 w-4" />
                             {{ totalReviews }} Feedback
                         </div>
                     </div>
 
-                    <div class="space-y-8">
-                        <div v-for="review in instructor.reviews_as_instructor" :key="review.id" class="rounded-[2rem] bg-slate-50 p-8 transition-all hover:bg-white border border-transparent hover:border-slate-100 hover:shadow-xl hover:shadow-slate-100">
+                    <div class="space-y-6 sm:space-y-8">
+                        <div v-for="review in instructor.reviews_as_instructor" :key="review.id" class="rounded-[2rem] bg-slate-50 p-6 sm:p-8 transition-all hover:bg-white border border-transparent hover:border-slate-100 hover:shadow-xl hover:shadow-slate-100">
                             <div class="mb-6 flex items-center justify-between font-black uppercase tracking-widest text-[10px]">
                                 <div class="flex items-center gap-4">
                                     <div class="h-12 w-12 rounded-2xl bg-sand-200 border-4 border-white shadow-sm flex items-center justify-center text-sand-700 text-sm">
@@ -368,9 +368,9 @@ const instructorLevelDescription: Record<number, string> = {
             </div>
 
             <!-- Right Column: Booking Widget -->
-            <div class="lg:col-span-1">
-                <div class="sticky top-28 space-y-8">
-                    <div class="overflow-hidden rounded-[3rem] bg-deep-900 p-10 text-white shadow-lift relative group">
+            <div class="min-w-0 lg:col-span-1">
+                <div class="sticky top-28 space-y-6 sm:space-y-8">
+                    <div class="overflow-hidden rounded-3xl sm:rounded-[3rem] bg-deep-900 p-6 sm:p-8 lg:p-10 text-white shadow-lift relative group">
                         <!-- Decorative element -->
                         <div class="absolute -top-12 -right-12 h-40 w-40 bg-lagoon-500/20 rounded-full blur-3xl transition-all group-hover:scale-150 duration-700" />
                         
@@ -474,7 +474,7 @@ const instructorLevelDescription: Record<number, string> = {
                     </div>
 
                     <!-- Pro Insights -->
-                    <div class="rounded-[2.5rem] border border-slate-100 bg-white p-8 shadow-sm">
+                    <div class="rounded-3xl sm:rounded-[2.5rem] border border-slate-100 bg-white p-6 sm:p-8 shadow-sm">
                         <div class="flex items-center gap-3 mb-4">
                             <AcademicCapIcon class="w-5 h-5 text-sand-500" />
                             <h4 class="text-xs font-bold text-slate-900 uppercase tracking-widest">Instructor Insights</h4>
@@ -484,6 +484,41 @@ const instructorLevelDescription: Record<number, string> = {
                         </p>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Sticky Mobile Booking CTA -->
+        <div
+            v-if="canBook"
+            :class="[
+                'lg:hidden fixed inset-x-0 z-20 border-t border-sand-200 bg-white/95 px-4 py-3 shadow-lift backdrop-blur-md',
+                isAuthenticated ? 'bottom-[57px]' : 'bottom-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
+            ]"
+        >
+            <div class="mx-auto flex max-w-xl items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-base font-extrabold leading-tight text-deep-950">
+                        ₱{{ Number(startingRate ?? instructor.instructor_profile.rate_per_hour ?? 600).toLocaleString() }}
+                        <span class="text-xs font-medium text-stone-500">/ hr</span>
+                    </p>
+                    <p class="truncate text-[11px] font-semibold text-lagoon-700">
+                        SISA-verified · Level {{ instructor.instructor_profile.level }}
+                    </p>
+                </div>
+
+                <span
+                    v-if="isStudent && studentBookingBlockReason"
+                    class="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800"
+                >
+                    Unavailable for your level
+                </span>
+                <Link
+                    v-else
+                    :href="route('bookings.create', instructor.id)"
+                    class="inline-flex min-h-[48px] flex-1 max-w-[220px] items-center justify-center rounded-xl bg-coral-700 px-4 text-xs font-black uppercase tracking-wider text-white shadow-card transition hover:bg-coral-800 active:scale-[0.98]"
+                >
+                    {{ isStudent ? 'Book Lesson →' : 'Sign in to Book →' }}
+                </Link>
             </div>
         </div>
     </AppSidebarLayout>

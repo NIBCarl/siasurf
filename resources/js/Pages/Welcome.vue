@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
+import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 
 defineProps<{
     canLogin?: boolean;
@@ -35,12 +36,10 @@ onMounted(() => {
             ]"
         >
             <div class="mx-auto flex max-w-7xl items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <img src="/assets/images/siargao_cloud9_sunset.png" class="h-10 w-10 object-cover rounded-lg" alt="SiaSurf Logo" />
-                    <span :class="['text-xl font-bold tracking-tight transition-colors duration-300', isScrolled ? 'text-deep-950' : 'text-white']">
-                        Sia<span class="text-lagoon-400">Surf</span>
-                    </span>
-                </div>
+                <Link href="/" class="flex items-center">
+                    <ApplicationLogo v-if="isScrolled" variant="horizontal" class="h-10 w-auto" />
+                    <ApplicationLogo v-else variant="horizontal-dark" class="h-10 w-auto drop-shadow-sm" />
+                </Link>
 
                 <div class="hidden items-center gap-8 md:flex">
                     <Link v-if="userRole !== 'instructor'" :href="route('instructors.search')" :class="['text-sm font-medium transition-colors duration-300 hover:text-lagoon-400', isScrolled ? 'text-stone-700' : 'text-white/90']">Find Instructors</Link>
@@ -155,39 +154,39 @@ onMounted(() => {
         </section>
 
         <!-- Stats Section -->
-        <section class="bg-sand-50 py-20">
+        <section class="bg-sand-50 py-12 md:py-20">
             <div class="container mx-auto px-6">
-                <div class="grid gap-12 text-center md:grid-cols-4">
+                <div class="grid grid-cols-2 gap-6 text-center md:grid-cols-4 md:gap-12">
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-2 text-4xl font-black text-deep-950">31 Breaks</div>
-                        <div class="text-sm font-bold uppercase tracking-widest text-stone-600">14 Beginner-Safe Zones</div>
+                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-deep-950">31 Breaks</div>
+                        <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">14 Beginner-Safe Zones</div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-2 text-4xl font-black text-lagoon-700">100% Live</div>
-                        <div class="text-sm font-bold uppercase tracking-widest text-stone-600">SISA QR Verification</div>
+                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-lagoon-700">100% Live</div>
+                        <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">SISA QR Verification</div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-2 text-4xl font-black text-deep-950">₱600 / hr</div>
-                        <div class="text-sm font-bold uppercase tracking-widest text-stone-600">Standardized SISA Base Rate</div>
+                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-deep-950">₱600 / hr</div>
+                        <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">Standardized SISA Base Rate</div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-2 text-4xl font-black text-coral-700">GCash &amp; Cash</div>
-                        <div class="text-sm font-bold uppercase tracking-widest text-stone-600">Official Digital Receipts</div>
+                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-coral-700">GCash &amp; Cash</div>
+                        <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">Official Digital Receipts</div>
                     </div>
                 </div>
             </div>
         </section>
 
         <!-- Features Section -->
-        <section id="features" class="bg-white py-24">
+        <section id="features" class="bg-white py-14 md:py-24">
             <div class="container mx-auto px-6">
-                <div class="mb-20 text-center">
+                <div class="mb-10 md:mb-20 text-center">
                     <h2 class="mb-4 text-3xl font-bold text-slate-900 md:text-5xl">Engineered for Safety. <br/> Designed for the Ocean.</h2>
                     <p class="mx-auto max-w-2xl text-slate-600">We bridge the gap between local surfing expertise and modern tourism standards.</p>
                 </div>
 
-                <div class="grid gap-8 lg:grid-cols-3">
-                    <div class="rounded-3xl border border-slate-100 bg-slate-50 p-10 transition-all hover:bg-white hover:shadow-xl hover:shadow-slate-200/50">
+                <div class="grid gap-6 md:gap-8 lg:grid-cols-3">
+                    <div class="rounded-3xl border border-slate-100 bg-slate-50 p-7 sm:p-10 transition-all hover:bg-white hover:shadow-xl hover:shadow-slate-200/50">
                         <div class="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-teal-600 shadow-sm">
                             <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -221,17 +220,17 @@ onMounted(() => {
         </section>
 
         <!-- Surf Spots Gallery -->
-        <section id="spots" class="bg-sand-50 py-24">
+        <section id="spots" class="bg-sand-50 py-14 md:py-24">
             <div class="container mx-auto px-6">
-                <div class="mb-16 text-center">
+                <div class="mb-8 md:mb-16 text-center">
                     <h2 class="mb-4 text-3xl font-bold text-slate-900 md:text-5xl">Explore the Island's Best</h2>
                     <p class="mx-auto max-w-2xl text-slate-600">Every break on the island, mapped with its difficulty and local conditions. Find the spot that matches your skill level.</p>
                 </div>
 
-                <div class="grid gap-8 md:grid-cols-3">
-                    <div class="group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
-                        <img src="/images/spot_cloud9.png" class="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Cloud 9" />
-                        <div class="p-8">
+                <div class="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-6 px-6 md:mx-0 md:px-0 md:pb-0 md:grid md:grid-cols-3 md:gap-8 md:overflow-visible">
+                    <div class="w-[82vw] max-w-[320px] shrink-0 snap-center md:w-auto md:max-w-none group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
+                        <img src="/images/spot_cloud9.png" class="h-56 md:h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Cloud 9" />
+                        <div class="p-6 md:p-8">
                             <div class="mb-2 flex items-center justify-between">
                                 <h3 class="text-xl font-bold text-slate-900">Cloud 9</h3>
                                 <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-600 uppercase tracking-wider">Advanced</span>
@@ -240,9 +239,9 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <div class="group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
-                        <img src="/images/spot_quicksilver.png" class="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Quicksilver" />
-                        <div class="p-8">
+                    <div class="w-[82vw] max-w-[320px] shrink-0 snap-center md:w-auto md:max-w-none group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
+                        <img src="/images/spot_quicksilver.png" class="h-56 md:h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Quicksilver" />
+                        <div class="p-6 md:p-8">
                             <div class="mb-2 flex items-center justify-between">
                                 <h3 class="text-xl font-bold text-slate-900">Quicksilver</h3>
                                 <span class="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-600 uppercase tracking-wider">Intermediate</span>
@@ -251,9 +250,9 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <div class="group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
-                        <img src="/images/spot_jacking_horse.png" class="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Jacking Horse" />
-                        <div class="p-8">
+                    <div class="w-[82vw] max-w-[320px] shrink-0 snap-center md:w-auto md:max-w-none group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
+                        <img src="/images/spot_jacking_horse.png" class="h-56 md:h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Jacking Horse" />
+                        <div class="p-6 md:p-8">
                             <div class="mb-2 flex items-center justify-between">
                                 <h3 class="text-xl font-bold text-slate-900">Jacking Horse</h3>
                                 <span class="rounded-full bg-teal-100 px-3 py-1 text-xs font-bold text-teal-600 uppercase tracking-wider">Beginner</span>
@@ -266,9 +265,9 @@ onMounted(() => {
         </section>
 
         <!-- Featured Instructors Section -->
-        <section class="bg-white py-24">
+        <section class="bg-white py-14 md:py-24">
             <div class="container mx-auto px-6">
-                <div class="mb-16 flex flex-col items-center justify-between gap-6 md:flex-row">
+                <div class="mb-8 md:mb-16 flex flex-col items-center justify-between gap-6 md:flex-row">
                     <div>
                         <h2 class="mb-2 text-3xl font-bold text-slate-900 md:text-5xl">Meet Our Pros</h2>
                         <p class="text-slate-600">Every instructor on SiaSurf is SISA-certified and safety-verified.</p>
@@ -278,9 +277,9 @@ onMounted(() => {
                     </Link>
                 </div>
 
-                <div class="grid gap-12 lg:grid-cols-2">
-                    <div class="flex flex-col items-center gap-8 rounded-[2rem] bg-sand-50 p-8 md:flex-row md:p-12">
-                        <img src="/images/instructor_male.png" class="h-48 w-48 rounded-3xl object-cover shadow-xl" alt="Instructor" />
+                <div class="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-6 px-6 lg:mx-0 lg:px-0 lg:pb-0 lg:grid lg:grid-cols-2 lg:gap-12 lg:overflow-visible">
+                    <div class="w-[86vw] max-w-[340px] shrink-0 snap-center lg:w-auto lg:max-w-none flex flex-col items-center gap-6 md:gap-8 rounded-[2rem] bg-sand-50 p-6 md:flex-row md:p-12">
+                        <img src="/images/instructor_male.png" class="h-44 w-44 md:h-48 md:w-48 rounded-3xl object-cover shadow-xl" alt="Instructor" />
                         <div>
                             <div class="mb-4 flex items-center gap-3">
                                 <span class="rounded-full bg-deep-900 px-3 py-1 text-xs font-bold text-white uppercase">Level 3 Expert</span>
@@ -296,8 +295,8 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <div class="flex flex-col items-center gap-8 rounded-[2rem] bg-sand-50 p-8 md:flex-row md:p-12">
-                        <img src="/images/instructor_female.png" class="h-48 w-48 rounded-3xl object-cover shadow-xl" alt="Instructor" />
+                    <div class="w-[86vw] max-w-[340px] shrink-0 snap-center lg:w-auto lg:max-w-none flex flex-col items-center gap-6 md:gap-8 rounded-[2rem] bg-sand-50 p-6 md:flex-row md:p-12">
+                        <img src="/images/instructor_female.png" class="h-44 w-44 md:h-48 md:w-48 rounded-3xl object-cover shadow-xl" alt="Instructor" />
                         <div>
                             <div class="mb-4 flex items-center gap-3">
                                 <span class="rounded-full bg-lagoon-700 px-3 py-1 text-xs font-bold text-white uppercase">Level 2 Pro</span>
@@ -317,7 +316,7 @@ onMounted(() => {
         </section>
 
         <!-- CTA Section -->
-        <section class="py-20 bg-sand-50">
+        <section class="py-12 md:py-20 bg-sand-50">
             <div class="container mx-auto px-6">
                 <div class="relative overflow-hidden rounded-[2rem] bg-deep-900 px-10 py-16 text-center text-white md:px-20 md:py-24">
                     <div class="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-lagoon-500 opacity-20"></div>
@@ -338,13 +337,8 @@ onMounted(() => {
             <div class="container mx-auto px-6">
                 <div class="grid gap-12 border-b border-white/10 pb-20 lg:grid-cols-4">
                     <div class="col-span-2">
-                        <div class="mb-6 flex items-center gap-2">
-                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-lagoon-600 text-white">
-                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                            </div>
-                            <span class="text-2xl font-bold text-white">SiaSurf</span>
+                        <div class="mb-6 flex items-center">
+                            <ApplicationLogo variant="horizontal-dark" class="h-10 w-auto" />
                         </div>
                         <p class="max-w-sm">
                             Smart Booking and Instructor Verification Platform with Real-time Safety Integration and Monitoring. Siargao Island, Philippines.

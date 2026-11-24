@@ -2,9 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import type { SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
 
-const props = defineProps<{
-  spots: SurfZoneSpot[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    spots: SurfZoneSpot[]
+    initialLimit?: number
+  }>(),
+  { initialLimit: 0 },
+)
 
 type TierKey = 'beginner' | 'intermediate' | 'advanced' | 'all'
 
@@ -60,6 +64,7 @@ const tabs = computed<Array<{ key: TierKey; label: string; count: number }>>(() 
 })
 
 const activeTab = ref<TierKey>(tabs.value[0]?.key ?? 'all')
+const showAll = ref(false)
 
 watch(
   tabs,
@@ -70,8 +75,22 @@ watch(
   },
 )
 
+watch(activeTab, () => {
+  showAll.value = false
+})
+
 const visibleSpots = computed(() =>
   activeTab.value === 'all' ? props.spots : grouped.value[activeTab.value],
+)
+
+const hasHiddenSpots = computed(
+  () => props.initialLimit > 0 && visibleSpots.value.length > props.initialLimit,
+)
+
+const displayedSpots = computed(() =>
+  hasHiddenSpots.value && !showAll.value
+    ? visibleSpots.value.slice(0, props.initialLimit)
+    : visibleSpots.value,
 )
 
 const badgeClassFor = (difficulty?: string | null) => {
@@ -86,7 +105,7 @@ const badgeClassFor = (difficulty?: string | null) => {
   <div class="space-y-3">
     <div
       v-if="tabs.length > 1"
-      class="inline-flex flex-wrap gap-1 rounded-xl border border-sand-200 bg-sand-50 p-1"
+      class="inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-sand-200 bg-sand-50 p-1"
       role="tablist"
       aria-label="Surf zone difficulty tiers"
     >
@@ -110,9 +129,9 @@ const badgeClassFor = (difficulty?: string | null) => {
 
     <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
       <div
-        v-for="spot in visibleSpots"
+        v-for="spot in displayedSpots"
         :key="spot.id"
-        class="flex items-center justify-between gap-3 rounded-xl border border-sand-200 bg-sand-50/70 px-3.5 py-2.5"
+        class="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-sand-200 bg-sand-50/70 px-3.5 py-2.5"
       >
         <div class="min-w-0">
           <p class="truncate text-xs font-bold text-deep-950">{{ spot.name }}</p>
@@ -128,5 +147,14 @@ const badgeClassFor = (difficulty?: string | null) => {
         </span>
       </div>
     </div>
+
+    <button
+      v-if="hasHiddenSpots"
+      type="button"
+      class="w-full rounded-xl border border-sand-200 bg-white py-2.5 text-xs font-bold text-deep-900 transition-colors hover:border-lagoon-600 hover:bg-sand-50"
+      @click="showAll = !showAll"
+    >
+      {{ showAll ? 'Show fewer zones ▲' : `Show all ${visibleSpots.length} zones ▼` }}
+    </button>
   </div>
 </template>

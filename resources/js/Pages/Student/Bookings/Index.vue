@@ -299,10 +299,10 @@ const submitCancel = () => {
                     class="overflow-hidden rounded-card border border-sand-200 bg-white shadow-card"
                 >
                     <div class="flex flex-col lg:flex-row">
-                        <div class="flex-1 p-5 sm:p-6">
-                            <div class="flex flex-col gap-4 sm:flex-row">
+                        <div class="flex-1 p-4 sm:p-6">
+                            <div class="flex flex-row items-start gap-3.5 sm:gap-4">
                                 <div
-                                    class="flex h-20 w-[68px] shrink-0 flex-col items-center justify-center rounded-control border"
+                                    class="flex h-16 w-[58px] sm:h-20 sm:w-[68px] shrink-0 flex-col items-center justify-center rounded-control border"
                                     :class="statusMeta(booking.status).date"
                                 >
                                     <span class="text-label font-semibold uppercase tracking-[0.06em] opacity-80">
@@ -354,7 +354,7 @@ const submitCancel = () => {
 
                                     <p
                                         v-if="booking.pending_reschedule_proposal"
-                                        class="mt-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-950"
+                                        class="mt-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] sm:py-2 sm:text-label text-amber-950"
                                     >
                                         Your instructor requested to reschedule this lesson to
                                         <strong>
@@ -366,21 +366,21 @@ const submitCancel = () => {
 
                                     <p
                                         v-if="isReservedBooking(booking)"
-                                        class="mt-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-950"
+                                        class="mt-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] sm:py-2 sm:text-label text-amber-950"
                                     >
-                                        Temporarily held while you finish the liability waiver and payment selection<template v-if="formatHoldMinutes(booking.hold_remaining_seconds)"> ({{ formatHoldMinutes(booking.hold_remaining_seconds) }})</template>. Your instructor will receive this request once you finish.
+                                        Temporarily held while you finish waiver &amp; payment<template v-if="formatHoldMinutes(booking.hold_remaining_seconds)"> ({{ formatHoldMinutes(booking.hold_remaining_seconds) }})</template>. Instructor receives request once finished.
                                     </p>
 
                                     <p
                                         v-if="booking.status === 'declined' && booking.decline_reason"
-                                        class="mt-2 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-label text-rose-800"
+                                        class="mt-2 rounded-control border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] sm:py-2 sm:text-label text-rose-800"
                                     >
                                         Declined: {{ booking.decline_reason }}
                                     </p>
 
                                     <p
                                         v-else-if="['cancelled', 'payment_timeout', 'no_show'].includes(booking.status) && booking.cancellation_note"
-                                        class="mt-2 whitespace-pre-line rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-label text-rose-800"
+                                        class="mt-2 whitespace-pre-line rounded-control border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] sm:py-2 sm:text-label text-rose-800"
                                     >
                                         <span class="font-semibold">{{ booking.cancellation_label || 'Cancelled' }}:</span>
                                         {{ booking.cancellation_note }}
@@ -388,7 +388,7 @@ const submitCancel = () => {
 
                                     <p
                                         v-if="booking.latest_refund"
-                                        class="mt-2 rounded-control border border-lagoon-200 bg-lagoon-50 px-3 py-2 text-label text-lagoon-900"
+                                        class="mt-2 rounded-control border border-lagoon-200 bg-lagoon-50 px-3 py-1.5 text-[11px] sm:py-2 sm:text-label text-lagoon-900"
                                     >
                                         <span class="font-semibold">{{ booking.latest_refund.status_label }}:</span>
                                         ₱{{ formatAmount(booking.latest_refund.amount) }}
@@ -420,26 +420,30 @@ const submitCancel = () => {
                             </div>
                         </div>
 
-                        <div class="border-t border-sand-200 p-5 sm:p-6 lg:w-64 lg:border-l lg:border-t-0">
-                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                                Booking total
-                            </p>
-                            <p class="metric mt-1 text-headline font-semibold text-deep-900">
-                                ₱{{ formatAmount(booking.total_amount) }}
-                            </p>
-                            <StatusPill
-                                class="mt-2"
-                                :variant="
-                                    booking.payment_status === 'completed'
-                                        ? 'verified'
-                                        : booking.payment_status === 'failed'
-                                          ? 'critical'
-                                          : 'pending'
-                                "
-                                :dot="false"
-                            >
-                                {{ paymentLabel(booking.payment_status) }}
-                            </StatusPill>
+                        <div class="border-t border-sand-200 p-4 sm:p-6 lg:w-64 lg:border-l lg:border-t-0">
+                            <div class="flex flex-wrap items-center justify-between gap-2 lg:block">
+                                <div>
+                                    <p class="text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+                                        Booking total
+                                    </p>
+                                    <p class="metric mt-0.5 sm:mt-1 text-headline font-semibold text-deep-900">
+                                        ₱{{ formatAmount(booking.total_amount) }}
+                                    </p>
+                                </div>
+                                <StatusPill
+                                    class="lg:mt-2"
+                                    :variant="
+                                        booking.payment_status === 'completed'
+                                            ? 'verified'
+                                            : booking.payment_status === 'failed'
+                                              ? 'critical'
+                                              : 'pending'
+                                    "
+                                    :dot="false"
+                                >
+                                    {{ paymentLabel(booking.payment_status) }}
+                                </StatusPill>
+                            </div>
 
                             <div class="mt-4 space-y-2">
                                 <AppButton

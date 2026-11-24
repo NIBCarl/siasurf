@@ -81,6 +81,7 @@ const hasFitOnce = ref(false)
 const search = ref('')
 const difficultyFilter = ref<'all' | 'beginner' | 'intermediate' | 'advanced'>('all')
 const failedThumbUrls = ref<Record<string, true>>({})
+const showAllSelectedChips = ref(false)
 
 const markThumbFailed = (url?: string | null) => {
   if (!url) return
@@ -679,7 +680,7 @@ onBeforeUnmount(() => {
     <!-- Selected chips (multi mode) -->
     <div v-if="mode === 'multi' && selectedSpots.length > 0" class="flex flex-wrap gap-1.5">
       <span
-        v-for="spot in selectedSpots"
+        v-for="spot in (selectedSpots.length > 6 && !showAllSelectedChips ? selectedSpots.slice(0, 6) : selectedSpots)"
         :key="`chip-${spot.id}`"
         class="inline-flex items-center gap-1.5 rounded-full border border-lagoon-200 bg-lagoon-50 px-3 py-1 text-xs font-semibold text-lagoon-900"
       >
@@ -693,6 +694,15 @@ onBeforeUnmount(() => {
           <XMarkIcon class="h-3.5 w-3.5" />
         </button>
       </span>
+
+      <button
+        v-if="selectedSpots.length > 6"
+        type="button"
+        class="inline-flex items-center rounded-full border border-sand-300 bg-white px-3 py-1 text-xs font-bold text-deep-900 transition-colors hover:border-lagoon-600 hover:bg-sand-50"
+        @click="showAllSelectedChips = !showAllSelectedChips"
+      >
+        {{ showAllSelectedChips ? 'Show fewer' : `+${selectedSpots.length - 6} more (Show all)` }}
+      </button>
     </div>
 
     <!-- Selected spot photo gallery or compact details strip (single mode) -->

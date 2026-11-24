@@ -523,6 +523,15 @@ const attendanceStatusEligible = (booking: Booking): boolean =>
 
 const canMarkAttendance = (booking: Booking): boolean =>
   attendanceStatusEligible(booking) && booking.can_mark_attendance !== false
+
+const expandedIds = ref<Record<number, boolean>>({})
+
+const toggleDetails = (id: number) => {
+  expandedIds.value = {
+    ...expandedIds.value,
+    [id]: !expandedIds.value[id],
+  }
+}
 </script>
 
 <template>
@@ -638,14 +647,31 @@ const canMarkAttendance = (booking: Booking): boolean =>
 
                     <p
                         v-if="isReservedBooking(booking)"
-                        class="mt-2.5 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-950"
+                        class="mt-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] sm:py-2 sm:text-label text-amber-950"
                     >
                         Tourist has selected this schedule and is completing the liability waiver. Accept/Decline unlocks once completed.
                     </p>
 
+                    <div class="mt-2 sm:hidden flex items-center justify-between border-t border-sand-200/70 pt-2">
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1 text-xs font-bold text-lagoon-700"
+                            :aria-expanded="Boolean(expandedIds[booking.id])"
+                            @click="toggleDetails(booking.id)"
+                        >
+                            {{ expandedIds[booking.id] ? 'Hide gear & status ▲' : 'Gear & status ▼' }}
+                        </button>
+                        <span class="text-[11px] font-medium text-stone-500">{{ boardLabel(booking) }}</span>
+                    </div>
+
                     <!-- Facts and actions share the last row: chips left, actions right -->
-                    <div class="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-sand-200/70 pt-2.5">
-                        <div class="flex min-w-0 flex-wrap gap-1.5">
+                    <div class="mt-2 sm:mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:border-t sm:border-sand-200/70 sm:pt-2.5">
+                        <div
+                            :class="[
+                                'min-w-0 flex-wrap gap-1.5',
+                                expandedIds[booking.id] ? 'flex' : 'hidden sm:flex',
+                            ]"
+                        >
                             <span class="chip chip-neutral">
                                 <svg
                                     class="h-3.5 w-3.5"
