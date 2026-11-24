@@ -30,6 +30,7 @@ import {
 
 interface NavItem {
     name: string;
+    mobileLabel?: string;
     href: string;
     icon: any;
     pattern: string;
@@ -144,7 +145,7 @@ const studentGroups = computed<NavGroup[]>(() => {
             label: 'Explore',
             items: [
                 { name: 'Overview', href: route('student.dashboard'), icon: Squares2X2Icon, pattern: 'student.dashboard' },
-                { name: 'Find instructor', href: route('instructors.search'), icon: MagnifyingGlassIcon, pattern: 'instructors.search' },
+                { name: 'Find instructor', mobileLabel: 'Instructors', href: route('instructors.search'), icon: MagnifyingGlassIcon, pattern: 'instructors.search' },
                 { name: 'Surf spots', href: route('surf-spots.index'), icon: MapPinIcon, pattern: 'surf-spots.*' },
             ],
         },
@@ -153,6 +154,7 @@ const studentGroups = computed<NavGroup[]>(() => {
             items: [
                 {
                     name: 'My bookings',
+                    mobileLabel: 'Bookings',
                     href: route('student.bookings.index'),
                     icon: CalendarDaysIcon,
                     pattern: 'student.bookings.*',
@@ -174,6 +176,7 @@ const studentGroups = computed<NavGroup[]>(() => {
             items: [
                 {
                     name: 'Account settings',
+                    mobileLabel: 'Account',
                     href: route('profile.edit'),
                     icon: Cog6ToothIcon,
                     pattern: 'profile.*',
@@ -203,6 +206,7 @@ const instructorGroups = computed<NavGroup[]>(() => {
                 },
                 {
                     name: 'Availability',
+                    mobileLabel: 'Schedule',
                     href: route('instructor.availability.index'),
                     icon: CalendarDaysIcon,
                     pattern: 'instructor.availability.*',
@@ -211,6 +215,7 @@ const instructorGroups = computed<NavGroup[]>(() => {
                 },
                 {
                     name: 'My lessons',
+                    mobileLabel: 'Lessons',
                     href: route('instructor.bookings.index'),
                     icon: UserGroupIcon,
                     pattern: 'instructor.bookings.*',
@@ -251,6 +256,7 @@ const instructorGroups = computed<NavGroup[]>(() => {
             items: [
                 {
                     name: 'Account settings',
+                    mobileLabel: 'Account',
                     href: route('profile.edit'),
                     icon: Cog6ToothIcon,
                     pattern: 'profile.*',
@@ -558,7 +564,7 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
                             aria-hidden="true"
                         />
                         <component :is="item.icon" class="h-5 w-5 shrink-0" aria-hidden="true" />
-                        <span class="max-w-full truncate">{{ item.name }}</span>
+                        <span class="max-w-full truncate">{{ item.mobileLabel ?? item.name }}</span>
                     </Link>
                 </li>
             </ul>

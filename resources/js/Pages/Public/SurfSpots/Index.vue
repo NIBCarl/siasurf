@@ -74,7 +74,7 @@ const emptyMessage = computed(() => {
   <Head title="Siargao Surf Spots" />
 
   <AppSidebarLayout>
-    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-7xl px-0 py-4 sm:px-6 sm:py-10 lg:px-8">
       <header class="mb-8">
         <p class="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Siargao Island</p>
         <h1 class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
@@ -101,7 +101,7 @@ const emptyMessage = computed(() => {
           <div class="mb-4 grid gap-3 sm:grid-cols-2">
             <select
               v-model="side"
-              class="rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500"
+              class="rounded-xl border-slate-200 bg-white text-base sm:text-sm font-medium text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500"
             >
               <option value="all">All coasts</option>
               <option v-for="(label, value) in sides" :key="value" :value="value">{{ label }}</option>
@@ -109,7 +109,7 @@ const emptyMessage = computed(() => {
 
             <select
               v-model="section"
-              class="rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500"
+              class="rounded-xl border-slate-200 bg-white text-base sm:text-sm font-medium text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500"
             >
               <option value="all">Inner and outer</option>
               <option v-for="(label, value) in sections" :key="value" :value="value">{{ label }}</option>
@@ -117,7 +117,7 @@ const emptyMessage = computed(() => {
 
             <select
               v-model="area"
-              class="rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500"
+              class="rounded-xl border-slate-200 bg-white text-base sm:text-sm font-medium text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500"
             >
               <option value="all">All areas</option>
               <option v-for="item in areas" :key="item" :value="item">{{ item }}</option>
@@ -125,7 +125,7 @@ const emptyMessage = computed(() => {
 
             <select
               v-model="difficulty"
-              class="rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500"
+              class="rounded-xl border-slate-200 bg-white text-base sm:text-sm font-medium text-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500"
             >
               <option value="all">All levels</option>
               <option value="beginner">Beginner</option>

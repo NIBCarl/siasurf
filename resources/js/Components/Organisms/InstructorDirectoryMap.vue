@@ -205,8 +205,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative overflow-hidden rounded-card border border-sand-200 bg-sand-100 shadow-card">
-    <div ref="container" :style="{ height }" class="w-full" aria-label="Map of surf instructors" />
+  <div class="relative z-0 isolate overflow-hidden rounded-card border border-sand-200 bg-sand-100 shadow-card">
+    <div ref="container" :style="{ '--map-h': height }" class="directory-map-canvas w-full" aria-label="Map of surf instructors" />
 
     <div
       v-if="validInstructors.length === 0"
@@ -225,3 +225,15 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.directory-map-canvas {
+  height: min(360px, var(--map-h, 360px));
+}
+
+@media (min-width: 1024px) {
+  .directory-map-canvas {
+    height: var(--map-h, 480px);
+  }
+}
+</style>

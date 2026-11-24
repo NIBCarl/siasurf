@@ -343,20 +343,20 @@ const goBack = () => {
   <Head title="Surf Lesson Waiver" />
 
   <AppSidebarLayout title="Surf Lesson Waiver">
-    <div class="waiver-page-outer py-10 bg-sand-50 min-h-screen print:py-0 print:bg-white print:min-h-0">
-      <div class="waiver-page-container max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 print:max-w-none print:px-0">
+    <div class="waiver-page-outer py-4 sm:py-10 bg-sand-50 min-h-screen print:py-0 print:bg-white print:min-h-0">
+      <div class="waiver-page-container max-w-5xl mx-auto px-0 sm:px-6 lg:px-8 print:max-w-none print:px-0">
         <!-- Progress Stepper -->
-        <BookingStepper :current="step ?? 2" class="mt-4 waiver-no-print print:hidden" />
+        <BookingStepper :current="step ?? 2" class="mt-2 sm:mt-4 waiver-no-print print:hidden" />
 
         <!-- Exclusive Slot Hold Banner -->
-        <div class="waiver-no-print mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 print:hidden">
-          <div class="flex items-center gap-3">
-            <span class="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
+        <div class="waiver-no-print mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 print:hidden">
+          <div class="flex items-start sm:items-center gap-3 min-w-0">
+            <span class="mt-1 sm:mt-0 flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
             <p class="text-xs font-semibold text-emerald-900">
               Seat(s) reserved for you! Your selected {{ (booking.student_count ?? 1) === 1 ? 'seat' : `${booking.student_count} seats` }} and time slot with {{ booking.instructor?.name || 'your instructor' }} are held for 15 minutes while you complete this waiver and payment step.
             </p>
           </div>
-          <div class="flex items-center gap-3 shrink-0">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2 w-full sm:w-auto sm:shrink-0">
             <span
               v-if="holdRemainingSeconds !== undefined"
               class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
@@ -367,7 +367,7 @@ const goBack = () => {
             <button
               type="button"
               @click="goBack"
-              class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
+              class="text-left text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
             >
               Change Slot / Release Hold
             </button>
@@ -444,8 +444,8 @@ const goBack = () => {
 
         <!-- Official SISA Waiver Document Form -->
         <form @submit.prevent="submitWaiver" class="waiver-form space-y-6 print:space-y-0">
-          <div class="waiver-print-frame rounded-2xl bg-deep-900 p-2 sm:p-3 shadow-lg print:bg-none print:p-0 print:shadow-none print:rounded-none">
-            <div class="waiver-print-sheet relative rounded-xl bg-white border border-sand-200 px-5 py-6 sm:px-10 sm:py-8 text-slate-900 print:rounded-none print:border-0 print:px-0 print:py-0">
+          <div class="waiver-print-frame rounded-2xl bg-deep-900 p-1 sm:p-3 shadow-lg print:bg-none print:p-0 print:shadow-none print:rounded-none">
+            <div class="waiver-print-sheet relative rounded-xl bg-white border border-sand-200 px-3.5 py-5 sm:px-10 sm:py-8 text-slate-900 print:rounded-none print:border-0 print:px-0 print:py-0">
               <!-- Download A4 PDF button in top-right corner of the waiver sheet -->
               <button
                 type="button"
@@ -502,7 +502,7 @@ const goBack = () => {
                       type="date"
                       :max="maxBirthday"
                       min="1920-01-01"
-                      class="waiver-no-print w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-lagoon-700 focus:ring-0"
+                      class="waiver-no-print w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-base sm:text-sm focus:border-lagoon-700 focus:ring-0"
                     />
                     <div class="waiver-print-only waiver-print-value">
                       {{ formattedFormBirthday || '\u00A0' }}
@@ -536,7 +536,7 @@ const goBack = () => {
                       v-model="form.email"
                       type="email"
                       placeholder="Enter email"
-                      class="waiver-no-print w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-lagoon-700 focus:ring-0"
+                      class="waiver-no-print w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-base sm:text-sm focus:border-lagoon-700 focus:ring-0"
                     />
                     <div class="waiver-print-only waiver-print-value">
                       {{ form.email.trim() || '\u00A0' }}
@@ -565,7 +565,7 @@ const goBack = () => {
                       v-model="form.country"
                       type="text"
                       placeholder="Enter country"
-                      class="waiver-no-print w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-lagoon-700 focus:ring-0"
+                      class="waiver-no-print w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-base sm:text-sm focus:border-lagoon-700 focus:ring-0"
                     />
                     <div class="waiver-print-only waiver-print-value">
                       {{ form.country.trim() || '\u00A0' }}
@@ -599,7 +599,7 @@ const goBack = () => {
                       type="text"
                       required
                       placeholder="e.g. Maria Santos — +63 917 000 0000"
-                      class="waiver-no-print w-full min-w-0 flex-1 border-0 border-b-2 border-lagoon-600 bg-lagoon-50/40 px-2 py-1 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0 rounded-t"
+                      class="waiver-no-print w-full min-w-0 flex-1 border-0 border-b-2 border-lagoon-600 bg-lagoon-50/40 px-2 py-1 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0 rounded-t"
                     />
                     <div class="waiver-print-only waiver-print-value flex-1 min-w-0">
                       {{ form.emergency_contact.trim() || '\u00A0' }}
@@ -623,7 +623,7 @@ const goBack = () => {
                   rows="2"
                   maxlength="1000"
                   placeholder="List any allergies, medical conditions, injuries, or medications your instructor should know about (leave blank if none)..."
-                  class="waiver-no-print w-full rounded-md border border-sand-300 border-b-2 border-b-lagoon-600 bg-lagoon-50/40 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0 print:hidden"
+                  class="waiver-no-print w-full rounded-md border border-sand-300 border-b-2 border-b-lagoon-600 bg-lagoon-50/40 px-2.5 py-1.5 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0 print:hidden"
                 ></textarea>
                 <div class="waiver-print-only waiver-print-medical min-h-[1.25rem] border-b border-slate-800 px-1 py-0.5 text-[11px] text-slate-900 whitespace-pre-wrap">
                   {{ form.medical_info.trim() || '\u00A0' }}
@@ -637,11 +637,11 @@ const goBack = () => {
               <div class="waiver-intro mt-5 pt-4 border-t border-slate-800 text-xs sm:text-sm leading-relaxed text-slate-800">
                 <p>
                   By fully volunteering myself to take a surf lesson from (surf shop / resort)
-                  <span class="inline-block min-w-[140px] border-b border-slate-800 px-3 text-center font-bold text-slate-950">
+                  <span class="inline-block max-w-full min-w-[140px] border-b border-slate-800 px-3 text-center font-bold text-slate-950 break-words">
                     {{ waiverPrefill.surf_shop }}
                   </span>
                   with SISA certified instructor
-                  <span class="inline-block min-w-[160px] border-b border-slate-800 px-3 text-center font-bold text-slate-950">
+                  <span class="inline-block max-w-full min-w-[160px] border-b border-slate-800 px-3 text-center font-bold text-slate-950 break-words">
                     {{ waiverPrefill.instructor_name }}
                   </span>,
                   I have read, understood, approved, and agree to the following terms and conditions:
@@ -676,14 +676,14 @@ const goBack = () => {
 
               <!-- Clauses 1 to 7 (Exact SISA Agreement Text) -->
               <div
-                class="mt-2 rounded-xl border border-sand-200 bg-sand-50/30 p-4 print:border-0 print:bg-transparent print:p-0 print:max-h-none print:overflow-visible"
+                class="mt-2 rounded-xl border border-sand-200 bg-sand-50/30 p-3 sm:p-4 print:border-0 print:bg-transparent print:p-0 print:max-h-none print:overflow-visible"
                 :class="showFullAgreement ? '' : 'max-h-64 overflow-y-auto'"
               >
-                <ol class="waiver-clauses space-y-2.5 text-xs sm:text-[13px] leading-relaxed text-slate-800 text-justify">
+                <ol class="waiver-clauses space-y-2.5 text-xs sm:text-[13px] leading-relaxed text-slate-800 text-left sm:text-justify print:text-justify">
                   <li
                     v-for="clause in waiverDocument.clauses"
                     :key="clause.number"
-                    class="waiver-clause-item flex items-start gap-2.5"
+                    class="waiver-clause-item flex items-start gap-2 sm:gap-2.5"
                   >
                     <span class="font-bold text-slate-900 shrink-0 w-4">{{ clause.number }}.</span>
                     <div class="flex-1 min-w-0">
@@ -712,7 +712,7 @@ const goBack = () => {
                       required
                       autocomplete="off"
                       :placeholder="isMinor ? 'Type Parent / Guardian full name' : 'Type your full printed name'"
-                      class="waiver-no-print w-full border-0 border-b-2 border-lagoon-600 bg-lagoon-50/40 px-2.5 py-2 text-sm font-semibold text-slate-950 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0 rounded-t"
+                      class="waiver-no-print w-full border-0 border-b-2 border-lagoon-600 bg-lagoon-50/40 px-2.5 py-2 text-base sm:text-sm font-semibold text-slate-950 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0 rounded-t"
                     />
                     <div class="waiver-print-only waiver-print-value font-semibold">
                       {{ form.signed_by.trim() || '\u00A0' }}
@@ -788,15 +788,15 @@ const goBack = () => {
           </div>
 
           <!-- Confirmation Checkbox & Action Buttons -->
-          <div class="waiver-no-print bg-white rounded-xl shadow-sm border border-sand-200 p-6 print:hidden">
-            <div class="mb-6">
+          <div class="waiver-no-print bg-white rounded-xl shadow-sm border border-sand-200 p-4 sm:p-6 print:hidden">
+            <div class="mb-5 sm:mb-6">
               <label for="agreement" class="flex items-start gap-3 cursor-pointer">
                 <input
                   id="agreement"
                   v-model="form.agreement"
                   type="checkbox"
                   required
-                  class="mt-0.5 h-5 w-5 rounded border-slate-300 text-lagoon-600 focus:ring-lagoon-600 cursor-pointer"
+                  class="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-lagoon-600 focus:ring-lagoon-600 cursor-pointer"
                 />
                 <span class="text-sm text-slate-700 leading-relaxed">
                   I confirm that the details above are accurate and that I have read, understood, and voluntarily signed the
@@ -808,12 +808,13 @@ const goBack = () => {
               </p>
             </div>
 
-            <div class="flex flex-wrap justify-between items-center gap-4">
-              <div class="flex flex-wrap items-center gap-3">
+            <div class="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div class="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3">
                 <BaseButton
                   type="button"
                   @click="goBack"
                   variant="secondary"
+                  class="w-full sm:w-auto min-h-[44px] justify-center"
                 >
                   ← Back &amp; Release Slot
                 </BaseButton>
@@ -822,6 +823,7 @@ const goBack = () => {
                   type="button"
                   @click="printWaiver"
                   variant="outline"
+                  class="w-full sm:w-auto min-h-[44px] justify-center"
                 >
                   <PrinterIcon class="mr-1.5 h-4 w-4" aria-hidden="true" />
                   Print Waiver
@@ -833,7 +835,8 @@ const goBack = () => {
                 :disabled="form.processing || !form.agreement || isHoldExpired"
                 :loading="form.processing"
                 variant="primary"
-                size="lg"
+                size="md"
+                class="w-full sm:w-auto min-h-[48px] h-auto py-3 px-5 sm:px-6 text-sm sm:text-base"
               >
                 Sign Waiver &amp; Continue →
               </AppButton>

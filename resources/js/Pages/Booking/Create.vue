@@ -803,8 +803,8 @@ const submit = () => {
   <Head :title="`Book with ${instructor.name}`" />
 
   <AppSidebarLayout title="Book Your Surf Session">
-    <div class="py-6 sm:py-12 pb-44 lg:pb-12 bg-sand-50 min-h-screen">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="py-4 sm:py-12 pb-44 lg:pb-12 bg-sand-50 min-h-screen">
+      <div class="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8">
         
         <!-- Progress Stepper -->
         <BookingStepper :current="1" wide />
@@ -814,7 +814,7 @@ const submit = () => {
           <!-- Left: Booking Form -->
           <div class="lg:col-span-2 min-w-0 space-y-6 sm:space-y-8">
             <div class="bg-white rounded-2xl shadow-sm border border-sand-200 overflow-hidden">
-              <div class="p-5 sm:p-8 border-b border-sand-200 bg-gradient-to-r from-lagoon-50 to-transparent">
+              <div class="p-4 sm:p-8 border-b border-sand-200 bg-gradient-to-r from-lagoon-50 to-transparent">
                 <h2 class="text-xl sm:text-2xl font-bold text-deep-950">Lesson Details</h2>
                 <p class="text-slate-600 mt-1 text-sm sm:text-base">Configure your surfing session with {{ instructor.name }}</p>
               </div>
@@ -845,7 +845,7 @@ const submit = () => {
                 </div>
               </div>
 
-              <form @submit.prevent="submit" class="p-5 sm:p-8 space-y-6">
+              <form @submit.prevent="submit" class="p-4 sm:p-8 space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                   <!-- Assigned Service Type (1-to-1 with student skill level) -->
@@ -1881,7 +1881,7 @@ const submit = () => {
      <div class="lg:hidden fixed inset-x-0 bottom-[57px] z-20 border-t border-sand-200 bg-white/95 backdrop-blur-md px-4 py-3 shadow-[0_-8px_24px_rgba(12,35,64,0.08)]">
        <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
          <div class="min-w-0">
-           <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+           <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
              Estimated Total
            </p>
            <p class="text-lg font-extrabold text-deep-950 tabular-nums">

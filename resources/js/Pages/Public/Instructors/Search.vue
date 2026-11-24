@@ -372,7 +372,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                     <select
                         id="filter-skill"
                         v-model="filters.skill_level"
-                        class="mt-1.5 h-10 w-full rounded-control border border-sand-200 bg-white px-3 text-body-sm text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                        class="mt-1.5 h-10 w-full rounded-control border border-sand-200 bg-white px-3 text-base sm:text-body-sm text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
                     >
                         <option value="">Any skill level</option>
                         <option value="beginner">Beginner</option>
@@ -398,7 +398,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                             min="0"
                             placeholder="Min"
                             aria-label="Minimum price per hour"
-                            class="h-10 w-full rounded-control border border-sand-200 bg-white px-3 text-body-sm text-deep-900 placeholder:text-stone-500 focus:border-lagoon-600 focus:ring-lagoon-600"
+                            class="h-10 min-w-0 w-full rounded-control border border-sand-200 bg-white px-3 text-base sm:text-body-sm text-deep-900 placeholder:text-stone-500 focus:border-lagoon-600 focus:ring-lagoon-600"
                         />
                         <input
                             v-model="filters.max_price"
@@ -406,7 +406,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                             min="0"
                             placeholder="Max"
                             aria-label="Maximum price per hour"
-                            class="h-10 w-full rounded-control border border-sand-200 bg-white px-3 text-body-sm text-deep-900 placeholder:text-stone-500 focus:border-lagoon-600 focus:ring-lagoon-600"
+                            class="h-10 min-w-0 w-full rounded-control border border-sand-200 bg-white px-3 text-base sm:text-body-sm text-deep-900 placeholder:text-stone-500 focus:border-lagoon-600 focus:ring-lagoon-600"
                         />
                     </div>
                 </div>
@@ -418,7 +418,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                     <select
                         id="filter-area"
                         v-model="filters.area"
-                        class="mt-1.5 h-10 w-full rounded-control border border-sand-200 bg-white px-3 text-body-sm text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                        class="mt-1.5 h-10 w-full rounded-control border border-sand-200 bg-white px-3 text-base sm:text-body-sm text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
                     >
                         <option value="">All areas</option>
                         <option v-for="area in areas" :key="area" :value="area">{{ area }}</option>
@@ -432,7 +432,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                     <select
                         id="filter-sort"
                         v-model="filters.sort_by"
-                        class="mt-1.5 h-10 w-full rounded-control border border-sand-200 bg-white px-3 text-body-sm text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+                        class="mt-1.5 h-10 w-full rounded-control border border-sand-200 bg-white px-3 text-base sm:text-body-sm text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
                     >
                         <option value="recommended">Recommended</option>
                         <option value="price_low">Price: low to high</option>
@@ -500,7 +500,7 @@ const bookingUrl = (instructor: DirectoryInstructor) =>
                         @select="selectInstructor"
                     />
 
-                    <div class="max-h-[560px] space-y-2 overflow-y-auto pr-1">
+                    <div class="space-y-2 lg:max-h-[560px] lg:overflow-y-auto lg:pr-1">
                         <button
                             v-for="instructor in instructors.data"
                             :key="instructor.id"

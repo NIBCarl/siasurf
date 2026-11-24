@@ -172,7 +172,7 @@ function capitalise(value: string): string {
 const cellClasses = (date: Date): string => {
     const state = stateFor(date)
     const base =
-        'relative flex h-11 w-full items-center justify-center rounded-control border text-body-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-lagoon-500 focus-visible:ring-offset-1'
+        'relative flex h-10 sm:h-11 w-full items-center justify-center rounded-lg sm:rounded-control border text-xs sm:text-body-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-lagoon-500 focus-visible:ring-offset-1'
 
     if (isSelected(date)) {
         return `${base} border-lagoon-700 bg-lagoon-700 text-white shadow-sm`
@@ -247,7 +247,7 @@ function shiftMonth(delta: number) {
 </script>
 
 <template>
-    <div class="rounded-card border border-sand-300 bg-white p-4">
+    <div class="rounded-card border border-sand-300 bg-white p-2.5 sm:p-4">
         <div class="mb-3 flex items-center justify-between">
             <button
                 type="button"
@@ -278,11 +278,11 @@ function shiftMonth(delta: number) {
             </button>
         </div>
 
-        <div class="grid grid-cols-7 gap-1" role="grid" :aria-label="monthLabel">
+        <div class="grid grid-cols-7 gap-0.5 sm:gap-1" role="grid" :aria-label="monthLabel">
             <div
                 v-for="label in WEEKDAY_LABELS"
                 :key="label"
-                class="pb-1 text-center text-label font-semibold uppercase tracking-[0.04em] text-stone-500"
+                class="pb-1 text-center text-[10px] sm:text-label font-semibold uppercase tracking-normal sm:tracking-[0.04em] text-stone-500"
                 role="columnheader"
             >
                 {{ label }}

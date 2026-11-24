@@ -222,11 +222,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative isolate">
+  <div class="relative z-0 isolate">
     <div
       ref="container"
-      :style="{ height }"
-      :class="['w-full overflow-hidden rounded-2xl ring-1 ring-slate-900/10', className]"
+      :style="{ '--map-h': height }"
+      :class="['live-map-canvas w-full overflow-hidden rounded-2xl ring-1 ring-slate-900/10', className]"
       role="application"
       aria-label="Siargao surf map"
     />
@@ -241,6 +241,16 @@ onBeforeUnmount(() => {
 
 <style>
 /* Scoped styles cannot reach Leaflet's DOM, so these are global by design. */
+.live-map-canvas {
+  height: min(360px, var(--map-h, 360px));
+}
+
+@media (min-width: 1024px) {
+  .live-map-canvas {
+    height: var(--map-h, 420px);
+  }
+}
+
 .siasurf-pin,
 .siasurf-picked-pin {
   background: transparent;

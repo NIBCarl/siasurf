@@ -181,20 +181,20 @@ const goBack = () => {
   <Head title="Parental Consent" />
 
   <AppSidebarLayout title="Parental Consent">
-    <div class="min-h-screen bg-sand-50 py-6 sm:py-12">
-      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen bg-sand-50 py-4 sm:py-12">
+      <div class="max-w-4xl mx-auto px-0 sm:px-6 lg:px-8">
         <!-- Progress Stepper -->
         <BookingStepper :current="step ?? 2" class="mt-2 sm:mt-6" />
 
         <!-- Exclusive Slot Hold Banner -->
-        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
-          <div class="flex items-center gap-3">
-            <span class="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
+        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+          <div class="flex items-start sm:items-center gap-3 min-w-0">
+            <span class="mt-1 sm:mt-0 flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
             <p class="text-xs font-semibold text-emerald-900">
               Seat(s) reserved for you! Your selected {{ (booking.student_count ?? 1) === 1 ? 'seat' : `${booking.student_count} seats` }} and time slot with {{ booking.instructor?.name || 'your instructor' }} are held while you complete consent and payment selection.
             </p>
           </div>
-          <div class="flex items-center gap-3 shrink-0">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2 w-full sm:w-auto sm:shrink-0">
             <span
               v-if="holdRemainingSeconds !== undefined"
               class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
@@ -205,7 +205,7 @@ const goBack = () => {
             <button
               type="button"
               @click="goBack"
-              class="shrink-0 text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
+              class="text-left text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
             >
               Change Slot / Release Hold
             </button>

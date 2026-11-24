@@ -72,6 +72,12 @@
         outline: 2px solid #0d9488;
         outline-offset: 2px;
     }
+
+    /* Trap Leaflet internal pane z-indices (400-1000) below fixed app navigation & modals */
+    .leaflet-container {
+        isolation: isolate;
+        z-index: 0 !important;
+    }
 }
 
 select:not([multiple]):not([size]) {
