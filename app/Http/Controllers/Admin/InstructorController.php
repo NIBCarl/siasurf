@@ -113,6 +113,7 @@ class InstructorController extends Controller
             'password' => 'required|string|min:8',
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
+            'birthday' => ['nullable', 'date', 'before_or_equal:'.now()->subYears(18)->toDateString()],
             'level' => 'required|integer|in:1,2,3',
             ...PricingService::offeringValidationRules($level, $request->input('offered_services'), $hasOfferedServices),
             ...SurfSpot::instructorSelectionValidationRules($level, requireWhenPresent: false),
@@ -120,7 +121,10 @@ class InstructorController extends Controller
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',
             'longitude' => 'nullable|numeric|between:125.8,126.5',
-        ], PricingService::offeringValidationMessages($level));
+        ], [
+            ...PricingService::offeringValidationMessages($level),
+            'birthday.before_or_equal' => 'Instructors must be at least 18 years old.',
+        ]);
 
         // Create user
         $user = User::create([
@@ -138,6 +142,7 @@ class InstructorController extends Controller
         $profile = InstructorProfile::create([
             'user_id' => $user->id,
             'bio' => $validated['bio'] ?? null,
+            'birthday' => $validated['birthday'] ?? null,
             'level' => $validated['level'],
             'status' => InstructorStatus::PendingVerification->value,
             ...$offerings,
@@ -639,6 +644,7 @@ class InstructorController extends Controller
             'email' => 'required|email|unique:users,email,'.$instructor->id,
             'phone' => 'nullable|string|max:20',
             'bio' => 'nullable|string',
+            'birthday' => ['nullable', 'date', 'before_or_equal:'.now()->subYears(18)->toDateString()],
             'level' => 'required|integer|in:1,2,3',
             ...PricingService::offeringValidationRules($level, $request->input('offered_services'), $hasOfferedServices),
             ...SurfSpot::instructorSelectionValidationRules($level, requireWhenPresent: false),
@@ -647,7 +653,10 @@ class InstructorController extends Controller
             'meeting_point' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:9.5,10.2',
             'longitude' => 'nullable|numeric|between:125.8,126.5',
-        ], PricingService::offeringValidationMessages($level));
+        ], [
+            ...PricingService::offeringValidationMessages($level),
+            'birthday.before_or_equal' => 'Instructors must be at least 18 years old.',
+        ]);
 
         $profile = $instructor->instructorProfile;
         $wasSuspended = $profile->status === InstructorStatus::Suspended;
@@ -708,7 +717,7 @@ class InstructorController extends Controller
             : [];
 
         // Update profile
-        $profile->update([
+        $profileAttributes = [
             'bio' => $validated['bio'] ?? null,
             'level' => $validated['level'],
             'status' => $validated['status'],
@@ -718,7 +727,13 @@ class InstructorController extends Controller
             'meeting_point' => $validated['meeting_point'] ?? null,
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
-        ]);
+        ];
+
+        if (array_key_exists('birthday', $validated)) {
+            $profileAttributes['birthday'] = $validated['birthday'];
+        }
+
+        $profile->update($profileAttributes);
 
         if (array_key_exists('surf_spot_ids', $validated)) {
             $profile->syncSurfSpotsAndLocation(

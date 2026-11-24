@@ -26,11 +26,18 @@ const allowedForLevel = (level: number): string[] => {
   return ['teaching']
 }
 
+const maxBirthday = computed(() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 18)
+  return d.toISOString().split('T')[0]
+})
+
 const form = useForm({
   name: '',
   email: '',
   password: 'password123', // Default for now
   phone: '',
+  birthday: '',
   bio: '',
   level: 1,
   offered_services: ['teaching'] as string[],
@@ -206,6 +213,12 @@ const submit = () => {
             </div>
 
             <div>
+               <InputLabel value="Date of Birth (for SISA ID)" class="mb-2" />
+               <TextInput v-model="form.birthday" type="date" :max="maxBirthday" class="w-full" />
+               <InputError :message="form.errors.birthday" />
+            </div>
+
+            <div class="md:col-span-2">
                <InputLabel value="Default Password" class="mb-2" />
                <TextInput v-model="form.password" type="text" class="w-full bg-slate-50" readonly />
                <p class="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">Instructor can change this after first login</p>

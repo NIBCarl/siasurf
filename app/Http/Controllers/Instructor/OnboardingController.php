@@ -39,6 +39,7 @@ class OnboardingController extends Controller
 
         $validated = $request->validate([
             'bio' => 'required|string|max:1000',
+            'birthday' => ['nullable', 'date', 'before_or_equal:'.now()->subYears(18)->toDateString()],
             'level' => 'required|integer|in:1,2,3',
             ...PricingService::offeringValidationRules($level, $request->input('offered_services'), $hasOfferedServices),
             ...SurfSpot::instructorSelectionValidationRules($level, requireWhenPresent: false),
@@ -54,6 +55,7 @@ class OnboardingController extends Controller
             'certificates.*.uploaded' => 'A certificate could not be uploaded because it is larger than this server allows (max '.$this->uploadMaxSizeLabel().' per file). Compress it and try again.',
             'bio.max' => 'Keep your bio to 1000 characters or fewer.',
             'bio.required' => 'Tell students about your experience before submitting.',
+            'birthday.before_or_equal' => 'Instructors must be at least 18 years old.',
             ...PricingService::offeringValidationMessages($level),
         ]);
 
@@ -95,6 +97,7 @@ class OnboardingController extends Controller
                     ['user_id' => $user->id],
                     [
                         'bio' => $validated['bio'],
+                        'birthday' => $validated['birthday'] ?? $user->instructorProfile?->birthday,
                         'level' => $validated['level'],
                         ...$offerings,
                         'status' => InstructorStatus::PendingVerification,

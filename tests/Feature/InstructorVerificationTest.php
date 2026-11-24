@@ -48,6 +48,10 @@ class InstructorVerificationTest extends TestCase
 
     public function test_verified_instructor_qr_page_shows_a_live_verified_status(): void
     {
+        $this->instructor->instructorProfile->update([
+            'birthday' => '1998-05-05',
+        ]);
+
         $this->get(route('walkin.scan', $this->instructor))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
@@ -55,6 +59,30 @@ class InstructorVerificationTest extends TestCase
                 ->where('verification.status', 'verified')
                 ->where('verification.can_book', true)
                 ->where('instructor.id', $this->instructor->id)
+                ->where('idCard.level', 2)
+                ->where('idCard.birthdate', '05 MAY 1998')
+                ->where('idCard.sisa_id_code', sprintf('SISA %d-%04d', now()->subMonth()->year, $this->instructor->id))
+                ->where('idCard.qr_image_url', route('qr.image', $this->instructor->id))
+                ->has('idCard.date_issued')
+                ->has('idCard.exp_date')
+            );
+    }
+
+    public function test_level_1_instructor_qr_page_exposes_level_1_id_card_props(): void
+    {
+        $this->instructor->instructorProfile->update([
+            'level' => InstructorLevel::Level1,
+            'birthday' => '2001-10-15',
+        ]);
+
+        $this->get(route('walkin.scan', $this->instructor))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Public/WalkIn/Scan')
+                ->where('idCard.level', 1)
+                ->where('idCard.level_label', 'Level 1')
+                ->where('idCard.birthdate', '15 OCT 2001')
+                ->where('idCard.qr_image_url', route('qr.image', $this->instructor->id))
             );
     }
 
@@ -146,6 +174,10 @@ class InstructorVerificationTest extends TestCase
     {
         Storage::fake('local');
 
+        $this->instructor->instructorProfile->update([
+            'birthday' => '1999-03-20',
+        ]);
+
         $this->actingAs($this->instructor)
             ->get(route('instructor.qr.show'))
             ->assertOk()
@@ -153,6 +185,10 @@ class InstructorVerificationTest extends TestCase
                 ->component('Instructor/Qr/Show')
                 ->where('instructor.id', $this->instructor->id)
                 ->where('verification.status', 'verified')
+                ->where('profile.birthday', '1999-03-20')
+                ->where('idCard.level', 2)
+                ->where('idCard.birthdate', '20 MAR 1999')
+                ->where('idCard.qr_image_url', route('qr.image', $this->instructor->id))
             );
     }
 

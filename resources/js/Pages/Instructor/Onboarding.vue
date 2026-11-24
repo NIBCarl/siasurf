@@ -28,6 +28,7 @@ import { computed, ref, watch, nextTick } from 'vue'
 const props = defineProps<{
   profile?: {
     bio: string | null;
+    birthday?: string | null;
     level: number;
     status?: string | null;
     rejection_reason?: string | null;
@@ -74,6 +75,7 @@ const allowedForLevel = (level: number): string[] => {
 
 const form = useForm({
   bio: props.profile?.bio ?? '',
+  birthday: props.profile?.birthday ?? '',
   level: initialLevel,
   offered_services: (
     props.profile?.offered_services && props.profile.offered_services.length > 0
@@ -162,6 +164,12 @@ const toggleService = (type: string) => {
 }
 
 const fileErrors = ref<string[]>([])
+
+const maxBirthday = computed(() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 18)
+  return d.toISOString().split('T')[0]
+})
 
 const rateDialogOpen = ref(false)
 const lastOverCapValue = ref<number | null>(null)
@@ -494,6 +502,23 @@ const handleFileChange = (e: Event) => {
                         {{ form.bio.length }} / 1000
                       </span>
                     </div>
+                  </div>
+
+                  <!-- Date of Birth -->
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2.5">
+                      <User class="w-4 h-4 text-sand-600 stroke-[1.75]" />
+                      <InputLabel for="birthday" class="text-[10px] uppercase font-bold tracking-widest text-slate-500" value="Date of Birth (Optional · For SISA ID Card)" />
+                    </div>
+                    <TextInput
+                      id="birthday"
+                      type="date"
+                      v-model="form.birthday"
+                      :max="maxBirthday"
+                      class="mt-1 block w-full max-w-xs border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500 rounded-lg transition-all duration-200 text-slate-900 bg-white p-3 text-sm font-medium"
+                    />
+                    <p class="text-xs text-slate-500">Must be at least 18 years old. Shown on your official SISA Instructor ID.</p>
+                    <InputError class="mt-1 text-xs font-bold" :message="form.errors.birthday" />
                   </div>
 
                   <!-- Lesson Types & Service Rates (per hour) -->

@@ -20,6 +20,7 @@ class InstructorProfile extends Model
     protected $fillable = [
         'user_id',
         'bio',
+        'birthday',
         'area',
         'meeting_point',
         'latitude',
@@ -42,6 +43,7 @@ class InstructorProfile extends Model
 
     protected $casts = [
         'level' => InstructorLevel::class,
+        'birthday' => 'date:Y-m-d',
         'offered_services' => 'array',
         'status' => InstructorStatus::class,
         'rate_per_hour' => 'decimal:2',

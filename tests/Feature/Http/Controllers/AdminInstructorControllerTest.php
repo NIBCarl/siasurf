@@ -413,4 +413,46 @@ class AdminInstructorControllerTest extends TestCase
                 ->where('instructors.data.0.id', $newestActive->id)
             );
     }
+
+    #[Test]
+    public function admin_can_save_and_validate_instructor_birthday(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.instructors.store'), [
+                'name' => 'Underage Applicant',
+                'email' => 'underage@example.com',
+                'password' => 'password123',
+                'birthday' => now()->subYears(17)->toDateString(),
+                'level' => 1,
+                'rate_per_hour' => 600,
+            ])
+            ->assertSessionHasErrors('birthday');
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.instructors.store'), [
+                'name' => 'Adult Instructor',
+                'email' => 'adult@example.com',
+                'password' => 'password123',
+                'birthday' => '1995-11-03',
+                'level' => 1,
+                'rate_per_hour' => 600,
+            ])
+            ->assertRedirect();
+
+        $adult = User::where('email', 'adult@example.com')->firstOrFail();
+        $this->assertSame('1995-11-03', $adult->instructorProfile?->birthday?->format('Y-m-d'));
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.instructors.update', $adult->id), [
+                'name' => $adult->name,
+                'email' => $adult->email,
+                'birthday' => '1996-02-14',
+                'level' => 1,
+                'rate_per_hour' => 600,
+                'status' => InstructorStatus::PendingVerification->value,
+            ])
+            ->assertRedirect(route('admin.instructors.show', $adult->id));
+
+        $this->assertSame('1996-02-14', $adult->instructorProfile()->firstOrFail()->birthday?->format('Y-m-d'));
+    }
 }

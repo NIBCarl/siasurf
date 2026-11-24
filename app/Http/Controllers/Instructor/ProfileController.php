@@ -82,6 +82,7 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'bio' => 'nullable|string|max:1000',
+            'birthday' => ['nullable', 'date', 'before_or_equal:'.now()->subYears(18)->toDateString()],
             ...PricingService::offeringValidationRules($level, $request->input('offered_services'), $hasOfferedServices),
             ...SurfSpot::instructorSelectionValidationRules($level, requireWhenPresent: true),
             'area' => 'nullable|string|max:100',
@@ -90,6 +91,7 @@ class ProfileController extends Controller
             'longitude' => 'nullable|numeric|between:125.8,126.5',
         ], [
             ...PricingService::offeringValidationMessages($level),
+            'birthday.before_or_equal' => 'Instructors must be at least 18 years old.',
             'latitude.between' => 'Choose a latitude inside Siargao Island.',
             'longitude.between' => 'Choose a longitude inside Siargao Island.',
         ]);
@@ -109,7 +111,7 @@ class ProfileController extends Controller
             ...$offerings,
         ];
 
-        foreach (['bio', 'area', 'meeting_point'] as $field) {
+        foreach (['bio', 'birthday', 'area', 'meeting_point'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $attributes[$field] = $validated[$field];
             }
