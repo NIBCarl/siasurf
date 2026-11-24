@@ -6,6 +6,8 @@ use App\Enums\BookingStatus;
 use App\Enums\CancellationReason;
 use App\Enums\ChangeRequestStatus;
 use App\Enums\ChangeRequestType;
+use App\Enums\SessionType;
+use App\Enums\SkillLevel;
 use App\Events\BookingChangeRequested;
 use App\Events\BookingChangeResolved;
 use App\Exceptions\BookingChangeException;
@@ -16,19 +18,24 @@ use App\Models\BookingChangeRequest;
 use App\Models\User;
 use App\Notifications\BookingChangeRequestedNotification;
 use App\Notifications\BookingRescheduledNotification;
+use App\Notifications\RescheduleProposedNotification;
+use App\Notifications\RescheduleResponseNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
- * FR 1.9.4 - instructors may cancel or reschedule their own bookings. Any change
- * made less than 24 hours before the lesson is parked for admin approval first;
- * anything further out is applied straight away and recorded for the audit trail.
+ * FR 1.9.4 - instructors may cancel or reschedule their own bookings.
+ * Reschedules first notify the student and post the reason in booking chat;
+ * the schedule only moves after the student agrees (and SISA approves if < 24h).
  */
 class BookingChangeService
 {
     public function __construct(
         protected AvailabilityService $availabilityService,
         protected BookingCancellationService $cancellationService,
+        protected ?BookingEventService $bookingEventService = null,
+        protected ?ConversationService $conversationService = null,
     ) {
     }
 
@@ -67,41 +74,226 @@ class BookingChangeService
     }
 
     /**
-     * File a reschedule request for a new slot.
+     * Propose a reschedule for a new date and start time.
      *
-     * @param  array{date:string,time_period:string,start_time:string,end_time:string}  $newSlot
+     * Automatically derives time_period and end_time from the booking's
+     * duration, posts the instructor's reason to Messages, and awaits student
+     * agreement before moving the booking.
+     *
+     * @param  array{date:string,start_time:string,time_period?:string,end_time?:string}  $newSlot
      */
     public function requestReschedule(Booking $booking, User $requester, array $newSlot, ?string $reason = null): BookingChangeRequest
     {
         $this->assertChangeable($booking);
 
-        // Keep the lesson length intact: derive the end time from the booking's
-        // own duration instead of trusting whatever the form supplied.
-        $durationHours = $booking->duration_hours ?: Booking::standardHours();
-        $newSlot['end_time'] = Carbon::parse($newSlot['start_time'])
+        $startTime = Carbon::parse($newSlot['start_time'])->format('H:i');
+        $durationHours = $booking->resolvedDurationHours();
+        $endTime = Carbon::createFromFormat('H:i', $startTime)
             ->addHours($durationHours)
             ->format('H:i');
+        $timePeriod = ((int) substr($startTime, 0, 2)) < 12 ? 'morning' : 'afternoon';
 
-        $this->assertSlotIsFree($booking, $newSlot);
+        $normalizedSlot = [
+            'date' => Carbon::parse($newSlot['date'])->format('Y-m-d'),
+            'time_period' => $timePeriod,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+        ];
 
-        return DB::transaction(function () use ($booking, $requester, $newSlot, $reason) {
+        $currentDate = $booking->date?->format('Y-m-d');
+        $currentStart = $booking->start_time?->format('H:i');
+
+        if ($currentDate === $normalizedSlot['date'] && $currentStart === $normalizedSlot['start_time']) {
+            throw new BookingChangeException('Please choose a different date or start time than the current schedule.');
+        }
+
+        $this->assertSlotIsFree($booking, $normalizedSlot);
+
+        return DB::transaction(function () use ($booking, $requester, $normalizedSlot, $reason) {
             $changeRequest = $booking->changeRequests()->create([
                 'requested_by' => $requester->id,
                 'type' => ChangeRequestType::Reschedule,
-                'status' => ChangeRequestStatus::Pending,
+                'status' => ChangeRequestStatus::AwaitingStudent,
                 'requires_admin_approval' => $booking->changeRequiresAdminApproval(),
                 'reason' => $reason,
                 'original_date' => $booking->date,
                 'original_time_period' => $booking->time_period?->value,
                 'original_start_time' => $booking->start_time,
                 'original_end_time' => $booking->end_time,
-                'new_date' => $newSlot['date'],
-                'new_time_period' => $newSlot['time_period'],
-                'new_start_time' => $newSlot['start_time'],
-                'new_end_time' => $newSlot['end_time'],
+                'new_date' => $normalizedSlot['date'],
+                'new_time_period' => $normalizedSlot['time_period'],
+                'new_start_time' => $normalizedSlot['start_time'],
+                'new_end_time' => $normalizedSlot['end_time'],
+                'student_notified_at' => now(),
             ]);
 
-            return $this->settle($changeRequest);
+            ($this->conversationService ?? app(ConversationService::class))
+                ->sendRescheduleReasonMessage($booking, $requester, $changeRequest);
+
+            DB::afterCommit(function () use ($booking, $changeRequest) {
+                $freshRequest = $changeRequest->fresh(['booking.student', 'booking.instructor', 'booking.surfSpot', 'requestedBy']);
+
+                $freshRequest?->booking?->student?->notify(new RescheduleProposedNotification($freshRequest));
+
+                if ($freshRequest) {
+                    try {
+                        broadcast(new BookingChangeRequested($freshRequest))->toOthers();
+                    } catch (\Throwable $exception) {
+                        Log::warning('Failed to broadcast reschedule proposal.', [
+                            'change_request_id' => $freshRequest->id,
+                            'booking_id' => $booking->id,
+                            'error' => $exception->getMessage(),
+                        ]);
+                    }
+                }
+            });
+
+            return $changeRequest;
+        });
+    }
+
+    /**
+     * Student agrees to a proposed reschedule.
+     *
+     * Applies immediately when >= 24h notice; moves into SISA approval queue
+     * when < 24h before the original lesson.
+     */
+    public function acceptRescheduleByStudent(Booking $booking, User $student, ?string $note = null): ?BookingChangeRequest
+    {
+        if ($booking->student_id !== $student->id) {
+            throw new BookingChangeException('Only the booking student can respond to this reschedule.');
+        }
+
+        $proposal = $booking->pendingRescheduleProposal();
+
+        if (! $proposal) {
+            if ($booking->rescheduled_by_instructor_at !== null && $booking->student_accepted_reschedule_at === null) {
+                $booking->update([
+                    'student_accepted_reschedule_at' => now(),
+                ]);
+
+                return null;
+            }
+
+            throw new BookingChangeException('There is no pending reschedule to confirm.');
+        }
+
+        return DB::transaction(function () use ($booking, $proposal, $note) {
+            User::query()->whereKey($booking->instructor_id)->lockForUpdate()->first();
+
+            $lockedBooking = Booking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $lockedProposal = BookingChangeRequest::query()->whereKey($proposal->id)->lockForUpdate()->firstOrFail();
+
+            if (! $lockedProposal->isAwaitingStudent()) {
+                throw new BookingChangeException('This reschedule request has already been handled.');
+            }
+
+            $slot = [
+                'date' => $lockedProposal->new_date->format('Y-m-d'),
+                'time_period' => (string) $lockedProposal->new_time_period,
+                'start_time' => $lockedProposal->new_start_time?->format('H:i') ?? '08:00',
+                'end_time' => $lockedProposal->new_end_time?->format('H:i') ?? '10:00',
+            ];
+
+            $this->assertSlotIsFree($lockedBooking, $slot);
+
+            $lockedProposal->update([
+                'student_agreed_at' => now(),
+                'student_response_note' => $note,
+            ]);
+
+            if ($lockedProposal->requires_admin_approval) {
+                $lockedProposal->update([
+                    'status' => ChangeRequestStatus::Pending,
+                ]);
+
+                $this->notifyAdmins($lockedProposal);
+
+                DB::afterCommit(function () use ($lockedProposal) {
+                    $fresh = $lockedProposal->fresh(['booking.student', 'booking.instructor', 'booking.surfSpot', 'requestedBy']);
+
+                    if ($fresh) {
+                        $fresh->booking?->instructor?->notify(new RescheduleResponseNotification($fresh, agreed: true, awaitingAdmin: true));
+
+                        try {
+                            broadcast(new BookingChangeRequested($fresh))->toOthers();
+                        } catch (\Throwable $exception) {
+                            Log::warning('Failed to broadcast reschedule awaiting admin.', [
+                                'change_request_id' => $fresh->id,
+                                'error' => $exception->getMessage(),
+                            ]);
+                        }
+                    }
+                });
+
+                return $lockedProposal->fresh();
+            }
+
+            $lockedProposal->resolve(ChangeRequestStatus::AutoApproved);
+            $this->apply($lockedProposal);
+
+            DB::afterCommit(function () use ($lockedProposal) {
+                $fresh = $lockedProposal->fresh(['booking.student', 'booking.instructor', 'booking.surfSpot', 'requestedBy']);
+
+                if ($fresh) {
+                    $fresh->booking?->instructor?->notify(new RescheduleResponseNotification($fresh, agreed: true, awaitingAdmin: false));
+
+                    try {
+                        broadcast(new BookingChangeResolved($fresh))->toOthers();
+                    } catch (\Throwable $exception) {
+                        Log::warning('Failed to broadcast reschedule resolution.', [
+                            'change_request_id' => $fresh->id,
+                            'error' => $exception->getMessage(),
+                        ]);
+                    }
+                }
+            });
+
+            return $lockedProposal->fresh();
+        });
+    }
+
+    /**
+     * Student declines a proposed reschedule, keeping the original slot.
+     */
+    public function declineRescheduleByStudent(Booking $booking, User $student, ?string $note = null): BookingChangeRequest
+    {
+        if ($booking->student_id !== $student->id) {
+            throw new BookingChangeException('Only the booking student can respond to this reschedule.');
+        }
+
+        $proposal = $booking->pendingRescheduleProposal();
+
+        if (! $proposal) {
+            throw new BookingChangeException('There is no pending reschedule to decline.');
+        }
+
+        return DB::transaction(function () use ($proposal, $note) {
+            $proposal->update([
+                'status' => ChangeRequestStatus::Rejected,
+                'student_declined_at' => now(),
+                'student_response_note' => $note,
+                'reviewed_at' => now(),
+            ]);
+
+            DB::afterCommit(function () use ($proposal) {
+                $fresh = $proposal->fresh(['booking.student', 'booking.instructor', 'booking.surfSpot', 'requestedBy']);
+
+                if ($fresh) {
+                    $fresh->booking?->instructor?->notify(new RescheduleResponseNotification($fresh, agreed: false, awaitingAdmin: false));
+
+                    try {
+                        broadcast(new BookingChangeResolved($fresh))->toOthers();
+                    } catch (\Throwable $exception) {
+                        Log::warning('Failed to broadcast declined reschedule.', [
+                            'change_request_id' => $fresh->id,
+                            'error' => $exception->getMessage(),
+                        ]);
+                    }
+                }
+            });
+
+            return $proposal->fresh();
         });
     }
 
@@ -139,6 +331,10 @@ class BookingChangeService
             throw new BookingChangeException('This request has already been resolved.');
         }
 
+        if ($changeRequest->isReschedule() && $changeRequest->student_agreed_at === null) {
+            throw new BookingChangeException('The student must be notified and agree to the reschedule before it can be approved.');
+        }
+
         return DB::transaction(function () use ($changeRequest, $admin, $note) {
             $changeRequest->resolve(ChangeRequestStatus::Approved, $admin->id, $note);
             $this->apply($changeRequest);
@@ -172,11 +368,11 @@ class BookingChangeService
     }
 
     /**
-     * The requester pulls their own request back before SISA acts on it.
+     * The requester pulls their own request back before SISA / student acts on it.
      */
     public function withdraw(BookingChangeRequest $changeRequest, User $requester): BookingChangeRequest
     {
-        if (!$changeRequest->isPending()) {
+        if (!$changeRequest->isOpen()) {
             throw new BookingChangeException('This request has already been resolved.');
         }
 
@@ -248,14 +444,22 @@ class BookingChangeService
             'time_period' => $changeRequest->new_time_period,
             'start_time' => $changeRequest->new_start_time?->format('H:i'),
             'end_time' => $changeRequest->new_end_time?->format('H:i'),
+            'duration_hours' => $booking->resolvedDurationHours(),
             'rescheduled_by_instructor_at' => now(),
-            'student_accepted_reschedule_at' => null,
+            'student_accepted_reschedule_at' => $changeRequest->student_agreed_at ?? now(),
         ]);
 
         $booking->refresh();
 
         // FR 1.8.3 - old slot is freed, new slot is locked.
         $this->availabilityService->moveBookingSlot($booking, $oldDate, $oldPeriod);
+
+        ($this->bookingEventService ?? app(BookingEventService::class))
+            ->recordRescheduled(
+                $booking,
+                $changeRequest,
+                $changeRequest->reviewed_by ?? $changeRequest->requested_by
+            );
 
         DB::afterCommit(function () use ($booking, $changeRequest) {
             $fresh = $booking->fresh(['instructor', 'surfSpot', 'student']);
@@ -318,6 +522,13 @@ class BookingChangeService
         // Capacity-aware: another lesson may share the slot as long as the
         // instructor's student capacity is not exceeded. The booking being
         // moved is excluded so it never conflicts with itself.
+        $skill = $booking->skill_level instanceof SkillLevel
+            ? $booking->skill_level
+            : SkillLevel::tryFrom((string) $booking->skill_level);
+        $sessionType = $booking->session_type instanceof SessionType
+            ? $booking->session_type
+            : SessionType::tryFrom((string) $booking->session_type);
+
         try {
             $this->availabilityService->assertRangeIsBookable(
                 $booking->instructor_id,
@@ -325,7 +536,9 @@ class BookingChangeService
                 $slot['start_time'],
                 $slot['end_time'],
                 max(1, (int) $booking->student_count),
-                $booking->id
+                $booking->id,
+                $skill,
+                $sessionType
             );
         } catch (BookingRequestException $exception) {
             throw new BookingChangeException($exception->getMessage());

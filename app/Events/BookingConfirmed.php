@@ -26,6 +26,7 @@ class BookingConfirmed implements ShouldBroadcast
         return [
             new PrivateChannel('student.' . $this->booking->student_id),
             new PrivateChannel('instructor.' . $this->booking->instructor_id),
+            new PrivateChannel('admin.notifications'),
         ];
     }
 

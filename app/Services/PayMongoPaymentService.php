@@ -284,6 +284,10 @@ class PayMongoPaymentService implements PaymentServiceInterface
                 'status' => PaymentStatus::Completed,
                 'paid_at' => now(),
             ]);
+
+            $eventService = app(BookingEventService::class);
+            $eventService->recordPaymentCompleted($booking, $payment->fresh(), $booking->student_id);
+            $eventService->recordConfirmed($booking, $booking->student_id, 'GCash');
         } else {
             $payment->update([
                 'status' => PaymentStatus::Failed,
@@ -315,12 +319,20 @@ class PayMongoPaymentService implements PaymentServiceInterface
 
         // Phase 11 - broadcast so the student's booking page and the admin
         // dashboard update without a refresh.
+        $eventService = app(BookingEventService::class);
+        if ($booking->payment) {
+            $eventService->recordPaymentCompleted($booking, $booking->payment->fresh(), $booking->student_id);
+        }
+        $eventService->recordConfirmed($booking, $booking->student_id, 'GCash');
+
         try {
             $booking->loadMissing(['student', 'instructor', 'surfSpot']);
 
             if ($booking->payment) {
                 broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
             }
+
+            broadcast(new \App\Events\BookingConfirmed($booking))->toOthers();
         } catch (\Throwable $exception) {
             Log::warning('Failed to broadcast payment received.', [
                 'booking_id' => $booking->id,

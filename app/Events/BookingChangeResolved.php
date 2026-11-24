@@ -68,7 +68,9 @@ class BookingChangeResolved implements ShouldBroadcast
                     ? $booking->status->value
                     : (string) $booking->status,
             ] : null,
-            'message' => "Your {$type} request for booking #{$this->changeRequest->booking_id} was {$status}.",
+            'message' => ($this->changeRequest->isReschedule() && $this->changeRequest->applied_at !== null)
+                ? "Booking #{$this->changeRequest->booking_id} has been rescheduled to {$this->changeRequest->describeNewSlot()}."
+                : "Your {$type} request for booking #{$this->changeRequest->booking_id} was {$status}.",
             'timestamp' => now()->toIso8601String(),
         ];
     }

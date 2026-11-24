@@ -8,6 +8,7 @@ import EmptyState from '@/Components/UI/EmptyState.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import Modal from '@/Components/Modal.vue'
 import Dropdown from '@/Components/Dropdown.vue'
+import RescheduleModal from '@/Components/Molecules/RescheduleModal.vue'
 import {
   BanknotesIcon,
   CalendarDaysIcon,
@@ -34,15 +35,19 @@ interface ChangeRequestSummary {
 
 interface Booking {
   id: number
+  instructor_id: number
   date: string
+  original_date?: string | null
   time_period: string
   start_time?: string | null
   end_time?: string | null
+  duration_hours?: number
   status: string
   total_amount: number | string
   payment_status: string
   chat_unread_count?: number
   skill_level: string
+  session_type?: string | null
   student_count: number
   student_age: number
   student: {
@@ -65,6 +70,11 @@ interface Booking {
   accept_block?: 'awaiting_waiver' | 'window_closed' | 'too_close' | null
   requires_admin_approval_for_change?: boolean
   has_pending_change_request?: boolean
+  has_pending_reschedule_proposal?: boolean
+  is_rescheduled?: boolean
+  rescheduled_by_instructor_at?: string | null
+  can_mark_attendance?: boolean
+  attendance_block_reason?: string | null
   attendance_label?: string | null
   attendance_status?: string | null
   height?: number | string | null
@@ -445,22 +455,22 @@ const submitDecline = () => {
 
 // ---- FR 1.9.4 change requests ------------------------------------------
 
+const rescheduleTarget = ref<Booking | null>(null)
 const changeTarget = ref<Booking | null>(null)
 const changeForm = useForm({
-  type: 'reschedule' as 'reschedule' | 'cancellation',
-  date: '',
-  time_period: 'morning',
-  start_time: '06:00',
-  end_time: '08:00',
+  type: 'cancellation' as 'cancellation',
   reason: '',
 })
 
 const openChange = (booking: Booking, type: 'reschedule' | 'cancellation') => {
+  if (type === 'reschedule') {
+    rescheduleTarget.value = booking
+    return
+  }
   changeTarget.value = booking
   changeForm.reset()
   changeForm.clearErrors()
-  changeForm.type = type
-  changeForm.date = booking.date
+  changeForm.type = 'cancellation'
 }
 
 const submitChange = () => {
@@ -482,7 +492,7 @@ const withdrawChange = (booking: Booking) => {
 }
 
 const pendingChangeRequest = (booking: Booking): ChangeRequestSummary | undefined =>
-  booking.change_requests?.find((request) => request.status === 'pending')
+  booking.change_requests?.find((request) => ['pending', 'awaiting_student'].includes(request.status))
 
 // ---- FR 1.10.1 attendance ---------------------------------------------
 
@@ -490,6 +500,7 @@ const attendanceTarget = ref<Booking | null>(null)
 const attendanceForm = useForm({ attendance_status: 'present' })
 
 const openAttendance = (booking: Booking) => {
+  if (booking.can_mark_attendance === false) return
   attendanceTarget.value = booking
   attendanceForm.reset()
   attendanceForm.clearErrors()
@@ -507,8 +518,11 @@ const submitAttendance = () => {
   })
 }
 
-const canMarkAttendance = (booking: Booking): boolean =>
+const attendanceStatusEligible = (booking: Booking): boolean =>
   ['confirmed', 'in_progress', 'completed', 'no_show'].includes(booking.status)
+
+const canMarkAttendance = (booking: Booking): boolean =>
+  attendanceStatusEligible(booking) && booking.can_mark_attendance !== false
 </script>
 
 <template>
@@ -676,9 +690,18 @@ const canMarkAttendance = (booking: Booking): boolean =>
                                 {{ booking.attendance_label }}
                             </span>
 
-                            <span v-if="booking.has_pending_change_request" class="chip chip-warning">
+                            <span v-if="booking.has_pending_reschedule_proposal" class="chip chip-warning">
+                                <ClockIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                                Awaiting student agreement
+                            </span>
+
+                            <span v-else-if="booking.has_pending_change_request" class="chip chip-warning">
                                 <ExclamationTriangleIcon class="h-3.5 w-3.5" aria-hidden="true" />
                                 Change awaiting SISA
+                            </span>
+
+                            <span v-if="booking.is_rescheduled || booking.rescheduled_by_instructor_at" class="chip chip-positive">
+                                Rescheduled
                             </span>
 
                             <span
@@ -745,10 +768,12 @@ const canMarkAttendance = (booking: Booking): boolean =>
                             </template>
 
                             <AppButton
-                                v-else-if="canMarkAttendance(booking)"
+                                v-else-if="attendanceStatusEligible(booking)"
                                 size="sm"
                                 class="flex-1 sm:flex-none"
                                 :variant="booking.status === 'in_progress' ? 'primary' : 'secondary'"
+                                :disabled="!canMarkAttendance(booking)"
+                                :title="!canMarkAttendance(booking) ? (booking.attendance_block_reason ?? undefined) : undefined"
                                 @click="openAttendance(booking)"
                             >
                                 {{ booking.attendance_label ? 'Update attendance' : 'Mark attendance' }}
@@ -875,12 +900,16 @@ const canMarkAttendance = (booking: Booking): boolean =>
             </div>
         </Modal>
 
-        <!-- Reschedule / cancel -->
+        <RescheduleModal
+            :show="rescheduleTarget !== null"
+            :booking="rescheduleTarget"
+            @close="rescheduleTarget = null"
+        />
+
+        <!-- Cancel -->
         <Modal :show="changeTarget !== null" @close="changeTarget = null" maxWidth="lg">
             <div class="p-6">
-                <h2 class="text-title font-semibold text-deep-900">
-                    {{ changeForm.type === 'cancellation' ? 'Cancel this lesson?' : 'Reschedule this lesson' }}
-                </h2>
+                <h2 class="text-title font-semibold text-deep-900">Cancel this lesson?</h2>
 
                 <AppPanel
                     v-if="changeTarget?.requires_admin_approval_for_change"
@@ -893,53 +922,6 @@ const canMarkAttendance = (booking: Booking): boolean =>
                 <AppPanel v-else tone="positive" label="Applies immediately" class="mt-4">
                     This change is far enough ahead to be applied immediately.
                 </AppPanel>
-
-                <div v-if="changeForm.type === 'reschedule'" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div class="sm:col-span-2">
-                        <label for="change-date" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                            New date
-                        </label>
-                        <input id="change-date" v-model="changeForm.date" type="date"
-                            class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600" />
-                        <p v-if="changeForm.errors.date" class="mt-1 text-body-sm font-semibold text-rose-700">
-                            {{ changeForm.errors.date }}
-                        </p>
-                    </div>
-
-                    <div>
-                        <label for="change-period" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                            Time period
-                        </label>
-                        <select id="change-period" v-model="changeForm.time_period"
-                            class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600">
-                            <option value="morning">Morning</option>
-                            <option value="afternoon">Afternoon</option>
-                        </select>
-                        <p v-if="changeForm.errors.time_period" class="mt-1 text-body-sm font-semibold text-rose-700">
-                            {{ changeForm.errors.time_period }}
-                        </p>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label for="change-start" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                                From
-                            </label>
-                            <input id="change-start" v-model="changeForm.start_time" type="time"
-                                class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600" />
-                        </div>
-                        <div>
-                            <label for="change-end" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                                To
-                            </label>
-                            <input id="change-end" v-model="changeForm.end_time" type="time"
-                                class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600" />
-                        </div>
-                    </div>
-                    <p v-if="changeForm.errors.end_time" class="text-body-sm font-semibold text-rose-700 sm:col-span-2">
-                        {{ changeForm.errors.end_time }}
-                    </p>
-                </div>
 
                 <div class="mt-4">
                     <label for="change-reason" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
@@ -954,9 +936,8 @@ const canMarkAttendance = (booking: Booking): boolean =>
                     <AppButton variant="secondary" :disabled="changeForm.processing" @click="changeTarget = null">
                         Keep lesson
                     </AppButton>
-                    <AppButton :variant="changeForm.type === 'cancellation' ? 'danger' : 'primary'"
-                        :loading="changeForm.processing" @click="submitChange">
-                        {{ changeForm.type === 'cancellation' ? 'Submit cancellation' : 'Submit reschedule' }}
+                    <AppButton variant="danger" :loading="changeForm.processing" @click="submitChange">
+                        Submit cancellation
                     </AppButton>
                 </div>
             </div>

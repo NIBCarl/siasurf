@@ -25,10 +25,13 @@ interface RefundPreview {
 interface Booking {
   id: number
   date: string
+  original_date?: string | null
   time_period: string
   start_time?: string | null
   end_time?: string | null
   created_at?: string | null
+  rescheduled_by_instructor_at?: string | null
+  is_rescheduled?: boolean
   status: string
   is_reserved?: boolean
   hold_remaining_seconds?: number
@@ -37,6 +40,11 @@ interface Booking {
   payment_status: string
   can_be_cancelled?: boolean
   has_pending_reschedule_response?: boolean
+  pending_reschedule_proposal?: {
+    id: number
+    new_date: string | null
+    new_time_range: string
+  } | null
   refund_preview?: RefundPreview | null
   latest_refund?: {
     id: number
@@ -313,6 +321,18 @@ const submitCancel = () => {
                                         <StatusPill :variant="statusMeta(booking.status).variant">
                                             {{ statusMeta(booking.status).label }}
                                         </StatusPill>
+                                        <StatusPill
+                                            v-if="booking.is_rescheduled || booking.rescheduled_by_instructor_at"
+                                            variant="verified"
+                                        >
+                                            Rescheduled to {{ formatPhilippineDate(booking.date, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-US', booking.date) }}
+                                        </StatusPill>
+                                        <StatusPill
+                                            v-if="booking.pending_reschedule_proposal"
+                                            variant="pending"
+                                        >
+                                            Reschedule requested
+                                        </StatusPill>
                                         <StatusPill v-if="booking.chat_unread_count" variant="pending">
                                             <ChatBubbleLeftRightIcon class="mr-1 h-3.5 w-3.5" aria-hidden="true" />
                                             {{ booking.chat_unread_count }} new
@@ -330,6 +350,18 @@ const submitCancel = () => {
                                         {{ formatDate(booking.date) }}
                                         <span aria-hidden="true">·</span>
                                         <span>{{ slotLabel(booking) }}</span>
+                                    </p>
+
+                                    <p
+                                        v-if="booking.pending_reschedule_proposal"
+                                        class="mt-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-label text-amber-950"
+                                    >
+                                        Your instructor requested to reschedule this lesson to
+                                        <strong>
+                                            {{ booking.pending_reschedule_proposal.new_date ? formatDate(booking.pending_reschedule_proposal.new_date) : '' }}
+                                            · {{ booking.pending_reschedule_proposal.new_time_range }}
+                                        </strong>.
+                                        Open this booking to agree, decline, or message your instructor.
                                     </p>
 
                                     <p

@@ -29,6 +29,10 @@ class BookingChangeRequest extends Model
         'new_time_period',
         'new_start_time',
         'new_end_time',
+        'student_notified_at',
+        'student_agreed_at',
+        'student_declined_at',
+        'student_response_note',
         'reviewed_by',
         'reviewed_at',
         'admin_note',
@@ -46,6 +50,9 @@ class BookingChangeRequest extends Model
         'new_date' => 'date:Y-m-d',
         'new_start_time' => 'datetime:H:i',
         'new_end_time' => 'datetime:H:i',
+        'student_notified_at' => 'datetime',
+        'student_agreed_at' => 'datetime',
+        'student_declined_at' => 'datetime',
         'reviewed_at' => 'datetime',
         'applied_at' => 'datetime',
     ];
@@ -70,6 +77,19 @@ class BookingChangeRequest extends Model
     public function scopePending($query)
     {
         return $query->where('status', ChangeRequestStatus::Pending);
+    }
+
+    public function scopeAwaitingStudent($query)
+    {
+        return $query->where('status', ChangeRequestStatus::AwaitingStudent);
+    }
+
+    public function scopeOpen($query)
+    {
+        return $query->whereIn('status', [
+            ChangeRequestStatus::Pending,
+            ChangeRequestStatus::AwaitingStudent,
+        ]);
     }
 
     public function scopeAwaitingAdmin($query)
@@ -98,6 +118,21 @@ class BookingChangeRequest extends Model
         return $this->status === ChangeRequestStatus::Pending;
     }
 
+    public function isAwaitingStudent(): bool
+    {
+        return $this->status === ChangeRequestStatus::AwaitingStudent;
+    }
+
+    public function isOpen(): bool
+    {
+        return $this->status instanceof ChangeRequestStatus && $this->status->isOpen();
+    }
+
+    public function hasStudentAgreed(): bool
+    {
+        return $this->student_agreed_at !== null;
+    }
+
     public function isReschedule(): bool
     {
         return $this->type === ChangeRequestType::Reschedule;
@@ -106,6 +141,22 @@ class BookingChangeRequest extends Model
     public function isCancellation(): bool
     {
         return $this->type === ChangeRequestType::Cancellation;
+    }
+
+    /**
+     * Format a 12-hour time range or period label.
+     */
+    public function describeTimeRange(?\Carbon\Carbon $start, ?\Carbon\Carbon $end, ?string $period): string
+    {
+        if ($start && $end) {
+            return $start->format('g:i A') . ' – ' . $end->format('g:i A');
+        }
+
+        if ($start) {
+            return $start->format('g:i A');
+        }
+
+        return $period ? ucfirst($period) : '—';
     }
 
     /**
@@ -179,5 +230,45 @@ class BookingChangeRequest extends Model
     public function markApplied(): void
     {
         $this->update(['applied_at' => now()]);
+    }
+
+    /**
+     * Serialized proposal summary shared across student and instructor views.
+     *
+     * @return array<string, mixed>
+     */
+    public function toProposalPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'type' => $this->type?->value,
+            'status' => $this->status?->value,
+            'status_label' => $this->status?->label(),
+            'requires_admin_approval' => (bool) $this->requires_admin_approval,
+            'reason' => $this->reason,
+            'admin_note' => $this->admin_note,
+            'original_date' => $this->original_date?->format('Y-m-d'),
+            'original_time_period' => $this->original_time_period,
+            'original_start_time' => $this->original_start_time?->format('H:i'),
+            'original_end_time' => $this->original_end_time?->format('H:i'),
+            'original_time_range' => $this->describeTimeRange(
+                $this->original_start_time,
+                $this->original_end_time,
+                $this->original_time_period
+            ),
+            'new_date' => $this->new_date?->format('Y-m-d'),
+            'new_time_period' => $this->new_time_period,
+            'new_start_time' => $this->new_start_time?->format('H:i'),
+            'new_end_time' => $this->new_end_time?->format('H:i'),
+            'new_time_range' => $this->describeTimeRange(
+                $this->new_start_time,
+                $this->new_end_time,
+                $this->new_time_period
+            ),
+            'student_notified_at' => $this->student_notified_at?->toIso8601String(),
+            'student_agreed_at' => $this->student_agreed_at?->toIso8601String(),
+            'student_declined_at' => $this->student_declined_at?->toIso8601String(),
+            'created_at' => $this->created_at?->toIso8601String(),
+        ];
     }
 }

@@ -142,6 +142,7 @@ Route::middleware(['auth', 'verified', 'role:student'])->prefix('student')->as('
     Route::get('/bookings/{booking}', [BookingController::class, 'show'])->name('bookings.show');
     Route::post('/bookings/{booking}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
     Route::post('/bookings/{booking}/accept-reschedule', [BookingController::class, 'acceptReschedule'])->name('bookings.accept-reschedule');
+    Route::post('/bookings/{booking}/decline-reschedule', [BookingController::class, 'declineReschedule'])->name('bookings.decline-reschedule');
 
     // Student reviews
     Route::get('/reviews', [ReviewController::class, 'index'])->name('reviews.index');
@@ -224,8 +225,8 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
         // Instructor bookings
         Route::get('/bookings', [InstructorBookingController::class, 'index'])->name('bookings.index');
         Route::get('/bookings/{booking}', [InstructorBookingController::class, 'show'])->name('bookings.show');
+        Route::get('/bookings/{booking}/reschedule-availability', [InstructorBookingController::class, 'rescheduleAvailability'])->name('bookings.reschedule-availability');
         Route::patch('/bookings/{booking}/confirm', [InstructorBookingController::class, 'confirm'])->name('bookings.confirm');
-        Route::post('/bookings/{booking}/start-session', [InstructorBookingController::class, 'startSession'])->name('bookings.start-session');
         Route::post('/bookings/{booking}/complete-session', [InstructorBookingController::class, 'completeSession'])->name('bookings.complete-session');
 
         Route::post('/bookings/{booking}/request-upgrade', [InstructorBookingController::class, 'requestUpgrade'])->name('bookings.request-upgrade');

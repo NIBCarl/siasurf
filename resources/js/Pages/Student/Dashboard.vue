@@ -44,9 +44,12 @@ interface SurfSpot {
 interface Booking {
   id: number
   date: string
+  original_date?: string | null
   time_period: string
   start_time?: string | null
   end_time?: string | null
+  rescheduled_by_instructor_at?: string | null
+  is_rescheduled?: boolean
   status: string
   total_amount?: number
   payment_status?: string
@@ -399,6 +402,12 @@ onUnmounted(() => {
                                             <StatusPill :variant="statusVariant(nextBooking.status)">
                                                 {{ statusLabel(nextBooking.status) }}
                                             </StatusPill>
+                                            <StatusPill
+                                                v-if="nextBooking.is_rescheduled || nextBooking.rescheduled_by_instructor_at"
+                                                variant="verified"
+                                            >
+                                                Rescheduled to {{ formatDate(nextBooking.date) }}
+                                            </StatusPill>
                                         </div>
                                         <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm text-stone-600">
                                             <CalendarDaysIcon class="h-4 w-4" aria-hidden="true" />
@@ -460,9 +469,17 @@ onUnmounted(() => {
                                         {{ booking.surf_spot.name }}
                                     </span>
                                 </span>
-                                <StatusPill :variant="statusVariant(booking.status)">
-                                    {{ statusLabel(booking.status) }}
-                                </StatusPill>
+                                <div class="flex shrink-0 flex-wrap items-center gap-1.5">
+                                    <StatusPill
+                                        v-if="booking.is_rescheduled || booking.rescheduled_by_instructor_at"
+                                        variant="verified"
+                                    >
+                                        Rescheduled to {{ formatDate(booking.date) }}
+                                    </StatusPill>
+                                    <StatusPill :variant="statusVariant(booking.status)">
+                                        {{ statusLabel(booking.status) }}
+                                    </StatusPill>
+                                </div>
                             </Link>
                         </li>
                     </ul>

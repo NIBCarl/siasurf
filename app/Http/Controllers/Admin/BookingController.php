@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\BookingChangeRequest;
+use App\Models\BookingEvent;
 use App\Services\BookingChangeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,13 +19,29 @@ class BookingController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = Booking::with(['student', 'instructor', 'surfSpot', 'payment', 'latestRefund'])
-            ->orderByDesc('created_at');
+        $query = Booking::with([
+            'student',
+            'instructor',
+            'surfSpot',
+            'payment',
+            'latestRefund',
+            'latestEvent',
+            'events' => fn ($q) => $q->whereIn('event_type', BookingEvent::manifestTypes())->limit(6),
+            'changeRequests' => fn ($q) => $q->reschedule()->latest('id')->limit(2),
+        ])
+            ->orderByRaw('COALESCE(last_event_at, created_at) DESC')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
 
-        // Simple status filter
-        if ($request->has('status')) {
+        // Status filter
+        if ($request->filled('status')) {
             if ($request->status === 'underpaid') {
                 $query->where('payment_status', 'underpaid');
+            } elseif ($request->status === 'rescheduled') {
+                $query->where(function ($q) {
+                    $q->whereNotNull('rescheduled_by_instructor_at')
+                        ->orWhereHas('changeRequests', fn ($cr) => $cr->reschedule()->whereNotNull('applied_at'));
+                });
             } else {
                 $query->where('status', $request->status);
             }
@@ -32,8 +49,49 @@ class BookingController extends Controller
 
         $bookings = $query->paginate(20)->withQueryString();
 
+        $bookings->through(function (Booking $booking) {
+            $appliedReschedule = $booking->changeRequests
+                ->first(fn (BookingChangeRequest $cr) => $cr->isReschedule() && $cr->applied_at !== null);
+
+            return array_merge($booking->toArray(), [
+                'is_rescheduled' => $booking->isRescheduled() || $appliedReschedule !== null,
+                'reschedule_summary' => $appliedReschedule?->toProposalPayload(),
+                'completed_event_types' => $booking->events
+                    ->pluck('event_type')
+                    ->unique()
+                    ->values()
+                    ->all(),
+            ]);
+        });
+
+        $recentEvents = BookingEvent::with([
+            'booking.student:id,name',
+            'booking.instructor:id,name',
+            'booking.surfSpot:id,name',
+            'actor:id,name',
+        ])
+            ->whereIn('event_type', BookingEvent::manifestTypes())
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get()
+            ->map(fn (BookingEvent $event) => [
+                'id' => $event->id,
+                'booking_id' => $event->booking_id,
+                'event_type' => $event->event_type,
+                'title' => $event->title,
+                'description' => $event->description,
+                'metadata' => $event->metadata,
+                'occurred_at' => $event->occurred_at?->toIso8601String(),
+                'actor_name' => $event->actor?->name,
+                'student_name' => $event->booking?->student?->name,
+                'instructor_name' => $event->booking?->instructor?->name,
+                'spot_name' => $event->booking?->surfSpot?->name,
+            ]);
+
         return Inertia::render('Admin/Bookings/Index', [
             'bookings' => $bookings,
+            'recentEvents' => $recentEvents,
             'filters' => $request->only(['status']),
             'pendingChangeRequestCount' => BookingChangeRequest::query()->awaitingAdmin()->count(),
         ]);
@@ -52,11 +110,15 @@ class BookingController extends Controller
             'latestRefund',
             'refunds.initiatedBy',
             'changeRequests.reviewedBy',
+            'changeRequests.requestedBy',
+            'events.actor',
             'waiver',
             'waivers',
             'participants.waivers',
             'review',
         ]);
+
+        $booking->setAttribute('is_rescheduled', $booking->isRescheduled());
 
         return Inertia::render('Admin/Bookings/Show', [
             'booking' => $booking,

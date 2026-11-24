@@ -183,6 +183,8 @@ export function useNotifications() {
             echo.private(channel)
                 .listen('.booking.created', (e: any) =>
                     toNotification(e, 'New Booking', 'info'))
+                .listen('.booking.confirmed', (e: any) =>
+                    toNotification(e, 'Booking Confirmed', 'success'))
                 .listen('.booking.cancelled', (e: any) =>
                     toNotification(e, 'Booking Cancelled', 'warning'))
                 .listen('.booking.declined', (e: any) =>

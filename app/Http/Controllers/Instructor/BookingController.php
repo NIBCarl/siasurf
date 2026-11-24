@@ -12,17 +12,21 @@ use App\Exceptions\BookingChangeException;
 use App\Exceptions\BookingRequestException;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\BookingChangeRequest;
 use App\Models\SurfSpot;
 use App\Notifications\BookingDeclinedNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
 use App\Services\BookingChangeService;
+use App\Services\BookingEventService;
 use App\Services\EarningsLedgerService;
 use App\Services\ReceiptService;
 use App\Events\SessionAttendanceMarked;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -83,6 +87,7 @@ class BookingController extends Controller
             $hasWaiver = $liabilitySignedCount > 0
                 ? $liabilitySignedCount >= $requiredWaivers
                 : $booking->waiver !== null;
+            $proposal = $booking->pendingRescheduleProposal();
 
             return array_merge($booking->toArray(), [
                 'status' => $isReserved ? BookingStatus::Reserved->value : $booking->status->value,
@@ -106,8 +111,12 @@ class BookingController extends Controller
                 },
                 'requires_admin_approval_for_change' => $booking->changeRequiresAdminApproval(),
                 'has_pending_change_request' => $booking->changeRequests
-                    ->where('status', ChangeRequestStatus::Pending)
-                    ->isNotEmpty(),
+                    ->contains(fn (BookingChangeRequest $cr) => $cr->isOpen()),
+                'has_pending_reschedule_proposal' => $proposal !== null,
+                'pending_reschedule_proposal' => $proposal?->toProposalPayload(),
+                'is_rescheduled' => $booking->isRescheduled(),
+                'can_mark_attendance' => $booking->canMarkAttendance(),
+                'attendance_block_reason' => $booking->attendanceBlockReason(),
                 'attendance_label' => $booking->attendance_status?->label(),
                 'attendance_status' => $booking->attendance_status?->value,
                 'has_waiver' => $hasWaiver,
@@ -118,6 +127,7 @@ class BookingController extends Controller
                     ? $booking->getRecommendedBoardSize()
                     : null,
                 'chat_unread_count' => (int) ($booking->conversation?->unread_count ?? 0),
+                'has_conversation' => $booking->conversation !== null,
             ]);
         });
 
@@ -128,6 +138,8 @@ class BookingController extends Controller
                 BookingStatus::InProgress,
                 BookingStatus::Completed,
             ])
+            ->get()
+            ->filter(fn (Booking $booking) => $booking->canMarkAttendance())
             ->count();
 
         return Inertia::render('Instructor/Bookings/Index', [
@@ -171,7 +183,8 @@ class BookingController extends Controller
             'waiver',
             'participants.waivers',
             'review',
-            'changeRequests' => fn ($query) => $query->with(['requestedBy', 'reviewedBy'])->latest(),
+            'conversation',
+            'changeRequests' => fn ($query) => $query->with(['requestedBy', 'reviewedBy'])->latest('id'),
         ]);
 
         $surfSpots = SurfSpot::where('is_active', true)->orderBy('name')->get(['id', 'name', 'difficulty']);
@@ -196,6 +209,7 @@ class BookingController extends Controller
             : null;
 
         $isReserved = $booking->isInStudentCheckout();
+        $proposal = $booking->pendingRescheduleProposal();
 
         return Inertia::render('Instructor/Bookings/Show', [
             'booking' => $booking,
@@ -220,12 +234,37 @@ class BookingController extends Controller
             'requiresAdminApprovalForChange' => $booking->changeRequiresAdminApproval(),
             'hoursUntilLesson' => $booking->hoursUntilLesson(),
             'changeApprovalThresholdHours' => Booking::CHANGE_APPROVAL_THRESHOLD_HOURS,
-            // FR 1.10.1 - why "Start Session" is unavailable, or null when it is.
-            'startBlockReason' => $booking->startSessionBlockReason(),
-            'canStartSession' => $booking->canStartSession(),
+            'canMarkAttendance' => $booking->canMarkAttendance(),
+            'attendanceBlockReason' => $booking->attendanceBlockReason(),
+            'canCompleteSession' => $booking->canCompleteSession(),
+            'completeBlockReason' => $booking->completeSessionBlockReason(),
+            'hasConversation' => $booking->conversation !== null,
+            'isRescheduled' => $booking->isRescheduled(),
+            'pendingRescheduleProposal' => $proposal?->toProposalPayload(),
             'paymentHoldMinutes' => Booking::PAYMENT_HOLD_MINUTES,
             'paymentTimeRemaining' => $isReserved ? 0 : $booking->getPaymentTimeRemaining(),
         ]);
+    }
+
+    /**
+     * Automated available start times for rescheduling a specific booking.
+     */
+    public function rescheduleAvailability(
+        Request $request,
+        Booking $booking,
+        AvailabilityService $availabilityService
+    ): JsonResponse {
+        if ($booking->instructor_id !== auth()->id()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'date' => ['required', 'date', 'after_or_equal:today'],
+        ]);
+
+        return response()->json(
+            $availabilityService->rescheduleStartTimes($booking, $validated['date'])
+        );
     }
 
     /**
@@ -262,29 +301,6 @@ class BookingController extends Controller
     }
 
     /**
-     * Start a surfing session (FR 1.10.1).
-     *
-     * The date/time rule lives on the Booking model so it cannot be bypassed
-     * from any other entry point.
-     */
-    public function startSession(Booking $booking)
-    {
-        if ($booking->instructor_id !== auth()->id()) {
-            abort(403);
-        }
-
-        $blockReason = $booking->startSessionBlockReason();
-
-        if ($blockReason !== null) {
-            return back()->with('error', $blockReason);
-        }
-
-        $booking->startSession();
-
-        return back()->with('success', 'Session started! Timer is now active.');
-    }
-
-    /**
      * Complete a surfing session.
      */
     public function completeSession(Request $request, Booking $booking)
@@ -293,12 +309,13 @@ class BookingController extends Controller
             abort(403);
         }
 
-        // Only in_progress bookings can be completed
-        if ($booking->status !== \App\Enums\BookingStatus::InProgress) {
-            return back()->with('error', 'Only active sessions can be completed.');
+        $blockReason = $booking->completeSessionBlockReason();
+        if ($blockReason !== null) {
+            return back()->with('error', $blockReason);
         }
 
         $booking->complete(auth()->id());
+        app(BookingEventService::class)->recordCompleted($booking, auth()->id());
 
         // If this is an unpaid Cash on Hand booking and the instructor confirmed
         // cash collection in the completion modal, record the cash payment and
@@ -444,9 +461,11 @@ class BookingController extends Controller
     }
 
     /**
-     * FR 1.9.4 - cancel or reschedule a booking. Changes filed less than
-     * 24 hours before the lesson are parked for SISA approval instead of
-     * being applied immediately.
+     * FR 1.9.4 - cancel or propose a reschedule for a booking.
+     *
+     * Reschedules accept ONLY date, start_time, and reason; time_period and
+     * end_time are derived automatically, the reason is sent to Messages, and
+     * the booking only moves once the student agrees (plus SISA if < 24h).
      */
     public function requestChange(Request $request, Booking $booking, BookingChangeService $changeService): RedirectResponse
     {
@@ -456,17 +475,16 @@ class BookingController extends Controller
 
         $validated = $request->validate([
             'type' => ['required', 'string', 'in:cancellation,reschedule'],
-            'reason' => ['nullable', 'string', 'max:500'],
+            'reason' => ['nullable', 'required_if:type,reschedule', 'string', 'min:3', 'max:500'],
             'cancellation_reason' => ['nullable', 'string', 'in:instructor,weather'],
             'date' => ['nullable', 'required_if:type,reschedule', 'date', 'after_or_equal:today'],
-            'time_period' => ['nullable', 'required_if:type,reschedule', 'string', 'in:morning,afternoon'],
             'start_time' => ['nullable', 'required_if:type,reschedule', 'date_format:H:i'],
-            'end_time' => ['nullable', 'required_if:type,reschedule', 'date_format:H:i', 'after:start_time'],
         ], [
+            'reason.required_if' => 'Please enter a reason so the student receives it in Messages before agreeing.',
+            'reason.min' => 'Please give a short explanation (at least 3 characters) for the student.',
             'date.required_if' => 'Please choose the new lesson date.',
             'date.after_or_equal' => 'The new lesson date must be today or later.',
-            'time_period.required_if' => 'Please choose morning or afternoon.',
-            'end_time.after' => 'The end time must be after the start time.',
+            'start_time.required_if' => 'Please choose an available start time.',
         ]);
 
         try {
@@ -487,15 +505,20 @@ class BookingController extends Controller
                     auth()->user(),
                     [
                         'date' => $validated['date'],
-                        'time_period' => $validated['time_period'],
                         'start_time' => $validated['start_time'],
-                        'end_time' => $validated['end_time'],
                     ],
                     $validated['reason'] ?? null
                 );
             }
         } catch (BookingChangeException $exception) {
             return back()->with('error', $exception->getMessage());
+        }
+
+        if ($changeRequest->isReschedule()) {
+            return back()->with(
+                'success',
+                'Reschedule request sent to ' . ($booking->student?->name ?? 'the student') . ' and posted in Messages. The schedule will update once the student agrees.'
+            );
         }
 
         if ($changeRequest->requires_admin_approval) {
@@ -510,7 +533,7 @@ class BookingController extends Controller
     }
 
     /**
-     * FR 1.9.4 - withdraw a change request that SISA has not decided on yet.
+     * FR 1.9.4 - withdraw a change request that the student or SISA has not decided on yet.
      */
     public function cancelChangeRequest(Booking $booking): RedirectResponse
     {
@@ -519,9 +542,9 @@ class BookingController extends Controller
         }
 
         $pending = $booking->changeRequests()
-            ->pending()
+            ->open()
             ->where('requested_by', auth()->id())
-            ->latest()
+            ->latest('id')
             ->first();
 
         if (!$pending) {
@@ -542,15 +565,9 @@ class BookingController extends Controller
             abort(403);
         }
 
-        $recordable = in_array($booking->status, [
-            BookingStatus::Confirmed,
-            BookingStatus::InProgress,
-            BookingStatus::Completed,
-            BookingStatus::NoShow,
-        ], true);
-
-        if (!$recordable) {
-            return back()->with('error', 'Attendance can only be recorded once the booking is confirmed.');
+        $blockReason = $booking->attendanceBlockReason();
+        if ($blockReason !== null) {
+            return back()->with('error', $blockReason);
         }
 
         $validated = $request->validate([
@@ -561,25 +578,29 @@ class BookingController extends Controller
         $cashReceived = $request->boolean('cash_received');
 
         DB::transaction(function () use ($booking, $status, $cashReceived) {
+            $eventService = app(BookingEventService::class);
+
             // Records attendance_status / attendance_marked_at / attendance_marked_by.
             $booking->markAttendance($status, auth()->id());
+            $eventService->recordAttendanceMarked($booking, $status, auth()->id());
 
-            // A student who never arrived cannot have a session running.
-            if ($status === AttendanceStatus::Absent && $booking->status === BookingStatus::InProgress) {
-                $booking->complete(auth()->id());
-            }
+            $tz = config('app.timezone', 'Asia/Manila');
+            $lessonEnd = $booking->lessonEndAt();
 
-            // If the live start window has already closed and the lesson remained
-            // in Confirmed, recording attendance reconciles the booking status so
-            // the student can access post-session feedback (or the booking is marked NoShow).
-            $lessonStart = $booking->lessonStartAt();
-            $windowClosed = $lessonStart !== null
-                && now()->greaterThan($lessonStart->copy()->addHours(Booking::START_TOLERANCE_HOURS));
-
-            if ($booking->status === BookingStatus::Confirmed && $windowClosed) {
-                if ($status->countsAsAttended()) {
-                    $booking->complete(auth()->id());
-                } elseif ($status === AttendanceStatus::Absent) {
+            if ($status->countsAsAttended()) {
+                if ($booking->status === BookingStatus::Confirmed) {
+                    if ($lessonEnd && now($tz)->greaterThanOrEqualTo($lessonEnd)) {
+                        $booking->complete(auth()->id());
+                        $eventService->recordCompleted($booking, auth()->id());
+                    } else {
+                        $booking->update([
+                            'status' => BookingStatus::InProgress,
+                            'started_at' => $booking->started_at ?? now(),
+                        ]);
+                    }
+                }
+            } elseif ($status === AttendanceStatus::Absent) {
+                if (in_array($booking->status, [BookingStatus::Confirmed, BookingStatus::InProgress], true)) {
                     $payment = $booking->payment;
                     $retainedAmount = ($payment && $payment->payment_method === PaymentMethod::GCash && $booking->isPaid())
                         ? $booking->effectiveLessonPrice()
@@ -610,10 +631,19 @@ class BookingController extends Controller
 
             app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
 
-            broadcast(new SessionAttendanceMarked(
-                $booking->fresh(['student', 'instructor']),
-                $status
-            ))->toOthers();
+            DB::afterCommit(function () use ($booking, $status) {
+                try {
+                    broadcast(new SessionAttendanceMarked(
+                        $booking->fresh(['student', 'instructor']),
+                        $status
+                    ))->toOthers();
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to broadcast attendance marked.', [
+                        'booking_id' => $booking->id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            });
         });
 
         return back()->with('success', 'Attendance recorded: ' . $status->label() . '.');
@@ -650,6 +680,26 @@ class BookingController extends Controller
         }
 
         $booking->update(['payment_status' => PaymentStatus::Completed]);
+
+        app(BookingEventService::class)->recordPaymentCompleted(
+            $booking,
+            $booking->payment?->fresh(),
+            auth()->id()
+        );
+
+        DB::afterCommit(function () use ($booking) {
+            try {
+                $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
+                if ($fresh?->payment) {
+                    broadcast(new \App\Events\PaymentReceived($fresh->payment))->toOthers();
+                }
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to broadcast cash settlement.', [
+                    'booking_id' => $booking->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        });
 
         try {
             app(ReceiptService::class)->generateReceipt($booking);

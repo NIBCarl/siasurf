@@ -269,14 +269,16 @@ class AvailabilityController extends Controller
             'students' => 'nullable|integer|min:1|max:10',
             'skill_level' => 'nullable|in:beginner,intermediate,advanced',
             'session_type' => 'nullable|in:teaching,guiding,coaching',
+            'except_booking_id' => 'nullable|integer|exists:bookings,id',
         ]);
 
         $date = \Carbon\Carbon::parse($validated['date']);
         $students = (int) ($validated['students'] ?? 1);
         [$skill, $sessionType] = $this->resolveSkillAndService($request, $validated);
+        $exceptBookingId = $this->resolveExceptBookingId($validated['except_booking_id'] ?? null, (int) $instructorId);
 
         $availability = app(AvailabilityService::class);
-        $periods = $availability->periodsFor((int) $instructorId, $date, $students, null, $skill, $sessionType);
+        $periods = $availability->periodsFor((int) $instructorId, $date, $students, $exceptBookingId, $skill, $sessionType);
 
         $availableSlots = [];
         foreach ($periods as $value => $period) {
@@ -309,10 +311,12 @@ class AvailabilityController extends Controller
             'students' => 'nullable|integer|min:1|max:10',
             'skill_level' => 'nullable|in:beginner,intermediate,advanced',
             'session_type' => 'nullable|in:teaching,guiding,coaching',
+            'except_booking_id' => 'nullable|integer|exists:bookings,id',
         ]);
 
         $students = (int) ($validated['students'] ?? 1);
         [$skill, $sessionType] = $this->resolveSkillAndService($request, $validated);
+        $exceptBookingId = $this->resolveExceptBookingId($validated['except_booking_id'] ?? null, (int) $instructorId);
 
         $availability = app(AvailabilityService::class);
 
@@ -344,11 +348,25 @@ class AvailabilityController extends Controller
                 $start,
                 $days,
                 $students,
-                null,
+                $exceptBookingId,
                 $skill,
                 $sessionType
             ),
         ]);
+    }
+
+    private function resolveExceptBookingId(mixed $rawId, int $instructorId): ?int
+    {
+        if (! $rawId) {
+            return null;
+        }
+
+        $booking = Booking::query()
+            ->whereKey((int) $rawId)
+            ->where('instructor_id', $instructorId)
+            ->first(['id']);
+
+        return $booking?->id;
     }
 
     /**

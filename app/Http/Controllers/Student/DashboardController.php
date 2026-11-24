@@ -29,7 +29,7 @@ class DashboardController extends Controller
             ->first();
 
         // 2. Upcoming Bookings
-        $upcomingBookings = Booking::with(['instructor', 'surfSpot'])
+        $upcomingBookings = Booking::with(['instructor', 'surfSpot', 'changeRequests'])
             ->where('student_id', $user->id)
             ->whereIn('status', [
                 BookingStatus::Reserved,
@@ -42,7 +42,11 @@ class DashboardController extends Controller
             ->orderBy('date', 'asc')
             ->orderBy('time_period', 'asc')
             ->take(4)
-            ->get();
+            ->get()
+            ->each(function (Booking $booking) {
+                $booking->setAttribute('is_rescheduled', $booking->isRescheduled());
+                $booking->setAttribute('pending_reschedule_proposal', $booking->pendingRescheduleProposal()?->toProposalPayload());
+            });
 
         // 3. Past Instructors (for Quick Re-book)
         $pastInstructors = Booking::with(['instructor.instructorProfile'])

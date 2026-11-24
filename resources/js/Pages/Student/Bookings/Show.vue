@@ -67,6 +67,9 @@ interface Booking {
   start_time?: string | null
   end_time?: string | null
   created_at?: string | null
+  rescheduled_by_instructor_at?: string | null
+  is_rescheduled?: boolean
+  has_conversation?: boolean
   status: string
   is_reserved?: boolean
   hold_remaining_seconds?: number
@@ -93,6 +96,16 @@ interface Booking {
   has_submitted_payment?: boolean
   has_pending_receipt_verification?: boolean
   has_pending_reschedule_response?: boolean
+  pending_reschedule_proposal?: {
+    id: number
+    status: string
+    requires_admin_approval: boolean
+    reason: string | null
+    original_date: string | null
+    original_time_range: string
+    new_date: string | null
+    new_time_range: string
+  } | null
   refund_preview?: RefundPreview | null
   latest_refund?: RefundRecord | null
   latest_change_request?: {
@@ -191,6 +204,8 @@ onMounted(() => {
       .listen('.booking.awaiting_payment', () => router.reload({ only: ['booking'] }))
       .listen('.booking.confirmed', () => router.reload({ only: ['booking'] }))
       .listen('.booking.cancelled', () => router.reload({ only: ['booking'] }))
+      .listen('.booking.change_requested', () => router.reload({ only: ['booking'] }))
+      .listen('.booking.change_resolved', () => router.reload({ only: ['booking'] }))
       .listen('.refund.updated', () => router.reload({ only: ['booking'] }))
   }
 })
@@ -394,11 +409,16 @@ const pendingReceiptVerification = computed(
     || props.booking.payment?.status === 'pending_verification',
 )
 
+const pendingProposal = computed(() => props.booking.pending_reschedule_proposal ?? null)
+const isRescheduled = computed(
+  () => Boolean(props.booking.is_rescheduled || props.booking.rescheduled_by_instructor_at),
+)
 const hasPendingReschedule = computed(
-  () => props.booking.has_pending_reschedule_response === true,
+  () => Boolean(pendingProposal.value) || props.booking.has_pending_reschedule_response === true,
 )
 
 const acceptingReschedule = ref(false)
+const decliningReschedule = ref(false)
 const acceptReschedule = () => {
   if (acceptingReschedule.value) return
   acceptingReschedule.value = true
@@ -409,6 +429,21 @@ const acceptReschedule = () => {
       preserveScroll: true,
       onFinish: () => {
         acceptingReschedule.value = false
+      },
+    },
+  )
+}
+
+const declineReschedule = () => {
+  if (decliningReschedule.value) return
+  decliningReschedule.value = true
+  router.post(
+    route('student.bookings.decline-reschedule', props.booking.id),
+    {},
+    {
+      preserveScroll: true,
+      onFinish: () => {
+        decliningReschedule.value = false
       },
     },
   )
@@ -458,9 +493,11 @@ const submitCancel = () => {
   })
 }
 
-// Chat is provisioned on confirmation and remains readable after completion.
+// Chat is provisioned on confirmation or when a reschedule proposal opens discussion.
 const canChat = computed(() =>
-  ['confirmed', 'in_progress', 'completed'].includes(props.booking.status),
+  ['confirmed', 'in_progress', 'completed'].includes(props.booking.status) ||
+  Boolean(props.booking.has_conversation) ||
+  Boolean(pendingProposal.value),
 )
 </script>
 
@@ -487,11 +524,16 @@ const canChat = computed(() =>
                 <SectionHeader
                     eyebrow="Booking detail"
                     :title="booking.surf_spot.name"
-                    :description="`${formatDate(booking.date)} · ${timeLabel(booking.time_period)} session`"
+                    :description="`${formatDate(booking.date)} · ${scheduledSlot}`"
                 />
-                <StatusPill :variant="statusMeta(isReserved ? 'reserved' : booking.status).variant">
-                    {{ statusMeta(isReserved ? 'reserved' : booking.status).label }}
-                </StatusPill>
+                <div class="flex flex-wrap items-center gap-2">
+                    <StatusPill v-if="isRescheduled" variant="verified">
+                        Rescheduled to {{ formatPhilippineDate(booking.date, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-US', booking.date) }}
+                    </StatusPill>
+                    <StatusPill :variant="statusMeta(isReserved ? 'reserved' : booking.status).variant">
+                        {{ statusMeta(isReserved ? 'reserved' : booking.status).label }}
+                    </StatusPill>
+                </div>
             </div>
 
             <!-- Why the instructor declined the request -->
@@ -546,15 +588,73 @@ const canChat = computed(() =>
                 <p class="mt-1 text-body-sm text-amber-900">{{ adminChangeNote }}</p>
             </div>
 
-            <!-- Instructor Rescheduled Banner: Student can accept new date or cancel for 100% lesson refund -->
+            <!-- Proposed Reschedule Banner: Instructor notified student & posted reason to Messages; schedule moves only after agreement -->
             <div
-                v-if="hasPendingReschedule && !isCancelled && !isDeclined"
+                v-if="pendingProposal && !isCancelled && !isDeclined"
+                class="rounded-card border border-amber-300 bg-amber-50 p-4"
+            >
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="space-y-1">
+                        <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-800">
+                            Reschedule Request — Your Agreement Is Required
+                        </p>
+                        <p class="text-body-sm text-amber-950">
+                            <strong>{{ booking.instructor.name }}</strong> wants to move your lesson from
+                            <strong>{{ pendingProposal.original_date ? formatDate(pendingProposal.original_date) : formatDate(booking.date) }} ({{ pendingProposal.original_time_range }})</strong>
+                            to
+                            <strong>{{ pendingProposal.new_date ? formatDate(pendingProposal.new_date) : '' }} ({{ pendingProposal.new_time_range }})</strong>.
+                        </p>
+                        <p v-if="pendingProposal.reason" class="text-body-sm text-amber-900">
+                            <span class="font-semibold">Reason:</span> {{ pendingProposal.reason }}
+                        </p>
+                        <p class="text-label text-amber-800">
+                            The reason was also sent to your Messages so you can talk with your instructor before agreeing.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 shrink-0">
+                        <AppButton
+                            size="sm"
+                            :loading="acceptingReschedule"
+                            @click="acceptReschedule"
+                        >
+                            Agree to reschedule
+                        </AppButton>
+                        <AppButton
+                            size="sm"
+                            variant="secondary"
+                            @click="showChat = true"
+                        >
+                            Message instructor
+                        </AppButton>
+                        <AppButton
+                            size="sm"
+                            variant="secondary"
+                            :loading="decliningReschedule"
+                            @click="declineReschedule"
+                        >
+                            Decline (keep original)
+                        </AppButton>
+                        <AppButton
+                            v-if="canCancel"
+                            size="sm"
+                            variant="danger"
+                            @click="openCancel"
+                        >
+                            Cancel (100% refund)
+                        </AppButton>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legacy Instructor Rescheduled Banner (when already moved without prior consent record) -->
+            <div
+                v-else-if="hasPendingReschedule && !isCancelled && !isDeclined"
                 class="rounded-card border border-amber-300 bg-amber-50 p-4"
             >
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p class="text-label font-semibold uppercase tracking-[0.06em] text-amber-800">
-                            Instructor Rescheduled Your Lesson
+                            Rescheduled to {{ formatDate(booking.date) }}
                         </p>
                         <p class="mt-1 text-body-sm text-amber-950">
                             Your instructor moved this session to <strong>{{ formatDate(booking.date) }} · {{ scheduledSlot }}</strong>.
@@ -579,6 +679,22 @@ const canChat = computed(() =>
                         </AppButton>
                     </div>
                 </div>
+            </div>
+
+            <!-- Persistent Rescheduled Banner once applied -->
+            <div
+                v-if="isRescheduled && !pendingProposal && !isCancelled && !isDeclined"
+                class="rounded-card border border-lagoon-200 bg-lagoon-50 p-4"
+            >
+                <p class="text-label font-semibold uppercase tracking-[0.06em] text-lagoon-800">
+                    Schedule Updated
+                </p>
+                <p class="mt-1 text-body-sm text-lagoon-950">
+                    This booking has been <strong>rescheduled to {{ formatDate(booking.date) }} ({{ scheduledSlot }})</strong>.
+                    <template v-if="booking.original_date && booking.original_date !== booking.date">
+                        Original schedule: {{ formatDate(booking.original_date) }}.
+                    </template>
+                </p>
             </div>
 
             <!-- Session timeline -->

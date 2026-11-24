@@ -16,8 +16,13 @@ interface ChangeRequest {
   admin_note: string | null
   original_date: string | null
   original_time_period: string | null
+  original_start_time?: string | null
+  original_end_time?: string | null
   new_date: string | null
   new_time_period: string | null
+  new_start_time?: string | null
+  new_end_time?: string | null
+  student_agreed_at?: string | null
   created_at: string
   booking?: {
     id: number
@@ -168,6 +173,9 @@ const submitDecision = () => {
                 <Badge variant="ocean" size="sm">{{ request.type }}</Badge>
                 <Badge v-if="request.requires_admin_approval" variant="warning" size="sm">
                   Under 24h
+                </Badge>
+                <Badge v-if="request.type === 'reschedule' && request.student_agreed_at" variant="success" size="sm">
+                  Student Agreed
                 </Badge>
                 <Badge
                   v-if="request.type === 'cancellation' && request.booking?.payment?.payment_method === 'gcash' && request.booking?.payment?.status === 'completed'"

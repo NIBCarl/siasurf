@@ -1326,6 +1326,101 @@ class AvailabilityService
     }
 
     /**
+     * Automated reschedule start-time picker for an existing booking.
+     *
+     * Excludes the booking itself, preserves its exact duration_hours, skill
+     * level, and session type, and derives end_time + time_period automatically.
+     *
+     * @return array<string, mixed>
+     */
+    public function rescheduleStartTimes(Booking $booking, Carbon|string $date): array
+    {
+        $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
+        $dateString = $day->format('Y-m-d');
+        $durationHours = $booking->resolvedDurationHours();
+        $students = max(1, (int) ($booking->student_count ?: 1));
+        $skill = $this->skillOf($booking);
+        $sessionType = $this->sessionTypeOf($booking);
+
+        $currentDate = $this->dateOf($booking);
+        $currentStart = $this->timeString($booking->start_time);
+
+        $rawPeriods = $this->periodsFor(
+            $booking->instructor_id,
+            $day,
+            $students,
+            $booking->id,
+            $skill,
+            $sessionType
+        );
+
+        $periods = [];
+        $hasAnySlot = false;
+
+        foreach (TimePeriod::cases() as $period) {
+            $key = $period->value;
+            $periodData = $rawPeriods[$key] ?? ['available' => false, 'reason' => 'Unavailable', 'slots' => []];
+            $slots = [];
+
+            if ($periodData['available'] && ! empty($periodData['slots'])) {
+                foreach ($periodData['slots'] as $startTime) {
+                    $endTime = Carbon::createFromFormat('H:i', $startTime)
+                        ->addHours($durationHours)
+                        ->format('H:i');
+
+                    $reason = $this->rangeBookabilityReason(
+                        $booking->instructor_id,
+                        $day,
+                        $startTime,
+                        $endTime,
+                        $students,
+                        $booking->id,
+                        $skill,
+                        $sessionType
+                    );
+
+                    if ($reason !== null) {
+                        continue;
+                    }
+
+                    $isCurrent = $dateString === $currentDate && $startTime === $currentStart;
+                    $slots[] = [
+                        'start_time' => $startTime,
+                        'end_time' => $endTime,
+                        'time_period' => $key,
+                        'start_label' => Carbon::createFromFormat('H:i', $startTime)->format('g:i A'),
+                        'end_label' => Carbon::createFromFormat('H:i', $endTime)->format('g:i A'),
+                        'is_current' => $isCurrent,
+                    ];
+
+                    if (! $isCurrent) {
+                        $hasAnySlot = true;
+                    }
+                }
+            }
+
+            $reason = $periodData['reason'];
+            if ($reason === null && empty($slots)) {
+                $reason = "No {$durationHours}-hour start times are open during the " . strtolower($period->label()) . ' on this date.';
+            }
+
+            $periods[$key] = [
+                'available' => ! empty($slots),
+                'reason' => empty($slots) ? $reason : null,
+                'slots' => $slots,
+            ];
+        }
+
+        return [
+            'date' => $dateString,
+            'day_label' => $day->format('l, M d, Y'),
+            'duration_hours' => $durationHours,
+            'periods' => $periods,
+            'has_any_slot' => $hasAnySlot,
+        ];
+    }
+
+    /**
      * Explain why a chosen start time has no bookable end times.
      *
      * @return array{is_reserved: bool, reason: string}

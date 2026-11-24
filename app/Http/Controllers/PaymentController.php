@@ -183,11 +183,38 @@ class PaymentController extends Controller
                 'payment_deadline_at' => null,
             ]);
 
+            $eventService = app(\App\Services\BookingEventService::class);
+            $eventService->recordPaymentCompleted($booking, $payment->fresh(), auth()->id());
+
+            $justConfirmed = false;
             // The lesson was only waiting on the money: confirming it now turns
             // the held slot into a confirmed booking.
             if ($booking->status === BookingStatus::AwaitingPayment) {
                 $booking->confirm();
+                $eventService->recordConfirmed($booking, auth()->id(), 'GCash receipt');
+                $justConfirmed = true;
             }
+
+            DB::afterCommit(function () use ($booking, $payment, $justConfirmed) {
+                $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
+                if (! $fresh) {
+                    return;
+                }
+
+                try {
+                    if ($fresh->payment) {
+                        broadcast(new \App\Events\PaymentReceived($fresh->payment))->toOthers();
+                    }
+                    if ($justConfirmed) {
+                        broadcast(new \App\Events\BookingConfirmed($fresh))->toOthers();
+                    }
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to broadcast receipt verification.', [
+                        'booking_id' => $fresh->id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            });
         });
 
         return back()->with('success', 'Receipt verified. The payment is now marked as paid.');
@@ -394,6 +421,24 @@ class PaymentController extends Controller
         ]);
 
         app(\App\Services\EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
+
+        app(\App\Services\BookingEventService::class)->recordPaymentCompleted(
+            $booking,
+            $booking->payment?->fresh(),
+            auth()->id()
+        );
+
+        try {
+            $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
+            if ($fresh?->payment) {
+                broadcast(new \App\Events\PaymentReceived($fresh->payment))->toOthers();
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to broadcast cash payment.', [
+                'booking_id' => $booking->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         // Generate receipt reflecting actual amount paid and any balance due
         try {

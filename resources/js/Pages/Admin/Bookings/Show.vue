@@ -24,10 +24,13 @@ import { formatPhilippineDate, formatPhilippineDateTime } from '@/utils/philippi
 interface Booking {
   id: number
   date: string
+  original_date?: string | null
   time_period: string
   start_time?: string | null
   end_time?: string | null
   created_at?: string | null
+  rescheduled_by_instructor_at?: string | null
+  is_rescheduled?: boolean
   status: string
   lesson_price?: number | null
   service_fee_percent?: number | null
@@ -89,6 +92,14 @@ interface Booking {
   waiver?: { id: number; signed_at: string; pdf_path: string }
   waivers?: Array<{ id: number; type: string; participant_name?: string | null; signed_by: string; signed_at: string }>
   review?: { id: number; rating: number | null; comment: string; photo_path: string | null; created_at: string }
+  events?: Array<{
+    id: number
+    event_type: string
+    title: string
+    description?: string | null
+    occurred_at?: string | null
+    actor?: { name: string } | null
+  }>
 }
 
 interface Props {
@@ -186,6 +197,21 @@ const toggleStudentBan = () => {
   }
 }
 
+const eventDotClass = (eventType: string) => {
+  switch (eventType) {
+    case 'booking_confirmed':
+      return 'bg-ocean-600 ring-ocean-50 text-ocean-600'
+    case 'payment_completed':
+      return 'bg-reef-500 ring-reef-50 text-reef-600'
+    case 'booking_rescheduled':
+      return 'bg-amber-500 ring-amber-50 text-amber-600'
+    case 'booking_cancelled':
+      return 'bg-rose-500 ring-rose-50 text-rose-600'
+    default:
+      return 'bg-slate-400 ring-slate-50 text-slate-500'
+  }
+}
+
 const getStatusVariant = (status: string) => {
   switch (status.toLowerCase()) {
     case 'confirmed': return 'ocean'
@@ -264,7 +290,16 @@ const getStatusVariant = (status: string) => {
                             <div class="space-y-1">
                                 <p class="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Schedule Window</p>
                                 <p class="text-xl font-black text-slate-900 capitalize">{{ booking.time_period }}</p>
-                                <p class="text-xs text-slate-400 font-bold">{{ booking.date }}</p>
+                                <p class="text-xs text-slate-500 font-bold">{{ formatPhilippineDate(booking.date) }}</p>
+                                <p
+                                    v-if="booking.is_rescheduled || booking.rescheduled_by_instructor_at"
+                                    class="text-[11px] font-bold text-amber-700"
+                                >
+                                    Rescheduled to {{ formatPhilippineDate(booking.date) }}
+                                    <template v-if="booking.original_date && booking.original_date !== booking.date">
+                                        (was {{ formatPhilippineDate(booking.original_date) }})
+                                    </template>
+                                </p>
                             </div>
                         </div>
 
@@ -641,43 +676,36 @@ const getStatusVariant = (status: string) => {
                     </div>
 
                     <div class="relative pl-8 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
-                        <!-- Step 1 -->
-                        <div class="relative group/step">
-                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-ocean-600 border-4 border-white shadow-sm ring-4 ring-ocean-50 z-10 transition-transform group-hover/step:scale-125"></div>
+                        <div
+                            v-for="event in booking.events ?? []"
+                            :key="event.id"
+                            class="relative group/step"
+                        >
+                            <div
+                                class="absolute -left-10 top-0 w-6 h-6 rounded-full border-4 border-white shadow-sm ring-4 z-10 transition-transform group-hover/step:scale-125"
+                                :class="eventDotClass(event.event_type).split(' ').slice(0, 2).join(' ')"
+                            ></div>
                             <div class="flex flex-col">
-                                <span class="text-[10px] font-black text-ocean-600 uppercase tracking-tighter">14:22 • TODAY</span>
-                                <span class="text-sm font-bold text-slate-900">Booking Confirmed</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">Automated system release after verification.</span>
+                                <span
+                                    class="text-[10px] font-black uppercase tracking-tighter"
+                                    :class="eventDotClass(event.event_type).split(' ')[2]"
+                                >
+                                    {{ event.occurred_at ? formatPhilippineDateTime(event.occurred_at) : 'Recorded' }}
+                                </span>
+                                <span class="text-sm font-bold text-slate-900">{{ event.title }}</span>
+                                <span v-if="event.description" class="text-[11px] text-slate-500 mt-0.5">{{ event.description }}</span>
+                                <span v-if="event.actor?.name" class="text-[10px] text-slate-400 mt-0.5">By {{ event.actor.name }}</span>
                             </div>
                         </div>
 
-                        <!-- Step 2 -->
-                        <div class="relative group/step">
-                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-reef-500 border-4 border-white shadow-sm ring-4 ring-reef-50 z-10 transition-transform group-hover/step:scale-125"></div>
+                        <div v-if="!booking.events || booking.events.length === 0" class="relative group/step">
+                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-slate-300 border-4 border-white shadow-sm ring-4 ring-slate-50 z-10"></div>
                             <div class="flex flex-col">
-                                <span class="text-[10px] font-black text-reef-600 uppercase tracking-tighter">14:15 • TODAY</span>
-                                <span class="text-sm font-bold text-slate-900">Payment Secured</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">GCash transaction verified by PayMongo.</span>
-                            </div>
-                        </div>
-
-                        <!-- Step 3 -->
-                        <div class="relative group/step">
-                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-wave-500 border-4 border-white shadow-sm ring-4 ring-wave-50 z-10 transition-transform group-hover/step:scale-125"></div>
-                            <div class="flex flex-col">
-                                <span class="text-[10px] font-black text-wave-600 uppercase tracking-tighter">14:02 • TODAY</span>
-                                <span class="text-sm font-bold text-slate-900">Signature Affixed</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">Electronic waveform capture successful.</span>
-                            </div>
-                        </div>
-
-                        <!-- Step 4 -->
-                        <div class="relative group/step">
-                            <div class="absolute -left-10 top-0 w-6 h-6 rounded-full bg-slate-300 border-4 border-white shadow-sm ring-4 ring-slate-50 z-10 transition-transform group-hover/step:scale-125"></div>
-                            <div class="flex flex-col opacity-60">
-                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">14:00 • TODAY</span>
-                                <span class="text-sm font-bold text-slate-900">Reservation Inflow</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">Inquiry registered via Cloud9 entry.</span>
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                                    {{ booking.created_at ? formatPhilippineDateTime(booking.created_at) : '' }}
+                                </span>
+                                <span class="text-sm font-bold text-slate-900">Booking Created</span>
+                                <span class="text-[10px] text-slate-400 mt-0.5">No additional events recorded yet.</span>
                             </div>
                         </div>
                     </div>

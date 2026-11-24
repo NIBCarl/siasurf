@@ -147,7 +147,16 @@ class BookingAcceptanceService
 
         $booking->refresh()->load(['instructor', 'student', 'surfSpot']);
 
-        broadcast(new BookingConfirmed($booking))->toOthers();
+        app(BookingEventService::class)->recordConfirmed($booking, auth()->id(), 'cash');
+
+        try {
+            broadcast(new BookingConfirmed($booking))->toOthers();
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to broadcast booking confirmed.', [
+                'booking_id' => $booking->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         return $booking;
     }

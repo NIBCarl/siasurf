@@ -70,9 +70,11 @@ class BookingChangeRequested implements ShouldBroadcast
                 'id' => $requester?->id,
                 'name' => $requester?->name ?? 'System',
             ],
-            'message' => $this->changeRequest->requires_admin_approval
-                ? "{$type} request for booking #{$this->changeRequest->booking_id} needs admin approval (lesson starts in under 24 hours)."
-                : "{$type} request applied to booking #{$this->changeRequest->booking_id}.",
+            'message' => match (true) {
+                $this->changeRequest->isAwaitingStudent() => "{$type} proposed for booking #{$this->changeRequest->booking_id} to {$this->changeRequest->describeNewSlot()}. Waiting for student agreement.",
+                $this->changeRequest->requires_admin_approval => "{$type} request for booking #{$this->changeRequest->booking_id} needs admin approval (lesson starts in under 24 hours).",
+                default => "{$type} request applied to booking #{$this->changeRequest->booking_id}.",
+            },
             'timestamp' => now()->toIso8601String(),
         ];
     }

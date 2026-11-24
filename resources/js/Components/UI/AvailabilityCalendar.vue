@@ -31,12 +31,14 @@ const props = withDefaults(
         horizonDays?: number
         skillLevel?: string
         sessionType?: string
+        exceptBookingId?: number | null
     }>(),
     {
         students: 1,
         horizonDays: 60,
         skillLevel: undefined,
         sessionType: undefined,
+        exceptBookingId: undefined,
     },
 )
 
@@ -212,6 +214,7 @@ async function load() {
         }
         if (props.skillLevel) params.skill_level = props.skillLevel
         if (props.sessionType) params.session_type = props.sessionType
+        if (props.exceptBookingId) params.except_booking_id = props.exceptBookingId
 
         const response = await fetch(
             route('api.availability.calendar', params),
@@ -231,7 +234,7 @@ async function load() {
 
 watch(cursor, load, { immediate: true })
 watch(
-    [() => props.students, () => props.skillLevel, () => props.sessionType],
+    [() => props.students, () => props.skillLevel, () => props.sessionType, () => props.exceptBookingId],
     () => {
         days.value = {}
         load()

@@ -11,9 +11,12 @@ interface Booking {
   id: number
   student_id: number
   date: string
+  original_date?: string | null
   time_period: string
   start_time?: string | null
   end_time?: string | null
+  rescheduled_by_instructor_at?: string | null
+  is_rescheduled?: boolean
   status: string
   total_amount: number
   payment_status: string
@@ -477,6 +480,12 @@ onBeforeUnmount(() => {
               <p class="text-lg font-bold text-slate-900">
                 {{ formatDate(booking.date) }} <br />
                 <span class="text-ocean-600 text-sm capitalize">{{ booking.time_period }} Session</span>
+              </p>
+              <p
+                v-if="booking.is_rescheduled || booking.rescheduled_by_instructor_at"
+                class="mt-1 inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800"
+              >
+                Rescheduled to {{ formatDate(booking.date) }}
               </p>
             </div>
             <div>

@@ -7,6 +7,7 @@ import StatusPill from '@/Components/UI/StatusPill.vue'
 import Modal from '@/Components/Modal.vue'
 import Dropdown from '@/Components/Dropdown.vue'
 import ChatBox from '@/Components/Organisms/ChatBox.vue'
+import RescheduleModal from '@/Components/Molecules/RescheduleModal.vue'
 import { formatPhilippineDate, formatPhilippineDateTime, formatPhilippineTime } from '@/utils/philippineTime'
 import {
   ArrowLeftIcon,
@@ -21,18 +22,20 @@ import {
   ExclamationTriangleIcon,
   MapPinIcon,
   PhoneIcon,
-  PlayIcon,
   SparklesIcon,
 } from '@heroicons/vue/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid'
 
 interface Booking {
   id: number
+  instructor_id: number
   date: string
+  original_date?: string | null
   time_period: string
   start_time?: string | null
   end_time?: string | null
   created_at?: string | null
+  rescheduled_by_instructor_at?: string | null
   status: string
   total_amount: number
   lesson_price?: number | null
@@ -47,6 +50,7 @@ interface Booking {
     basis_label: string
   } | null
   skill_level: string
+  session_type?: string | null
   student_age: number
   height: number | null
   weight: number | null
@@ -139,6 +143,20 @@ interface StudentAssessment {
   assessed_at_label: string | null
 }
 
+interface RescheduleProposal {
+  id: number
+  type: string
+  status: string
+  status_label: string
+  requires_admin_approval: boolean
+  reason: string | null
+  original_date: string | null
+  original_time_range: string
+  new_date: string | null
+  new_time_range: string
+  student_agreed_at: string | null
+}
+
 interface Props {
   booking: Booking
   studentAssessment?: StudentAssessment | null
@@ -151,9 +169,13 @@ interface Props {
   requiresAdminApprovalForChange?: boolean
   hoursUntilLesson?: number | null
   changeApprovalThresholdHours?: number
-  // FR 1.10.1 - why "Start Session" is unavailable, or null when it is allowed.
-  startBlockReason?: string | null
-  canStartSession?: boolean
+  canMarkAttendance?: boolean
+  attendanceBlockReason?: string | null
+  canCompleteSession?: boolean
+  completeBlockReason?: string | null
+  hasConversation?: boolean
+  isRescheduled?: boolean
+  pendingRescheduleProposal?: RescheduleProposal | null
   paymentHoldMinutes?: number
   paymentTimeRemaining?: number
 }
@@ -447,26 +469,10 @@ const acceptBlockLabel = computed(() => {
 })
 
 // Modals state
-const showStartModal = ref(false)
-const isStarting = ref(false)
 const showCompleteModal = ref(false)
 const isCompleting = ref(false)
 const cashReceivedOnComplete = ref(true)
 const isRequesting = ref(false)
-
-const startSession = () => {
-  showStartModal.value = true
-}
-
-const confirmStartSession = () => {
-  isStarting.value = true
-  router.post(route('instructor.bookings.start-session', props.booking.id), {}, {
-    onFinish: () => {
-      isStarting.value = false
-      showStartModal.value = false
-    },
-  })
-}
 
 const completeSession = () => {
   cashReceivedOnComplete.value = canRecordCash.value
@@ -520,24 +526,24 @@ const submitDecline = () => {
   })
 }
 
-// Reschedule / Cancel modal
+// Reschedule / Cancel modals
+const showRescheduleModal = ref(false)
 const showChangeModal = ref(false)
 const changeForm = useForm({
-  type: 'reschedule' as 'reschedule' | 'cancellation',
+  type: 'cancellation' as 'cancellation',
   cancellation_reason: 'instructor' as 'instructor' | 'weather',
-  date: '',
-  time_period: 'morning',
-  start_time: '06:00',
-  end_time: '08:00',
   reason: '',
 })
 
 const openChangeModal = (type: 'reschedule' | 'cancellation') => {
+  if (type === 'reschedule') {
+    showRescheduleModal.value = true
+    return
+  }
   changeForm.reset()
   changeForm.clearErrors()
-  changeForm.type = type
+  changeForm.type = 'cancellation'
   changeForm.cancellation_reason = 'instructor'
-  changeForm.date = props.booking.date
   showChangeModal.value = true
 }
 
@@ -551,7 +557,7 @@ const submitChange = () => {
 }
 
 const pendingChangeRequest = computed(() =>
-  props.booking.change_requests?.find((request) => request.status === 'pending'),
+  props.booking.change_requests?.find((request) => ['pending', 'awaiting_student'].includes(request.status)),
 )
 
 const withdrawChange = () => {
@@ -567,6 +573,7 @@ const showAttendanceModal = ref(false)
 const attendanceForm = useForm({ attendance_status: 'present' })
 
 const openAttendanceModal = () => {
+  if (!attendanceAllowedNow.value) return
   attendanceForm.reset()
   attendanceForm.clearErrors()
   attendanceForm.attendance_status = props.booking.attendance_status ?? 'present'
@@ -581,9 +588,15 @@ const submitAttendance = () => {
   })
 }
 
-const canMarkAttendance = computed(() =>
+const attendanceStatusEligible = computed(() =>
   ['confirmed', 'in_progress', 'completed', 'no_show'].includes(props.booking.status),
 )
+
+const attendanceAllowedNow = computed(
+  () => attendanceStatusEligible.value && props.canMarkAttendance !== false,
+)
+
+const canMarkAttendance = attendanceAllowedNow
 
 // ---- FR 1.4 cash settlement -------------------------------------------
 
@@ -598,9 +611,13 @@ const canRecordCash = computed(
     props.booking.payment?.status !== 'completed',
 )
 
-// The thread is created when the booking is confirmed; completed lessons stay
-// readable as history.
-const canChat = computed(() => ['confirmed', 'in_progress', 'completed'].includes(props.booking.status))
+// The thread is created when the booking is confirmed or when a reschedule proposal opens chat.
+const canChat = computed(
+  () =>
+    ['confirmed', 'in_progress', 'completed'].includes(props.booking.status) ||
+    Boolean(props.hasConversation) ||
+    Boolean(props.pendingRescheduleProposal),
+)
 
 const showCashModal = ref(false)
 const showChat = ref(false)
@@ -632,16 +649,17 @@ const submitCash = () => {
   })
 }
 
-// FR 1.10.1 - sessions may only start on the scheduled day, near the booked time.
-const startBlocked = computed(() => props.canStartSession === false)
-
 // Everything that does not deserve a permanent slot in the header.
 const hasMoreActions = computed(
-  () => canRecordCash.value || canChangeBooking.value || (canMarkAttendance.value && props.booking.status !== 'completed'),
+  () => canRecordCash.value || canChangeBooking.value || (attendanceStatusEligible.value && props.booking.status !== 'completed'),
 )
 
 const showPrimaryAttendance = computed(
-  () => canMarkAttendance.value && props.booking.status === 'completed',
+  () => attendanceStatusEligible.value && ['confirmed', 'in_progress', 'completed'].includes(props.booking.status),
+)
+
+const showCompleteAction = computed(
+  () => props.booking.status === 'in_progress' || (props.booking.status === 'confirmed' && Boolean(props.canCompleteSession)),
 )
 </script>
 
@@ -688,6 +706,9 @@ const showPrimaryAttendance = computed(
                 </StatusPill>
                 <span v-if="booking.attendance_label" class="chip chip-neutral">
                   {{ booking.attendance_label }}
+                </span>
+                <span v-if="isRescheduled || booking.rescheduled_by_instructor_at" class="chip chip-positive">
+                  Rescheduled to {{ dateFull }}
                 </span>
               </div>
 
@@ -752,17 +773,6 @@ const showPrimaryAttendance = computed(
             </template>
 
             <AppButton
-              v-if="booking.status === 'confirmed'"
-              size="sm"
-              :disabled="startBlocked"
-              :title="startBlocked ? startBlockReason ?? undefined : undefined"
-              @click="startSession"
-            >
-              <PlayIcon class="h-4 w-4 fill-current" aria-hidden="true" />
-              Start session
-            </AppButton>
-
-            <AppButton
               v-if="canRecordCash"
               size="sm"
               variant="secondary"
@@ -775,11 +785,21 @@ const showPrimaryAttendance = computed(
             <AppButton
               v-if="showPrimaryAttendance"
               size="sm"
-              variant="secondary"
+              :variant="attendanceAllowedNow ? 'primary' : 'secondary'"
+              :disabled="!attendanceAllowedNow"
+              :title="!attendanceAllowedNow ? (attendanceBlockReason ?? undefined) : undefined"
               @click="openAttendanceModal"
             >
               <CheckBadgeIcon class="h-4 w-4" aria-hidden="true" />
               {{ booking.attendance_label ? 'Edit attendance' : 'Mark attendance' }}
+            </AppButton>
+
+            <AppButton
+              v-if="showCompleteAction && booking.status === 'confirmed'"
+              size="sm"
+              @click="completeSession"
+            >
+              Complete session
             </AppButton>
 
             <Dropdown
@@ -810,9 +830,11 @@ const showPrimaryAttendance = computed(
                   Record cash
                 </button>
                 <button
-                  v-if="canMarkAttendance && !showPrimaryAttendance"
+                  v-if="attendanceStatusEligible && !showPrimaryAttendance"
                   type="button"
-                  class="menu-item"
+                  class="menu-item disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!attendanceAllowedNow"
+                  :title="!attendanceAllowedNow ? (attendanceBlockReason ?? undefined) : undefined"
                   @click="openAttendanceModal"
                 >
                   {{ booking.attendance_label ? 'Edit attendance' : 'Mark attendance' }}
@@ -839,11 +861,11 @@ const showPrimaryAttendance = computed(
         </div>
 
         <p
-          v-if="startBlocked && startBlockReason && booking.status === 'confirmed'"
-          class="mt-3 flex items-start gap-2 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-body-sm text-rose-900"
+          v-if="attendanceStatusEligible && !attendanceAllowedNow && attendanceBlockReason"
+          class="mt-3 flex items-start gap-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-body-sm text-amber-950"
         >
-          <ExclamationTriangleIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{{ startBlockReason }}</span>
+          <ClockIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{{ attendanceBlockReason }}</span>
         </p>
 
         <p
@@ -895,17 +917,46 @@ const showPrimaryAttendance = computed(
         </div>
       </section>
 
-      <!-- Pending change request -->
+      <!-- Pending reschedule awaiting student agreement -->
       <section
-        v-if="pendingChangeRequest"
+        v-if="pendingRescheduleProposal"
+        class="flex flex-col gap-3 rounded-card border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div class="flex items-start gap-2">
+          <ClockIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+          <div class="text-body-sm text-amber-950">
+            <p class="font-semibold">
+              Waiting for {{ booking.student.name }} to agree to reschedule
+            </p>
+            <p class="mt-0.5">
+              Proposed:
+              <strong>
+                {{ pendingRescheduleProposal.new_date ? formatPhilippineDate(pendingRescheduleProposal.new_date) : 'new date' }}
+                · {{ pendingRescheduleProposal.new_time_range }}
+              </strong>.
+              Your reason was sent to Messages.
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2 shrink-0">
+          <AppButton size="sm" variant="secondary" @click="showChat = true">Message student</AppButton>
+          <AppButton size="sm" variant="secondary" @click="withdrawChange">Withdraw request</AppButton>
+        </div>
+      </section>
+
+      <!-- Pending change request (awaiting SISA approval) -->
+      <section
+        v-else-if="pendingChangeRequest"
         class="flex flex-col gap-3 rounded-card border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div class="flex items-start gap-2">
           <ExclamationTriangleIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
           <p class="text-body-sm text-amber-950">
             <span class="font-semibold capitalize">{{ pendingChangeRequest.type }} request pending SISA review</span>
-            — moving to {{ pendingChangeRequest.new_date ? formatPhilippineDate(pendingChangeRequest.new_date) : 'a new date' }}
-            ({{ pendingChangeRequest.new_time_period ?? 'new slot' }}).
+            <template v-if="pendingChangeRequest.type === 'reschedule'">
+              — moving to {{ pendingChangeRequest.new_date ? formatPhilippineDate(pendingChangeRequest.new_date) : 'a new date' }}
+              ({{ pendingChangeRequest.new_time_period ?? 'new slot' }}).
+            </template>
           </p>
         </div>
         <AppButton size="sm" variant="secondary" @click="withdrawChange">Withdraw request</AppButton>
@@ -1455,26 +1506,19 @@ const showPrimaryAttendance = computed(
                   Attendance
                 </span>
                 <button
-                  v-if="canMarkAttendance"
+                  v-if="attendanceAllowedNow"
                   type="button"
                   class="chip chip-neutral hover:border-lagoon-600"
                   @click="openAttendanceModal"
                 >
                   {{ booking.attendance_label ?? 'Not recorded' }}
                 </button>
-                <span v-else class="chip chip-neutral">{{ booking.attendance_label ?? 'Not recorded' }}</span>
-              </div>
-
-              <div
-                v-if="booking.status === 'confirmed'"
-                class="flex items-center justify-between gap-2 rounded-control border border-sand-200 bg-sand-50 px-3 py-2"
-              >
-                <span class="inline-flex min-w-0 items-center gap-2 text-body-sm text-deep-900">
-                  <ClockIcon class="h-4 w-4 shrink-0 text-stone-500" aria-hidden="true" />
-                  Start window
-                </span>
-                <span class="chip" :class="startBlocked ? 'chip-warning' : 'chip-positive'">
-                  {{ startBlocked ? 'Not open yet' : 'Open now' }}
+                <span
+                  v-else
+                  class="chip chip-neutral"
+                  :title="attendanceBlockReason ?? undefined"
+                >
+                  {{ booking.attendance_label ?? (attendanceStatusEligible ? 'Opens at lesson time' : 'Not recorded') }}
                 </span>
               </div>
             </div>
@@ -1483,19 +1527,6 @@ const showPrimaryAttendance = computed(
       </div>
 
       <!-- Modals (full functional parity preserved) -->
-
-      <Modal :show="showStartModal" @close="showStartModal = false" maxWidth="md">
-        <div class="p-6">
-          <h2 class="text-title font-semibold text-deep-950">Start this session?</h2>
-          <p class="mt-1 text-body-sm text-stone-600">
-            This starts the live countdown for {{ booking.student.name }} and marks the lesson as in progress.
-          </p>
-          <div class="mt-6 flex justify-end gap-2">
-            <AppButton variant="secondary" :disabled="isStarting" @click="showStartModal = false">Cancel</AppButton>
-            <AppButton :loading="isStarting" @click="confirmStartSession">Start session</AppButton>
-          </div>
-        </div>
-      </Modal>
 
       <Modal :show="showCompleteModal" @close="showCompleteModal = false" maxWidth="md">
         <div class="p-6">
@@ -1612,11 +1643,16 @@ const showPrimaryAttendance = computed(
         </div>
       </Modal>
 
+      <RescheduleModal
+        :show="showRescheduleModal"
+        :booking="booking"
+        :requires-admin-approval="requiresAdminApprovalForChange"
+        @close="showRescheduleModal = false"
+      />
+
       <Modal :show="showChangeModal" @close="showChangeModal = false" maxWidth="lg">
         <div class="p-6">
-          <h2 class="text-title font-semibold text-deep-950">
-            {{ changeForm.type === 'cancellation' ? 'Cancel this lesson?' : 'Reschedule this lesson' }}
-          </h2>
+          <h2 class="text-title font-semibold text-deep-950">Cancel this lesson?</h2>
 
           <p
             v-if="requiresAdminApprovalForChange"
@@ -1628,7 +1664,7 @@ const showPrimaryAttendance = computed(
             More than 24 hours' notice, so the change applies immediately.
           </p>
 
-          <div v-if="changeForm.type === 'cancellation'" class="mt-4 space-y-2">
+          <div class="mt-4 space-y-2">
             <p class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
               Cancellation cause
             </p>
@@ -1666,68 +1702,6 @@ const showPrimaryAttendance = computed(
             </p>
           </div>
 
-          <div v-if="changeForm.type === 'reschedule'" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div class="sm:col-span-2">
-              <label for="change-date" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                New date
-              </label>
-              <input
-                id="change-date"
-                v-model="changeForm.date"
-                type="date"
-                class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
-              />
-              <p v-if="changeForm.errors.date" class="mt-1 text-body-sm font-semibold text-rose-700">
-                {{ changeForm.errors.date }}
-              </p>
-            </div>
-
-            <div>
-              <label for="change-period" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                Time period
-              </label>
-              <select
-                id="change-period"
-                v-model="changeForm.time_period"
-                class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
-              >
-                <option value="morning">Morning</option>
-                <option value="afternoon">Afternoon</option>
-              </select>
-              <p v-if="changeForm.errors.time_period" class="mt-1 text-body-sm font-semibold text-rose-700">
-                {{ changeForm.errors.time_period }}
-              </p>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label for="change-start" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                  From
-                </label>
-                <input
-                  id="change-start"
-                  v-model="changeForm.start_time"
-                  type="time"
-                  class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
-                />
-              </div>
-              <div>
-                <label for="change-end" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
-                  To
-                </label>
-                <input
-                  id="change-end"
-                  v-model="changeForm.end_time"
-                  type="time"
-                  class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
-                />
-              </div>
-            </div>
-            <p v-if="changeForm.errors.end_time" class="text-body-sm font-semibold text-rose-700 sm:col-span-2">
-              {{ changeForm.errors.end_time }}
-            </p>
-          </div>
-
           <div class="mt-4">
             <label for="change-reason" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
               Reason for the student / SISA
@@ -1747,11 +1721,11 @@ const showPrimaryAttendance = computed(
               Keep current slot
             </AppButton>
             <AppButton
-              :variant="changeForm.type === 'cancellation' ? 'danger' : 'primary'"
+              variant="danger"
               :loading="changeForm.processing"
               @click="submitChange"
             >
-              {{ changeForm.type === 'cancellation' ? 'Submit cancellation' : 'Submit reschedule' }}
+              Submit cancellation
             </AppButton>
           </div>
         </div>

@@ -130,6 +130,7 @@ class Booking extends Model
         'cancellation_reason',
         'cancellation_note',
         'payment_timed_out_at',
+        'last_event_at',
     ];
 
     protected $casts = [
@@ -170,6 +171,7 @@ class Booking extends Model
         'declined_at' => 'datetime',
         'cancellation_reason' => CancellationReason::class,
         'payment_timed_out_at' => 'datetime',
+        'last_event_at' => 'datetime',
     ];
 
     /**
@@ -268,6 +270,19 @@ class Booking extends Model
     public function changeRequests(): HasMany
     {
         return $this->hasMany(BookingChangeRequest::class);
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(BookingEvent::class)->orderByDesc('occurred_at')->orderByDesc('id');
+    }
+
+    public function latestEvent(): HasOne
+    {
+        return $this->hasOne(BookingEvent::class)->ofMany([
+            'occurred_at' => 'max',
+            'id' => 'max',
+        ]);
     }
 
     public function attendanceMarkedBy(): BelongsTo
@@ -431,14 +446,42 @@ class Booking extends Model
     }
 
     /**
-     * Whether the instructor rescheduled this booking and the student has not
-     * yet accepted the new date (which entitles the student to a full refund
-     * of the lesson price if they decline or cancel).
+     * Whether the instructor rescheduled (or proposed to reschedule) this booking
+     * and the student has not yet agreed to the new date (which entitles the
+     * student to a full refund of the lesson price if they decline or cancel).
      */
     public function hasPendingRescheduleResponse(): bool
     {
-        return $this->rescheduled_by_instructor_at !== null
-            && $this->student_accepted_reschedule_at === null;
+        return ($this->rescheduled_by_instructor_at !== null
+            && $this->student_accepted_reschedule_at === null)
+            || $this->hasOpenRescheduleProposal();
+    }
+
+    public function pendingRescheduleProposal(): ?BookingChangeRequest
+    {
+        if ($this->relationLoaded('changeRequests')) {
+            return $this->changeRequests
+                ->where('type', \App\Enums\ChangeRequestType::Reschedule)
+                ->where('status', \App\Enums\ChangeRequestStatus::AwaitingStudent)
+                ->sortByDesc('id')
+                ->first();
+        }
+
+        return $this->changeRequests()
+            ->reschedule()
+            ->awaitingStudent()
+            ->latest('id')
+            ->first();
+    }
+
+    public function hasOpenRescheduleProposal(): bool
+    {
+        return $this->pendingRescheduleProposal() !== null;
+    }
+
+    public function isRescheduled(): bool
+    {
+        return $this->rescheduled_by_instructor_at !== null;
     }
 
     /**
@@ -652,12 +695,12 @@ class Booking extends Model
 
     public function hasPendingChangeRequest(): bool
     {
-        return $this->changeRequests()->pending()->exists();
+        return $this->changeRequests()->open()->exists();
     }
 
     public function pendingChangeRequest(): ?BookingChangeRequest
     {
-        return $this->changeRequests()->pending()->latest()->first();
+        return $this->changeRequests()->open()->latest('id')->first();
     }
 
     public function confirm(): void
@@ -717,7 +760,7 @@ class Booking extends Model
 
     /**
      * The scheduled start of the lesson, combining the date with the booked
-     * start time. Used to clamp every response and payment window.
+     * start time in the platform timezone (Asia/Manila).
      */
     public function lessonStartAt(): ?\Carbon\Carbon
     {
@@ -725,16 +768,67 @@ class Booking extends Model
             return null;
         }
 
-        $start = $this->date->copy();
+        $tz = config('app.timezone', 'Asia/Manila');
+        $start = \Carbon\Carbon::parse($this->date->format('Y-m-d'), $tz)->startOfDay();
 
         if ($this->start_time) {
-            $start->setTimeFrom($this->start_time);
+            $start->setTime($this->start_time->hour, $this->start_time->minute, 0);
         } elseif ($this->time_period instanceof TimePeriod) {
             [$hour] = explode(':', $this->time_period->startTime());
-            $start->setTime((int) $hour, 0);
+            $start->setTime((int) $hour, 0, 0);
         }
 
         return $start;
+    }
+
+    /**
+     * The scheduled end of the lesson in Asia/Manila.
+     */
+    public function lessonEndAt(): ?\Carbon\Carbon
+    {
+        $start = $this->lessonStartAt();
+
+        if (! $start) {
+            return null;
+        }
+
+        $tz = config('app.timezone', 'Asia/Manila');
+
+        if ($this->end_time) {
+            $end = \Carbon\Carbon::parse($this->date->format('Y-m-d'), $tz)
+                ->setTime($this->end_time->hour, $this->end_time->minute, 0);
+
+            if ($end->greaterThan($start)) {
+                return $end;
+            }
+        }
+
+        $hours = max(1, (int) ($this->duration_hours ?: self::standardHours()));
+
+        return $start->copy()->addHours($hours);
+    }
+
+    /**
+     * Resolve the scheduled lesson length in whole hours.
+     *
+     * Prefers the span between start_time and end_time when both are present so
+     * bookings whose duration_hours column still holds a schema default stay accurate.
+     */
+    public function resolvedDurationHours(): int
+    {
+        if ($this->start_time && $this->end_time) {
+            $start = \Carbon\Carbon::createFromFormat('H:i', $this->start_time->format('H:i'));
+            $end = \Carbon\Carbon::createFromFormat('H:i', $this->end_time->format('H:i'));
+
+            if ($end->greaterThan($start)) {
+                $minutes = $start->diffInMinutes($end);
+                if ($minutes >= 60 && $minutes % 60 === 0) {
+                    return (int) ($minutes / 60);
+                }
+            }
+        }
+
+        return max(1, (int) ($this->duration_hours ?: self::standardHours()));
     }
 
     /**
@@ -871,60 +965,77 @@ class Booking extends Model
     }
 
     /**
-     * Why this session cannot be started right now, or null when it can.
+     * Why attendance cannot be marked right now, or null when it is allowed.
      *
-     * FR 1.10.1 - a lesson may only be started on the day it is scheduled, and
-     * only near its booked time. Returning the reason (rather than a bare
-     * boolean) lets the UI offer the right next action: reschedule, or wait.
+     * Instructors cannot mark attendance before the scheduled start time.
      */
-    public function startSessionBlockReason(): ?string
+    public function attendanceBlockReason(): ?string
     {
-        if ($this->status !== BookingStatus::Confirmed) {
-            return 'Only confirmed bookings can be started.';
+        if (! in_array($this->status, [
+            BookingStatus::Confirmed,
+            BookingStatus::InProgress,
+            BookingStatus::Completed,
+            BookingStatus::NoShow,
+        ], true)) {
+            return 'Attendance can only be recorded once the booking is confirmed.';
+        }
+
+        // Historical attendance on already-closed sessions may be reviewed/updated.
+        if (in_array($this->status, [BookingStatus::Completed, BookingStatus::NoShow], true)) {
+            return null;
         }
 
         $lessonStart = $this->lessonStartAt();
 
-        if (!$lessonStart) {
-            return 'This booking has no scheduled time, so it cannot be started.';
+        if (! $lessonStart) {
+            return 'This booking has no scheduled time, so attendance cannot be marked.';
         }
 
-        if (!$this->date->isToday()) {
-            return 'This lesson is scheduled for ' . $this->date->format('M d, Y')
-                . ', not today. Reschedule it if you need to run it now.';
-        }
+        $tz = config('app.timezone', 'Asia/Manila');
 
-        $tolerance = self::START_TOLERANCE_HOURS;
-        $opensAt = $lessonStart->copy()->subHours($tolerance);
-        $closesAt = $lessonStart->copy()->addHours($tolerance);
-
-        if (now()->lessThan($opensAt)) {
-            return 'This lesson is not due yet. You can start it from '
-                . $opensAt->format('g:i A') . '.';
-        }
-
-        if (now()->greaterThan($closesAt)) {
-            return 'The session window closed at ' . $closesAt->format('g:i A')
-                . '. Reschedule the lesson or mark the student attendance instead.';
+        if (now($tz)->lessThan($lessonStart)) {
+            return 'Attendance cannot be marked yet. Scheduled for '
+                . $lessonStart->format('M d, Y \a\t g:i A') . '.';
         }
 
         return null;
     }
 
-    /**
-     * Pure guard used by every entry point that starts a session.
-     */
-    public function canStartSession(): bool
+    public function canMarkAttendance(): bool
     {
-        return $this->startSessionBlockReason() === null;
+        return $this->attendanceBlockReason() === null;
     }
 
-    public function startSession(): void
+    /**
+     * Why this session cannot be completed yet, or null when it can.
+     */
+    public function completeSessionBlockReason(): ?string
     {
-        $this->update([
-            'status' => BookingStatus::InProgress,
-            'started_at' => now(),
-        ]);
+        if ($this->status === BookingStatus::InProgress) {
+            return null;
+        }
+
+        if ($this->status === BookingStatus::Confirmed) {
+            $lessonStart = $this->lessonStartAt();
+            $tz = config('app.timezone', 'Asia/Manila');
+
+            if (! $lessonStart || now($tz)->lessThan($lessonStart)) {
+                return 'The scheduled session time has not started yet.';
+            }
+
+            if (! $this->studentAttended()) {
+                return 'Mark student attendance as Present or Late before completing the session.';
+            }
+
+            return null;
+        }
+
+        return 'Only active or attended confirmed sessions can be completed.';
+    }
+
+    public function canCompleteSession(): bool
+    {
+        return $this->completeSessionBlockReason() === null;
     }
 
     /**

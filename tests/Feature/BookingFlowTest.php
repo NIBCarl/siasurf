@@ -168,30 +168,35 @@ class BookingFlowTest extends TestCase
         $this->assertSame(BookingStatus::Pending, $booking->fresh()->status);
     }
 
-    // ---- Session start guard (FR 1.10.1) -------------------------------
+    // ---- Schedule-time attendance guard (replaces Start Session) -------
 
     /** @test */
-    public function a_session_cannot_be_started_on_a_future_date()
+    public function start_session_route_is_removed_and_attendance_requires_scheduled_time()
     {
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('instructor.bookings.start-session'));
+
         $booking = $this->booking([
             'status' => BookingStatus::Confirmed,
             'date' => now()->addDay()->format('Y-m-d'),
             'start_time' => '08:00',
+            'end_time' => '10:00',
         ]);
 
-        $this->assertFalse($booking->canStartSession());
-        $this->assertStringContainsString('not today', $booking->startSessionBlockReason());
+        $this->assertFalse($booking->canMarkAttendance());
+        $this->assertStringContainsString('Scheduled for', (string) $booking->attendanceBlockReason());
 
         $this->actingAs($this->instructor)
-            ->post(route('instructor.bookings.start-session', $booking->id))
+            ->post(route('instructor.bookings.attendance', $booking->id), [
+                'attendance_status' => 'present',
+            ])
             ->assertRedirect();
 
+        $this->assertNull($booking->fresh()->attendance_status);
         $this->assertSame(BookingStatus::Confirmed, $booking->fresh()->status);
-        $this->assertNull($booking->fresh()->started_at);
     }
 
     /** @test */
-    public function a_session_can_be_started_on_the_day_within_tolerance()
+    public function attendance_can_be_marked_once_scheduled_time_starts_and_moves_to_in_progress()
     {
         $start = now()->subMinutes(10);
 
@@ -199,52 +204,70 @@ class BookingFlowTest extends TestCase
             'status' => BookingStatus::Confirmed,
             'date' => $start->format('Y-m-d'),
             'start_time' => $start->format('H:i'),
+            'end_time' => $start->copy()->addHours(2)->format('H:i'),
+            'duration_hours' => 2,
         ]);
 
-        $this->assertTrue($booking->canStartSession(), (string) $booking->startSessionBlockReason());
+        $this->assertTrue($booking->canMarkAttendance(), (string) $booking->attendanceBlockReason());
 
         $this->actingAs($this->instructor)
-            ->post(route('instructor.bookings.start-session', $booking->id))
+            ->post(route('instructor.bookings.attendance', $booking->id), [
+                'attendance_status' => 'present',
+            ])
             ->assertRedirect();
 
-        $this->assertSame(BookingStatus::InProgress, $booking->fresh()->status);
-        $this->assertNotNull($booking->fresh()->started_at);
+        $fresh = $booking->fresh();
+        $this->assertSame(\App\Enums\AttendanceStatus::Present, $fresh->attendance_status);
+        $this->assertSame(BookingStatus::InProgress, $fresh->status);
+        $this->assertNotNull($fresh->started_at);
     }
 
     /** @test */
-    public function a_session_cannot_be_started_far_before_its_scheduled_time()
+    public function attendance_cannot_be_marked_earlier_on_the_same_day_before_start_time()
     {
-        // Today, but hours earlier than the booked slot.
-        $booking = $this->booking([
-            'status' => BookingStatus::Confirmed,
-            'date' => now()->format('Y-m-d'),
-            'start_time' => now()->addHours(6)->format('H:i'),
-        ]);
-
-        $this->assertFalse($booking->canStartSession());
-
-        $this->actingAs($this->instructor)
-            ->post(route('instructor.bookings.start-session', $booking->id))
-            ->assertRedirect();
-
-        $this->assertNull($booking->fresh()->started_at);
-    }
-
-    /** @test */
-    public function a_session_cannot_be_started_after_the_window_closes()
-    {
-        // Keep this test independent of the wall clock: at 02:00 "six hours
-        // ago" belongs to the previous day once the date and time are combined.
-        $this->travelTo(now()->setTime(12, 0));
+        $this->travelTo(now()->setTime(7, 0));
 
         $booking = $this->booking([
             'status' => BookingStatus::Confirmed,
             'date' => now()->format('Y-m-d'),
-            'start_time' => now()->subHours(6)->format('H:i'),
+            'start_time' => '14:00',
+            'end_time' => '16:00',
         ]);
 
-        $this->assertFalse($booking->canStartSession());
-        $this->assertStringContainsString('window closed', $booking->startSessionBlockReason());
+        $this->assertFalse($booking->canMarkAttendance());
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.bookings.attendance', $booking->id), [
+                'attendance_status' => 'present',
+            ])
+            ->assertRedirect();
+
+        $this->assertNull($booking->fresh()->attendance_status);
+        $this->assertSame(BookingStatus::Confirmed, $booking->fresh()->status);
+    }
+
+    /** @test */
+    public function marking_present_after_lesson_end_time_completes_the_session()
+    {
+        $this->travelTo(now()->setTime(15, 0));
+
+        $booking = $this->booking([
+            'status' => BookingStatus::Confirmed,
+            'date' => now()->format('Y-m-d'),
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'duration_hours' => 2,
+        ]);
+
+        $this->assertTrue($booking->canMarkAttendance());
+
+        $this->actingAs($this->instructor)
+            ->post(route('instructor.bookings.attendance', $booking->id), [
+                'attendance_status' => 'present',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(BookingStatus::Completed, $booking->fresh()->status);
     }
 
     // ---- Instant Book --------------------------------------------------

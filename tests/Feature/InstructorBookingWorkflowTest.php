@@ -65,10 +65,12 @@ class InstructorBookingWorkflowTest extends TestCase
             'instructor_id' => $this->instructor->id,
             'surf_spot_id' => $this->surfSpot->id,
             'status' => BookingStatus::Pending,
+            'skill_level' => 'beginner',
             'date' => now()->addDays(3)->format('Y-m-d'),
             'time_period' => 'morning',
             'start_time' => '08:00',
             'end_time' => '10:00',
+            'duration_hours' => 2,
             'accept_deadline_at' => now()->addHours(2),
         ], $attributes));
     }
@@ -83,10 +85,12 @@ class InstructorBookingWorkflowTest extends TestCase
             'instructor_id' => $this->instructor->id,
             'surf_spot_id' => $this->surfSpot->id,
             'status' => BookingStatus::Confirmed,
+            'skill_level' => 'beginner',
             'date' => now()->addDays(3)->format('Y-m-d'),
             'time_period' => 'morning',
             'start_time' => '08:00',
             'end_time' => '10:00',
+            'duration_hours' => 2,
         ], $attributes));
     }
 
@@ -209,38 +213,65 @@ class InstructorBookingWorkflowTest extends TestCase
     // ---- FR 1.9.4 cancel / reschedule ----------------------------------
 
     /** @test */
-    public function reschedule_more_than_24_hours_ahead_applies_immediately()
+    public function reschedule_more_than_24_hours_ahead_notifies_student_posts_chat_and_applies_after_agreement()
     {
-        $booking = $this->confirmedBooking(['date' => now()->addDays(4)->format('Y-m-d')]);
+        $originalDate = now()->addDays(4)->format('Y-m-d');
+        $booking = $this->confirmedBooking(['date' => $originalDate]);
 
         $newDate = now()->addDays(6)->format('Y-m-d');
 
+        // Instructor only supplies date, start_time, and reason; period & end_time are automated.
         $this->actingAs($this->instructor)
             ->post(route('instructor.bookings.change-request', $booking->id), [
                 'type' => 'reschedule',
                 'date' => $newDate,
-                'time_period' => 'afternoon',
                 'start_time' => '13:00',
-                'end_time' => '15:00',
                 'reason' => 'Better tide window.',
             ])
             ->assertRedirect();
 
         $booking->refresh();
 
+        // Schedule must NOT move before the student agrees.
+        $this->assertSame($originalDate, $booking->date->format('Y-m-d'));
+
+        $this->assertDatabaseHas('booking_change_requests', [
+            'booking_id' => $booking->id,
+            'type' => 'reschedule',
+            'status' => ChangeRequestStatus::AwaitingStudent->value,
+            'requires_admin_approval' => false,
+            'new_time_period' => 'afternoon',
+        ]);
+
+        // Reason was automatically posted to the booking Messages thread.
+        $this->assertDatabaseHas('messages', [
+            'sender_id' => $this->instructor->id,
+        ]);
+        $this->assertStringContainsString(
+            'Better tide window.',
+            \App\Models\Message::latest('id')->first()->body
+        );
+
+        // Student agrees -> booking moves and end_time is auto-calculated (15:00).
+        $this->actingAs($this->student)
+            ->post(route('student.bookings.accept-reschedule', $booking->id))
+            ->assertRedirect();
+
+        $booking->refresh();
         $this->assertSame($newDate, $booking->date->format('Y-m-d'));
         $this->assertSame('afternoon', $booking->time_period->value);
+        $this->assertSame('13:00', $booking->start_time->format('H:i'));
+        $this->assertSame('15:00', $booking->end_time->format('H:i'));
 
         $this->assertDatabaseHas('booking_change_requests', [
             'booking_id' => $booking->id,
             'type' => 'reschedule',
             'status' => ChangeRequestStatus::AutoApproved->value,
-            'requires_admin_approval' => false,
         ]);
     }
 
     /** @test */
-    public function reschedule_within_24_hours_waits_for_admin_approval()
+    public function reschedule_within_24_hours_waits_for_student_agreement_then_admin_approval()
     {
         $start = now()->addHours(3);
 
@@ -258,16 +289,25 @@ class InstructorBookingWorkflowTest extends TestCase
             ->post(route('instructor.bookings.change-request', $booking->id), [
                 'type' => 'reschedule',
                 'date' => now()->addDays(5)->format('Y-m-d'),
-                'time_period' => 'morning',
                 'start_time' => '07:00',
-                'end_time' => '09:00',
                 'reason' => 'Family emergency.',
             ])
             ->assertRedirect();
 
-        // The booking keeps its original slot until SISA signs off.
+        // Starts in awaiting_student; booking keeps original slot.
         $this->assertSame($originalDate, $booking->fresh()->date->format('Y-m-d'));
+        $this->assertDatabaseHas('booking_change_requests', [
+            'booking_id' => $booking->id,
+            'status' => ChangeRequestStatus::AwaitingStudent->value,
+            'requires_admin_approval' => true,
+        ]);
 
+        // Student agrees -> transitions to Pending for SISA approval.
+        $this->actingAs($this->student)
+            ->post(route('student.bookings.accept-reschedule', $booking->id))
+            ->assertRedirect();
+
+        $this->assertSame($originalDate, $booking->fresh()->date->format('Y-m-d'));
         $this->assertDatabaseHas('booking_change_requests', [
             'booking_id' => $booking->id,
             'status' => ChangeRequestStatus::Pending->value,
@@ -329,7 +369,7 @@ class InstructorBookingWorkflowTest extends TestCase
     }
 
     /** @test */
-    public function admin_can_approve_a_late_reschedule()
+    public function admin_can_approve_a_late_reschedule_after_student_agrees()
     {
         $start = now()->addHours(3);
 
@@ -345,13 +385,14 @@ class InstructorBookingWorkflowTest extends TestCase
             ->post(route('instructor.bookings.change-request', $booking->id), [
                 'type' => 'reschedule',
                 'date' => $newDate,
-                'time_period' => 'morning',
                 'start_time' => '07:00',
-                'end_time' => '09:00',
                 'reason' => 'Tide conditions.',
             ]);
 
-        $changeRequest = $booking->changeRequests()->latest()->first();
+        $this->actingAs($this->student)
+            ->post(route('student.bookings.accept-reschedule', $booking->id));
+
+        $changeRequest = $booking->changeRequests()->latest('id')->first();
 
         $this->actingAs($this->admin)
             ->post(route('admin.change-requests.approve', $changeRequest->id), [
@@ -436,9 +477,14 @@ class InstructorBookingWorkflowTest extends TestCase
     // ---- FR 1.10.1 session tracking ------------------------------------
 
     /** @test */
-    public function instructor_can_mark_a_student_present()
+    public function instructor_can_mark_a_student_present_once_scheduled_time_starts()
     {
-        $booking = $this->confirmedBooking();
+        $start = now()->subMinutes(15);
+        $booking = $this->confirmedBooking([
+            'date' => $start->format('Y-m-d'),
+            'start_time' => $start->format('H:i'),
+            'end_time' => $start->copy()->addHours(2)->format('H:i'),
+        ]);
 
         $this->actingAs($this->instructor)
             ->post(route('instructor.bookings.attendance', $booking->id), [
@@ -455,11 +501,15 @@ class InstructorBookingWorkflowTest extends TestCase
     }
 
     /** @test */
-    public function marking_absent_on_a_live_session_closes_it()
+    public function marking_absent_on_a_live_session_marks_no_show()
     {
+        $start = now()->subMinutes(30);
         $booking = $this->confirmedBooking([
             'status' => BookingStatus::InProgress,
-            'started_at' => now()->subMinutes(30),
+            'date' => $start->format('Y-m-d'),
+            'start_time' => $start->format('H:i'),
+            'end_time' => $start->copy()->addHours(2)->format('H:i'),
+            'started_at' => $start,
             'duration_hours' => 2,
         ]);
 
@@ -472,7 +522,7 @@ class InstructorBookingWorkflowTest extends TestCase
         $booking->refresh();
 
         $this->assertSame(AttendanceStatus::Absent, $booking->attendance_status);
-        $this->assertSame(BookingStatus::Completed, $booking->status);
+        $this->assertSame(BookingStatus::NoShow, $booking->status);
         $this->assertFalse($booking->studentAttended());
     }
 
@@ -493,7 +543,12 @@ class InstructorBookingWorkflowTest extends TestCase
     /** @test */
     public function attendance_rejects_an_unknown_status()
     {
-        $booking = $this->confirmedBooking();
+        $start = now()->subMinutes(15);
+        $booking = $this->confirmedBooking([
+            'date' => $start->format('Y-m-d'),
+            'start_time' => $start->format('H:i'),
+            'end_time' => $start->copy()->addHours(2)->format('H:i'),
+        ]);
 
         $this->actingAs($this->instructor)
             ->post(route('instructor.bookings.attendance', $booking->id), [

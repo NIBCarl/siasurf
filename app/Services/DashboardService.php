@@ -394,7 +394,7 @@ class DashboardService
             ->values()
             ->toArray();
 
-        // FR 1.10.1 - lessons that still need an attendance record.
+        // FR 1.10.1 - lessons that still need an attendance record and have reached their scheduled start.
         $attendanceDue = $user->bookingsAsInstructor()
             ->whereIn('status', [
                 BookingStatus::Confirmed,
@@ -402,6 +402,8 @@ class DashboardService
                 BookingStatus::Completed,
             ])
             ->whereNull('attendance_status')
+            ->get()
+            ->filter(fn (Booking $booking) => $booking->canMarkAttendance())
             ->count();
 
         $recentReviews = $user->reviewsAsInstructor()

@@ -160,6 +160,12 @@ class MockPaymentService implements PaymentServiceInterface
         // Update simulated storage
         self::$simulatedPayments[$transactionId]['status'] = 'paid';
 
+        $eventService = app(BookingEventService::class);
+        if ($booking->payment) {
+            $eventService->recordPaymentCompleted($booking, $booking->payment->fresh(), $booking->student_id);
+        }
+        $eventService->recordConfirmed($booking, $booking->student_id, 'GCash');
+
         // Phase 11 - tell the student and the admin dashboard in real time.
         // This was previously a TODO, so the `.payment.received` listeners in
         // useNotifications.ts never fired.
@@ -177,6 +183,8 @@ class MockPaymentService implements PaymentServiceInterface
             if ($booking->payment) {
                 broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
             }
+
+            broadcast(new \App\Events\BookingConfirmed($booking))->toOthers();
         } catch (\Throwable $exception) {
             \Log::warning('Failed to broadcast payment received.', [
                 'booking_id' => $booking->id,

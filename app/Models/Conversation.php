@@ -77,8 +77,9 @@ class Conversation extends Model
     }
 
     /**
-     * Chat is writable while the lesson is live or still ahead. Completed and
-     * cancelled bookings retain their history read-only.
+     * Chat is writable while the lesson is live, ahead, or has an open
+     * reschedule discussion. Completed and cancelled bookings retain their
+     * history read-only.
      */
     public function canSendFor(User $user): bool
     {
@@ -86,7 +87,17 @@ class Conversation extends Model
             return false;
         }
 
-        return in_array($this->booking?->status, [
+        $booking = $this->booking;
+
+        if (! $booking) {
+            return false;
+        }
+
+        if ($booking->hasOpenRescheduleProposal()) {
+            return true;
+        }
+
+        return in_array($booking->status, [
             BookingStatus::Confirmed,
             BookingStatus::InProgress,
         ], true);

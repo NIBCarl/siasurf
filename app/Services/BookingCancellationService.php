@@ -97,6 +97,13 @@ class BookingCancellationService
             ($this->earningsLedger ?? app(EarningsLedgerService::class))
                 ->syncBookingToLedger($locked->fresh(['payment']));
 
+            app(BookingEventService::class)->recordCancelled(
+                $locked,
+                $effectiveReason,
+                $actor?->id,
+                $note
+            );
+
             $refundSummary = $this->buildRefundSummary($calculation, $refund);
             $freshBooking = $locked->fresh(['student', 'instructor', 'surfSpot', 'payment', 'latestRefund']);
 
