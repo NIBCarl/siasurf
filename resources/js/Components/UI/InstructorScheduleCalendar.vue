@@ -631,9 +631,11 @@ const instructorActionSentence = (booking: ScheduleBooking): string => {
               </div>
               <div
                 v-else-if="isHourOpen(day, hour)"
-                class="flex h-full min-h-[52px] items-center justify-center rounded-control border border-sand-200/80 bg-white px-1.5 text-center text-[11px] font-medium text-lagoon-700"
+                class="flex h-full min-h-[52px] items-center justify-center rounded-control border border-sand-200/70 bg-white transition-colors hover:bg-lagoon-50/40"
+                title="Available"
+                aria-label="Available"
               >
-                Available
+                <span class="h-1.5 w-1.5 rounded-full bg-sand-300/70" aria-hidden="true" />
               </div>
               <div
                 v-else

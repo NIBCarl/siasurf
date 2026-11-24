@@ -378,7 +378,7 @@ const quickActions = computed<QuickAction[]>(() => [
                             </p>
                         </div>
                     </div>
-                    <AppButton :href="route('instructor.bookings.index')" variant="secondary" size="md">
+                    <AppButton :href="route('instructor.bookings.index')" variant="primary" size="md">
                         Mark attendance
                     </AppButton>
                 </div>
@@ -570,8 +570,8 @@ const quickActions = computed<QuickAction[]>(() => [
                         <StatCard label="Lessons taught" :value="stats.completed_lessons" meta="Completed sessions" />
                         <StatCard
                             label="Tourist rating"
-                            :value="Number(profile.average_rating).toFixed(1)"
-                            meta="Average from verified reviews"
+                            :value="Number(profile.average_rating) === 0 && recentReviews.length === 0 ? 'New' : Number(profile.average_rating).toFixed(1)"
+                            :meta="Number(profile.average_rating) === 0 && recentReviews.length === 0 ? 'No reviews yet · SISA verified' : 'Average from verified reviews'"
                         />
                         <StatCard
                             label="Safety standing"

@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import { formatDate, formatDateTime } from '@/utils/date'
 import { ChevronRightIcon, ChatBubbleLeftRightIcon } from '@heroicons/vue/24/outline'
 
 interface Appeal {
@@ -66,12 +67,12 @@ const statusVariant = (status: string) => {
           class="group rounded-3xl border border-slate-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-xl">
           <div class="flex items-center justify-between">
             <Badge :variant="statusVariant(appeal.status)" size="sm">{{ appeal.status }}</Badge>
-            <span class="text-xs text-slate-400">{{ new Date(appeal.created_at).toLocaleDateString() }}</span>
+            <span class="text-xs text-slate-400">{{ formatDate(appeal.created_at) }}</span>
           </div>
           <h2 class="mt-4 text-lg font-extrabold text-slate-900">{{ appeal.instructor?.name ?? 'Instructor' }}</h2>
           <p class="mt-2 line-clamp-3 text-sm text-slate-500">{{ appeal.message }}</p>
           <p class="mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Suspension ends: {{ appeal.suspension?.ends_at ?? '—' }}
+            Suspension ends: {{ formatDateTime(appeal.suspension?.ends_at) }}
           </p>
           <div class="mt-3 flex items-center justify-end text-xs font-bold text-teal-600 group-hover:underline">
             Review appeal <ChevronRightIcon class="ml-1 h-3 w-3" />

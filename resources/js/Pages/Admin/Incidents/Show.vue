@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import InputError from '@/Components/InputError.vue'
+import { formatDateTime } from '@/utils/date'
 import { ChevronLeftIcon, ExclamationTriangleIcon, PaperClipIcon, ShieldExclamationIcon } from '@heroicons/vue/24/outline'
 
 interface Incident {
@@ -149,7 +150,7 @@ const outcomeVariant = (outcome: string | null | undefined) => {
             <Badge v-if="incident.handled_externally" variant="danger">Handled outside system</Badge>
           </div>
           <p class="mt-1 text-sm text-slate-500">
-            Submitted {{ new Date(incident.created_at).toLocaleString() }} by {{ incident.reporter?.name ?? 'SISA Admin' }}.
+            Submitted {{ formatDateTime(incident.created_at) }} by {{ incident.reporter?.name ?? 'SISA Admin' }}.
           </p>
         </div>
       </div>
@@ -380,7 +381,7 @@ const outcomeVariant = (outcome: string | null | undefined) => {
               <ul class="mt-2 space-y-2">
                 <li v-for="strike in activeStrikes" :key="strike.id" class="rounded-2xl bg-slate-50 p-3 text-xs">
                   <p class="font-bold text-slate-800">{{ strike.reason_text ?? 'Confirmed concern' }}</p>
-                  <p class="mt-1 text-slate-500">{{ strike.weight }} strike(s) · {{ strike.applied_at ?? '' }}</p>
+                  <p class="mt-1 text-slate-500">{{ strike.weight }} strike(s) · {{ formatDateTime(strike.applied_at) }}</p>
                 </li>
                 <li v-if="!activeStrikes.length" class="rounded-2xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">No active strikes.</li>
               </ul>

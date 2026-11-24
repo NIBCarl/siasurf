@@ -22,6 +22,7 @@ import {
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
+import { formatDateTime } from '@/utils/date'
 
 interface Certificate {
   id: number
@@ -241,7 +242,7 @@ const getStatusVariant = (status: string) => {
                     </div>
                     <p class="mt-2 text-sm font-semibold text-rose-900">{{ activeSuspension?.reason ?? instructor.instructor_profile?.suspension_reason ?? 'Suspended by SISA.' }}</p>
                     <p class="mt-2 text-xs text-rose-700">
-                        Started {{ activeSuspension?.starts_at ?? instructor.instructor_profile?.suspended_at ?? '—' }} · Ends {{ activeSuspension?.ends_at ?? instructor.instructor_profile?.suspended_until ?? '—' }}
+                        Started {{ formatDateTime(activeSuspension?.starts_at ?? instructor.instructor_profile?.suspended_at) }} · Ends {{ formatDateTime(activeSuspension?.ends_at ?? instructor.instructor_profile?.suspended_until) }}
                     </p>
                     <p v-if="activeSuspension?.requires_sisa_id_confiscation" class="mt-2 text-xs font-bold text-rose-900">
                         3-Strike Tier: Confirm physical SISA ID confiscation/return outside the system before approving reinstatement.
@@ -498,8 +499,8 @@ const getStatusVariant = (status: string) => {
                                 </div>
                                 <p v-if="fine.reason" class="mt-1 text-xs text-slate-600">{{ fine.reason }}</p>
                                 <p class="mt-1 text-[11px] text-slate-400">
-                                    Issued {{ fine.issued_at ?? '—' }}
-                                    <template v-if="fine.paid_at"> · Paid {{ fine.paid_at }}</template>
+                                    Issued {{ formatDateTime(fine.issued_at) }}
+                                    <template v-if="fine.paid_at"> · Paid {{ formatDateTime(fine.paid_at) }}</template>
                                     <template v-if="fine.settlement_note"> · {{ fine.settlement_note }}</template>
                                 </p>
                             </div>
