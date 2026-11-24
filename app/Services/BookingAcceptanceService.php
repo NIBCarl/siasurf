@@ -38,9 +38,9 @@ class BookingAcceptanceService
      *
      * @throws BookingRequestException
      */
-    public function accept(Booking $booking): Booking
+    public function accept(Booking $booking, ?User $actor = null): Booking
     {
-        return DB::transaction(function () use ($booking) {
+        return DB::transaction(function () use ($booking, $actor) {
             User::query()->whereKey($booking->instructor_id)->lockForUpdate()->first();
 
             $locked = Booking::with(['instructor.instructorProfile', 'payment'])
@@ -62,7 +62,7 @@ class BookingAcceptanceService
 
             return $this->paymentMethodFor($locked) === PaymentMethod::GCash
                 ? $this->awaitPayment($locked)
-                : $this->confirmWithCash($locked);
+                : $this->confirmWithCash($locked, $actor);
         });
     }
 
@@ -153,7 +153,7 @@ class BookingAcceptanceService
     /**
      * Cash: the lesson is confirmed straight away and paid at the beach.
      */
-    private function confirmWithCash(Booking $booking): Booking
+    private function confirmWithCash(Booking $booking, ?User $actor = null): Booking
     {
         $booking->update(['status' => BookingStatus::Confirmed]);
 
@@ -162,7 +162,10 @@ class BookingAcceptanceService
         broadcast(new BookingConfirmed($booking))->toOthers();
 
         $booking->student?->notify(new BookingConfirmedNotification($booking));
-        $booking->instructor?->notify(new BookingConfirmedNotification($booking));
+
+        if ($actor === null || $actor->id !== $booking->instructor_id) {
+            $booking->instructor?->notify(new BookingConfirmedNotification($booking));
+        }
 
         return $booking;
     }

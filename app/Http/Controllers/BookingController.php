@@ -868,7 +868,8 @@ class BookingController extends Controller
     {
         try {
             $accepted = $this->acceptanceService->accept(
-                $booking->fresh(['payment', 'instructor.instructorProfile', 'student', 'surfSpot'])
+                $booking->fresh(['payment', 'instructor.instructorProfile', 'student', 'surfSpot']),
+                auth()->user()
             );
         } catch (\Throwable $exception) {
             report($exception);

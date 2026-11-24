@@ -315,7 +315,7 @@ class BookingController extends Controller
         }
 
         try {
-            $accepted = $acceptanceService->accept($booking);
+            $accepted = $acceptanceService->accept($booking, auth()->user());
         } catch (BookingRequestException $exception) {
             return back()->with('error', $exception->getMessage());
         } catch (\Throwable $exception) {
@@ -711,7 +711,6 @@ class BookingController extends Controller
                 broadcast(new SessionAttendanceMarked($fresh, $status))->toOthers();
 
                 $fresh->student?->notify(new SessionAttendanceNotification($fresh, $status));
-                $fresh->instructor?->notify(new SessionAttendanceNotification($fresh, $status));
             });
 
             return null;

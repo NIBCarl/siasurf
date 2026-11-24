@@ -47,6 +47,7 @@ class BookingCancellationService
         ?User $actor = null,
         ?float $overrideAmount = null,
         ?string $studentNotificationMessage = null,
+        bool $notifyInstructor = true,
     ): array {
         $result = DB::transaction(function () use (
             $booking,
@@ -54,7 +55,8 @@ class BookingCancellationService
             $note,
             $actor,
             $overrideAmount,
-            $studentNotificationMessage
+            $studentNotificationMessage,
+            $notifyInstructor
         ) {
             $locked = Booking::with(['payment', 'student', 'instructor', 'surfSpot'])
                 ->whereKey($booking->id)
@@ -112,14 +114,18 @@ class BookingCancellationService
                 $refund,
                 $note,
                 $studentNotificationMessage,
-                $refundSummary
+                $refundSummary,
+                $actor,
+                $notifyInstructor
             ) {
                 $this->notifyAndDispatch(
                     $freshBooking,
                     $refund,
                     $note,
                     $studentNotificationMessage,
-                    $refundSummary
+                    $refundSummary,
+                    $actor,
+                    $notifyInstructor
                 );
             });
 
@@ -392,6 +398,8 @@ class BookingCancellationService
         ?string $note,
         ?string $studentMessage,
         array $refundSummary,
+        ?User $actor = null,
+        bool $notifyInstructor = true,
     ): void {
         try {
             broadcast(new BookingCancelled($booking, $note, $refundSummary))->toOthers();
@@ -408,11 +416,13 @@ class BookingCancellationService
             $refundSummary
         ));
 
-        $booking->instructor?->notify(new BookingCancelledNotification(
-            $booking,
-            $note,
-            $refundSummary
-        ));
+        if ($notifyInstructor && ($actor === null || $actor->id !== $booking->instructor_id)) {
+            $booking->instructor?->notify(new BookingCancelledNotification(
+                $booking,
+                $note,
+                $refundSummary
+            ));
+        }
 
         if (! $refund) {
             return;

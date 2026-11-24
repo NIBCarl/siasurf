@@ -134,8 +134,6 @@ class BookingChangeService
             $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
         ))->toOthers();
 
-        $this->notifyParties($changeRequest);
-
         return $changeRequest;
     }
 
@@ -221,12 +219,12 @@ class BookingChangeService
             $lockedRequest->resolve(ChangeRequestStatus::Approved, $admin->id, $note);
             $this->apply($lockedRequest);
 
-            DB::afterCommit(function () use ($lockedRequest) {
+            DB::afterCommit(function () use ($lockedRequest, $admin) {
                 broadcast(new BookingChangeResolved(
                     $lockedRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
                 ))->toOthers();
 
-                $this->notifyParties($lockedRequest);
+                $this->notifyRequester($lockedRequest, $admin);
             });
 
             return $lockedRequest->fresh();
@@ -249,7 +247,7 @@ class BookingChangeService
                 $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
             ))->toOthers();
 
-            $this->notifyParties($changeRequest);
+            $this->notifyRequester($changeRequest, $admin);
 
             return $changeRequest;
         });
@@ -268,33 +266,37 @@ class BookingChangeService
             throw new BookingChangeException('Only the instructor who filed the request can withdraw it.');
         }
 
-        return DB::transaction(function () use ($changeRequest) {
+        return DB::transaction(function () use ($changeRequest, $requester) {
             $changeRequest->resolve(ChangeRequestStatus::Rejected, null, 'Withdrawn by the instructor.');
 
             broadcast(new BookingChangeResolved(
                 $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy'])
             ))->toOthers();
 
-            $this->notifyParties($changeRequest);
+            $this->notifyRequester($changeRequest, $requester);
 
             return $changeRequest;
         });
     }
 
     /**
-     * Persist the outcome for both parties. The broadcast above is the live
-     * nudge; this is what the bell can still show after a page reload.
+     * Persist the outcome for the requester when another user decided it.
+     * The broadcast above is the live nudge; this is what the bell shows
+     * after a page reload.
      */
-    private function notifyParties(BookingChangeRequest $changeRequest): void
+    private function notifyRequester(BookingChangeRequest $changeRequest, ?User $actor = null): void
     {
-        $fresh = $changeRequest->fresh(['booking.student', 'booking.instructor', 'requestedBy']);
+        $fresh = $changeRequest->fresh(['booking.instructor', 'requestedBy']);
 
         if (! $fresh) {
             return;
         }
 
-        $fresh->booking?->student?->notify(new BookingChangeResolvedNotification($fresh));
-        $fresh->booking?->instructor?->notify(new BookingChangeResolvedNotification($fresh));
+        $recipient = $fresh->requestedBy ?? $fresh->booking?->instructor;
+
+        if ($recipient && ($actor === null || $actor->id !== $recipient->id)) {
+            $recipient->notify(new BookingChangeResolvedNotification($fresh));
+        }
     }
 
     /**
@@ -328,7 +330,7 @@ class BookingChangeService
             $reason = $changeRequest->cancellation_reason ?? CancellationReason::Instructor;
             $actor = $changeRequest->reviewedBy ?? $changeRequest->requestedBy;
 
-            $this->cancellationService->cancel($booking, $reason, $note, $actor);
+            $this->cancellationService->cancel($booking, $reason, $note, $actor, notifyInstructor: false);
         } else {
             $this->applyReschedule($changeRequest, $booking);
         }

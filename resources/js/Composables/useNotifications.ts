@@ -24,6 +24,7 @@ export interface AppNotification {
 const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
     incident_report: 'error',
     incident_outcome: 'error',
+    booking_awaiting_payment: 'warning',
     booking_cancelled: 'warning',
     booking_declined: 'warning',
     booking_expired: 'warning',
@@ -34,6 +35,8 @@ const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
     instructor_suspended: 'warning',
     strike_recorded: 'warning',
     suspension_awaiting_reinstatement: 'warning',
+    booking_confirmed: 'success',
+    payment_received: 'success',
     instructor_verified: 'success',
     account_reactivated: 'success',
     appeal_resolved: 'success',
@@ -42,6 +45,9 @@ const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
 const TITLE_BY_TYPE: Record<string, string> = {
     incident_report: 'Safety Incident Reported',
     incident_outcome: 'Incident Outcome',
+    booking_requested: 'New Booking Request',
+    booking_awaiting_payment: 'Payment Required',
+    booking_confirmed: 'Booking Confirmed',
     booking_cancelled: 'Booking Cancelled',
     booking_declined: 'Request Declined',
     booking_expired: 'Request Expired',
@@ -49,6 +55,9 @@ const TITLE_BY_TYPE: Record<string, string> = {
     booking_spot_changed: 'Surf Spot Changed',
     booking_rescheduled: 'Booking Rescheduled',
     booking_change_requested: 'Change Request Filed',
+    booking_change_resolved: 'Change Request Update',
+    payment_received: 'Payment Received',
+    session_attendance: 'Attendance Recorded',
     instructor_rejected: 'Application Rejected',
     instructor_verified: 'Instructor Verified',
     account_suspended: 'Account Suspended',
@@ -291,6 +300,8 @@ export function useNotifications() {
                 // FR 1.9.1 - real-time booking request notification.
                 .listen('.booking.created', (e: any) =>
                     toNotification(e, 'New Booking Request', 'info'))
+                .listen('.booking.confirmed', (e: any) =>
+                    toNotification(e, 'Booking Confirmed', 'success'))
                 .listen('.booking.cancelled', (e: any) =>
                     toNotification(e, 'Booking Cancelled', 'warning'))
                 .listen('.booking.declined', (e: any) =>
@@ -300,8 +311,6 @@ export function useNotifications() {
                     toNotification(e, 'Change Request Filed', 'info'))
                 .listen('.booking.change_resolved', (e: any) =>
                     toNotification(e, 'Change Request Update', 'info'))
-                .listen('.booking.attendance', (e: any) =>
-                    toNotification(e, 'Attendance Recorded', 'info'))
                 .listen('.payment.received', (e: any) =>
                     toNotification(e, 'Payment Received', 'success'))
                 .listen('.refund.updated', (e: any) =>
