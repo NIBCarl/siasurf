@@ -57,6 +57,7 @@ use App\Notifications\RefundStatusNotification;
 use App\Notifications\ReviewModeratedNotification;
 use App\Notifications\SendReviewRequest;
 use App\Notifications\SessionCompletedNotification;
+use App\Notifications\SisaIdExpiryNotification;
 use App\Notifications\SkillUpgradeRequestedNotification;
 use App\Notifications\SuspensionNotification;
 use App\Notifications\SuspensionReadyForReinstatementNotification;
@@ -615,5 +616,127 @@ class RemainingNotificationsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('items.0.type', 'session_completed')
             ->assertJsonPath('items.0.url', route('student.bookings.show', $booking->id));
+    }
+
+    public function test_sisa_id_expiry_command_notifies_30_days_before_and_when_expired_without_duplicates(): void
+    {
+        $expiringInstructor = User::factory()->instructor()->create(['name' => 'Expiring ID Instructor']);
+        $expiringInstructor->assignRole('instructor');
+        $expiringInstructor->instructorProfile()->create([
+            'level' => InstructorLevel::Level2,
+            'status' => InstructorStatus::Active->value,
+            'rate_per_hour' => 800,
+        ]);
+        Certificate::create([
+            'user_id' => $expiringInstructor->id,
+            'type' => CertificateType::SISA,
+            'file_path' => 'certificates/expiring-id.pdf',
+            'status' => CertificateStatus::Verified,
+            'verified_at' => now()->subYears(2)->addDays(15),
+            'expires_at' => null,
+        ]);
+
+        $expiredByDefaultWindow = User::factory()->instructor()->create(['name' => 'Lapsed 2Y ID Instructor']);
+        $expiredByDefaultWindow->assignRole('instructor');
+        $expiredByDefaultWindow->instructorProfile()->create([
+            'level' => InstructorLevel::Level2,
+            'status' => InstructorStatus::Active->value,
+            'rate_per_hour' => 800,
+        ]);
+        Certificate::create([
+            'user_id' => $expiredByDefaultWindow->id,
+            'type' => CertificateType::SISA,
+            'file_path' => 'certificates/lapsed-2y-id.pdf',
+            'status' => CertificateStatus::Verified,
+            'verified_at' => now()->subYears(2)->subDays(2),
+            'expires_at' => null,
+        ]);
+
+        $expiredByCertDate = User::factory()->instructor()->create(['name' => 'Expired SISA Cert ID Instructor']);
+        $expiredByCertDate->assignRole('instructor');
+        $expiredByCertDate->instructorProfile()->create([
+            'level' => InstructorLevel::Level2,
+            'status' => InstructorStatus::Active->value,
+            'rate_per_hour' => 800,
+        ]);
+        Certificate::create([
+            'user_id' => $expiredByCertDate->id,
+            'type' => CertificateType::SISA,
+            'file_path' => 'certificates/expired-cert-id.pdf',
+            'status' => CertificateStatus::Verified,
+            'verified_at' => now()->subYear(),
+            'expires_at' => now()->subDay(),
+        ]);
+
+        // Verify channel routing directly
+        $sampleNotification = new SisaIdExpiryNotification(
+            $expiringInstructor,
+            'SISA 2024-0001',
+            now()->addDays(15),
+            expired: false,
+            daysLeft: 15
+        );
+        $this->assertSame(['database', 'mail'], $sampleNotification->via($expiringInstructor));
+        $this->assertSame(['database'], $sampleNotification->via($this->admin));
+
+        $this->artisan('certs:expire')->assertSuccessful();
+
+        // Expiring within 30 days -> instructor & admin notified with correct URLs
+        $expiringNotice = $expiringInstructor->notifications()
+            ->where('data->type', 'sisa_id_expiring_soon')
+            ->first();
+        $this->assertNotNull($expiringNotice);
+        $this->assertSame(route('instructor.qr.show'), $expiringNotice->data['url']);
+
+        $adminExpiringNotice = $this->admin->notifications()
+            ->where('data->type', 'sisa_id_expiring_soon')
+            ->where('data->instructor_id', $expiringInstructor->id)
+            ->first();
+        $this->assertNotNull($adminExpiringNotice);
+        $this->assertSame(route('admin.instructors.show', $expiringInstructor->id), $adminExpiringNotice->data['url']);
+
+        // Expired by 2-year default window & expired by explicit SISA cert expires_at
+        foreach ([$expiredByDefaultWindow, $expiredByCertDate] as $expiredInstructor) {
+            $instructorNotice = $expiredInstructor->notifications()
+                ->where('data->type', 'sisa_id_expired')
+                ->first();
+            $this->assertNotNull($instructorNotice);
+            $this->assertSame(route('instructor.qr.show'), $instructorNotice->data['url']);
+
+            $adminExpiredNotice = $this->admin->notifications()
+                ->where('data->type', 'sisa_id_expired')
+                ->where('data->instructor_id', $expiredInstructor->id)
+                ->first();
+            $this->assertNotNull($adminExpiredNotice);
+            $this->assertSame(route('admin.instructors.show', $expiredInstructor->id), $adminExpiredNotice->data['url']);
+        }
+
+        // Second sweep must not duplicate expiring-soon or expired ID notifications
+        $this->artisan('certs:expire')->assertSuccessful();
+
+        $this->assertSame(
+            1,
+            $expiringInstructor->fresh()->notifications()->where('data->type', 'sisa_id_expiring_soon')->count()
+        );
+        $this->assertSame(
+            1,
+            $this->admin->fresh()->notifications()
+                ->where('data->type', 'sisa_id_expiring_soon')
+                ->where('data->instructor_id', $expiringInstructor->id)
+                ->count()
+        );
+        foreach ([$expiredByDefaultWindow, $expiredByCertDate] as $expiredInstructor) {
+            $this->assertSame(
+                1,
+                $expiredInstructor->fresh()->notifications()->where('data->type', 'sisa_id_expired')->count()
+            );
+            $this->assertSame(
+                1,
+                $this->admin->fresh()->notifications()
+                    ->where('data->type', 'sisa_id_expired')
+                    ->where('data->instructor_id', $expiredInstructor->id)
+                    ->count()
+            );
+        }
     }
 }

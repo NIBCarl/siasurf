@@ -3,9 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Enums\CertificateStatus;
+use App\Enums\InstructorStatus;
 use App\Models\Certificate;
 use App\Models\User;
 use App\Notifications\CertificateExpiryNotification;
+use App\Notifications\SisaIdExpiryNotification;
+use App\Services\SisaIdCardService;
 use Illuminate\Console\Command;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +27,7 @@ class ExpireCertificates extends Command
     protected $signature = 'certs:expire
                             {--dry-run : Report what would change without writing}';
 
-    protected $description = 'Mark newly expired certificates as Expired and warn about upcoming expiry';
+    protected $description = 'Mark newly expired certificates as Expired and notify about expiring or expired certificates and SISA IDs';
 
     public function handle(): int
     {
@@ -144,13 +147,109 @@ class ExpireCertificates extends Command
             }
         }
 
+        $idCardService = app(SisaIdCardService::class);
+        $expiredIdsCount = 0;
+        $expiringSoonIdsCount = 0;
+
+        $verifiedInstructors = User::query()
+            ->instructors()
+            ->whereHas('instructorProfile', fn ($q) => $q->whereIn('status', [
+                InstructorStatus::Active->value,
+                InstructorStatus::Inactive->value,
+            ]))
+            ->whereHas('certificates')
+            ->with(['instructorProfile', 'certificates'])
+            ->get();
+
+        foreach ($verifiedInstructors as $instructor) {
+            $validity = $idCardService->resolveValidity($instructor);
+            $expiresAt = $validity['expires_at'];
+            $sisaIdCode = $validity['sisa_id_code'];
+
+            $isExpired = $expiresAt->lt(now());
+            $isExpiringSoon = ! $isExpired && $expiresAt->lte(now()->addDays(30));
+
+            if (! $isExpired && ! $isExpiringSoon) {
+                continue;
+            }
+
+            if ($isExpired) {
+                $expiredIdsCount++;
+                $notificationType = 'sisa_id_expired';
+                $daysLeft = null;
+                Log::info('SISA ID expired', [
+                    'instructor_id' => $instructor->id,
+                    'sisa_id_code' => $sisaIdCode,
+                    'expired_at' => $expiresAt->toIso8601String(),
+                ]);
+            } else {
+                $expiringSoonIdsCount++;
+                $notificationType = 'sisa_id_expiring_soon';
+                $daysLeft = max(0, (int) now()->diffInDays($expiresAt, false));
+                Log::warning('SISA ID expiring soon', [
+                    'instructor_id' => $instructor->id,
+                    'sisa_id_code' => $sisaIdCode,
+                    'days_left' => $daysLeft,
+                ]);
+            }
+
+            if ($dryRun) {
+                continue;
+            }
+
+            $alreadyNotified = DatabaseNotification::query()
+                ->where('notifiable_type', User::class)
+                ->where('notifiable_id', $instructor->id)
+                ->where('data->type', $notificationType)
+                ->where('data->expires_at', $expiresAt->toDateString())
+                ->exists();
+
+            if ($alreadyNotified) {
+                continue;
+            }
+
+            $idNotification = new SisaIdExpiryNotification(
+                $instructor,
+                $sisaIdCode,
+                $expiresAt,
+                expired: $isExpired,
+                daysLeft: $daysLeft
+            );
+
+            try {
+                $instructor->notify($idNotification);
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify instructor of SISA ID expiry status.', [
+                    'instructor_id' => $instructor->id,
+                    'sisa_id_code' => $sisaIdCode,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
+            foreach ($admins as $admin) {
+                try {
+                    $admin->notify($idNotification);
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to notify admin of SISA ID expiry status.', [
+                        'instructor_id' => $instructor->id,
+                        'admin_id' => $admin->id,
+                        'sisa_id_code' => $sisaIdCode,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            }
+        }
+
         $verb = $dryRun ? 'would expire' : 'expired';
 
         $this->info(sprintf(
-            '%d certificate(s) %s; %d expiring within 30 days.',
+            '%d certificate(s) %s; %d certificate(s) expiring within 30 days; %d SISA ID(s) %s; %d SISA ID(s) expiring within 30 days.',
             $newlyExpired->count(),
             $verb,
-            $expiringSoon->count()
+            $expiringSoon->count(),
+            $expiredIdsCount,
+            $verb,
+            $expiringSoonIdsCount
         ));
 
         return self::SUCCESS;
