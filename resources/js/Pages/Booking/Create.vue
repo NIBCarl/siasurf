@@ -4,7 +4,7 @@ import { Head, useForm, Link } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
-import BaseButton from '@/Components/Atoms/BaseButton.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import TextInput from '@/Components/TextInput.vue'
@@ -804,19 +804,19 @@ const submit = () => {
   <Head :title="`Book with ${instructor.name}`" />
 
   <AppSidebarLayout title="Book Your Surf Session">
-    <div class="py-12 pb-28 lg:pb-12 bg-slate-50 min-h-screen">
+    <div class="py-12 pb-28 lg:pb-12 bg-sand-50 min-h-screen">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Progress Stepper -->
-        <BookingStepper :current="step" wide />
+        <BookingStepper :current="1" wide />
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           <!-- Left: Booking Form -->
           <div class="lg:col-span-2 space-y-8">
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div class="p-8 border-b border-slate-100 bg-gradient-to-r from-ocean-50 to-transparent">
-                <h2 class="text-2xl font-bold text-slate-900">Lesson Details</h2>
+            <div class="bg-white rounded-2xl shadow-sm border border-sand-200 overflow-hidden">
+              <div class="p-8 border-b border-sand-200 bg-gradient-to-r from-lagoon-50 to-transparent">
+                <h2 class="text-2xl font-bold text-deep-950">Lesson Details</h2>
                 <p class="text-slate-600 mt-1">Configure your surfing session with {{ instructor.name }}</p>
               </div>
 
@@ -850,12 +850,12 @@ const submit = () => {
                     </div>
                     <div
                       v-else-if="activeService"
-                      class="mt-2 flex flex-col gap-3 rounded-xl border border-ocean-200 bg-ocean-50/50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                      class="mt-2 flex flex-col gap-3 rounded-xl border border-lagoon-200 bg-lagoon-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div>
                         <div class="flex flex-wrap items-center gap-2">
                           <span class="text-sm font-bold text-slate-900">{{ activeService.label }}</span>
-                          <span class="rounded-full bg-ocean-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ocean-800">
+                          <span class="rounded-full bg-lagoon-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-lagoon-800">
                             Fixed for {{ studentSkillLevel }}
                           </span>
                         </div>
@@ -870,7 +870,7 @@ const submit = () => {
                         </p>
                       </div>
                       <div class="shrink-0 text-left sm:text-right">
-                        <p class="text-base font-extrabold text-ocean-700">
+                        <p class="text-base font-extrabold text-lagoon-700">
                           ₱{{ Number(activeService.rate).toLocaleString() }}
                           <span class="text-xs font-medium text-slate-500">/ hr</span>
                         </p>
@@ -914,7 +914,7 @@ const submit = () => {
                       v-else-if="availabilityLoading"
                       class="mt-1 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500"
                     >
-                      <svg class="h-4 w-4 animate-spin text-ocean-500" viewBox="0 0 24 24" fill="none">
+                      <svg class="h-4 w-4 animate-spin text-lagoon-600" viewBox="0 0 24 24" fill="none">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
@@ -953,7 +953,7 @@ const submit = () => {
                     <template v-else>
                       <select
                         v-model="form.start_time"
-                        class="mt-1 block w-full appearance-none border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm"
+                        class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm"
                         required
                       >
                         <option value="" disabled>Select a time slot</option>
@@ -1040,7 +1040,7 @@ const submit = () => {
                       v-else-if="endTimesLoading"
                       class="mt-1 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500"
                     >
-                      <svg class="h-4 w-4 animate-spin text-ocean-500" viewBox="0 0 24 24" fill="none">
+                      <svg class="h-4 w-4 animate-spin text-lagoon-600" viewBox="0 0 24 24" fill="none">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
@@ -1082,14 +1082,14 @@ const submit = () => {
                           :class="[
                             'rounded-xl border p-3 text-left transition-all',
                             lessonMinutes === 60
-                              ? 'border-ocean-600 bg-ocean-50/70 ring-2 ring-ocean-200'
-                              : 'border-slate-200 bg-white hover:border-ocean-300',
+                              ? 'border-lagoon-600 bg-lagoon-50/70 ring-2 ring-lagoon-200'
+                              : 'border-slate-200 bg-white hover:border-lagoon-300',
                             !durationOptionEndTime(60) ? 'cursor-not-allowed opacity-50' : '',
                           ]"
                         >
                           <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-900">1 Hour — Teaching (Intro)</span>
-                            <span class="text-xs font-extrabold text-ocean-700">₱{{ Number(estimatedPrice.rate).toLocaleString() }}/surfer</span>
+                            <span class="text-xs font-extrabold text-lagoon-700">₱{{ Number(estimatedPrice.rate).toLocaleString() }}/surfer</span>
                           </div>
                           <p class="mt-1 text-[11px] text-slate-500">Quick first-time surf experience.</p>
                         </button>
@@ -1101,8 +1101,8 @@ const submit = () => {
                           :class="[
                             'rounded-xl border p-3 text-left transition-all',
                             lessonMinutes === 120
-                              ? 'border-ocean-600 bg-ocean-50/70 ring-2 ring-ocean-200'
-                              : 'border-slate-200 bg-white hover:border-ocean-300',
+                              ? 'border-lagoon-600 bg-lagoon-50/70 ring-2 ring-lagoon-200'
+                              : 'border-slate-200 bg-white hover:border-lagoon-300',
                             !durationOptionEndTime(120) ? 'cursor-not-allowed opacity-50' : '',
                           ]"
                         >
@@ -1126,14 +1126,14 @@ const submit = () => {
                           :class="[
                             'rounded-xl border p-3 text-left transition-all',
                             lessonMinutes === 120
-                              ? 'border-ocean-600 bg-ocean-50/70 ring-2 ring-ocean-200'
-                              : 'border-slate-200 bg-white hover:border-ocean-300',
+                              ? 'border-lagoon-600 bg-lagoon-50/70 ring-2 ring-lagoon-200'
+                              : 'border-slate-200 bg-white hover:border-lagoon-300',
                             !durationOptionEndTime(120) ? 'cursor-not-allowed opacity-50' : '',
                           ]"
                         >
                           <div class="flex items-center justify-between gap-2">
                             <span class="text-xs font-bold text-slate-900">2 Hours — Standard {{ activeService?.label ?? 'Session' }}</span>
-                            <span class="rounded-full bg-ocean-100 px-2 py-0.5 text-[10px] font-bold uppercase text-ocean-800">
+                            <span class="rounded-full bg-lagoon-100 px-2 py-0.5 text-[10px] font-bold uppercase text-lagoon-800">
                               Fixed Base
                             </span>
                           </div>
@@ -1149,14 +1149,14 @@ const submit = () => {
                           :class="[
                             'rounded-xl border p-3 text-left transition-all',
                             lessonMinutes === 180
-                              ? 'border-ocean-600 bg-ocean-50/70 ring-2 ring-ocean-200'
-                              : 'border-slate-200 bg-white hover:border-ocean-300',
+                              ? 'border-lagoon-600 bg-lagoon-50/70 ring-2 ring-lagoon-200'
+                              : 'border-slate-200 bg-white hover:border-lagoon-300',
                             !durationOptionEndTime(180) ? 'cursor-not-allowed opacity-50' : '',
                           ]"
                         >
                           <div class="flex items-center justify-between gap-2">
                             <span class="text-xs font-bold text-slate-900">3 Hours — Extended (+1 Hr)</span>
-                            <span class="text-xs font-extrabold text-ocean-700">₱{{ (Number(estimatedPrice.rate) * 3).toLocaleString() }}/surfer</span>
+                            <span class="text-xs font-extrabold text-lagoon-700">₱{{ (Number(estimatedPrice.rate) * 3).toLocaleString() }}/surfer</span>
                           </div>
                           <p class="mt-1 text-[11px] text-slate-500">
                             <template v-if="durationOptionEndTime(180)">
@@ -1171,7 +1171,7 @@ const submit = () => {
 
                       <select
                         v-model="form.end_time"
-                        class="mt-1 block w-full appearance-none border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm"
+                        class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm"
                         required
                       >
                         <option value="" disabled>Select an end time</option>
@@ -1181,7 +1181,7 @@ const submit = () => {
                       </select>
 
                       <p class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                        <span class="rounded-full bg-ocean-50 px-2 py-0.5 font-bold text-ocean-700">
+                        <span class="rounded-full bg-lagoon-50 px-2 py-0.5 font-bold text-lagoon-700">
                           {{ lessonDurationText }} lesson
                         </span>
                         <span v-if="form.start_time && form.end_time">
@@ -1194,16 +1194,16 @@ const submit = () => {
                   </div>
 
                   <!-- Real-Time Tide Forecast -->
-                  <div v-if="dailyTides.length > 0" class="col-span-full bg-ocean-50/50 p-5 rounded-2xl border border-ocean-100/50">
+                  <div v-if="dailyTides.length > 0" class="col-span-full bg-lagoon-50/50 p-5 rounded-2xl border border-lagoon-100">
                     <h4 class="text-sm font-bold text-slate-900 mb-3 flex items-center">
-                      <svg class="w-5 h-5 text-ocean-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-5 h-5 text-lagoon-700 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                       Tide Forecast for {{ form.date }}
                     </h4>
                     <div class="flex flex-wrap gap-3">
                       <span v-for="tide in dailyTides" :key="tide.time" class="text-sm bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-100">
-                        <strong :class="tide.type === 'high' ? 'text-ocean-600' : 'text-amber-600'">{{ tide.type === 'high' ? 'High' : 'Low' }}</strong>: {{ tide.time }} ({{ tide.height }}m)
+                        <strong :class="tide.type === 'high' ? 'text-lagoon-700' : 'text-amber-600'">{{ tide.type === 'high' ? 'High' : 'Low' }}</strong>: {{ tide.time }} ({{ tide.height }}m)
                       </span>
                     </div>
                     
@@ -1251,7 +1251,7 @@ const submit = () => {
                       >+</button>
                     </div>
                     <p class="mt-1 text-xs text-slate-500">
-                      Max {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }} ({{ maxStudents > 1 ? 'same skill level required' : '1-on-1' }})<span v-if="maxStudents > 1 && selectedSlotRemainingSeats !== null" class="font-semibold text-ocean-700"> · {{ selectedSlotRemainingSeats }} of {{ maxStudents }} {{ selectedSlotRemainingSeats === 1 ? 'seat' : 'seats' }} open at {{ formatSlotLabel(form.start_time) }}</span>
+                      Max {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }} ({{ maxStudents > 1 ? 'same skill level required' : '1-on-1' }})<span v-if="maxStudents > 1 && selectedSlotRemainingSeats !== null" class="font-semibold text-lagoon-700"> · {{ selectedSlotRemainingSeats }} of {{ maxStudents }} {{ selectedSlotRemainingSeats === 1 ? 'seat' : 'seats' }} open at {{ formatSlotLabel(form.start_time) }}</span>
                     </p>
                   </div>
 
@@ -1314,10 +1314,10 @@ const submit = () => {
                   </div>
 
                   <!-- Own Board Check -->
-                  <div class="col-span-full bg-ocean-50/50 p-6 rounded-2xl border border-ocean-100/50">
+                  <div class="col-span-full bg-lagoon-50/50 p-6 rounded-2xl border border-lagoon-100">
                     <div class="flex items-center space-x-4">
-                      <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-ocean-100 shadow-sm">
-                        <svg class="w-6 h-6 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-lagoon-200 shadow-sm">
+                        <svg class="w-6 h-6 text-lagoon-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                       </div>
@@ -1332,7 +1332,7 @@ const submit = () => {
                           :class="[
                             'px-4 py-2 text-xs font-bold rounded-lg transition-all',
                             form.has_board
-                              ? 'bg-ocean-600 text-white shadow-md'
+                              ? 'bg-deep-900 text-white shadow-md'
                               : 'text-slate-500 hover:bg-slate-50'
                           ]"
                         >Yes, I have</button>
@@ -1342,7 +1342,7 @@ const submit = () => {
                           :class="[
                             'px-4 py-2 text-xs font-bold rounded-lg transition-all',
                             !form.has_board
-                              ? 'bg-ocean-600 text-white shadow-md'
+                              ? 'bg-deep-900 text-white shadow-md'
                               : 'text-slate-500 hover:bg-slate-50'
                           ]"
                         >No, I'll rent</button>
@@ -1360,7 +1360,7 @@ const submit = () => {
                   <div class="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
                     <div class="col-span-full mb-2">
                        <h4 class="text-sm font-bold text-slate-900 flex items-center">
-                         <svg class="w-4 h-4 mr-2 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <svg class="w-4 h-4 mr-2 text-lagoon-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                          </svg>
                          Physical Profile
@@ -1426,7 +1426,7 @@ const submit = () => {
                     <div class="col-span-full space-y-2.5">
                       <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <InputLabel for="surf_spot" value="Choose Surf Spot & View Photos" />
-                        <span v-if="instructorHasCustomSpots" class="text-xs font-semibold text-ocean-700">
+                        <span v-if="instructorHasCustomSpots" class="text-xs font-semibold text-lagoon-700">
                           Showing surf zones where {{ instructor.name }} teaches for your skill level
                         </span>
                       </div>
@@ -1445,12 +1445,12 @@ const submit = () => {
                         <div
                           v-if="lockedSurfSpot"
                           role="note"
-                          class="rounded-xl border border-ocean-200 bg-ocean-50 px-4 py-3 text-xs text-ocean-900"
+                          class="rounded-xl border border-lagoon-200 bg-lagoon-50 px-4 py-3 text-xs text-deep-900"
                         >
                           <p class="font-bold">
                             Location Locked for Shared Session: {{ lockedSurfSpot.name }}
                           </p>
-                          <p class="mt-0.5 text-ocean-800">
+                          <p class="mt-0.5 text-lagoon-800">
                             Another student already reserved part of this time slot at {{ lockedSurfSpot.name }}, so everyone sharing the session meets at the same surf spot. If wave or wind conditions change, your instructor can still update the surf spot later and notify all students.
                           </p>
                         </div>
@@ -1471,7 +1471,7 @@ const submit = () => {
                             id="surf_spot"
                             v-model="form.surf_spot_id"
                             :disabled="Boolean(lockedSurfSpot)"
-                            class="mt-1 block w-full appearance-none border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm text-sm disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
+                            class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm text-sm disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
                           >
                             <option v-for="spot in displayedSpots" :key="spot.id" :value="spot.id">
                               {{ spot.name }} — {{ spot.area ?? 'Siargao' }} ({{ spot.difficulty.charAt(0).toUpperCase() + spot.difficulty.slice(1) }})
@@ -1498,7 +1498,7 @@ const submit = () => {
                     <div class="col-span-full bg-slate-50/80 p-6 rounded-2xl border border-slate-200/80">
                       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                         <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm w-fit">
-                          <svg class="w-6 h-6 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg class="w-6 h-6 text-lagoon-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
@@ -1516,7 +1516,7 @@ const submit = () => {
                             :class="[
                               'px-4 py-2 text-xs font-bold rounded-lg transition-all',
                               !form.needs_hotel_pickup
-                                ? 'bg-ocean-600 text-white shadow-md'
+                                ? 'bg-deep-900 text-white shadow-md'
                                 : 'text-slate-500 hover:bg-slate-50',
                             ]"
                           >
@@ -1528,7 +1528,7 @@ const submit = () => {
                             :class="[
                               'px-4 py-2 text-xs font-bold rounded-lg transition-all',
                               form.needs_hotel_pickup
-                                ? 'bg-ocean-600 text-white shadow-md'
+                                ? 'bg-deep-900 text-white shadow-md'
                                 : 'text-slate-500 hover:bg-slate-50',
                             ]"
                           >
@@ -1660,7 +1660,7 @@ const submit = () => {
                               :id="`companion-board-${index}`"
                               v-model="companion.has_board"
                               type="checkbox"
-                              class="rounded border-slate-300 text-ocean-600 focus:ring-ocean-500"
+                              class="rounded border-slate-300 text-lagoon-600 focus:ring-lagoon-600"
                             />
                             <label :for="`companion-board-${index}`" class="text-sm text-slate-600">Yes</label>
                           </div>
@@ -1679,7 +1679,7 @@ const submit = () => {
                           <textarea
                             v-model="companion.medical_info"
                             rows="2"
-                            class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500"
+                            class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600"
                             placeholder="Allergies or conditions the instructor should know about"
                           ></textarea>
                         </div>
@@ -1709,7 +1709,7 @@ const submit = () => {
                   <textarea
                     id="notes"
                     v-model="form.notes"
-                    class="mt-1 block w-full border-slate-300 focus:border-ocean-500 focus:ring-ocean-500 rounded-lg shadow-sm"
+                    class="mt-1 block w-full border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm"
                     rows="3"
                     placeholder="Any lesson preferences, goals, or special requests..."
                   ></textarea>
@@ -1719,7 +1719,7 @@ const submit = () => {
                   <Link :href="route('instructors.profile', instructor.id)" class="text-slate-500 hover:text-slate-800 text-sm font-medium">
                     &larr; Back to Profile
                   </Link>
-                  <BaseButton 
+                  <AppButton 
                     type="submit" 
                     variant="primary" 
                     size="lg"
@@ -1727,13 +1727,13 @@ const submit = () => {
                     :disabled="form.processing || !form.date || !form.start_time || !form.end_time || !form.surf_spot_id || !form.session_type || serviceOptions.length === 0 || ambientSpots.length === 0 || Boolean(childSafetyViolation) || (form.needs_hotel_pickup && !form.hotel_name.trim())"
                   >
                     Continue to Waiver &rarr;
-                  </BaseButton>
+                  </AppButton>
                 </div>
               </form>
             </div>
             
             <!-- Information Callout -->
-            <div class="bg-ocean-600 rounded-2xl p-8 text-white relative overflow-hidden group shadow-xl">
+            <div class="bg-deep-900 rounded-2xl p-8 text-white relative overflow-hidden group shadow-xl">
                <div class="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
                <div class="relative flex items-start space-x-6">
                  <div class="bg-white/20 p-3 rounded-xl border border-white/30">
@@ -1743,7 +1743,7 @@ const submit = () => {
                  </div>
                  <div>
                    <h3 class="text-xl font-bold mb-2">Did you know?</h3>
-                   <p class="text-ocean-50 opacity-90 leading-relaxed">
+                   <p class="text-cyan-100 opacity-90 leading-relaxed">
                      SiaSurf is the only platform that automatically verifies your instructor's WASAR (Water Search and Rescue) certification before every lesson. Your safety is our #1 priority.
                    </p>
                  </div>
@@ -1755,20 +1755,20 @@ const submit = () => {
           <div class="space-y-6">
             
             <!-- Instructor Summary -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sticky top-8">
-              <h3 class="text-lg font-bold text-slate-900 mb-4 pb-4 border-b border-slate-100">Booking Summary</h3>
+            <div class="bg-white rounded-2xl shadow-sm border border-sand-200 p-6 sticky top-8">
+              <h3 class="text-lg font-bold text-deep-950 mb-4 pb-4 border-b border-sand-200">Booking Summary</h3>
               
               <!-- Instructor Info -->
               <div class="flex items-center mb-6">
                 <img 
                   v-if="instructorAvatar"
                   :src="instructorAvatar" 
-                  class="w-14 h-14 rounded-xl object-cover border-2 border-ocean-100 shadow-sm"
+                  class="w-14 h-14 rounded-xl object-cover border-2 border-lagoon-200 shadow-sm"
                   alt=""
                 >
                 <div
                   v-else
-                  class="flex h-14 w-14 items-center justify-center rounded-xl border-2 border-ocean-100 bg-ocean-50 text-body font-bold text-ocean-700"
+                  class="flex h-14 w-14 items-center justify-center rounded-xl border-2 border-lagoon-200 bg-lagoon-50 text-body font-bold text-lagoon-700"
                   aria-hidden="true"
                 >
                   {{ instructorInitials }}
@@ -1810,7 +1810,7 @@ const submit = () => {
 
                 <div class="pt-4 border-t border-slate-100 flex justify-between items-center">
                   <span class="text-base font-bold text-slate-900">Total Price</span>
-                  <span class="text-2xl font-black text-ocean-600">₱{{ estimatedPrice.total.toLocaleString() }}</span>
+                  <span class="text-2xl font-black text-deep-950">₱{{ estimatedPrice.total.toLocaleString() }}</span>
                 </div>
               </div>
 
@@ -1836,15 +1836,15 @@ const submit = () => {
                   </p>
                 </div>
 
-                <div class="p-4 bg-slate-50 rounded-xl space-y-2">
+                <div class="p-4 bg-sand-50 rounded-xl space-y-2 border border-sand-200/70">
                    <div class="flex items-center text-xs text-slate-600">
-                     <svg class="w-4 h-4 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <svg class="w-4 h-4 text-lagoon-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                      </svg>
                      Instant confirmation available
                    </div>
                    <div class="flex items-center text-xs text-slate-600">
-                     <svg class="w-4 h-4 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <svg class="w-4 h-4 text-lagoon-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                      </svg>
                      Insurance coverage included

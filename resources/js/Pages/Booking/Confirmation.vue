@@ -218,7 +218,7 @@ onBeforeUnmount(() => {
     <div class="py-12 bg-white min-h-screen">
       <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <!-- Progress Stepper -->
-        <BookingStepper :current="6" class="mt-6" />
+        <BookingStepper :current="4" class="mt-6" />
 
         <!-- =============================================================== -->
         <!-- STATE 1: WAITING FOR INSTRUCTOR CONFIRMATION (status = pending) -->

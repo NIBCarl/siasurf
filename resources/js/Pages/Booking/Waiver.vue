@@ -5,6 +5,7 @@ import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
 
 interface Booking {
   id: number
@@ -260,6 +261,8 @@ const formatBookingTime = (booking: Booking): string => {
   return periods[booking.time_period] || booking.time_period
 }
 
+const showFullAgreement = ref(false)
+
 const goBack = () => {
   router.post(route('bookings.abandon', props.booking.id))
 }
@@ -269,10 +272,10 @@ const goBack = () => {
   <Head title="Surf Lesson Waiver" />
 
   <AppSidebarLayout title="Surf Lesson Waiver">
-    <div class="py-10 bg-slate-50 min-h-screen">
+    <div class="py-10 bg-sand-50 min-h-screen">
       <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Progress Stepper -->
-        <BookingStepper :current="4" class="mt-4" />
+        <BookingStepper :current="2" class="mt-4" />
 
         <!-- Exclusive Slot Hold Banner -->
         <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
@@ -308,14 +311,14 @@ const goBack = () => {
         <!-- Multi-participant Progress -->
         <div
           v-if="participant && progress && progress.participants > 1"
-          class="mb-6 rounded-xl border border-ocean-100 bg-ocean-50/60 px-5 py-4"
+          class="mb-6 rounded-xl border border-lagoon-200 bg-lagoon-50/60 px-5 py-4"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p class="text-[10px] font-bold uppercase tracking-widest text-ocean-600">Signing for</p>
+              <p class="text-[10px] font-bold uppercase tracking-widest text-lagoon-700">Signing for</p>
               <p class="text-base font-bold text-slate-900">{{ participant.full_name || 'Participant' }}</p>
             </div>
-            <span class="rounded-full bg-white px-3 py-1 text-xs font-bold text-ocean-700 border border-ocean-100">
+            <span class="rounded-full bg-white px-3 py-1 text-xs font-bold text-lagoon-700 border border-lagoon-200">
               {{ progress.signed }} / {{ progress.required }} signatures
             </span>
           </div>
@@ -340,7 +343,7 @@ const goBack = () => {
         </div>
 
         <!-- Compact Booking Context Bar -->
-        <div v-if="booking && booking.instructor" class="mb-6 bg-white rounded-xl shadow-sm border border-slate-200 px-5 py-3.5">
+        <div v-if="booking && booking.instructor" class="mb-6 bg-white rounded-xl shadow-sm border border-sand-200 px-5 py-3.5">
           <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-slate-600">
             <div>
               <span class="font-semibold text-slate-400 uppercase tracking-wider mr-1.5">Spot:</span>
@@ -356,7 +359,7 @@ const goBack = () => {
             </div>
             <div>
               <span class="font-semibold text-slate-400 uppercase tracking-wider mr-1.5">Pickup:</span>
-              <span class="font-bold" :class="waiverPrefill.needs_hotel_pickup ? 'text-ocean-700' : 'text-slate-800'">
+              <span class="font-bold" :class="waiverPrefill.needs_hotel_pickup ? 'text-lagoon-700' : 'text-slate-800'">
                 {{ waiverPrefill.needs_hotel_pickup ? `Hotel Pickup (${waiverPrefill.hotel_name})` : 'Meet at surf spot' }}
               </span>
             </div>
@@ -365,8 +368,8 @@ const goBack = () => {
 
         <!-- Official SISA Waiver Document Form -->
         <form @submit.prevent="submitWaiver" class="space-y-6">
-          <div class="rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 p-2 sm:p-3 shadow-lg">
-            <div class="rounded-xl bg-white border border-sky-200 px-5 py-6 sm:px-10 sm:py-8 text-slate-900">
+          <div class="rounded-2xl bg-deep-900 p-2 sm:p-3 shadow-lg">
+            <div class="rounded-xl bg-white border border-sand-200 px-5 py-6 sm:px-10 sm:py-8 text-slate-900">
               <!-- Document Header: Logo + Title -->
               <div class="flex flex-col sm:flex-row sm:items-end gap-4 pb-3 border-b-2 border-slate-800">
                 <div class="shrink-0">
@@ -412,7 +415,7 @@ const goBack = () => {
                       type="date"
                       :max="maxBirthday"
                       min="1920-01-01"
-                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                      class="w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-lagoon-700 focus:ring-0"
                     />
                   </div>
                 </div>
@@ -443,7 +446,7 @@ const goBack = () => {
                       v-model="form.email"
                       type="email"
                       placeholder="Enter email"
-                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                      class="w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-lagoon-700 focus:ring-0"
                     />
                   </div>
                 </div>
@@ -466,7 +469,7 @@ const goBack = () => {
                       v-model="form.country"
                       type="text"
                       placeholder="Enter country"
-                      class="w-full border-0 border-b border-ocean-500 bg-ocean-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-ocean-700 focus:ring-0"
+                      class="w-full border-0 border-b border-lagoon-600 bg-lagoon-50/40 px-1.5 py-0.5 text-xs sm:text-sm focus:border-lagoon-700 focus:ring-0"
                     />
                   </div>
                 </div>
@@ -497,13 +500,32 @@ const goBack = () => {
                       type="text"
                       required
                       placeholder="e.g. Maria Santos — +63 917 000 0000"
-                      class="flex-1 border-0 border-b-2 border-ocean-500 bg-ocean-50/40 px-2 py-1 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 rounded-t"
+                      class="flex-1 border-0 border-b-2 border-lagoon-600 bg-lagoon-50/40 px-2 py-1 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0 rounded-t"
                     />
                   </div>
                   <p v-if="form.errors.emergency_contact" class="mt-1 text-xs font-semibold text-rose-600">
                     {{ form.errors.emergency_contact }}
                   </p>
                 </div>
+              </div>
+
+              <!-- Medical Info Declaration (kept always visible outside collapsible legal clauses) -->
+              <div class="mt-4 text-left">
+                <label for="medical_info" class="block text-xs font-bold text-slate-800 mb-1">
+                  Medical Info / Allergies or Physical Conditions
+                  <span class="font-normal text-slate-500">(Optional)</span>
+                </label>
+                <textarea
+                  id="medical_info"
+                  v-model="form.medical_info"
+                  rows="2"
+                  maxlength="1000"
+                  placeholder="List any allergies, medical conditions, injuries, or medications your instructor should know about (leave blank if none)..."
+                  class="w-full rounded-md border border-sand-300 border-b-2 border-b-lagoon-600 bg-lagoon-50/40 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0"
+                ></textarea>
+                <p v-if="form.errors.medical_info" class="mt-1 text-xs font-semibold text-rose-600">
+                  {{ form.errors.medical_info }}
+                </p>
               </div>
 
               <!-- Intro Statement -->
@@ -521,41 +543,53 @@ const goBack = () => {
                 </p>
               </div>
 
-              <!-- Clauses 1 to 7 (Exact SISA Agreement Text) -->
-              <ol class="mt-5 space-y-2.5 text-xs sm:text-[13px] leading-relaxed text-slate-800 text-justify">
-                <li
-                  v-for="clause in waiverDocument.clauses"
-                  :key="clause.number"
-                  class="flex items-start gap-2.5"
-                >
-                  <span class="font-bold text-slate-900 shrink-0 w-4">{{ clause.number }}.</span>
-                  <div class="flex-1">
-                    <p>
-                      <strong class="font-bold text-slate-950">{{ clause.heading }}</strong>
-                      {{ ' ' + clause.body }}
-                    </p>
+              <!-- Quick Summary Before Signing -->
+              <div class="mt-4 rounded-xl border border-sand-200 bg-sand-50/80 p-4 text-xs text-deep-900">
+                <p class="font-bold uppercase tracking-wider text-[11px] text-deep-950 mb-2">
+                  Quick Summary Before Signing
+                </p>
+                <ul class="space-y-1.5 text-slate-700 list-disc pl-4">
+                  <li><strong>Health &amp; Fitness:</strong> You confirm you can swim safely and have disclosed any medical conditions above.</li>
+                  <li><strong>Instructor &amp; Zone Rules:</strong> You agree to follow your SISA-certified instructor's ocean safety instructions at all times.</li>
+                  <li><strong>Open-Ocean Risk &amp; Release:</strong> Surfing involves natural ocean hazards; by signing, you accept these risks and release SiaSurf / SISA within the agreement below.</li>
+                </ul>
+              </div>
 
-                    <!-- Medical Info declared directly under 1. PERSONAL HEALTH -->
-                    <div v-if="clause.number === 1" class="mt-2.5 mb-1.5 text-left">
-                      <label for="medical_info" class="block text-xs font-bold text-slate-800 mb-1">
-                        Medical Info / Allergies or Physical Conditions
-                        <span class="font-normal text-slate-500">(Optional)</span>
-                      </label>
-                      <textarea
-                        id="medical_info"
-                        v-model="form.medical_info"
-                        rows="2"
-                        maxlength="1000"
-                        placeholder="List any allergies, medical conditions, injuries, or medications your instructor should know about (leave blank if none)..."
-                        class="w-full rounded-md border border-ocean-200 border-b-2 border-b-ocean-500 bg-ocean-50/40 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0"
-                      ></textarea>
-                      <p v-if="form.errors.medical_info" class="mt-1 text-xs font-semibold text-rose-600">
-                        {{ form.errors.medical_info }}
+              <!-- Clauses 1 to 7 Header + Expand/Collapse Toggle -->
+              <div class="mt-5 flex flex-wrap items-center justify-between gap-2">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Full SISA Liability Agreement (Clauses 1–7)
+                </h2>
+                <button
+                  type="button"
+                  @click="showFullAgreement = !showFullAgreement"
+                  class="text-xs font-bold text-lagoon-700 underline hover:text-deep-900"
+                >
+                  {{ showFullAgreement ? 'Collapse Legal Box' : 'Expand Full Legal Text' }}
+                </button>
+              </div>
+
+              <!-- Clauses 1 to 7 (Exact SISA Agreement Text) -->
+              <div
+                class="mt-2 rounded-xl border border-sand-200 bg-sand-50/30 p-4"
+                :class="showFullAgreement ? '' : 'max-h-64 overflow-y-auto'"
+              >
+                <ol class="space-y-2.5 text-xs sm:text-[13px] leading-relaxed text-slate-800 text-justify">
+                  <li
+                    v-for="clause in waiverDocument.clauses"
+                    :key="clause.number"
+                    class="flex items-start gap-2.5"
+                  >
+                    <span class="font-bold text-slate-900 shrink-0 w-4">{{ clause.number }}.</span>
+                    <div class="flex-1">
+                      <p>
+                        <strong class="font-bold text-slate-950">{{ clause.heading }}</strong>
+                        {{ ' ' + clause.body }}
                       </p>
                     </div>
-                  </div>
-                </li>
-              </ol>
+                  </li>
+                </ol>
+              </div>
 
               <!-- Bottom Signature Block -->
               <div class="mt-8 pt-6 border-t border-slate-300 space-y-6 text-xs sm:text-sm">
@@ -573,7 +607,7 @@ const goBack = () => {
                       required
                       autocomplete="off"
                       :placeholder="isMinor ? 'Type Parent / Guardian full name' : 'Type your full printed name'"
-                      class="w-full border-0 border-b-2 border-ocean-500 bg-ocean-50/40 px-2.5 py-2 text-sm font-semibold text-slate-950 placeholder:text-slate-400 focus:border-ocean-700 focus:bg-ocean-50/70 focus:ring-0 rounded-t"
+                      class="w-full border-0 border-b-2 border-lagoon-600 bg-lagoon-50/40 px-2.5 py-2 text-sm font-semibold text-slate-950 placeholder:text-slate-400 focus:border-lagoon-700 focus:bg-lagoon-50/70 focus:ring-0 rounded-t"
                     />
                     <p class="mt-1 text-[11px] text-slate-500">
                       {{ isMinor ? 'Manually typed by parent or legal guardian.' : 'Manually typed by the student (or parent/guardian).' }}
@@ -638,7 +672,7 @@ const goBack = () => {
           </div>
 
           <!-- Confirmation Checkbox & Action Buttons -->
-          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div class="bg-white rounded-xl shadow-sm border border-sand-200 p-6">
             <div class="mb-6">
               <label for="agreement" class="flex items-start gap-3 cursor-pointer">
                 <input
@@ -646,7 +680,7 @@ const goBack = () => {
                   v-model="form.agreement"
                   type="checkbox"
                   required
-                  class="mt-0.5 h-5 w-5 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500 cursor-pointer"
+                  class="mt-0.5 h-5 w-5 rounded border-slate-300 text-lagoon-600 focus:ring-lagoon-600 cursor-pointer"
                 />
                 <span class="text-sm text-slate-700 leading-relaxed">
                   I confirm that the details above are accurate and that I have read, understood, and voluntarily signed the
@@ -667,7 +701,7 @@ const goBack = () => {
                 ← Back &amp; Release Slot
               </BaseButton>
 
-              <BaseButton
+              <AppButton
                 type="submit"
                 :disabled="form.processing || !form.agreement || isHoldExpired"
                 :loading="form.processing"
@@ -675,7 +709,7 @@ const goBack = () => {
                 size="lg"
               >
                 Sign Waiver &amp; Continue →
-              </BaseButton>
+              </AppButton>
             </div>
           </div>
         </form>
