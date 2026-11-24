@@ -1,13 +1,72 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
+import { getEcho } from '@/Composables/useEcho';
+
+interface LandingStats {
+    total_spots: number;
+    beginner_safe_spots: number;
+    verified_instructors: number;
+    base_rate: number;
+    completed_sessions: number;
+}
+
+interface LandingSpot {
+    id: number | string;
+    name: string;
+    area: string | null;
+    difficulty: string;
+    difficulty_label: string;
+    description: string;
+    best_tide: string | null;
+    image_url: string;
+    url: string;
+}
+
+interface LandingInstructor {
+    id: number | string;
+    name: string;
+    level: number;
+    level_badge: string;
+    bio: string;
+    area: string | null;
+    average_rating: number | null;
+    total_reviews: number;
+    show_stars: boolean;
+    starting_rate: number | null;
+    avatar_url: string;
+    profile_url: string;
+    cta_label: string;
+}
+
+interface LandingReview {
+    id: number | string;
+    rating: number;
+    comment: string;
+    student_name: string;
+    student_avatar_url: string | null;
+    instructor_name: string;
+    surf_spot: string | null;
+    created_at: string;
+    photo_url: string | null;
+}
+
+interface LandingReviewStats {
+    average_rating: number | null;
+    total_reviews: number;
+}
 
 defineProps<{
     canLogin?: boolean;
     canRegister?: boolean;
     laravelVersion: string;
     phpVersion: string;
+    stats: LandingStats;
+    featuredSpots: LandingSpot[];
+    featuredInstructors: LandingInstructor[];
+    recentReviews: LandingReview[];
+    reviewStats: LandingReviewStats;
 }>();
 
 const page = usePage();
@@ -16,10 +75,113 @@ const userRole = computed(() => user.value?.role ?? null);
 
 const isScrolled = ref(false);
 
-onMounted(() => {
-    window.addEventListener('scroll', () => {
-        isScrolled.value = window.scrollY > 50;
+const LANDING_PROPS = ['stats', 'featuredSpots', 'featuredInstructors', 'recentReviews', 'reviewStats'];
+let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let isReloading = false;
+let lastReloadAt = Date.now();
+
+const reloadLandingData = () => {
+    if (isReloading) return;
+    isReloading = true;
+
+    router.reload({
+        only: LANDING_PROPS,
+        onFinish: () => {
+            isReloading = false;
+            lastReloadAt = Date.now();
+        },
     });
+};
+
+const scheduleLandingReload = () => {
+    if (reloadTimer) {
+        clearTimeout(reloadTimer);
+    }
+
+    reloadTimer = setTimeout(() => {
+        reloadTimer = null;
+        reloadLandingData();
+    }, 500);
+};
+
+const onScroll = () => {
+    isScrolled.value = window.scrollY > 50;
+};
+
+const onVisibilityChange = () => {
+    if (!document.hidden && Date.now() - lastReloadAt > 15_000) {
+        scheduleLandingReload();
+    }
+};
+
+const spotDifficultyBadgeClass = (difficulty: string): string => {
+    switch (difficulty) {
+        case 'advanced':
+            return 'bg-rose-100 text-rose-600';
+        case 'intermediate':
+            return 'bg-orange-100 text-orange-600';
+        default:
+            return 'bg-teal-100 text-teal-600';
+    }
+};
+
+const instructorLevelBadgeClass = (level: number): string => {
+    switch (level) {
+        case 3:
+            return 'bg-deep-900';
+        case 2:
+            return 'bg-lagoon-700';
+        default:
+            return 'bg-teal-600';
+    }
+};
+
+const getInitials = (name: string): string => {
+    const initials = name
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+
+    return initials || 'S';
+};
+
+onMounted(() => {
+    window.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    const echo = getEcho();
+    if (echo) {
+        echo.channel('landing.public').listen('.landing.updated', () => {
+            scheduleLandingReload();
+        });
+    }
+
+    pollTimer = setInterval(() => {
+        if (!document.hidden) {
+            scheduleLandingReload();
+        }
+    }, 60_000);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('scroll', onScroll);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+
+    if (reloadTimer) {
+        clearTimeout(reloadTimer);
+        reloadTimer = null;
+    }
+
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+
+    getEcho()?.leave('landing.public');
 });
 </script>
 
@@ -158,15 +320,19 @@ onMounted(() => {
             <div class="container mx-auto px-6">
                 <div class="grid grid-cols-2 gap-6 text-center md:grid-cols-4 md:gap-12">
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-deep-950">31 Breaks</div>
-                        <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">14 Beginner-Safe Zones</div>
+                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-deep-950">{{ stats.total_spots }} Breaks</div>
+                        <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">{{ stats.beginner_safe_spots }} Beginner-Safe Zones</div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-lagoon-700">100% Live</div>
-                        <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">SISA QR Verification</div>
+                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-lagoon-700">
+                            {{ stats.verified_instructors > 0 ? `${stats.verified_instructors} Verified` : '100% Live' }}
+                        </div>
+                        <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">
+                            {{ stats.verified_instructors > 0 ? 'SISA-Certified Instructors' : 'SISA QR Verification' }}
+                        </div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-deep-950">₱600 / hr</div>
+                        <div class="mb-1.5 text-2xl sm:text-4xl font-black text-deep-950">₱{{ stats.base_rate.toLocaleString() }} / hr</div>
                         <div class="text-xs sm:text-sm font-bold uppercase tracking-widest text-stone-600">Standardized SISA Base Rate</div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
@@ -222,44 +388,42 @@ onMounted(() => {
         <!-- Surf Spots Gallery -->
         <section id="spots" class="bg-sand-50 py-14 md:py-24">
             <div class="container mx-auto px-6">
-                <div class="mb-8 md:mb-16 text-center">
-                    <h2 class="mb-4 text-3xl font-bold text-slate-900 md:text-5xl">Explore the Island's Best</h2>
-                    <p class="mx-auto max-w-2xl text-slate-600">Every break on the island, mapped with its difficulty and local conditions. Find the spot that matches your skill level.</p>
+                <div class="mb-8 md:mb-16 flex flex-col items-center justify-between gap-6 md:flex-row">
+                    <div class="text-center md:text-left">
+                        <h2 class="mb-4 text-3xl font-bold text-slate-900 md:text-5xl">Explore the Island's Best</h2>
+                        <p class="max-w-2xl text-slate-600">Every break on the island, mapped with its difficulty and local conditions. Find the spot that matches your skill level.</p>
+                    </div>
+                    <Link :href="route('surf-spots.index')" class="shrink-0 rounded-full border-2 border-deep-900 px-8 py-3 font-bold text-deep-900 transition hover:bg-deep-900 hover:text-white">
+                        Explore All Breaks
+                    </Link>
                 </div>
 
                 <div class="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-6 px-6 md:mx-0 md:px-0 md:pb-0 md:grid md:grid-cols-3 md:gap-8 md:overflow-visible">
-                    <div class="w-[82vw] max-w-[320px] shrink-0 snap-center md:w-auto md:max-w-none group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
-                        <img src="/images/spot_cloud9.png" class="h-56 md:h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Cloud 9" />
+                    <Link
+                        v-for="spot in featuredSpots"
+                        :key="spot.id"
+                        :href="spot.url"
+                        class="w-[82vw] max-w-[320px] shrink-0 snap-center md:w-auto md:max-w-none group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl"
+                    >
+                        <img :src="spot.image_url" class="h-56 md:h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" :alt="spot.name" />
                         <div class="p-6 md:p-8">
-                            <div class="mb-2 flex items-center justify-between">
-                                <h3 class="text-xl font-bold text-slate-900">Cloud 9</h3>
-                                <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-600 uppercase tracking-wider">Advanced</span>
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <h3 class="text-xl font-bold text-slate-900">{{ spot.name }}</h3>
+                                <span
+                                    :class="[
+                                        'shrink-0 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider',
+                                        spotDifficultyBadgeClass(spot.difficulty),
+                                    ]"
+                                >
+                                    {{ spot.difficulty_label }}
+                                </span>
                             </div>
-                            <p class="text-sm text-slate-600">The island's most famous break. Thick, hollow tubes at mid-to-high tide.</p>
+                            <p v-if="spot.area" class="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
+                                {{ spot.area }}<span v-if="spot.best_tide"> · {{ spot.best_tide }}</span>
+                            </p>
+                            <p class="line-clamp-3 text-sm text-slate-600">{{ spot.description }}</p>
                         </div>
-                    </div>
-
-                    <div class="w-[82vw] max-w-[320px] shrink-0 snap-center md:w-auto md:max-w-none group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
-                        <img src="/images/spot_quicksilver.png" class="h-56 md:h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Quicksilver" />
-                        <div class="p-6 md:p-8">
-                            <div class="mb-2 flex items-center justify-between">
-                                <h3 class="text-xl font-bold text-slate-900">Quicksilver</h3>
-                                <span class="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-600 uppercase tracking-wider">Intermediate</span>
-                            </div>
-                            <p class="text-sm text-slate-600">Right next to Cloud 9. Offers faster, sharper waves perfect for refining your skills.</p>
-                        </div>
-                    </div>
-
-                    <div class="w-[82vw] max-w-[320px] shrink-0 snap-center md:w-auto md:max-w-none group relative overflow-hidden rounded-[2rem] bg-white shadow-lg transition-all hover:-translate-y-2 hover:shadow-xl">
-                        <img src="/images/spot_jacking_horse.png" class="h-56 md:h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Jacking Horse" />
-                        <div class="p-6 md:p-8">
-                            <div class="mb-2 flex items-center justify-between">
-                                <h3 class="text-xl font-bold text-slate-900">Jacking Horse</h3>
-                                <span class="rounded-full bg-teal-100 px-3 py-1 text-xs font-bold text-teal-600 uppercase tracking-wider">Beginner</span>
-                            </div>
-                            <p class="text-sm text-slate-600">A friendly, rolling break ideal for first-timers and those learning the basics.</p>
-                        </div>
-                    </div>
+                    </Link>
                 </div>
             </div>
         </section>
@@ -278,37 +442,124 @@ onMounted(() => {
                 </div>
 
                 <div class="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-6 px-6 lg:mx-0 lg:px-0 lg:pb-0 lg:grid lg:grid-cols-2 lg:gap-12 lg:overflow-visible">
-                    <div class="w-[86vw] max-w-[340px] shrink-0 snap-center lg:w-auto lg:max-w-none flex flex-col items-center gap-6 md:gap-8 rounded-[2rem] bg-sand-50 p-6 md:flex-row md:p-12">
-                        <img src="/images/instructor_male.png" class="h-44 w-44 md:h-48 md:w-48 rounded-3xl object-cover shadow-xl" alt="Instructor" />
-                        <div>
-                            <div class="mb-4 flex items-center gap-3">
-                                <span class="rounded-full bg-deep-900 px-3 py-1 text-xs font-bold text-white uppercase">Level 3 Expert</span>
-                                <div class="flex text-amber-400">
-                                    <svg v-for="i in 5" :key="i" class="h-4 w-4 fill-current" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
+                    <div
+                        v-for="instructor in featuredInstructors"
+                        :key="instructor.id"
+                        class="w-[86vw] max-w-[340px] shrink-0 snap-center lg:w-auto lg:max-w-none flex flex-col items-center gap-6 md:gap-8 rounded-[2rem] bg-sand-50 p-6 md:flex-row md:p-12"
+                    >
+                        <img :src="instructor.avatar_url" class="h-44 w-44 md:h-48 md:w-48 shrink-0 rounded-3xl object-cover shadow-xl" :alt="instructor.name" />
+                        <div class="min-w-0 flex-1">
+                            <div class="mb-4 flex flex-wrap items-center gap-3">
+                                <span
+                                    :class="[
+                                        'rounded-full px-3 py-1 text-xs font-bold text-white uppercase',
+                                        instructorLevelBadgeClass(instructor.level),
+                                    ]"
+                                >
+                                    {{ instructor.level_badge }}
+                                </span>
+                                <div v-if="instructor.show_stars" class="flex items-center gap-1.5">
+                                    <div class="flex text-amber-400">
+                                        <svg
+                                            v-for="i in 5"
+                                            :key="i"
+                                            :class="['h-4 w-4 fill-current', i <= Math.round(instructor.average_rating ?? 5) ? 'text-amber-400' : 'text-stone-300']"
+                                            viewBox="0 0 20 20"
+                                        >
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                        </svg>
+                                    </div>
+                                    <span v-if="instructor.total_reviews > 0" class="text-xs font-bold text-stone-600">
+                                        {{ instructor.average_rating }} ({{ instructor.total_reviews }})
+                                    </span>
                                 </div>
+                                <span v-else class="rounded-full bg-teal-100 px-3 py-1 text-xs font-bold text-teal-700">
+                                    SISA Verified
+                                </span>
                             </div>
-                            <h3 class="mb-2 text-2xl font-bold text-deep-950">Junrey 'Bogs' Capistrano</h3>
-                            <p class="mb-6 text-stone-600">Local legend with 15 years at Cloud 9. Specializes in advanced tube riding and safety rescue.</p>
-                            <Link :href="route('instructors.search')" class="inline-flex items-center font-bold text-lagoon-700 hover:text-lagoon-800">Browse Verified Instructors →</Link>
+                            <h3 class="mb-2 text-2xl font-bold text-deep-950">{{ instructor.name }}</h3>
+                            <p v-if="instructor.area || instructor.starting_rate" class="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500">
+                                <span v-if="instructor.area">{{ instructor.area }}</span>
+                                <span v-if="instructor.area && instructor.starting_rate"> · </span>
+                                <span v-if="instructor.starting_rate">From ₱{{ instructor.starting_rate.toLocaleString() }}/hr</span>
+                            </p>
+                            <p class="mb-6 line-clamp-3 text-stone-600">{{ instructor.bio }}</p>
+                            <Link :href="instructor.profile_url" class="inline-flex items-center font-bold text-lagoon-700 hover:text-lagoon-800">
+                                {{ instructor.cta_label }} →
+                            </Link>
                         </div>
                     </div>
+                </div>
+            </div>
+        </section>
 
-                    <div class="w-[86vw] max-w-[340px] shrink-0 snap-center lg:w-auto lg:max-w-none flex flex-col items-center gap-6 md:gap-8 rounded-[2rem] bg-sand-50 p-6 md:flex-row md:p-12">
-                        <img src="/images/instructor_female.png" class="h-44 w-44 md:h-48 md:w-48 rounded-3xl object-cover shadow-xl" alt="Instructor" />
-                        <div>
-                            <div class="mb-4 flex items-center gap-3">
-                                <span class="rounded-full bg-lagoon-700 px-3 py-1 text-xs font-bold text-white uppercase">Level 2 Pro</span>
-                                <div class="flex text-amber-400">
-                                    <svg v-for="i in 5" :key="i" class="h-4 w-4 fill-current" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
+        <!-- Verified Surfer Reviews Section -->
+        <section id="reviews" class="bg-sand-50 py-14 md:py-24">
+            <div class="container mx-auto px-6">
+                <div class="mb-8 md:mb-16 flex flex-col items-center justify-between gap-6 md:flex-row">
+                    <div class="text-center md:text-left">
+                        <h2 class="mb-2 text-3xl font-bold text-slate-900 md:text-5xl">What Surfers Say</h2>
+                        <p class="text-slate-600">Feedback from verified SiaSurf sessions across Siargao.</p>
+                    </div>
+                    <div
+                        v-if="reviewStats.total_reviews > 0"
+                        class="inline-flex items-center gap-2.5 rounded-full bg-white px-6 py-3 shadow-sm border border-stone-200"
+                    >
+                        <svg class="h-5 w-5 text-amber-400 fill-current" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        <span class="text-sm font-bold text-deep-950">
+                            {{ reviewStats.average_rating }} · {{ reviewStats.total_reviews }} Verified {{ reviewStats.total_reviews === 1 ? 'Review' : 'Reviews' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-6 px-6 md:mx-0 md:px-0 md:pb-0 md:grid md:grid-cols-3 md:gap-8 md:overflow-visible">
+                    <div
+                        v-for="review in recentReviews"
+                        :key="review.id"
+                        class="w-[84vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none flex flex-col rounded-[2rem] bg-white p-7 shadow-lg"
+                    >
+                        <div class="mb-4 flex items-center justify-between gap-3">
+                            <div class="flex text-amber-400">
+                                <svg
+                                    v-for="i in 5"
+                                    :key="i"
+                                    :class="['h-4 w-4 fill-current', i <= review.rating ? 'text-amber-400' : 'text-stone-300']"
+                                    viewBox="0 0 20 20"
+                                >
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                            </div>
+                            <span v-if="review.surf_spot" class="rounded-full bg-ocean-50 px-3 py-1 text-xs font-bold text-ocean-700">
+                                {{ review.surf_spot }}
+                            </span>
+                        </div>
+
+                        <p class="mb-6 line-clamp-4 flex-1 text-slate-600 leading-relaxed">
+                            “{{ review.comment }}”
+                        </p>
+
+                        <div class="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <img
+                                    v-if="review.student_avatar_url"
+                                    :src="review.student_avatar_url"
+                                    :alt="review.student_name"
+                                    class="h-10 w-10 shrink-0 rounded-full object-cover"
+                                />
+                                <div
+                                    v-else
+                                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-deep-900 text-xs font-bold text-white"
+                                >
+                                    {{ getInitials(review.student_name) }}
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="truncate text-sm font-bold text-deep-950">{{ review.student_name }}</div>
+                                    <div class="truncate text-xs text-stone-500">with {{ review.instructor_name }}</div>
                                 </div>
                             </div>
-                            <h3 class="mb-2 text-2xl font-bold text-deep-950">Ana 'Maui' San Jose</h3>
-                            <p class="mb-6 text-stone-600">ISA certified instructor focusing on intermediate women's surf camps and longboarding style.</p>
-                            <Link :href="route('instructors.search')" class="inline-flex items-center font-bold text-lagoon-700 hover:text-lagoon-800">Browse Verified Instructors →</Link>
+                            <span class="shrink-0 text-xs font-medium text-stone-400">{{ review.created_at }}</span>
                         </div>
                     </div>
                 </div>
@@ -316,7 +567,7 @@ onMounted(() => {
         </section>
 
         <!-- CTA Section -->
-        <section class="py-12 md:py-20 bg-sand-50">
+        <section class="py-12 md:py-20 bg-white">
             <div class="container mx-auto px-6">
                 <div class="relative overflow-hidden rounded-[2rem] bg-deep-900 px-10 py-16 text-center text-white md:px-20 md:py-24">
                     <div class="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-lagoon-500 opacity-20"></div>

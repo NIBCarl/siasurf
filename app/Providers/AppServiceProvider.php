@@ -10,10 +10,15 @@ use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Notifications\Events\NotificationSent;
+use App\Events\LandingDataUpdated;
 use App\Events\NotificationFeedUpdated;
 use App\Models\Booking;
-use App\Models\User;
+use App\Models\Certificate;
+use App\Models\InstructorProfile;
+use App\Models\Review;
 use App\Models\SafetyIncident;
+use App\Models\SurfSpot;
+use App\Models\User;
 use App\Observers\BookingObserver;
 use App\Observers\SafetyIncidentObserver;
 use App\Contracts\PaymentServiceInterface;
@@ -56,6 +61,22 @@ class AppServiceProvider extends ServiceProvider
 
         // Every confirmed booking gets exactly one private chat thread.
         Booking::observe(BookingObserver::class);
+
+        // Broadcast lightweight nudges so public landing visitors stay in sync
+        // with spot, instructor, and review updates without polling heavily.
+        SurfSpot::saved(fn () => LandingDataUpdated::notify('spots'));
+        SurfSpot::deleted(fn () => LandingDataUpdated::notify('spots'));
+        Review::saved(fn () => LandingDataUpdated::notify('reviews'));
+        Review::deleted(fn () => LandingDataUpdated::notify('reviews'));
+        InstructorProfile::saved(fn () => LandingDataUpdated::notify('instructors'));
+        InstructorProfile::deleted(fn () => LandingDataUpdated::notify('instructors'));
+        Certificate::saved(fn () => LandingDataUpdated::notify('instructors'));
+        Certificate::deleted(fn () => LandingDataUpdated::notify('instructors'));
+        User::updated(function (User $user): void {
+            if ($user->isInstructor() && $user->wasChanged(['name', 'avatar_path'])) {
+                LandingDataUpdated::notify('instructors');
+            }
+        });
 
         Event::listen(NotificationSent::class, function (NotificationSent $event): void {
             if ($event->channel !== 'database' || ! $event->notifiable instanceof User) {

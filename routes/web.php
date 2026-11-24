@@ -33,20 +33,13 @@ use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\Student\FeedbackController;
 use App\Http\Controllers\SurfSpotController;
 use App\Http\Controllers\WaiverController;
+use App\Http\Controllers\WelcomeController;
 use App\Models\SurfSpot;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Public routes
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
-})->name('welcome');
+Route::get('/', WelcomeController::class)->name('welcome');
 
 // Instructor search and public profile routes
 Route::get('/instructors', [InstructorSearchController::class, 'index'])->name('instructors.search');
