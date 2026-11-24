@@ -1,5 +1,6 @@
 import { ref, onUnmounted } from 'vue'
 import { router } from '@inertiajs/vue3'
+import axios from 'axios'
 import { getEcho } from './useEcho'
 
 export interface AppNotification {
@@ -10,6 +11,53 @@ export interface AppNotification {
     data?: any
     timestamp: Date
     read: boolean
+    /** Present for notifications that exist in the database. */
+    serverId?: string
+}
+
+/**
+ * Persisted notifications carry a machine type (e.g. `booking_cancelled`),
+ * while the dropdown renders a severity. Unknown types fall back to `info`.
+ */
+const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
+    incident_report: 'error',
+    incident_outcome: 'error',
+    booking_cancelled: 'warning',
+    booking_declined: 'warning',
+    booking_expired: 'warning',
+    booking_no_show: 'warning',
+    booking_spot_changed: 'warning',
+    instructor_rejected: 'warning',
+    account_suspended: 'warning',
+    instructor_suspended: 'warning',
+    strike_recorded: 'warning',
+    suspension_awaiting_reinstatement: 'warning',
+    instructor_verified: 'success',
+    account_reactivated: 'success',
+    appeal_resolved: 'success',
+}
+
+const TITLE_BY_TYPE: Record<string, string> = {
+    incident_report: 'Safety Incident Reported',
+    incident_outcome: 'Incident Outcome',
+    booking_cancelled: 'Booking Cancelled',
+    booking_declined: 'Request Declined',
+    booking_expired: 'Request Expired',
+    booking_no_show: 'Booking No Show',
+    booking_spot_changed: 'Surf Spot Changed',
+    booking_rescheduled: 'Booking Rescheduled',
+    booking_change_requested: 'Change Request Filed',
+    instructor_rejected: 'Application Rejected',
+    instructor_verified: 'Instructor Verified',
+    account_suspended: 'Account Suspended',
+    account_reactivated: 'Account Reactivated',
+    instructor_suspended: 'Account Suspended',
+    strike_recorded: 'Strike Recorded',
+    appeal_submitted: 'Appeal Submitted',
+    appeal_resolved: 'Appeal Resolved',
+    refund_status_updated: 'Refund Update',
+    review_request: 'Leave a Review',
+    suspension_awaiting_reinstatement: 'Reinstatement Required',
 }
 
 /**
@@ -19,9 +67,12 @@ export interface AppNotification {
 const subscribedChannels: string[] = []
 let notificationsInitialized = false
 
+// Shared across every caller so a broadcast listener and the dropdown that
+// renders it always see the same feed.
+const notifications = ref<AppNotification[]>([])
+const unreadCount = ref(0)
+
 export function useNotifications() {
-    const notifications = ref<AppNotification[]>([])
-    const unreadCount = ref(0)
 
     const syncUnreadCount = () => {
         unreadCount.value = notifications.value.filter((n) => !n.read).length
@@ -49,25 +100,86 @@ export function useNotifications() {
     const markAsRead = (id: string) => {
         const notification = notifications.value.find((n) => n.id === id)
 
-        if (notification && !notification.read) {
-            notification.read = true
-            syncUnreadCount()
+        if (!notification || notification.read) {
+            return
+        }
+
+        notification.read = true
+        syncUnreadCount()
+
+        // Broadcast-only entries have no serverId; nothing to persist.
+        if (notification.serverId) {
+            axios
+                .post(route('notifications.read', notification.serverId))
+                .catch(() => {
+                    notification.read = false
+                    syncUnreadCount()
+                })
         }
     }
 
     const markAllAsRead = () => {
+        const previouslyUnread = notifications.value.filter((n) => !n.read)
         notifications.value.forEach((n) => (n.read = true))
         unreadCount.value = 0
+
+        if (!previouslyUnread.some((n) => n.serverId)) {
+            return
+        }
+
+        axios.post(route('notifications.read-all')).catch(() => {
+            previouslyUnread.forEach((n) => (n.read = false))
+            syncUnreadCount()
+        })
     }
 
     const removeNotification = (id: string) => {
+        const notification = notifications.value.find((n) => n.id === id)
         notifications.value = notifications.value.filter((n) => n.id !== id)
         syncUnreadCount()
+
+        if (notification?.serverId) {
+            axios.delete(route('notifications.destroy', notification.serverId)).catch(() => {})
+        }
     }
 
     const clearAll = () => {
+        const hadPersisted = notifications.value.some((n) => n.serverId)
         notifications.value = []
         unreadCount.value = 0
+
+        if (hadPersisted) {
+            axios.delete(route('notifications.clear')).catch(() => {})
+        }
+    }
+
+    /**
+     * Hydrate the feed from the database so history survives navigation. The
+     * bell lives in a layout that remounts on every Inertia visit, so without
+     * this the panel would always open empty.
+     */
+    const loadNotifications = async () => {
+        try {
+            const response = await axios.get(route('notifications.index'))
+            const items = response.data?.items ?? []
+
+            notifications.value = items.map((item: any) => ({
+                id: item.id,
+                serverId: item.id,
+                type:
+                    SEVERITY_BY_TYPE[item.type] ??
+                    (item.type === 'success' ? 'success' : 'info'),
+                title: TITLE_BY_TYPE[item.type] ?? 'Notification',
+                message: item.message ?? 'You have a new update.',
+                data: item.data,
+                timestamp: new Date(item.created_at ?? Date.now()),
+                read: Boolean(item.read),
+            }))
+
+            syncUnreadCount()
+        } catch {
+            // The feed is additive: a failed fetch must not break the page.
+        }
     }
 
     /**
@@ -97,6 +209,10 @@ export function useNotifications() {
     const initializeEcho = (userId: number, userRole: string) => {
         if (notificationsInitialized) return
 
+        // Load history even when Reverb is unavailable: persisted rows are the
+        // only record of what happened while the user was offline.
+        void loadNotifications()
+
         const echo = getEcho()
         if (!echo) return
 
@@ -109,6 +225,8 @@ export function useNotifications() {
             echo.private(channel)
                 .listen('.booking.confirmed', (e: any) =>
                     toNotification(e, 'Booking Confirmed', 'success'))
+                .listen('.booking.awaiting_payment', (e: any) =>
+                    toNotification(e, 'Payment Required', 'warning'))
                 .listen('.booking.cancelled', (e: any) =>
                     toNotification(e, 'Booking Cancelled', 'warning'))
                 .listen('.booking.declined', (e: any) =>
@@ -224,6 +342,7 @@ export function useNotifications() {
         notifications,
         unreadCount,
         addNotification,
+        loadNotifications,
         markAsRead,
         markAllAsRead,
         removeNotification,

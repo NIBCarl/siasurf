@@ -22,6 +22,7 @@ use App\Http\Controllers\Instructor\QrController as InstructorQrController;
 use App\Http\Controllers\Instructor\SuspensionController;
 use App\Http\Controllers\InstructorSearchController;
 use App\Http\Controllers\InstructorVerificationController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileAvatarController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QRCodeController;
@@ -112,6 +113,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/profile/avatar', [ProfileAvatarController::class, 'destroy'])
         ->middleware('throttle:20,1')
         ->name('profile.avatar.destroy');
+
+    // Persisted notification feed. The bell loads this on mount so history
+    // survives navigation, which a broadcast-only feed cannot do.
+    Route::get('/notifications', [NotificationController::class, 'index'])
+        ->name('notifications.index');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])
+        ->name('notifications.read');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])
+        ->name('notifications.read-all');
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])
+        ->name('notifications.destroy');
+    Route::delete('/notifications', [NotificationController::class, 'clear'])
+        ->name('notifications.clear');
 });
 
 // Booking-scoped chat. The booking policy decides who is a participant, so the
