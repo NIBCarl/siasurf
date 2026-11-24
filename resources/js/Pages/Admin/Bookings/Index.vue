@@ -8,6 +8,7 @@ import EmptyState from '@/Components/UI/EmptyState.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import { CalendarDaysIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface Booking {
     id: number
@@ -86,7 +87,7 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
 }
 
 const formatDate = (date: string) =>
-    new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    formatPhilippineDate(date, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-US', date)
 
 const formatAmount = (amount: number) => Number(amount ?? 0).toLocaleString()
 

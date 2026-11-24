@@ -6,6 +6,7 @@ import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import Modal from '@/Components/Modal.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface Booking {
   id: number
@@ -84,22 +85,18 @@ const submit = () => {
   form.post(route('bookings.store-payment', props.booking.id))
 }
 
-const parseLocalDate = (dateString: string): Date => {
-  const isoDay = dateString.slice(0, 10)
-  const parts = isoDay.split('-').map(Number)
-  if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
-    return new Date(parts[0], parts[1] - 1, parts[2])
-  }
-  return new Date(dateString)
-}
-
 const formatDate = (date: string) => {
-  return parseLocalDate(date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  return formatPhilippineDate(
+    date,
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+    'en-US',
+    date,
+  )
 }
 
 const formatClockTime = (time?: string | null): string => {

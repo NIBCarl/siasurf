@@ -141,7 +141,7 @@ class ChatController extends Controller
             'mine' => $message->sender_id === $viewerId,
             'read_at' => $message->read_at?->toIso8601String(),
             'created_at' => $message->created_at?->toIso8601String(),
-            'created_at_label' => $message->created_at?->format('M j, g:i A'),
+            'created_at_label' => $message->created_at?->copy()->timezone(config('app.timezone', 'Asia/Manila'))->format('M j, g:i A'),
         ];
     }
 

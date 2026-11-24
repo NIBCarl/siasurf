@@ -35,7 +35,7 @@ class Availability extends Model
         'open_slots' => 'array',
         'slot_duration_minutes' => 'integer',
         'is_available' => 'boolean',
-        'specific_date' => 'date',
+        'specific_date' => 'date:Y-m-d',
     ];
 
     // Relationships

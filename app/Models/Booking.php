@@ -151,7 +151,7 @@ class Booking extends Model
         'total_amount' => 'decimal:2',
         'refund_amount' => 'decimal:2',
         'instructor_retained_amount' => 'decimal:2',
-        'original_date' => 'date',
+        'original_date' => 'date:Y-m-d',
         'is_long_term' => 'boolean',
         'rescheduled_by_instructor_at' => 'datetime',
         'student_accepted_reschedule_at' => 'datetime',

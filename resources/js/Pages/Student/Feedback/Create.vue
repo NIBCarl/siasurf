@@ -8,6 +8,7 @@ import AppPanel from '@/Components/UI/AppPanel.vue'
 import InputError from '@/Components/InputError.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 import {
   ArrowLeftIcon,
   CheckBadgeIcon,
@@ -134,7 +135,7 @@ const submit = () => {
 }
 
 const formatDate = (date: string) =>
-  new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  formatPhilippineDate(date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }, 'en-US', date)
 
 const feedbackError = computed(() => (form.errors as Record<string, string>).feedback ?? '')
 </script>

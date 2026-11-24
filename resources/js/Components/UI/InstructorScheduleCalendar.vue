@@ -5,6 +5,7 @@ import AppButton from '@/Components/UI/AppButton.vue'
 import AppCard from '@/Components/UI/AppCard.vue'
 import Modal from '@/Components/Modal.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 import {
   CalendarDaysIcon,
   ChevronLeftIcon,
@@ -200,14 +201,17 @@ const formatCompactTimer = (seconds: number): string => {
 }
 
 const formatLocalDateLong = (isoDate: string): string => {
-  const [year, month, day] = isoDate.slice(0, 10).split('-').map(Number)
-  if (!year || !month || !day) return isoDate
-  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatPhilippineDate(
+    isoDate.slice(0, 10),
+    {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    },
+    'en-US',
+    isoDate,
+  )
 }
 
 const periodForHour = (hour: string): 'morning' | 'afternoon' =>

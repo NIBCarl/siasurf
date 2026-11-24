@@ -5,6 +5,7 @@ import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import InputError from '@/Components/InputError.vue'
 import { ChevronLeftIcon, ExclamationTriangleIcon, PaperClipIcon } from '@heroicons/vue/24/outline'
+import { formatPhilippineDateTime } from '@/utils/philippineTime'
 
 interface Incident {
   id: number
@@ -63,7 +64,7 @@ const severityVariant = (severity: string | null) => severity === 'critical' ? '
             <Badge :variant="statusVariant(incident.status)">{{ incident.status.replace('_', ' ') }}</Badge>
             <Badge v-if="incident.severity" :variant="severityVariant(incident.severity)">{{ incident.severity }}</Badge>
           </div>
-          <p class="mt-1 text-sm text-slate-500">Submitted {{ new Date(incident.created_at).toLocaleString() }} by {{ incident.reporter?.name ?? 'SISA Admin' }}.</p>
+          <p class="mt-1 text-sm text-slate-500">Submitted {{ formatPhilippineDateTime(incident.created_at) }} by {{ incident.reporter?.name ?? 'SISA Admin' }}.</p>
         </div>
       </div>
 

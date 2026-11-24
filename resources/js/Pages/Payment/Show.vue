@@ -12,6 +12,7 @@ import { computed, ref } from 'vue'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import { formatPhilippineDateTime } from '@/utils/philippineTime'
 import {
   CreditCardIcon,
   BanknotesIcon,
@@ -277,7 +278,7 @@ const startGCash = () => {
 
             <p v-if="payment?.receipt_verified_at" class="mt-1 text-xs font-semibold text-emerald-700">
               Verified
-              {{ new Date(payment.receipt_verified_at).toLocaleString('en-US') }}
+              {{ formatPhilippineDateTime(payment.receipt_verified_at) }}
               <template v-if="payment?.verified_by?.name">by {{ payment.verified_by.name }}</template>
             </p>
 

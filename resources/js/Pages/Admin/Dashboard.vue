@@ -11,6 +11,7 @@ import ActivityFeed from '@/Components/Organisms/ActivityFeed.vue'
 import RevenueChart from '@/Components/Organisms/RevenueChart.vue'
 import PopularSpotsChart from '@/Components/Organisms/PopularSpotsChart.vue'
 import TopInstructorsTable from '@/Components/Organisms/TopInstructorsTable.vue'
+import { formatPhilippineTime } from '@/utils/philippineTime'
 import { 
     UserPlusIcon, 
     ShieldCheckIcon, 
@@ -80,12 +81,7 @@ const serviceFeePercent = computed(() => Number(props.stats.revenue.service_fee_
  * reconciling a session against the attendance record.
  */
 const formatStartedAt = (value: string | null | undefined) => {
-  if (!value) return '—'
-
-  const started = new Date(value)
-  if (Number.isNaN(started.getTime())) return '—'
-
-  return started.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return formatPhilippineTime(value, { hour: '2-digit', minute: '2-digit' })
 }
 
 const quickActions = [

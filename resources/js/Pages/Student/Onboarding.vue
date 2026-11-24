@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import AppSwitch from '@/Components/UI/AppSwitch.vue';
 import InputError from '@/Components/InputError.vue';
+import { calculatePhilippineAge, getPhilippineMaxBirthday } from '@/utils/philippineTime';
 
 interface Profile {
     skill_level: string;
@@ -111,11 +112,7 @@ function submitAssessment() {
     });
 }
 
-const maxBirthday = (() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 5);
-    return d.toISOString().split('T')[0];
-})();
+const maxBirthday = getPhilippineMaxBirthday(5);
 
 const commonCountries = [
     'Philippines',
@@ -157,22 +154,7 @@ const age = ref<number | null>(props.profile.age);
 watch(
     () => form.date_of_birth,
     (value) => {
-        if (!value) {
-            age.value = null;
-            return;
-        }
-        const dob = new Date(value);
-        if (Number.isNaN(dob.getTime())) {
-            age.value = null;
-            return;
-        }
-        const today = new Date();
-        let years = today.getFullYear() - dob.getFullYear();
-        const monthDiff = today.getMonth() - dob.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-            years -= 1;
-        }
-        age.value = years >= 0 ? years : null;
+        age.value = calculatePhilippineAge(value);
     },
     { immediate: true },
 );

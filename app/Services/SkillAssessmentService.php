@@ -258,7 +258,7 @@ class SkillAssessmentService
             'bookable_instructors' => $level->instructorLevelRangeLabel(),
             'allowed_zones' => $level->surfSpotRuleLabel(),
             'assessed_at' => $assessment->confirmed_at?->toIso8601String(),
-            'assessed_at_label' => $assessment->confirmed_at?->format('M j, Y g:i A'),
+            'assessed_at_label' => $assessment->confirmed_at?->copy()->timezone(config('app.timezone', 'Asia/Manila'))->format('M j, Y g:i A'),
         ];
     }
 

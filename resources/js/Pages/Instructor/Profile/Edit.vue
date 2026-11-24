@@ -10,6 +10,7 @@ import TextInput from '@/Components/TextInput.vue'
 import InputLabel from '@/Components/InputLabel.vue'
 import InputError from '@/Components/InputError.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 import {
   DocumentArrowUpIcon,
   MapPinIcon,
@@ -245,7 +246,7 @@ const levelLabel = computed(() => {
 const isActive = computed(() => user.instructor_profile?.status === 'active')
 const memberSince = computed(() => {
   if (!user.created_at) return null
-  return new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(user.created_at))
+  return formatPhilippineDate(user.created_at, { month: 'long', year: 'numeric' }, 'en-PH', '')
 })
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info'

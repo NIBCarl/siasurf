@@ -8,6 +8,7 @@ import EmptyState from '@/Components/UI/EmptyState.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 import { ChatBubbleLeftRightIcon, StarIcon } from '@heroicons/vue/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid'
 
@@ -41,11 +42,16 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const formatDate = (date: string) =>
-  new Date(date).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  formatPhilippineDate(
+    date,
+    {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    },
+    'en-US',
+    date,
+  )
 
 const initials = (name: string) =>
   name

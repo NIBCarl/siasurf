@@ -227,7 +227,7 @@
 
     <div class="footer">
         <p>This Parental Consent Form is legally binding and governed by the laws of the Philippines.</p>
-        <p>Retention Period: 7 years from signing date (until {{ now()->addYears(7)->format('F d, Y') }})</p>
+        <p>Retention Period: 7 years from signing date (until {{ now(config('app.timezone', 'Asia/Manila'))->addYears(7)->format('F d, Y') }})</p>
         <p style="margin-top: 10px;">Questions? Contact us at {{ config('app.admin_email', 'admin@siasurf.com') }}</p>
     </div>
 </body>

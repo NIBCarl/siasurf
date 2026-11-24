@@ -33,7 +33,7 @@ class AvailabilityController extends Controller
         $focusDate = null;
         if (is_string($rawFocusDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawFocusDate)) {
             try {
-                $focusDate = \Carbon\Carbon::createFromFormat('Y-m-d', $rawFocusDate)->format('Y-m-d');
+                $focusDate = \Carbon\Carbon::createFromFormat('Y-m-d', $rawFocusDate, config('app.timezone', 'Asia/Manila'))->format('Y-m-d');
             } catch (\Throwable) {
                 $focusDate = null;
             }
@@ -201,7 +201,7 @@ class AvailabilityController extends Controller
                 ? [$validated['time_period']]
                 : ['morning', 'afternoon'];
 
-            $dayOfWeek = (int) \Carbon\Carbon::parse($date)->format('w');
+            $dayOfWeek = (int) \Carbon\Carbon::parse($date, config('app.timezone', 'Asia/Manila'))->format('w');
 
             foreach ($periods as $period) {
                 // firstOrCreate keeps any existing booking ownership intact, so

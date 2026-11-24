@@ -7,6 +7,7 @@ import StatusPill from '@/Components/UI/StatusPill.vue'
 import Modal from '@/Components/Modal.vue'
 import Dropdown from '@/Components/Dropdown.vue'
 import ChatBox from '@/Components/Organisms/ChatBox.vue'
+import { formatPhilippineDate, formatPhilippineDateTime, formatPhilippineTime } from '@/utils/philippineTime'
 import {
   ArrowLeftIcon,
   BanknotesIcon,
@@ -268,22 +269,18 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
   }
 }
 
-/** Calendar parts parsed from the raw date so the label never shifts a day. */
-const dateParts = computed(() => {
-  const [year, month, day] = String(props.booking.date).slice(0, 10).split('-').map(Number)
-  return { year, month, day }
-})
-
 const dateFull = computed(() => {
-  const { year, month, day } = dateParts.value
-  if (!year || !month || !day) return ''
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+  return formatPhilippineDate(
+    props.booking.date,
+    {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    },
+    'en-US',
+    '',
+  )
 })
 
 const periodLabel = computed(() =>
@@ -711,13 +708,7 @@ const showPrimaryAttendance = computed(
 
               <p v-if="booking.created_at" class="mt-1 text-label text-stone-500">
                 Booked
-                {{ new Date(booking.created_at).toLocaleString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                }) }}
+                {{ formatPhilippineDateTime(booking.created_at) }}
               </p>
             </div>
           </div>
@@ -883,7 +874,7 @@ const showPrimaryAttendance = computed(
             <p class="font-mono text-headline font-semibold tabular-nums text-white">{{ formattedTimeLeft }}</p>
             <p class="text-body-sm text-lagoon-100/80">
               Started
-              {{ new Date(booking.started_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
+              {{ formatPhilippineTime(booking.started_at) }}
               · {{ booking.duration_hours }}h booked
             </p>
           </div>
@@ -913,7 +904,7 @@ const showPrimaryAttendance = computed(
           <ExclamationTriangleIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
           <p class="text-body-sm text-amber-950">
             <span class="font-semibold capitalize">{{ pendingChangeRequest.type }} request pending SISA review</span>
-            — moving to {{ pendingChangeRequest.new_date ?? 'a new date' }}
+            — moving to {{ pendingChangeRequest.new_date ? formatPhilippineDate(pendingChangeRequest.new_date) : 'a new date' }}
             ({{ pendingChangeRequest.new_time_period ?? 'new slot' }}).
           </p>
         </div>
@@ -1223,7 +1214,7 @@ const showPrimaryAttendance = computed(
             <div class="flex items-center justify-between">
               <h2 class="text-title font-semibold tracking-tight text-deep-950">Student review</h2>
               <span class="text-body-sm text-stone-600">
-                {{ new Date(booking.review.created_at).toLocaleDateString() }}
+                {{ formatPhilippineDate(booking.review.created_at) }}
               </span>
             </div>
 
@@ -1435,7 +1426,7 @@ const showPrimaryAttendance = computed(
                   Ref: <span class="font-mono">{{ booking.payment.receipt_reference }}</span>
                 </p>
                 <p v-if="booking.payment?.receipt_uploaded_at" class="mt-1 text-label text-stone-500">
-                  Uploaded {{ new Date(booking.payment.receipt_uploaded_at).toLocaleString('en-US') }}
+                  Uploaded {{ formatPhilippineDateTime(booking.payment.receipt_uploaded_at) }}
                 </p>
                 <p v-if="booking.payment?.receipt_note" class="mt-1 text-label text-rose-700">
                   Previous note: {{ booking.payment.receipt_note }}

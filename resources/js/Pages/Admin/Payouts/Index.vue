@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import Modal from '@/Components/Modal.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface InstructorSummary {
   unsettled_days_count: number
@@ -108,8 +109,7 @@ const money = (value: number | string | null | undefined) => {
 }
 
 const formatDate = (value: string | null | undefined) => {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  return formatPhilippineDate(value, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-PH')
 }
 
 const settleTarget = ref<InstructorLedgerRow | null>(null)

@@ -19,6 +19,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import { formatPhilippineDate, formatPhilippineDateTime } from '@/utils/philippineTime'
 
 interface Booking {
   id: number
@@ -390,7 +391,7 @@ const getStatusVariant = (status: string) => {
                                 <p class="text-slate-600 italic leading-relaxed text-lg">"{{ booking.review.comment }}"</p>
                                 
                                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest pt-4 border-t border-slate-50">
-                                    Submitted on {{ new Date(booking.review.created_at).toLocaleDateString() }}
+                                    Submitted on {{ formatPhilippineDate(booking.review.created_at) }}
                                 </p>
                             </div>
                         </div>
@@ -445,7 +446,7 @@ const getStatusVariant = (status: string) => {
                                         </p>
                                     </template>
                                     <p v-if="booking.payment.paid_at" class="text-[10px] font-bold opacity-60 mt-2">
-                                        Processed on {{ new Date(booking.payment.paid_at).toLocaleDateString() }}
+                                        Processed on {{ formatPhilippineDate(booking.payment.paid_at) }}
                                     </p>
                                 </div>
 
@@ -505,7 +506,7 @@ const getStatusVariant = (status: string) => {
                                         Ref: <span class="font-mono">{{ booking.payment.receipt_reference }}</span>
                                     </p>
                                     <p v-if="booking.payment.receipt_uploaded_at" class="mt-1 text-[10px] opacity-60">
-                                        Uploaded {{ new Date(booking.payment.receipt_uploaded_at).toLocaleString() }}
+                                        Uploaded {{ formatPhilippineDateTime(booking.payment.receipt_uploaded_at) }}
                                     </p>
 
                                     <button
@@ -597,7 +598,7 @@ const getStatusVariant = (status: string) => {
                                 </div>
                                 <div class="space-y-1">
                                     <p class="text-sm font-black text-ocean-400">Electronic Waiver Active</p>
-                                    <p v-if="booking.waiver" class="text-[10px] font-bold opacity-30 tracking-tight">Signed: {{ new Date(booking.waiver.signed_at).toLocaleString() }}</p>
+                                    <p v-if="booking.waiver" class="text-[10px] font-bold opacity-30 tracking-tight">Signed: {{ formatPhilippineDateTime(booking.waiver.signed_at) }}</p>
                                 </div>
                                 <div class="pt-2 space-y-2">
                                     <template v-if="booking.waivers && booking.waivers.length > 0">

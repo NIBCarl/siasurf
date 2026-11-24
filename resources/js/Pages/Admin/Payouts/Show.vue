@@ -6,6 +6,7 @@ import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import Modal from '@/Components/Modal.vue'
 import { ChevronLeftIcon } from '@heroicons/vue/24/outline'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface BookingLine {
   id: number
@@ -173,8 +174,7 @@ const money = (value: number | string | null | undefined) => {
 }
 
 const formatDate = (value: string | null | undefined) => {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  return formatPhilippineDate(value, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-PH')
 }
 
 const statusVariant = (status: string) => {

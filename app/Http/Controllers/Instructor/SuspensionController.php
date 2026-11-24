@@ -31,6 +31,8 @@ class SuspensionController extends Controller
 
         $appeal = $suspension?->appeals()->latest()->first();
 
+        $tz = config('app.timezone', 'Asia/Manila');
+
         $strikes = $user->instructorStrikes()
             ->with('incident')
             ->where('status', StrikeStatus::Active->value)
@@ -43,7 +45,7 @@ class SuspensionController extends Controller
                     ?? $strike->reason_text
                     ?? $strike->reason_code,
                 'category' => $strike->incident?->category,
-                'applied_at' => $strike->applied_at?->format('M d, Y'),
+                'applied_at' => $strike->applied_at?->copy()->timezone($tz)->format('M d, Y'),
             ])
             ->values();
 
@@ -51,8 +53,8 @@ class SuspensionController extends Controller
             'profile' => [
                 'strike_count' => $user->instructorProfile->strike_count,
                 'suspension_reason' => $user->instructorProfile->suspension_reason,
-                'suspended_at' => $user->instructorProfile->suspended_at?->format('M d, Y g:i A'),
-                'suspended_until' => $user->instructorProfile->suspended_until?->format('M d, Y g:i A'),
+                'suspended_at' => $user->instructorProfile->suspended_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
+                'suspended_until' => $user->instructorProfile->suspended_until?->copy()->timezone($tz)->format('M d, Y g:i A'),
             ],
             'suspension' => $suspension ? [
                 'id' => $suspension->id,
@@ -60,8 +62,8 @@ class SuspensionController extends Controller
                 'type_label' => $suspension->type?->label(),
                 'status' => $suspension->status?->value,
                 'reason' => $suspension->reason,
-                'starts_at' => $suspension->starts_at?->format('M d, Y g:i A'),
-                'ends_at' => $suspension->ends_at?->format('M d, Y g:i A'),
+                'starts_at' => $suspension->starts_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
+                'ends_at' => $suspension->ends_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
             ] : null,
             'strikes' => $strikes,
             'appeal' => $appeal ? [
@@ -70,8 +72,8 @@ class SuspensionController extends Controller
                 'status_label' => $appeal->status?->label(),
                 'message' => $appeal->message,
                 'admin_response' => $appeal->admin_response,
-                'created_at' => $appeal->created_at?->format('M d, Y g:i A'),
-                'reviewed_at' => $appeal->reviewed_at?->format('M d, Y g:i A'),
+                'created_at' => $appeal->created_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
+                'reviewed_at' => $appeal->reviewed_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
             ] : null,
             'canAppeal' => $suspension !== null && $appeal === null,
             'appealGrounds' => collect(\App\Enums\AppealGround::cases())->map(fn ($ground) => [

@@ -9,6 +9,7 @@ import {
     UserIcon
 } from '@heroicons/vue/24/outline';
 import badgeStyles from '@/Components/Atoms/Badge.vue'; // Or wherever a badge component might be.
+import { formatPhilippineDate } from '@/utils/philippineTime';
 // Since we don't know the exact badge atom location, we'll use inline tailwind classes for badges.
 
 interface Student {
@@ -126,7 +127,7 @@ const getLevelBadgeClass = (level: string) => {
                             <tbody class="bg-white divide-y divide-slate-200">
                                 <tr v-for="req in upgradeRequests.data" :key="req.id" class="hover:bg-slate-50/50 transition-colors">
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                        {{ new Date(req.created_at).toLocaleDateString() }}
+                                        {{ formatPhilippineDate(req.created_at) }}
                                     </td>
                                     
                                     <td class="px-6 py-4 whitespace-nowrap">

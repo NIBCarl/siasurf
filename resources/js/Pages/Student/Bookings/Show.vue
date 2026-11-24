@@ -10,6 +10,7 @@ import Modal from '@/Components/Modal.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { formatPhilippineDate, formatPhilippineDateTime } from '@/utils/philippineTime'
 import ChatBox from '@/Components/Organisms/ChatBox.vue'
 import {
   ArrowLeftIcon,
@@ -285,12 +286,6 @@ const paymentLabel = (status?: string) => {
   return labels[status] ?? status.replace(/_/g, ' ')
 }
 
-const parseLocalDate = (date: string) => {
-  const [year, month, day] = String(date).slice(0, 10).split('-').map(Number)
-  if (!year || !month || !day) return new Date(date)
-  return new Date(year, month - 1, day)
-}
-
 const refundVariant = (status?: string): PillVariant => {
   switch (status) {
     case 'completed':
@@ -307,12 +302,17 @@ const refundVariant = (status?: string): PillVariant => {
 }
 
 const formatDate = (date: string) =>
-  parseLocalDate(date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  formatPhilippineDate(
+    date,
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+    'en-US',
+    date,
+  )
 
 const formatAmount = (amount?: number) => Number(amount ?? props.booking.total_amount ?? 0).toLocaleString()
 
@@ -346,13 +346,18 @@ const scheduledSlot = computed(() => {
 const bookedOn = computed(() => {
   if (!props.booking.created_at) return null
 
-  return new Date(props.booking.created_at).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  return formatPhilippineDateTime(
+    props.booking.created_at,
+    {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    },
+    'en-US',
+    '',
+  )
 })
 
 const initials = (name: string) =>
@@ -526,7 +531,7 @@ const canChat = computed(() =>
                     <span class="font-semibold">SISA note:</span> {{ adminChangeNote }}
                 </p>
                 <p v-if="booking.cancelled_at" class="mt-1 text-label text-stone-500">
-                    Cancelled {{ new Date(booking.cancelled_at).toLocaleString('en-US') }}
+                    Cancelled {{ formatPhilippineDateTime(booking.cancelled_at) }}
                 </p>
             </div>
 
@@ -878,7 +883,7 @@ const canChat = computed(() =>
                         </div>
 
                         <p v-if="booking.waiver?.signed_at" class="mt-2 text-label text-stone-500">
-                            Signed {{ new Date(booking.waiver.signed_at).toLocaleDateString('en-US') }}
+                            Signed {{ formatPhilippineDate(booking.waiver.signed_at) }}
                         </p>
 
                         <div
@@ -952,7 +957,7 @@ const canChat = computed(() =>
                                 <p class="mt-0.5 text-body-sm text-lagoon-900">
                                     ₱{{ formatAmount(booking.payment?.amount) }} received
                                     <template v-if="booking.payment?.paid_at">
-                                        on {{ new Date(booking.payment.paid_at).toLocaleString('en-US') }}
+                                        on {{ formatPhilippineDateTime(booking.payment.paid_at) }}
                                     </template>.
                                 </p>
                             </div>
@@ -980,7 +985,7 @@ const canChat = computed(() =>
                                 Ref: <span class="font-mono">{{ booking.payment.receipt_reference }}</span>
                             </p>
                             <p v-if="booking.payment?.receipt_verified_at" class="mt-1 text-label text-lagoon-700">
-                                Verified {{ new Date(booking.payment.receipt_verified_at).toLocaleString('en-US') }}
+                                Verified {{ formatPhilippineDateTime(booking.payment.receipt_verified_at) }}
                                 <template v-if="booking.payment?.verified_by?.name">
                                     by {{ booking.payment.verified_by.name }}
                                 </template>

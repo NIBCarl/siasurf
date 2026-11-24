@@ -32,8 +32,8 @@ class InstructorDailyLedger extends Model
     ];
 
     protected $casts = [
-        'ledger_date' => 'date',
-        'remittance_due_date' => 'date',
+        'ledger_date' => 'date:Y-m-d',
+        'remittance_due_date' => 'date:Y-m-d',
         'completed_bookings_count' => 'integer',
         'gcash_bookings_count' => 'integer',
         'cash_bookings_count' => 'integer',

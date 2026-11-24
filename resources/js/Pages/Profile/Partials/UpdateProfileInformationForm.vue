@@ -5,6 +5,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import { calculatePhilippineAge, getPhilippineMaxBirthday } from '@/utils/philippineTime';
 
 defineProps<{
     mustVerifyEmail?: Boolean;
@@ -13,11 +14,7 @@ defineProps<{
 
 const user = usePage().props.auth.user;
 
-const maxBirthday = (() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 5);
-    return d.toISOString().split('T')[0];
-})();
+const maxBirthday = getPhilippineMaxBirthday(5);
 
 const commonCountries = [
     'Philippines',
@@ -48,18 +45,7 @@ const form = useForm({
     country: user.student_profile?.country ?? '',
 });
 
-const computedAge = computed(() => {
-    if (!form.birthday) return null;
-    const birth = new Date(form.birthday);
-    if (Number.isNaN(birth.getTime())) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const m = today.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-        age--;
-    }
-    return age >= 0 ? age : null;
-});
+const computedAge = computed(() => calculatePhilippineAge(form.birthday));
 </script>
 
 <template>

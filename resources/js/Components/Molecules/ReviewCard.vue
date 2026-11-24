@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatPhilippineDate, parsePhilippineDate } from '@/utils/philippineTime'
+
 interface Review {
   id: number
   rating: number
@@ -49,16 +51,17 @@ const getInitials = (name: string): string => {
 }
 
 const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffTime = Math.abs(now.getTime() - date.getTime())
+  const date = parsePhilippineDate(dateString)
+  if (!date) return dateString
+
+  const diffTime = Math.abs(Date.now() - date.getTime())
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
   if (diffDays === 1) return 'Yesterday'
   if (diffDays < 7) return `${diffDays} days ago`
   if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
-  
-  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+
+  return formatPhilippineDate(date, { month: 'short', year: 'numeric' }, 'en-US', dateString)
 }
 </script>
 

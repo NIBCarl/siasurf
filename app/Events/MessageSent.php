@@ -69,7 +69,7 @@ class MessageSent implements ShouldBroadcast
                 'body' => $this->message->body,
                 'read_at' => $this->message->read_at?->toIso8601String(),
                 'created_at' => $this->message->created_at?->toIso8601String(),
-                'created_at_label' => $this->message->created_at?->format('M j, g:i A'),
+                'created_at_label' => $this->message->created_at?->copy()->timezone(config('app.timezone', 'Asia/Manila'))->format('M j, g:i A'),
             ],
         ];
     }

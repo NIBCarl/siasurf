@@ -6,6 +6,7 @@ import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface Booking {
   id: number
@@ -130,22 +131,18 @@ const formatHoldTimer = (seconds: number): string => {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
-const parseLocalDate = (dateString: string): Date => {
-  const isoDay = dateString.slice(0, 10)
-  const parts = isoDay.split('-').map(Number)
-  if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
-    return new Date(parts[0], parts[1] - 1, parts[2])
-  }
-  return new Date(dateString)
-}
-
 const formatDate = (dateString: string): string => {
-  return parseLocalDate(dateString).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  return formatPhilippineDate(
+    dateString,
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+    'en-US',
+    dateString,
+  )
 }
 
 const formatClockTime = (time?: string | null): string => {

@@ -10,6 +10,7 @@ import EmptyState from '@/Components/UI/EmptyState.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 import {
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
@@ -80,18 +81,17 @@ const needsSkillAssessment = computed(() => {
   return Boolean(profile && !profile.skill_assessed_at)
 })
 
-const parseLocalDate = (dateString: string) => {
-  const [year, month, day] = String(dateString).slice(0, 10).split('-').map(Number)
-  if (!year || !month || !day) return new Date(dateString)
-  return new Date(year, month - 1, day)
-}
-
 const formatDate = (dateString: string) =>
-  parseLocalDate(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    weekday: 'short',
-  })
+  formatPhilippineDate(
+    dateString,
+    {
+      month: 'short',
+      day: 'numeric',
+      weekday: 'short',
+    },
+    'en-US',
+    dateString,
+  )
 
 /**
  * "9:00 AM – 11:00 AM" for the booking cards, so the time is visible without

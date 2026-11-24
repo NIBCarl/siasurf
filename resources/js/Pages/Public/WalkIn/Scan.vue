@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import Badge from '@/Components/Atoms/Badge.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { formatPhilippineDateTime } from '@/utils/philippineTime'
 import {
   CheckBadgeIcon,
   ClockIcon,
@@ -86,10 +87,14 @@ const statusPanelClass = computed(() => {
 })
 
 const checkedAt = computed(() =>
-  new Date(props.verification.checked_at).toLocaleString('en-PH', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }),
+  formatPhilippineDateTime(
+    props.verification.checked_at,
+    {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    },
+    'en-PH',
+  ),
 )
 
 const initials = computed(() =>

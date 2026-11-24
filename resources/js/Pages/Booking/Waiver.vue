@@ -8,6 +8,7 @@ import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
 import LeaveCheckoutModal from '@/Components/Molecules/LeaveCheckoutModal.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import { useCheckoutHoldGuard } from '@/Composables/useCheckoutHoldGuard'
+import { calculatePhilippineAge, formatPhilippineDate, getPhilippineMaxBirthday } from '@/utils/philippineTime'
 import { ArrowDownTrayIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 
 interface Booking {
@@ -86,11 +87,7 @@ const props = defineProps<Props>()
 const signaturePadRef = ref<InstanceType<typeof SignaturePad> | null>(null)
 const hasDrawnSignature = ref(false)
 
-const maxBirthday = (() => {
-  const d = new Date()
-  d.setFullYear(d.getFullYear() - 5)
-  return d.toISOString().split('T')[0]
-})()
+const maxBirthday = getPhilippineMaxBirthday(5)
 
 // Printed Name (signed_by) and Emergency Contact are ALWAYS manually entered
 // by the student (or parent/guardian) and never prefilled.
@@ -113,16 +110,8 @@ const hasPrefilledEmail = computed(() => Boolean(props.waiverPrefill?.email))
 
 const displayAge = computed(() => {
   if (form.birthday && !hasPrefilledBirthday.value) {
-    const birth = new Date(form.birthday)
-    if (!Number.isNaN(birth.getTime())) {
-      const today = new Date()
-      let age = today.getFullYear() - birth.getFullYear()
-      const m = today.getMonth() - birth.getMonth()
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-        age--
-      }
-      if (age >= 0) return age
-    }
+    const calculated = calculatePhilippineAge(form.birthday)
+    if (calculated !== null) return calculated
   }
   return props.waiverPrefill?.age ?? props.participant?.age ?? props.booking.student_age
 })
@@ -231,22 +220,18 @@ onUnmounted(() => {
   }
 })
 
-const parseLocalDate = (dateString: string): Date => {
-  const isoDay = dateString.slice(0, 10)
-  const parts = isoDay.split('-').map(Number)
-  if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
-    return new Date(parts[0], parts[1] - 1, parts[2])
-  }
-  return new Date(dateString)
-}
-
 const formatDate = (dateString: string): string => {
-  return parseLocalDate(dateString).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return formatPhilippineDate(
+    dateString,
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+    'en-US',
+    dateString,
+  )
 }
 
 const formatClockTime = (time?: string | null): string => {
@@ -281,13 +266,16 @@ const downloadError = ref<string | null>(null)
 
 const formattedFormBirthday = computed(() => {
   if (!form.birthday) return ''
-  const parsed = parseLocalDate(form.birthday)
-  if (Number.isNaN(parsed.getTime())) return form.birthday
-  return parsed.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return formatPhilippineDate(
+    form.birthday,
+    {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+    'en-US',
+    form.birthday,
+  )
 })
 
 const printWaiver = () => {

@@ -9,6 +9,7 @@ import Modal from '@/Components/Modal.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { formatPhilippineDate, getPhilippineDayOfMonth } from '@/utils/philippineTime'
 import { CalendarDaysIcon, ChatBubbleLeftRightIcon, MapPinIcon } from '@heroicons/vue/24/outline'
 
 interface RefundPreview {
@@ -89,19 +90,18 @@ const applyFilter = (status: string) => {
   )
 }
 
-const parseLocalDate = (date: string) => {
-  const [year, month, day] = String(date).slice(0, 10).split('-').map(Number)
-  if (!year || !month || !day) return new Date(date)
-  return new Date(year, month - 1, day)
-}
-
 const formatDate = (date: string) =>
-  parseLocalDate(date).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  formatPhilippineDate(
+    date,
+    {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    },
+    'en-US',
+    date,
+  )
 
 const formatAmount = (amount: number) => Number(amount ?? 0).toLocaleString()
 
@@ -298,10 +298,10 @@ const submitCancel = () => {
                                     :class="statusMeta(booking.status).date"
                                 >
                                     <span class="text-label font-semibold uppercase tracking-[0.06em] opacity-80">
-                                        {{ parseLocalDate(booking.date).toLocaleDateString('en-US', { month: 'short' }) }}
+                                        {{ formatPhilippineDate(booking.date, { month: 'short' }, 'en-US', '') }}
                                     </span>
                                     <span class="text-headline font-semibold leading-none">
-                                        {{ parseLocalDate(booking.date).getDate() }}
+                                        {{ getPhilippineDayOfMonth(booking.date) }}
                                     </span>
                                     <span class="mt-1 max-w-full truncate text-label font-semibold capitalize opacity-80">
                                         {{ booking.time_period }}

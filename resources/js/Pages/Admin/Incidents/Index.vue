@@ -8,6 +8,7 @@ import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatCard from '@/Components/UI/StatCard.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import { ChevronRightIcon, ExclamationTriangleIcon, PlusIcon } from '@heroicons/vue/24/outline'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface Incident {
     id: number
@@ -69,7 +70,7 @@ const tabs = [
 ]
 
 const formatDate = (date: string) =>
-    new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    formatPhilippineDate(date, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-US', date)
 
 const paginationLabel = (label: string) =>
     label.replace(/&laquo;/g, '').replace(/&raquo;/g, '').replace(/&amp;/g, '&').trim()

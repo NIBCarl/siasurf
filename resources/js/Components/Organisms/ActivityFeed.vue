@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatPhilippineDate, parsePhilippineDate } from '@/utils/philippineTime'
+
 interface Activity {
   type: string
   message: string
@@ -33,14 +35,15 @@ const getIconPath = (icon: string): string => {
 }
 
 const formatTime = (time: string): string => {
-  const date = new Date(time)
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
+  const date = parsePhilippineDate(time)
+  if (!date) return time
+
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000)
 
   if (diff < 60) return 'Just now'
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return formatPhilippineDate(date, { month: 'short', day: 'numeric' }, 'en-US', time)
 }
 </script>
 

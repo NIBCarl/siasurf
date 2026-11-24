@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useNotifications } from '@/Composables/useNotifications'
+import { formatPhilippineDate, parsePhilippineDate } from '@/utils/philippineTime'
 
 const props = defineProps<{
   userId: number
@@ -40,14 +41,17 @@ const iconClasses: Record<string, string> = {
 
 const getIconClass = (type: string) => iconClasses[type] ?? 'bg-slate-100 text-slate-500'
 
-const formatTime = (date: Date) => {
-  const diff = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
+const formatTime = (date: Date | string) => {
+  const parsed = parsePhilippineDate(date)
+  if (!parsed) return ''
+
+  const diff = Math.floor((Date.now() - parsed.getTime()) / 1000)
 
   if (diff < 60) return 'Just now'
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
 
-  return new Date(date).toLocaleDateString()
+  return formatPhilippineDate(parsed)
 }
 </script>
 

@@ -22,6 +22,7 @@ import {
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
+import { parsePhilippineDate } from '@/utils/philippineTime'
 
 interface Certificate {
   id: number
@@ -82,9 +83,10 @@ const verifyForm = useForm({
 })
 
 const hasVerifiedCertificate = computed(() =>
-  props.instructor.certificates.some(
-    c => c.status === 'verified' && (!c.expires_at || new Date(c.expires_at) >= new Date())
-  )
+  props.instructor.certificates.some((c) => {
+    const exp = parsePhilippineDate(c.expires_at)
+    return c.status === 'verified' && (!exp || exp >= new Date())
+  })
 )
 
 const isActiveButHidden = computed(

@@ -8,6 +8,7 @@ import EmptyState from '@/Components/UI/EmptyState.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatCard from '@/Components/UI/StatCard.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 import {
   BanknotesIcon,
   CalendarDaysIcon,
@@ -158,8 +159,7 @@ const money = (value: number | string | null | undefined) => {
 }
 
 const formatDate = (value: string | null | undefined) => {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  return formatPhilippineDate(value, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-PH')
 }
 
 const netTone = computed(() => {

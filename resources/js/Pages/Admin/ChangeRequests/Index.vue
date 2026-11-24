@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import Modal from '@/Components/Modal.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface ChangeRequest {
   id: number
@@ -76,7 +77,8 @@ const statusVariant = (status: string) => {
 const formatSlot = (date: string | null, period: string | null) => {
   if (!date) return '—'
 
-  return period ? `${date} · ${period}` : date
+  const formattedDate = formatPhilippineDate(date, { month: 'short', day: 'numeric', year: 'numeric' }, 'en-US', date)
+  return period ? `${formattedDate} · ${period}` : formattedDate
 }
 
 const paginationLabel = (label: string) =>

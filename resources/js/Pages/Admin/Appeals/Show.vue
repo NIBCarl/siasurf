@@ -5,6 +5,7 @@ import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import InputError from '@/Components/InputError.vue'
 import { ChevronLeftIcon } from '@heroicons/vue/24/outline'
+import { formatPhilippineDateTime } from '@/utils/philippineTime'
 
 interface Strike { id: number; weight: number; reason_text: string | null; applied_at: string | null; incident: { id: number; category: string | null; description: string } | null }
 interface Appeal {
@@ -31,11 +32,7 @@ const reject = () => rejectForm.post(route('admin.appeals.reject', props.appeal.
 const statusVariant = (status: string) => status === 'approved' ? 'success' : (status === 'rejected' ? 'danger' : (status === 'pending' ? 'warning' : 'default'))
 
 const formatDateTime = (value: string | null | undefined) => {
-  if (!value) return '—'
-  const d = new Date(value)
-  return Number.isNaN(d.getTime())
-    ? value
-    : d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+  return formatPhilippineDateTime(value, { dateStyle: 'medium', timeStyle: 'short' }, 'en-PH')
 }
 </script>
 

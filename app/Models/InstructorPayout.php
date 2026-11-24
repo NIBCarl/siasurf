@@ -33,8 +33,8 @@ class InstructorPayout extends Model
     protected $casts = [
         'settlement_type' => PayoutType::class,
         'payment_channel' => PayoutChannel::class,
-        'period_start' => 'date',
-        'period_end' => 'date',
+        'period_start' => 'date:Y-m-d',
+        'period_end' => 'date:Y-m-d',
         'ledger_days_count' => 'integer',
         'gcash_earnings_settled' => 'decimal:2',
         'cash_fees_settled' => 'decimal:2',

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
@@ -8,6 +8,7 @@ import AppSwitch from '@/Components/UI/AppSwitch.vue'
 import SectionHeader from '@/Components/UI/SectionHeader.vue'
 import StatusPill from '@/Components/UI/StatusPill.vue'
 import InstructorScheduleCalendar, { type WeekSchedule } from '@/Components/UI/InstructorScheduleCalendar.vue'
+import { getPhilippineDateKeyOffset } from '@/utils/philippineTime'
 import {
   ArrowPathIcon,
   CloudIcon,
@@ -379,9 +380,7 @@ const addBlockDate = () => {
 }
 
 const quickAddDate = (daysAhead: number) => {
-  const d = new Date()
-  d.setDate(d.getDate() + daysAhead)
-  const dateStr = d.toISOString().split('T')[0]
+  const dateStr = getPhilippineDateKeyOffset(daysAhead)
   if (!blockForm.dates.includes(dateStr)) {
     blockForm.dates.push(dateStr)
   }

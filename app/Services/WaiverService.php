@@ -292,7 +292,8 @@ class WaiverService
     ): string {
         $booking->loadMissing(['student', 'instructor', 'surfSpot']);
 
-        $resolvedSignedAt = $signedAt ?? now();
+        $tz = config('app.timezone', 'Asia/Manila');
+        $resolvedSignedAt = ($signedAt instanceof Carbon ? $signedAt->copy() : ($signedAt ? Carbon::parse($signedAt) : now()))->timezone($tz);
         $signatureImage = $this->validImageDataUri($snapshot['signature_data'] ?? null);
         $logoDataUri = $this->logoDataUri();
 
@@ -418,14 +419,15 @@ class WaiverService
         ?string $medicalInfo,
         $signedAt
     ): string {
+        $phSignedAt = ($signedAt instanceof Carbon ? $signedAt->copy() : Carbon::parse($signedAt))->timezone(config('app.timezone', 'Asia/Manila'));
         $data = [
             'booking' => $booking,
             'parent_name' => $parentName,
             'emergency_contact' => $emergencyContact,
             'emergency_phone' => $emergencyPhone,
             'medical_info' => $medicalInfo,
-            'signed_at' => $signedAt->format('F d, Y'),
-            'signed_at_datetime' => $signedAt->format('F d, Y h:i A'),
+            'signed_at' => $phSignedAt->format('F d, Y'),
+            'signed_at_datetime' => $phSignedAt->format('F d, Y h:i A'),
             'company_name' => config('app.name', 'SiaSurf'),
             'waiver_id' => 'WVR-PC-' . str_pad((string) $booking->id, 6, '0', STR_PAD_LEFT),
         ];

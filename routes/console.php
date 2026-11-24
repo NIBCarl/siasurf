@@ -19,6 +19,7 @@ Schedule::command(SendReviewRequestEmails::class)
 // Fetch tide data from Stormglass.io once daily at 00:05 (uses 1 of 10 free API calls)
 Schedule::command(FetchTideDataCommand::class)
     ->dailyAt('00:05')
+    ->timezone(config('app.timezone', 'Asia/Manila'))
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/stormglass-tides.log'));
 
@@ -38,6 +39,7 @@ Schedule::command(\App\Console\Commands\LiftExpiredSuspensions::class)
 // BR-4.6 - legal documents are kept for seven years, then destroyed.
 Schedule::command(\App\Console\Commands\CleanupExpiredWaivers::class)
     ->monthlyOn(1, '02:30')
+    ->timezone(config('app.timezone', 'Asia/Manila'))
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/waiver-retention.log'));
 
@@ -45,11 +47,13 @@ Schedule::command(\App\Console\Commands\CleanupExpiredWaivers::class)
 // read time, so this sweep only flips the stored status and notifies.
 Schedule::command(\App\Console\Commands\ExpireCertificates::class)
     ->dailyAt('00:15')
+    ->timezone(config('app.timezone', 'Asia/Manila'))
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/certificate-expiry.log'));
 
 // FR 1.16 - flag cash service fee remittances past their 7-day due date as overdue.
 Schedule::command(\App\Console\Commands\CheckOverdueCashRemittances::class)
     ->dailyAt('00:30')
+    ->timezone(config('app.timezone', 'Asia/Manila'))
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/cash-remittances.log'));

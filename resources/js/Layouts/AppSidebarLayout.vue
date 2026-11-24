@@ -6,6 +6,7 @@ import NotificationDropdown from '@/Components/Molecules/NotificationDropdown.vu
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import { resolveAvatarUrl } from '@/utils/avatar';
+import { getPhilippineYear } from '@/utils/philippineTime';
 import {
     AcademicCapIcon,
     BanknotesIcon,
@@ -514,7 +515,7 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
             </main>
 
             <footer class="app-shell-no-print border-t border-sand-200 px-4 py-5 text-center text-body-sm text-stone-500 sm:px-6 lg:px-8 lg:text-left print:hidden">
-                &copy; {{ new Date().getFullYear() }} SiaSurf &middot; Siargao Island, Philippines
+                &copy; {{ getPhilippineYear() }} SiaSurf &middot; Siargao Island, Philippines
             </footer>
         </div>
 

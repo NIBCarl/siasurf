@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface Booking {
   id: number
@@ -70,12 +71,17 @@ const submitReview = () => {
 }
 
 const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  return formatPhilippineDate(
+    dateString,
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+    'en-US',
+    dateString,
+  )
 }
 
 

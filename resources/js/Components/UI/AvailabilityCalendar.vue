@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { formatDatePartsKey, getPhilippineDateParts } from '@/utils/philippineTime'
 
 /**
  * Month-grid availability calendar.
@@ -49,37 +50,39 @@ const MONTH_LABELS = [
     'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+const { year: todayYear, month: todayMonth, day: todayDay } = getPhilippineDateParts()
+const today = new Date(Date.UTC(todayYear, todayMonth - 1, todayDay))
+
 /** The first day of the month currently shown. */
-const cursor = ref(startOfMonth(parseDate(props.modelValue) ?? new Date()))
+const cursor = ref(startOfMonth(parseDate(props.modelValue) ?? today))
 
 const days = ref<DayMap>({})
 const loading = ref(false)
 const failed = ref(false)
 
 function startOfMonth(date: Date): Date {
-    return new Date(date.getFullYear(), date.getMonth(), 1)
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
 }
 
 function parseDate(value: string): Date | null {
     if (!value) return null
     const [y, m, d] = value.split('-').map(Number)
     if (!y || !m || !d) return null
-    return new Date(y, m - 1, d)
+    return new Date(Date.UTC(y, m - 1, d))
 }
 
 function toKey(date: Date): string {
-    const m = String(date.getMonth() + 1).padStart(2, '0')
-    const d = String(date.getDate()).padStart(2, '0')
-    return `${date.getFullYear()}-${m}-${d}`
+    return formatDatePartsKey(
+        date.getUTCFullYear(),
+        date.getUTCMonth() + 1,
+        date.getUTCDate(),
+    )
 }
-
-const today = new Date()
-today.setHours(0, 0, 0, 0)
 
 /** The last date a student may book, derived from the horizon. */
 const lastBookableDate = computed(() => {
-    const d = new Date(today)
-    d.setDate(d.getDate() + props.horizonDays)
+    const d = new Date(today.getTime())
+    d.setUTCDate(d.getUTCDate() + props.horizonDays)
     return d
 })
 
@@ -89,30 +92,30 @@ const canGoBack = computed(() => {
 })
 
 const canGoForward = computed(() => {
-    const nextMonth = new Date(cursor.value.getFullYear(), cursor.value.getMonth() + 1, 1)
+    const nextMonth = new Date(Date.UTC(cursor.value.getUTCFullYear(), cursor.value.getUTCMonth() + 1, 1))
     return nextMonth <= lastBookableDate.value
 })
 
 const monthLabel = computed(
-    () => `${MONTH_LABELS[cursor.value.getMonth()]} ${cursor.value.getFullYear()}`,
+    () => `${MONTH_LABELS[cursor.value.getUTCMonth()]} ${cursor.value.getUTCFullYear()}`,
 )
 
 /**
  * The grid, Monday-first, padded with nulls so the first weekday lines up.
  */
 const cells = computed<(Date | null)[]>(() => {
-    const year = cursor.value.getFullYear()
-    const month = cursor.value.getMonth()
-    const first = new Date(year, month, 1)
-    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const year = cursor.value.getUTCFullYear()
+    const month = cursor.value.getUTCMonth()
+    const first = new Date(Date.UTC(year, month, 1))
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
 
-    // getDay(): 0 = Sunday. Convert to a Monday-first offset.
-    const offset = (first.getDay() + 6) % 7
+    // getUTCDay(): 0 = Sunday. Convert to a Monday-first offset.
+    const offset = (first.getUTCDay() + 6) % 7
 
     const out: (Date | null)[] = Array.from({ length: offset }, () => null)
 
     for (let d = 1; d <= daysInMonth; d++) {
-        out.push(new Date(year, month, d))
+        out.push(new Date(Date.UTC(year, month, d)))
     }
 
     return out
@@ -236,7 +239,7 @@ watch(
 )
 
 function shiftMonth(delta: number) {
-    cursor.value = new Date(cursor.value.getFullYear(), cursor.value.getMonth() + delta, 1)
+    cursor.value = new Date(Date.UTC(cursor.value.getUTCFullYear(), cursor.value.getUTCMonth() + delta, 1))
 }
 </script>
 
@@ -298,7 +301,7 @@ function shiftMonth(delta: number) {
                         :aria-pressed="isSelected(date)"
                         @click="select(date)"
                     >
-                        {{ date.getDate() }}
+                        {{ date.getUTCDate() }}
 
                     <!-- One dot per open period, so a half-free day is obvious. -->
                     <span

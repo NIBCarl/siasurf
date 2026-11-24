@@ -7,6 +7,7 @@ import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { calculatePhilippineAge, getPhilippineMaxBirthday } from '@/utils/philippineTime'
 import TextInput from '@/Components/TextInput.vue'
 import AvailabilityCalendar from '@/Components/UI/AvailabilityCalendar.vue'
 import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
@@ -112,23 +113,10 @@ const emptyCompanion = (): Companion => ({
   guardian_phone: '',
 })
 
-const maxBirthday = (() => {
-  const d = new Date()
-  d.setFullYear(d.getFullYear() - 5)
-  return d.toISOString().split('T')[0]
-})()
+const maxBirthday = getPhilippineMaxBirthday(5)
 
 const calculateAgeFromBirthday = (birthday: string): number | null => {
-  if (!birthday) return null
-  const birth = new Date(birthday)
-  if (Number.isNaN(birth.getTime())) return null
-  const today = new Date()
-  let age = today.getFullYear() - birth.getFullYear()
-  const m = today.getMonth() - birth.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-    age--
-  }
-  return age >= 0 ? age : null
+  return calculatePhilippineAge(birthday)
 }
 
 const hasProfileBirthday = computed(() => Boolean(props.studentProfile?.birthday))

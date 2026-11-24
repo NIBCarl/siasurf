@@ -16,6 +16,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface Booking {
   id: number
@@ -485,7 +486,7 @@ const toggleBanStatus = () => {
                                     <Badge :variant="getSeverityVariant(incident.severity)" size="sm">
                                         {{ incident.severity.toUpperCase() }}
                                     </Badge>
-                                    <span class="text-[10px] font-black text-slate-400 tracking-widest uppercase">{{ new Date(incident.created_at).toLocaleDateString() }}</span>
+                                    <span class="text-[10px] font-black text-slate-400 tracking-widest uppercase">{{ formatPhilippineDate(incident.created_at) }}</span>
                                 </div>
                                 <h4 class="font-bold text-slate-900">{{ incident.type.replace('_', ' ').toUpperCase() }}</h4>
                                 <p class="text-sm text-slate-600 mt-2">{{ incident.description }}</p>

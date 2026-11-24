@@ -5,6 +5,7 @@ import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import { formatPhilippineDate } from '@/utils/philippineTime'
 
 interface Booking {
   id: number
@@ -115,12 +116,17 @@ const formatCountdown = (seconds: number) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  return formatPhilippineDate(
+    date,
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    },
+    'en-US',
+    date,
+  )
 }
 
 const pageTitle = computed(() => {
