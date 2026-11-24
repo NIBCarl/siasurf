@@ -65,8 +65,9 @@ const verificationMailFailed = computed(
         </div>
 
         <form @submit.prevent="submit">
-            <div class="mt-4 flex items-center justify-between">
+            <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <PrimaryButton
+                    class="w-full sm:w-auto"
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
@@ -77,7 +78,7 @@ const verificationMailFailed = computed(
                     :href="route('logout')"
                     method="post"
                     as="button"
-                    class="rounded-md text-sm text-slate-600 underline hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-wave-500 focus:ring-offset-2"
+                    class="inline-flex min-h-[44px] items-center justify-center rounded-md text-sm text-slate-600 underline hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-wave-500 focus:ring-offset-2"
                     >Log Out</Link
                 >
             </div>

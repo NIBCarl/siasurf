@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Head } from '@inertiajs/vue3'
+import ApplicationLogo from '@/Components/ApplicationLogo.vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import AppButton from '@/Components/UI/AppButton.vue'
 import AppCard from '@/Components/UI/AppCard.vue'
@@ -56,6 +57,10 @@ const statusVariant = computed(() => {
   return 'neutral'
 })
 
+const isLocalVerificationUrl = computed(() =>
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\//i.test(props.verificationUrl),
+)
+
 const printPass = () => window.print()
 </script>
 
@@ -97,6 +102,7 @@ const printPass = () => window.print()
 
           <AppCard padding="lg" class="mt-4">
             <div class="flex flex-col items-center text-center">
+              <ApplicationLogo variant="horizontal" class="mb-4 h-8 w-auto" />
               <div class="rounded-[2rem] border-4 border-sand-100 bg-white p-5 shadow-card">
                 <img
                   v-if="qrImageUrl"
@@ -124,7 +130,10 @@ const printPass = () => window.print()
 
               <p class="mt-4 max-w-md text-body-sm text-stone-600">{{ verification.message }}</p>
 
-              <p class="mt-4 break-all rounded-control bg-sand-50 px-3 py-2 text-label text-stone-500">
+              <p
+                v-if="!isLocalVerificationUrl"
+                class="mt-4 break-all rounded-control bg-sand-50 px-3 py-2 text-label text-stone-500"
+              >
                 {{ verificationUrl }}
               </p>
 

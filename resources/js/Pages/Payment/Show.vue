@@ -67,6 +67,19 @@ const isPaid = computed(
 )
 const isCash = computed(() => payment.value?.payment_method === 'cash')
 const isAwaitingVerification = computed(() => payment.value?.status === 'pending_verification')
+const refundStatuses = new Set(['refund_requested', 'refund_processing', 'refunded'])
+const isRefundState = computed(
+  () => refundStatuses.has(payment.value?.status ?? '') || refundStatuses.has(props.booking.payment_status ?? ''),
+)
+const isRefundCompleted = computed(
+  () => payment.value?.status === 'refunded' || props.booking.payment_status === 'refunded',
+)
+const isCancelledBooking = computed(() =>
+  ['cancelled', 'declined', 'expired', 'payment_timeout', 'no_show'].includes(props.booking.status ?? ''),
+)
+const isWaitingForInstructor = computed(() =>
+  ['reserved', 'pending'].includes(props.booking.status ?? ''),
+)
 const receiptUrl = computed(() => props.receiptUrl ?? null)
 const paymentExpired = computed(() => {
   if (!props.booking.payment_deadline_at) return false
@@ -209,9 +222,35 @@ const startGCash = () => {
             </div>
           </div>
 
-          <div v-else-if="booking.status !== 'awaiting_payment'" class="flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50 p-4">
-            <ClockIcon class="mt-0.5 h-6 w-6 text-amber-500" />
-            <div>
+          <div v-else-if="isRefundState" class="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+            <ClockIcon class="mt-0.5 h-6 w-6 shrink-0 text-sky-600" />
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-sky-900">
+                {{ isRefundCompleted ? 'Payment refunded' : 'Refund in progress' }}
+              </p>
+              <p class="mt-1 text-xs leading-relaxed text-sky-800">
+                {{
+                  isRefundCompleted
+                    ? 'This payment has been refunded. Check your booking details for the refund breakdown and reference.'
+                    : 'Your refund request is being processed. Return to your booking details for the latest refund status.'
+                }}
+              </p>
+            </div>
+          </div>
+
+          <div v-else-if="isCancelledBooking" class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <ClockIcon class="mt-0.5 h-6 w-6 shrink-0 text-slate-500" />
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-slate-900">Booking no longer open for payment</p>
+              <p class="mt-1 text-xs leading-relaxed text-slate-600">
+                This booking has already closed. Return to your booking details to review its final status or rebook.
+              </p>
+            </div>
+          </div>
+
+          <div v-else-if="isWaitingForInstructor || booking.status !== 'awaiting_payment'" class="flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50 p-4">
+            <ClockIcon class="mt-0.5 h-6 w-6 shrink-0 text-amber-500" />
+            <div class="min-w-0">
               <p class="text-sm font-semibold text-amber-900">Waiting for the instructor</p>
               <p class="mt-1 text-xs leading-relaxed text-amber-700">
                 Payment becomes available after the instructor accepts this booking.
@@ -301,7 +340,7 @@ const startGCash = () => {
                 id="gcash-receipt"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                class="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-teal-700"
+                class="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-teal-700"
                 @change="onReceiptSelected"
               />
               <p class="mt-1 text-xs text-slate-500">
@@ -322,7 +361,7 @@ const startGCash = () => {
                 type="text"
                 maxlength="100"
                 placeholder="e.g. 0123456789012"
-                class="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                class="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-700"
               />
               <p v-if="receiptForm.errors.reference" class="mt-1 text-xs font-semibold text-rose-700">
                 {{ receiptForm.errors.reference }}
@@ -332,7 +371,7 @@ const startGCash = () => {
             <BaseButton
               variant="primary"
               size="lg"
-              class="w-full justify-center"
+              class="w-full min-h-[48px] justify-center"
               :loading="receiptForm.processing"
               @click="uploadReceipt"
             >
@@ -343,7 +382,7 @@ const startGCash = () => {
         </div>
       </div>
 
-      <div class="mt-6 flex items-center justify-between text-sm">
+      <div class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm">
         <Link :href="route('student.bookings.show', booking.id)" class="font-semibold text-teal-700 hover:text-teal-800">
           ← Back to booking
         </Link>

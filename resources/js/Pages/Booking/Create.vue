@@ -755,6 +755,19 @@ const syncCompanionAge = (companion: Companion) => {
   }
 }
 
+const canSubmit = computed(() => !(
+  form.processing ||
+  !form.date ||
+  !form.start_time ||
+  !form.end_time ||
+  !form.surf_spot_id ||
+  !form.session_type ||
+  serviceOptions.value.length === 0 ||
+  ambientSpots.value.length === 0 ||
+  Boolean(childSafetyViolation.value) ||
+  (form.needs_hotel_pickup && !form.hotel_name.trim())
+))
+
 const submit = () => {
   if (childSafetyViolation.value) {
     return
@@ -790,24 +803,24 @@ const submit = () => {
   <Head :title="`Book with ${instructor.name}`" />
 
   <AppSidebarLayout title="Book Your Surf Session">
-    <div class="py-12 pb-28 lg:pb-12 bg-sand-50 min-h-screen">
+    <div class="py-6 sm:py-12 pb-44 lg:pb-12 bg-sand-50 min-h-screen">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Progress Stepper -->
         <BookingStepper :current="1" wide />
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           
           <!-- Left: Booking Form -->
-          <div class="lg:col-span-2 space-y-8">
+          <div class="lg:col-span-2 min-w-0 space-y-6 sm:space-y-8">
             <div class="bg-white rounded-2xl shadow-sm border border-sand-200 overflow-hidden">
-              <div class="p-8 border-b border-sand-200 bg-gradient-to-r from-lagoon-50 to-transparent">
-                <h2 class="text-2xl font-bold text-deep-950">Lesson Details</h2>
-                <p class="text-slate-600 mt-1">Configure your surfing session with {{ instructor.name }}</p>
+              <div class="p-5 sm:p-8 border-b border-sand-200 bg-gradient-to-r from-lagoon-50 to-transparent">
+                <h2 class="text-xl sm:text-2xl font-bold text-deep-950">Lesson Details</h2>
+                <p class="text-slate-600 mt-1 text-sm sm:text-base">Configure your surfing session with {{ instructor.name }}</p>
               </div>
 
               <!-- Flash Info Alert -->
-              <div v-if="$page.props.flash.info" class="mx-8 mt-6 p-4 bg-ocean-50 border border-ocean-200 rounded-xl flex items-start">
+              <div v-if="$page.props.flash.info" class="mx-5 sm:mx-8 mt-6 p-4 bg-ocean-50 border border-ocean-200 rounded-xl flex items-start">
                 <div class="bg-ocean-100 p-2 rounded-lg mr-3">
                   <svg class="w-5 h-5 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -820,7 +833,7 @@ const submit = () => {
               </div>
 
               <!-- Flash Error Alert -->
-              <div v-if="$page.props.flash.error" class="mx-8 mt-6 p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start animate-shake">
+              <div v-if="$page.props.flash.error" class="mx-5 sm:mx-8 mt-6 p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start animate-shake">
                 <div class="bg-rose-100 p-2 rounded-lg mr-3">
                   <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -832,7 +845,7 @@ const submit = () => {
                 </div>
               </div>
 
-              <form @submit.prevent="submit" class="p-8 space-y-6">
+              <form @submit.prevent="submit" class="p-5 sm:p-8 space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                   <!-- Assigned Service Type (1-to-1 with student skill level) -->
@@ -952,7 +965,7 @@ const submit = () => {
                     <template v-else>
                       <select
                         v-model="form.start_time"
-                        class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm"
+                        class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm text-base sm:text-sm"
                         required
                       >
                         <option value="" disabled>Select a time slot</option>
@@ -1170,7 +1183,7 @@ const submit = () => {
 
                       <select
                         v-model="form.end_time"
-                        class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm"
+                        class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm text-base sm:text-sm"
                         required
                       >
                         <option value="" disabled>Select an end time</option>
@@ -1240,13 +1253,13 @@ const submit = () => {
                        <button 
                         type="button" 
                         @click="form.student_count > 1 && form.student_count--"
-                        class="w-10 h-10 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50"
+                        class="min-h-[44px] min-w-[44px] rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50"
                       >-</button>
                       <span class="text-lg font-bold w-4 text-center">{{ form.student_count }}</span>
                       <button 
                         type="button" 
                         @click="form.student_count < maxStudents && form.student_count++"
-                        class="w-10 h-10 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50"
+                        class="min-h-[44px] min-w-[44px] rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50"
                       >+</button>
                     </div>
                     <p class="mt-1 text-xs text-slate-500">
@@ -1313,23 +1326,25 @@ const submit = () => {
                   </div>
 
                   <!-- Own Board Check -->
-                  <div class="col-span-full bg-lagoon-50/50 p-6 rounded-2xl border border-lagoon-100">
-                    <div class="flex items-center space-x-4">
-                      <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-lagoon-200 shadow-sm">
-                        <svg class="w-6 h-6 text-lagoon-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
+                  <div class="col-span-full bg-lagoon-50/50 p-5 sm:p-6 rounded-2xl border border-lagoon-100">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+                      <div class="flex items-center gap-3 sm:gap-4 min-w-0 flex-grow">
+                        <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-lagoon-200 shadow-sm">
+                          <svg class="w-6 h-6 text-lagoon-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div class="min-w-0 flex-grow">
+                          <h4 class="text-sm font-bold text-slate-900">Surfboard Requirement</h4>
+                          <p class="text-xs text-slate-500">Do you have your own surfboard for this lesson?</p>
+                        </div>
                       </div>
-                      <div class="flex-grow">
-                        <h4 class="text-sm font-bold text-slate-900">Surfboard Requirement</h4>
-                        <p class="text-xs text-slate-500">Do you have your own surfboard for this lesson?</p>
-                      </div>
-                      <div class="flex items-center space-x-4 bg-white p-1 rounded-xl border border-slate-200">
+                      <div class="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
                         <button 
                           type="button"
                           @click="form.has_board = true"
                           :class="[
-                            'px-4 py-2 text-xs font-bold rounded-lg transition-all',
+                            'min-h-[44px] sm:min-h-0 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-all text-center',
                             form.has_board
                               ? 'bg-deep-900 text-white shadow-md'
                               : 'text-slate-500 hover:bg-slate-50'
@@ -1339,7 +1354,7 @@ const submit = () => {
                           type="button"
                           @click="form.has_board = false"
                           :class="[
-                            'px-4 py-2 text-xs font-bold rounded-lg transition-all',
+                            'min-h-[44px] sm:min-h-0 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-all text-center',
                             !form.has_board
                               ? 'bg-deep-900 text-white shadow-md'
                               : 'text-slate-500 hover:bg-slate-50'
@@ -1470,7 +1485,7 @@ const submit = () => {
                             id="surf_spot"
                             v-model="form.surf_spot_id"
                             :disabled="Boolean(lockedSurfSpot)"
-                            class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm text-sm disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
+                            class="mt-1 block w-full appearance-none border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm text-base sm:text-sm disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
                           >
                             <option v-for="spot in displayedSpots" :key="spot.id" :value="spot.id">
                               {{ spot.name }} — {{ spot.area ?? 'Siargao' }} ({{ spot.difficulty.charAt(0).toUpperCase() + spot.difficulty.slice(1) }})
@@ -1494,26 +1509,28 @@ const submit = () => {
                     </div>
 
                     <!-- Hotel Pickup Option (decides whether Hotel appears on the waiver) -->
-                    <div class="col-span-full bg-slate-50/80 p-6 rounded-2xl border border-slate-200/80">
+                    <div class="col-span-full bg-slate-50/80 p-5 sm:p-6 rounded-2xl border border-slate-200/80">
                       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-                        <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm w-fit">
-                          <svg class="w-6 h-6 text-lagoon-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
+                        <div class="flex items-center gap-3 sm:gap-4 min-w-0 flex-grow">
+                          <div class="flex-shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm w-fit">
+                            <svg class="w-6 h-6 text-lagoon-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                          </div>
+                          <div class="min-w-0 flex-grow">
+                            <h4 class="text-sm font-bold text-slate-900">Hotel Pickup Option</h4>
+                            <p class="text-xs text-slate-500">
+                              Would you like the instructor to pick you up from the hotel where you are staying?
+                            </p>
+                          </div>
                         </div>
-                        <div class="flex-grow">
-                          <h4 class="text-sm font-bold text-slate-900">Hotel Pickup Option</h4>
-                          <p class="text-xs text-slate-500">
-                            Would you like the instructor to pick you up from the hotel where you are staying?
-                          </p>
-                        </div>
-                        <div class="flex items-center space-x-2 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
+                        <div class="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
                           <button
                             type="button"
                             @click="form.needs_hotel_pickup = false"
                             :class="[
-                              'px-4 py-2 text-xs font-bold rounded-lg transition-all',
+                              'min-h-[44px] sm:min-h-0 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-all text-center',
                               !form.needs_hotel_pickup
                                 ? 'bg-deep-900 text-white shadow-md'
                                 : 'text-slate-500 hover:bg-slate-50',
@@ -1525,7 +1542,7 @@ const submit = () => {
                             type="button"
                             @click="form.needs_hotel_pickup = true"
                             :class="[
-                              'px-4 py-2 text-xs font-bold rounded-lg transition-all',
+                              'min-h-[44px] sm:min-h-0 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-all text-center',
                               form.needs_hotel_pickup
                                 ? 'bg-deep-900 text-white shadow-md'
                                 : 'text-slate-500 hover:bg-slate-50',
@@ -1678,7 +1695,7 @@ const submit = () => {
                           <textarea
                             v-model="companion.medical_info"
                             rows="2"
-                            class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600"
+                            class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600 text-base sm:text-sm"
                             placeholder="Allergies or conditions the instructor should know about"
                           ></textarea>
                         </div>
@@ -1708,22 +1725,26 @@ const submit = () => {
                   <textarea
                     id="notes"
                     v-model="form.notes"
-                    class="mt-1 block w-full border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm"
+                    class="mt-1 block w-full border-slate-300 focus:border-lagoon-600 focus:ring-lagoon-600 rounded-lg shadow-sm text-base sm:text-sm"
                     rows="3"
                     placeholder="Any lesson preferences, goals, or special requests..."
                   ></textarea>
                 </div>
 
-                <div class="pt-6 flex items-center justify-between border-t border-slate-100">
-                  <Link :href="route('instructors.profile', instructor.id)" class="text-slate-500 hover:text-slate-800 text-sm font-medium">
+                <div class="pt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100">
+                  <Link
+                    :href="route('instructors.profile', instructor.id)"
+                    class="inline-flex min-h-[44px] items-center justify-center sm:justify-start text-slate-500 hover:text-slate-800 text-sm font-medium"
+                  >
                     &larr; Back to Profile
                   </Link>
                   <AppButton 
                     type="submit" 
                     variant="primary" 
                     size="lg"
+                    class="w-full sm:w-auto min-h-[48px]"
                     :loading="form.processing"
-                    :disabled="form.processing || !form.date || !form.start_time || !form.end_time || !form.surf_spot_id || !form.session_type || serviceOptions.length === 0 || ambientSpots.length === 0 || Boolean(childSafetyViolation) || (form.needs_hotel_pickup && !form.hotel_name.trim())"
+                    :disabled="!canSubmit"
                   >
                     Continue to Waiver &rarr;
                   </AppButton>
@@ -1732,15 +1753,15 @@ const submit = () => {
             </div>
             
             <!-- Information Callout -->
-            <div class="bg-deep-900 rounded-2xl p-8 text-white relative overflow-hidden group shadow-xl">
+            <div class="bg-deep-900 rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden group shadow-xl">
                <div class="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-               <div class="relative flex items-start space-x-6">
-                 <div class="bg-white/20 p-3 rounded-xl border border-white/30">
+               <div class="relative flex items-start space-x-4 sm:space-x-6">
+                 <div class="bg-white/20 p-3 rounded-xl border border-white/30 shrink-0">
                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                    </svg>
                  </div>
-                 <div>
+                 <div class="min-w-0">
                    <h3 class="text-xl font-bold mb-2">Did you know?</h3>
                    <p class="text-cyan-100 opacity-90 leading-relaxed">
                      SiaSurf is the only platform that automatically verifies your instructor's WASAR (Water Search and Rescue) certification before every lesson. Your safety is our #1 priority.
@@ -1751,7 +1772,7 @@ const submit = () => {
           </div>
 
           <!-- Right: Summary Sidebar -->
-          <div class="space-y-6">
+          <div class="min-w-0 space-y-6">
             
             <!-- Instructor Summary -->
             <div class="bg-white rounded-2xl shadow-sm border border-sand-200 p-6 sticky top-8">
@@ -1842,20 +1863,45 @@ const submit = () => {
                      </svg>
                      Instant confirmation available
                    </div>
-                   <div class="flex items-center text-xs text-slate-600">
-                     <svg class="w-4 h-4 text-lagoon-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                     </svg>
-                     Insurance coverage included
-                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </AppSidebarLayout>
+                    <div class="flex items-center text-xs text-slate-600">
+                      <svg class="w-4 h-4 text-lagoon-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Insurance coverage included
+                    </div>
+                 </div>
+               </div>
+             </div>
+           </div>
+         </div>
+       </div>
+     </div>
+
+     <!-- Sticky mobile booking checkout bar above AppSidebarLayout bottom nav -->
+     <div class="lg:hidden fixed inset-x-0 bottom-[57px] z-20 border-t border-sand-200 bg-white/95 backdrop-blur-md px-4 py-3 shadow-[0_-8px_24px_rgba(12,35,64,0.08)]">
+       <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
+         <div class="min-w-0">
+           <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+             Estimated Total
+           </p>
+           <p class="text-lg font-extrabold text-deep-950 tabular-nums">
+             ₱{{ estimatedPrice.total.toLocaleString() }}
+           </p>
+         </div>
+         <AppButton
+           type="button"
+           variant="primary"
+           size="lg"
+           class="min-h-[48px] shrink-0 px-5"
+           :loading="form.processing"
+           :disabled="!canSubmit"
+           @click="submit"
+         >
+           Continue to Waiver &rarr;
+         </AppButton>
+       </div>
+     </div>
+   </AppSidebarLayout>
 </template>
 
 <style scoped>

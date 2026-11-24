@@ -4,6 +4,7 @@ import { Head, router, useForm } from '@inertiajs/vue3'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BookingStepper from '@/Components/Molecules/BookingStepper.vue'
 import SignaturePad from '@/Components/Molecules/SignaturePad.vue'
+import AppButton from '@/Components/UI/AppButton.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import { formatPhilippineDate } from '@/utils/philippineTime'
@@ -180,13 +181,13 @@ const goBack = () => {
   <Head title="Parental Consent" />
 
   <AppSidebarLayout title="Parental Consent">
-    <div class="py-12">
-      <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+    <div class="min-h-screen bg-sand-50 py-6 sm:py-12">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Progress Stepper -->
-        <BookingStepper :current="step ?? 2" class="mt-6" />
+        <BookingStepper :current="step ?? 2" class="mt-2 sm:mt-6" />
 
         <!-- Exclusive Slot Hold Banner -->
-        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
+        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-3">
             <span class="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500"></span>
             <p class="text-xs font-semibold text-emerald-900">
@@ -213,16 +214,16 @@ const goBack = () => {
 
 
         <!-- Header -->
-        <div class="mb-8 text-center">
-          <h1 class="text-3xl font-bold text-slate-900">Parental Consent</h1>
-          <p class="mt-2 text-slate-600">
+        <div class="mb-6 sm:mb-8 text-center">
+          <h1 class="text-2xl sm:text-3xl font-bold text-deep-950">Parental Consent</h1>
+          <p class="mt-2 text-sm sm:text-base text-slate-600">
             Since the student is under 18, parental consent and guardian information is required
           </p>
-          <div class="mt-4 inline-flex items-center px-4 py-2 bg-ocean-50 border border-ocean-200 rounded-md">
-            <svg class="w-5 h-5 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="mt-4 inline-flex items-center px-4 py-2 bg-lagoon-50 border border-lagoon-200 rounded-md">
+            <svg class="w-5 h-5 text-lagoon-600 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <span class="text-sm text-ocean-800">
+            <span class="text-sm text-lagoon-900">
               {{ participant?.full_name || 'Student' }}
               <template v-if="participant?.age"> · {{ participant.age }} years old</template>
             </span>
@@ -233,9 +234,9 @@ const goBack = () => {
         </div>
 
         <!-- Booking Summary -->
-        <div class="mb-8 bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-          <h2 class="text-lg font-semibold text-slate-900 mb-4">Booking Details</h2>
-          <div class="grid grid-cols-2 gap-4 text-sm">
+        <div class="mb-6 sm:mb-8 bg-white rounded-xl shadow-sm border border-sand-200 p-5 sm:p-6">
+          <h2 class="text-lg font-semibold text-deep-950 mb-4">Booking Details</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
             <div>
               <span class="text-slate-500">Instructor:</span>
               <span class="ml-2 font-medium">{{ booking.instructor.name }}</span>
@@ -258,10 +259,10 @@ const goBack = () => {
         <!-- Parental Consent Form -->
         <form @submit.prevent="submitConsent" class="space-y-6">
           <!-- Consent Text -->
-          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <h2 class="text-lg font-semibold text-slate-900 mb-4">Parental Consent & Release</h2>
+          <div class="bg-white rounded-xl shadow-sm border border-sand-200 p-5 sm:p-6">
+            <h2 class="text-lg font-semibold text-deep-950 mb-4">Parental Consent & Release</h2>
             
-            <div class="prose max-w-none text-slate-700 space-y-4">
+            <div class="prose max-w-none text-slate-700 space-y-4 text-sm sm:text-base">
               <p class="font-medium">
                 PARENTAL CONSENT FOR MINOR PARTICIPATION
               </p>
@@ -303,8 +304,8 @@ const goBack = () => {
           </div>
 
           <!-- Emergency Contact Information -->
-          <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <h2 class="text-lg font-semibold text-slate-900 mb-4">Emergency Contact Information</h2>
+          <div class="bg-white rounded-xl shadow-sm border border-sand-200 p-5 sm:p-6">
+            <h2 class="text-lg font-semibold text-deep-950 mb-4">Emergency Contact Information</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Parent/Guardian Name -->
@@ -317,7 +318,7 @@ const goBack = () => {
                   v-model="form.parent_name"
                   type="text"
                   required
-                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600 text-base sm:text-sm"
                   placeholder="Enter your full legal name"
                 />
                 <p v-if="form.errors.parent_name" class="mt-1 text-sm text-rose-600">
@@ -335,7 +336,7 @@ const goBack = () => {
                   v-model="form.emergency_contact_name"
                   type="text"
                   required
-                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600 text-base sm:text-sm"
                   placeholder="Name of emergency contact"
                 />
                 <p v-if="form.errors.emergency_contact_name" class="mt-1 text-sm text-rose-600">
@@ -353,7 +354,7 @@ const goBack = () => {
                   v-model="form.emergency_contact_phone"
                   type="tel"
                   required
-                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600 text-base sm:text-sm"
                   placeholder="+63 XXX XXX XXXX"
                 />
                 <p v-if="form.errors.emergency_contact_phone" class="mt-1 text-sm text-rose-600">
@@ -370,7 +371,7 @@ const goBack = () => {
                   id="medical_info"
                   v-model="form.medical_info"
                   rows="3"
-                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-ocean-500 focus:ring-ocean-500 sm:text-sm"
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600 text-base sm:text-sm"
                   placeholder="Please list any medical conditions, allergies, or medications the instructor should be aware of"
                 ></textarea>
                 <p v-if="form.errors.medical_info" class="mt-1 text-sm text-rose-600">
@@ -409,7 +410,7 @@ const goBack = () => {
                     v-model="form.agreement"
                     type="checkbox"
                     required
-                    class="min-h-[44px] min-w-[44px] text-ocean-600 focus:ring-ocean-500 border-slate-300 rounded cursor-pointer"
+                    class="min-h-[44px] min-w-[44px] text-lagoon-600 focus:ring-lagoon-600 border-slate-300 rounded cursor-pointer"
                   />
                 </div>
                 <div class="ml-3">
@@ -426,24 +427,26 @@ const goBack = () => {
             </div>
 
             <!-- Submit Buttons -->
-            <div class="flex justify-between items-center">
+            <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <BaseButton
                 type="button"
                 @click="goBack"
                 variant="secondary"
+                class="w-full sm:w-auto min-h-[48px] justify-center"
               >
                 ← Back &amp; Release Slot
               </BaseButton>
               
-              <BaseButton
+              <AppButton
                 type="submit"
                 :disabled="form.processing || !form.agreement || isHoldExpired"
                 :loading="form.processing"
                 variant="primary"
                 size="lg"
+                class="w-full sm:w-auto min-h-[48px]"
               >
-                Complete Consent & Continue →
-              </BaseButton>
+                Complete Consent &amp; Continue →
+              </AppButton>
             </div>
           </div>
         </form>
