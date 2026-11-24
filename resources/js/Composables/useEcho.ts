@@ -48,6 +48,15 @@ export function getEcho(): Echo<'reverb'> | null {
 }
 
 /**
+ * The current socket id, without opening a connection that nothing needs.
+ * Broadcasts use `toOthers()`, and Laravel needs this id to know which socket
+ * to skip.
+ */
+export function getSocketId(): string | undefined {
+    return echo?.socketId()
+}
+
+/**
  * Used on logout. Normal component unmounts should only leave their channels,
  * not tear down the shared socket another component may still be using.
  */

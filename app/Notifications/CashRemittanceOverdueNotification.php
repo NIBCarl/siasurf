@@ -20,7 +20,7 @@ class CashRemittanceOverdueNotification extends Notification implements ShouldQu
 
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        return ['database', 'mail'];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -46,6 +46,7 @@ class CashRemittanceOverdueNotification extends Notification implements ShouldQu
             'earliest_due_date' => $this->earliestDueDate,
             'message' => "Cash service fee remittance of {$amount} is overdue (earliest due {$this->earliestDueDate}).",
             'type' => 'cash_remittance_overdue',
+            'url' => route('instructor.earnings.index'),
         ];
     }
 }

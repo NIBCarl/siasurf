@@ -19,7 +19,7 @@ class RescheduleProposedNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        return ['database', 'mail'];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -74,6 +74,7 @@ class RescheduleProposedNotification extends Notification implements ShouldQueue
             'reason' => $this->changeRequest->reason,
             'message' => "Instructor requested to reschedule {$ref} to {$newDate} ({$newRange}). Please agree or decline.",
             'type' => 'reschedule_proposed',
+            'url' => route('student.bookings.show', $booking->id),
         ];
     }
 }

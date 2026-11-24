@@ -16,6 +16,7 @@ use App\Observers\SafetyIncidentObserver;
 use App\Contracts\PaymentServiceInterface;
 use App\Services\MockPaymentService;
 use App\Services\PayMongoPaymentService;
+use App\Services\XenditPaymentService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -26,12 +27,15 @@ class AppServiceProvider extends ServiceProvider
     {
         // Bind PaymentServiceInterface based on configuration
         $this->app->bind(PaymentServiceInterface::class, function ($app) {
-            // Use MockPaymentService if no PayMongo keys configured
-            if (empty(config('services.paymongo.secret_key'))) {
-                return new MockPaymentService();
+            if (! empty(config('services.xendit.secret_key'))) {
+                return new XenditPaymentService();
             }
-            
-            return new PayMongoPaymentService();
+
+            if (! empty(config('services.paymongo.secret_key'))) {
+                return new PayMongoPaymentService();
+            }
+
+            return new MockPaymentService();
         });
     }
 

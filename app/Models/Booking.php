@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Enums\AttendanceStatus;
 use App\Enums\BookingStatus;
 use App\Enums\CancellationReason;
+use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\SessionType;
 use App\Enums\SkillLevel;
@@ -85,6 +86,9 @@ class Booking extends Model
         'student_id',
         'instructor_id',
         'surf_spot_id',
+        'previous_surf_spot_id',
+        'spot_change_reason',
+        'spot_changed_at',
         'date',
         'time_period',
         'start_time',
@@ -172,6 +176,7 @@ class Booking extends Model
         'cancellation_reason' => CancellationReason::class,
         'payment_timed_out_at' => 'datetime',
         'last_event_at' => 'datetime',
+        'spot_changed_at' => 'datetime',
     ];
 
     /**
@@ -202,6 +207,11 @@ class Booking extends Model
     public function surfSpot(): BelongsTo
     {
         return $this->belongsTo(SurfSpot::class);
+    }
+
+    public function previousSurfSpot(): BelongsTo
+    {
+        return $this->belongsTo(SurfSpot::class, 'previous_surf_spot_id');
     }
 
     public function payment(): HasOne
@@ -555,6 +565,24 @@ class Booking extends Model
     }
 
     /**
+     * Active bookings whose surf spot can still be updated by the instructor
+     * (once out of the student's 15-minute checkout hold and before close).
+     */
+    public function canChangeSurfSpot(): bool
+    {
+        if ($this->isInStudentCheckout()) {
+            return false;
+        }
+
+        return in_array($this->status, [
+            BookingStatus::Pending,
+            BookingStatus::AwaitingPayment,
+            BookingStatus::Confirmed,
+            BookingStatus::InProgress,
+        ], true);
+    }
+
+    /**
      * FR 1.9.3 - still waiting for the instructor to accept or decline.
      */
     public function isAwaitingInstructorResponse(): bool
@@ -653,6 +681,14 @@ class Booking extends Model
      */
     public function canRecordCashPayment(): bool
     {
+        $payment = $this->relationLoaded('payment')
+            ? $this->getRelation('payment')
+            : $this->payment()->first();
+
+        if ($payment && $payment->payment_method !== PaymentMethod::Cash) {
+            return false;
+        }
+
         return in_array($this->status, [
             BookingStatus::Confirmed,
             BookingStatus::InProgress,
@@ -934,6 +970,8 @@ class Booking extends Model
             // Kept separate from `notes` (the student's special requests) so the
             // student can actually read why the lesson was cancelled.
             'cancellation_note' => $reason ? trim($reason) : null,
+            'payment_deadline_at' => null,
+            'accept_deadline_at' => null,
         ];
 
         if ($refundAmount !== null) {
@@ -980,8 +1018,8 @@ class Booking extends Model
             return 'Attendance can only be recorded once the booking is confirmed.';
         }
 
-        // Historical attendance on already-closed sessions may be reviewed/updated.
-        if (in_array($this->status, [BookingStatus::Completed, BookingStatus::NoShow], true)) {
+        // Live or already-closed sessions can always have attendance recorded/updated.
+        if (in_array($this->status, [BookingStatus::InProgress, BookingStatus::Completed, BookingStatus::NoShow], true)) {
             return null;
         }
 

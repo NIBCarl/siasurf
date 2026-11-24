@@ -70,6 +70,13 @@ interface QuickAction {
   featured?: boolean
 }
 
+interface DueFine {
+  id: number
+  amount: number
+  reason: string | null
+  issued_at: string | null
+}
+
 interface Props {
   stats: {
     total_bookings: number
@@ -84,6 +91,7 @@ interface Props {
     average_rating: number
     level: number
   }
+  due_fines?: DueFine[]
   activities: {
     ongoing_session: OngoingSession | null
     upcoming_bookings: UpcomingBooking[]
@@ -123,10 +131,12 @@ const toggleVacationMode = () => {
 const levelLabel = computed(() => {
   if (props.profile.level === 1) return 'Level 1 · beginners, one-on-one'
   if (props.profile.level === 2) return 'Level 2 · max 2 students'
-  return 'Level 3 · groups up to five'
+  return 'Level 3 · groups up to 3'
 })
 
 const pendingRequests = computed(() => props.activities.pending_request_list ?? [])
+const dueFines = computed(() => props.due_fines ?? [])
+const totalDueFineAmount = computed(() => dueFines.value.reduce((sum, f) => sum + Number(f.amount), 0))
 const attendanceDue = computed(() => props.activities.attendance_due ?? 0)
 const upcomingBookings = computed(() => props.activities.upcoming_bookings ?? [])
 const recentReviews = computed(() => props.activities.recent_reviews ?? [])
@@ -265,9 +275,40 @@ const quickActions = computed<QuickAction[]>(() => [
                 </div>
             </AppCard>
 
+            <!-- Official Warning & Unpaid SISA Fine Banner -->
+            <AppCard v-if="dueFines.length" padding="md" class="border-rose-300 bg-rose-50">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="flex items-start gap-3">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-rose-600 text-white">
+                            <ExclamationTriangleIcon class="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <div>
+                            <p class="text-label font-semibold uppercase tracking-[0.06em] text-rose-800">
+                                Official SISA Warning &amp; Fine Due
+                            </p>
+                            <h2 class="mt-1 text-title font-semibold text-rose-950">
+                                ₱{{ totalDueFineAmount.toLocaleString() }} fine payable to SISA
+                            </h2>
+                            <p class="mt-1 text-body-sm text-rose-900">
+                                Your record currently carries {{ profile.strike_count }} / 3 active strike(s). Fines are
+                                collected by SISA outside the platform. A 2nd active strike triggers a 1-week suspension;
+                                a 3rd strike triggers a 1-month suspension.
+                            </p>
+                            <ul class="mt-2 space-y-1 text-label text-rose-900">
+                                <li v-for="fine in dueFines" :key="fine.id">
+                                    • ₱{{ Number(fine.amount).toLocaleString() }}
+                                    <template v-if="fine.reason"> — {{ fine.reason }}</template>
+                                    <template v-if="fine.issued_at"> ({{ fine.issued_at }})</template>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </AppCard>
+
             <!-- Directory location prompt -->
             <AppCard
-                v-if="user && (!user.instructorProfile?.latitude || !user.instructorProfile?.longitude)"
+                v-if="user && (!(user.instructor_profile?.latitude ?? user.instructorProfile?.latitude) || !(user.instructor_profile?.longitude ?? user.instructorProfile?.longitude))"
                 padding="md"
                 class="border-ocean-200 bg-ocean-50"
             >
@@ -372,14 +413,14 @@ const quickActions = computed<QuickAction[]>(() => [
                                 Roll call
                             </p>
                             <h2 class="mt-1 text-title font-semibold text-lagoon-900">
-                                {{ attendanceDue }} completed lesson{{ attendanceDue === 1 ? '' : 's' }} awaiting attendance
+                                {{ attendanceDue }} lesson{{ attendanceDue === 1 ? '' : 's' }} awaiting attendance
                             </h2>
                             <p class="mt-1 text-body-sm text-lagoon-800">
                                 Mark attendance to close out these sessions.
                             </p>
                         </div>
                     </div>
-                    <AppButton :href="route('instructor.bookings.index')" variant="secondary" size="md">
+                    <AppButton :href="route('instructor.bookings.index')" variant="primary" size="md">
                         Mark attendance
                     </AppButton>
                 </div>
@@ -423,7 +464,7 @@ const quickActions = computed<QuickAction[]>(() => [
                 <SectionHeader
                     eyebrow="Shoreline tools"
                     title="Quick actions"
-                    description="The three things you reach for most often."
+                    description="The shortcuts you reach for most often."
                 />
 
                 <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -581,14 +622,14 @@ const quickActions = computed<QuickAction[]>(() => [
                         <StatCard label="Lessons taught" :value="stats.completed_lessons" meta="Completed sessions" />
                         <StatCard
                             label="Tourist rating"
-                            :value="Number(profile.average_rating).toFixed(1)"
-                            meta="Average from verified reviews"
+                            :value="Number(profile.average_rating) === 0 && recentReviews.length === 0 ? 'New' : Number(profile.average_rating).toFixed(1)"
+                            :meta="Number(profile.average_rating) === 0 && recentReviews.length === 0 ? 'No reviews yet · SISA verified' : 'Average from verified reviews'"
                         />
                         <StatCard
                             label="Safety standing"
-                            :value="`${profile.strike_count} strike${profile.strike_count === 1 ? '' : 's'}`"
+                            :value="`${profile.strike_count} / 3 strike${profile.strike_count === 1 ? '' : 's'}`"
                             :tone="profile.strike_count === 0 ? 'positive' : 'critical'"
-                            :meta="`Level ${profile.level} certified`"
+                            :meta="dueFines.length ? `₱${totalDueFineAmount.toLocaleString()} fine due · Level ${profile.level}` : `Level ${profile.level} certified`"
                         />
                     </div>
 

@@ -22,6 +22,8 @@ import {
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
 import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue'
+import SurfZoneTabs from '@/Components/Molecules/SurfZoneTabs.vue'
+import { formatDateTime } from '@/utils/date'
 import { parsePhilippineDate } from '@/utils/philippineTime'
 
 interface Certificate {
@@ -59,12 +61,50 @@ interface Instructor {
   certificates: Certificate[]
 }
 
+interface AuditTrailItem {
+  label: string
+  date: string
+  tone?: 'neutral' | 'positive' | 'critical'
+}
+
+interface ActiveSuspension {
+  id: number
+  type: string | null
+  tier_label: string
+  strike_tier: number | null
+  status: string | null
+  status_label: string | null
+  reason: string
+  starts_at: string | null
+  ends_at: string | null
+  requires_sisa_id_confiscation: boolean
+  is_awaiting_reinstatement: boolean
+}
+
+interface FineItem {
+  id: number
+  amount: number
+  status: string
+  status_label: string
+  reason: string | null
+  issued_at: string | null
+  paid_at: string | null
+  voided_at: string | null
+  settlement_note: string | null
+  safety_incident_id: number | null
+}
+
 interface Props {
   instructor: Instructor
   serviceRates?: ServiceRate[]
   surfSpots?: SurfZoneSpot[]
+  auditTrail?: AuditTrailItem[]
   qrImageUrl: string | null
   verificationUrl: string
+  activeSuspension?: ActiveSuspension | null
+  fines?: FineItem[]
+  hasDueFines?: boolean
+  canReinstate?: boolean
   ledgerSummary?: {
     unsettled_days_count: number
     unsettled_gcash_earnings: number
@@ -104,8 +144,14 @@ const accountStatusLabel = computed(() => {
 const showVerifyModal = ref(false)
 const showSuspendModal = ref(false)
 const showRejectModal = ref(false)
+const showReinstateModal = ref(false)
+const showFineModal = ref(false)
+const fineMode = ref<'paid' | 'waive'>('paid')
+const selectedFine = ref<FineItem | null>(null)
 
 const rejectForm = useForm({ reason: '' })
+const reinstateForm = useForm({ reinstatement_note: '' })
+const fineForm = useForm({ settlement_note: '' })
 
 const confirmVerify = () => {
   if (props.instructor.certificates.filter(c => c.status === 'pending_verification').length > 0 && verifyForm.certificate_ids.length === 0) {
@@ -129,6 +175,32 @@ const submitSuspend = () => {
 const submitReject = () => {
   rejectForm.post(route('admin.instructors.reject', props.instructor.id), {
     onSuccess: () => { showRejectModal.value = false; rejectForm.reset() }
+  })
+}
+
+const submitReinstate = () => {
+  reinstateForm.post(route('admin.instructors.reactivate', props.instructor.id), {
+    preserveScroll: true,
+    onSuccess: () => { showReinstateModal.value = false; reinstateForm.reset() }
+  })
+}
+
+const openFineModal = (fine: FineItem, mode: 'paid' | 'waive') => {
+  selectedFine.value = fine
+  fineMode.value = mode
+  fineForm.reset()
+  fineForm.clearErrors()
+  showFineModal.value = true
+}
+
+const submitFine = () => {
+  if (!selectedFine.value) return
+  const routeName = fineMode.value === 'paid'
+    ? 'admin.instructors.fines.mark-paid'
+    : 'admin.instructors.fines.waive'
+  fineForm.post(route(routeName, [props.instructor.id, selectedFine.value.id]), {
+    preserveScroll: true,
+    onSuccess: () => { showFineModal.value = false; fineForm.reset() }
   })
 }
 
@@ -168,11 +240,34 @@ const getStatusVariant = (status: string) => {
 
     <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
         <div v-if="instructor.instructor_profile?.status === 'suspended'" class="rounded-3xl border border-rose-200 bg-rose-50 p-6">
-            <p class="text-xs font-black uppercase tracking-[0.2em] text-rose-600">Account Suspended</p>
-            <p class="mt-2 text-sm font-semibold text-rose-900">{{ instructor.instructor_profile?.suspension_reason ?? 'Suspended by SISA.' }}</p>
-            <p class="mt-2 text-xs text-rose-700">
-                Started {{ instructor.instructor_profile?.suspended_at ?? '—' }} · Ends {{ instructor.instructor_profile?.suspended_until ?? '—' }}
-            </p>
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <p class="text-xs font-black uppercase tracking-[0.2em] text-rose-600">
+                            {{ activeSuspension?.tier_label ?? 'Account Suspended' }}
+                        </p>
+                        <Badge v-if="activeSuspension?.is_awaiting_reinstatement" variant="warning" size="sm">
+                            Awaiting SISA Reinstatement
+                        </Badge>
+                    </div>
+                    <p class="mt-2 text-sm font-semibold text-rose-900">{{ activeSuspension?.reason ?? instructor.instructor_profile?.suspension_reason ?? 'Suspended by SISA.' }}</p>
+                    <p class="mt-2 text-xs text-rose-700">
+                        Started {{ formatDateTime(activeSuspension?.starts_at ?? instructor.instructor_profile?.suspended_at) }} · Ends {{ formatDateTime(activeSuspension?.ends_at ?? instructor.instructor_profile?.suspended_until) }}
+                    </p>
+                    <p v-if="activeSuspension?.requires_sisa_id_confiscation" class="mt-2 text-xs font-bold text-rose-900">
+                        3-Strike Tier: Confirm physical SISA ID confiscation/return outside the system before approving reinstatement.
+                    </p>
+                </div>
+                <BaseButton
+                    v-if="canReinstate"
+                    @click="showReinstateModal = true"
+                    variant="success"
+                    class="rounded-xl shadow-lg shadow-emerald-600/20"
+                >
+                    <ShieldCheckIcon class="w-4 h-4 mr-2" />
+                    Approve Reinstatement
+                </BaseButton>
+            </div>
         </div>
 
         <div v-if="isActiveButHidden" class="rounded-3xl border border-amber-300 bg-amber-50 p-6">
@@ -247,6 +342,16 @@ const getStatusVariant = (status: string) => {
                 >
                     <ShieldExclamationIcon class="w-4 h-4 mr-2" />
                     Suspend Profile
+                </BaseButton>
+
+                <BaseButton
+                    v-if="canReinstate"
+                    @click="showReinstateModal = true"
+                    variant="success"
+                    class="rounded-xl shadow-lg shadow-emerald-600/20"
+                >
+                    <ShieldCheckIcon class="w-4 h-4 mr-2" />
+                    Approve Reinstatement
                 </BaseButton>
 
                 <Link 
@@ -357,20 +462,61 @@ const getStatusVariant = (status: string) => {
                     </div>
 
                     <div v-if="surfSpots && surfSpots.length > 0" class="space-y-4">
-                        <div class="flex flex-wrap gap-2">
-                            <span
-                                v-for="spot in surfSpots"
-                                :key="spot.id"
-                                class="inline-flex items-center gap-1.5 rounded-full border border-ocean-200 bg-ocean-50 px-3 py-1 text-xs font-bold text-ocean-800"
-                            >
-                                {{ spot.name }}
-                                <span class="text-[10px] uppercase text-ocean-600">({{ spot.difficulty }})</span>
-                            </span>
-                        </div>
+                        <SurfZoneTabs :spots="surfSpots" />
                         <SurfZoneMap mode="view" :spots="surfSpots" height="280px" />
                     </div>
                     <p v-else class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs font-semibold text-slate-500">
                         No surf zones selected yet (defaults to all level-permitted spots).
+                    </p>
+                </div>
+
+                <!-- Fines & Penalties Ledger -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8 space-y-5">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 uppercase tracking-widest">Fines &amp; Warnings Ledger</h3>
+                            <p class="mt-1 text-xs text-slate-500">
+                                1-strike penalties record a ₱500 fine due to SISA outside the platform.
+                            </p>
+                        </div>
+                        <Badge v-if="hasDueFines" variant="warning" size="sm">Unpaid fine due</Badge>
+                    </div>
+
+                    <div v-if="fines && fines.length > 0" class="space-y-3">
+                        <div
+                            v-for="fine in fines"
+                            :key="fine.id"
+                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                        >
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="text-sm font-black text-slate-900">₱{{ fine.amount.toLocaleString() }}</span>
+                                    <Badge
+                                        :variant="fine.status === 'paid' ? 'ocean' : fine.status === 'due' ? 'warning' : 'default'"
+                                        size="sm"
+                                    >
+                                        {{ fine.status_label }}
+                                    </Badge>
+                                </div>
+                                <p v-if="fine.reason" class="mt-1 text-xs text-slate-600">{{ fine.reason }}</p>
+                                <p class="mt-1 text-[11px] text-slate-400">
+                                    Issued {{ formatDateTime(fine.issued_at) }}
+                                    <template v-if="fine.paid_at"> · Paid {{ formatDateTime(fine.paid_at) }}</template>
+                                    <template v-if="fine.settlement_note"> · {{ fine.settlement_note }}</template>
+                                </p>
+                            </div>
+                            <div v-if="fine.status === 'due'" class="flex shrink-0 gap-2">
+                                <BaseButton size="sm" variant="success" @click="openFineModal(fine, 'paid')">
+                                    Mark Paid
+                                </BaseButton>
+                                <BaseButton size="sm" variant="secondary" outline @click="openFineModal(fine, 'waive')">
+                                    Waive
+                                </BaseButton>
+                            </div>
+                        </div>
+                    </div>
+                    <p v-else class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs font-semibold text-slate-500">
+                        No fines recorded for this instructor.
                     </p>
                 </div>
 
@@ -545,9 +691,12 @@ const getStatusVariant = (status: string) => {
                                     <p class="text-[10px] font-black uppercase text-rose-900 tracking-widest leading-none">Safety Protocol</p>
                                 </div>
                                 <p class="text-xs text-rose-800/70 mb-6 font-bold leading-relaxed italic">Record aquatic safety violations or critical service incidents.</p>
-                                <BaseButton variant="danger" size="sm" class="w-full justify-center rounded-xl shadow-lg shadow-rose-600/10 active:scale-95 transition-all">
+                                <Link
+                                    :href="route('admin.incidents.create', { instructor_id: instructor.id })"
+                                    class="inline-flex w-full items-center justify-center rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-lg shadow-rose-600/10 transition-all hover:bg-rose-700 active:scale-95"
+                                >
                                     Log Safety Incident
-                                </BaseButton>
+                                </Link>
                             </div>
                             
                             <!-- Audit Logs -->
@@ -556,20 +705,23 @@ const getStatusVariant = (status: string) => {
                                     <span>Audit Trail</span>
                                     <ShieldCheckIcon class="w-3 h-3 text-emerald-500" />
                                 </h4>
-                                <ul class="space-y-4">
-                                    <li class="flex items-center justify-between group">
-                                        <span class="text-[10px] font-black text-slate-400 group-hover:text-slate-600 transition-colors uppercase tracking-tight">System Registry</span>
-                                        <span class="text-xs font-black text-slate-900 group-hover:text-ocean-600 transition-colors">2025-03-10</span>
-                                    </li>
-                                    <li class="flex items-center justify-between group">
-                                        <span class="text-[10px] font-black text-slate-400 group-hover:text-slate-600 transition-colors uppercase tracking-tight">Artifact Upload</span>
-                                        <span class="text-xs font-black text-slate-900 group-hover:text-ocean-600 transition-colors">2025-03-12</span>
-                                    </li>
-                                    <li class="flex items-center justify-between group decoration-rose-200">
-                                        <span class="text-[10px] font-black text-slate-400 group-hover:text-rose-600 transition-colors uppercase tracking-tight">Security Strike #1</span>
-                                        <span class="text-xs font-black text-rose-600">2025-04-15</span>
+                                <ul v-if="auditTrail && auditTrail.length > 0" class="space-y-4">
+                                    <li v-for="(item, idx) in auditTrail" :key="idx" class="flex items-center justify-between gap-3 group">
+                                        <span
+                                            class="text-[10px] font-black uppercase tracking-tight transition-colors"
+                                            :class="item.tone === 'critical' ? 'text-rose-500' : 'text-slate-400 group-hover:text-slate-600'"
+                                        >
+                                            {{ item.label }}
+                                        </span>
+                                        <span
+                                            class="shrink-0 whitespace-nowrap text-xs font-black transition-colors"
+                                            :class="item.tone === 'critical' ? 'text-rose-600' : item.tone === 'positive' ? 'text-emerald-700' : 'text-slate-900 group-hover:text-ocean-600'"
+                                        >
+                                            {{ item.date }}
+                                        </span>
                                     </li>
                                 </ul>
+                                <p v-else class="text-xs text-slate-500 italic">No audit events recorded yet.</p>
                             </div>
                         </div>
                     </div>
@@ -664,6 +816,77 @@ const getStatusVariant = (status: string) => {
                 <BaseButton variant="secondary" @click="showSuspendModal = false">Cancel</BaseButton>
                 <BaseButton variant="danger" @click="submitSuspend" :disabled="!suspendForm.reason" :loading="suspendForm.processing">
                     Confirm Suspension
+                </BaseButton>
+            </div>
+        </div>
+    </Modal>
+
+    <!-- Reinstate Modal -->
+    <Modal :show="showReinstateModal" @close="showReinstateModal = false">
+        <div class="p-6">
+            <h2 class="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+                <ShieldCheckIcon class="w-6 h-6 text-emerald-600" />
+                Approve Instructor Reinstatement
+            </h2>
+            <p class="text-sm text-slate-600 mb-4">
+                Approving reinstatement restores this instructor's profile to Active and makes them visible for bookings again.
+            </p>
+            <div v-if="activeSuspension?.strike_tier === 2" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                This is a 1-week (2-strike) suspension. Their 2 active strikes remain on record after reinstatement.
+            </div>
+            <div v-else-if="activeSuspension?.requires_sisa_id_confiscation" class="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+                This is a 1-month (3-strike) suspension. Confirm SISA ID return outside the system; active strikes will be marked served and reset to 0.
+            </div>
+            <div v-if="hasDueFines" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-950">
+                Note: This instructor still has an unpaid ₱500 fine on record.
+            </div>
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Reinstatement Note (optional)</label>
+                <textarea
+                    v-model="reinstateForm.reinstatement_note"
+                    class="w-full rounded-xl border-slate-200 shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm p-4 min-h-[90px]"
+                    placeholder="Optional note confirming conditions for reinstatement..."
+                ></textarea>
+            </div>
+            <div class="flex justify-end gap-3">
+                <BaseButton variant="secondary" @click="showReinstateModal = false">Cancel</BaseButton>
+                <BaseButton variant="success" @click="submitReinstate" :loading="reinstateForm.processing">
+                    Confirm Reinstatement
+                </BaseButton>
+            </div>
+        </div>
+    </Modal>
+
+    <!-- Fine Settlement Modal -->
+    <Modal :show="showFineModal" @close="showFineModal = false">
+        <div class="p-6">
+            <h2 class="text-lg font-bold text-slate-900 mb-3">
+                {{ fineMode === 'paid' ? 'Mark SISA Fine as Paid' : 'Waive SISA Fine' }}
+            </h2>
+            <p class="text-sm text-slate-600 mb-4">
+                Fine amount: <strong>₱{{ selectedFine?.amount.toLocaleString() }}</strong>.
+                {{ fineMode === 'paid' ? 'Confirm receipt of payment collected by SISA outside the platform.' : 'Provide a mandatory reason for waiving this fine.' }}
+            </p>
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    {{ fineMode === 'paid' ? 'Receipt / Settlement Note (optional)' : 'Waiver Reason *' }}
+                </label>
+                <textarea
+                    v-model="fineForm.settlement_note"
+                    class="w-full rounded-xl border-slate-200 shadow-sm focus:ring-ocean-500 focus:border-ocean-500 sm:text-sm p-4 min-h-[90px]"
+                    :placeholder="fineMode === 'paid' ? 'Official receipt number or SISA collector note...' : 'Explain why SISA waived this fine (minimum 5 characters)...'"
+                ></textarea>
+                <p v-if="fineForm.errors.settlement_note" class="mt-1 text-xs font-bold text-rose-600">{{ fineForm.errors.settlement_note }}</p>
+            </div>
+            <div class="flex justify-end gap-3">
+                <BaseButton variant="secondary" @click="showFineModal = false">Cancel</BaseButton>
+                <BaseButton
+                    :variant="fineMode === 'paid' ? 'success' : 'primary'"
+                    @click="submitFine"
+                    :disabled="fineMode === 'waive' && fineForm.settlement_note.length < 5"
+                    :loading="fineForm.processing"
+                >
+                    {{ fineMode === 'paid' ? 'Confirm Paid' : 'Confirm Waiver' }}
                 </BaseButton>
             </div>
         </div>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Instructor;
 
 use App\Enums\AttendanceStatus;
 use App\Enums\BookingStatus;
+use App\Enums\CancellationReason;
 use App\Enums\ChangeRequestStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
@@ -15,6 +16,7 @@ use App\Models\Booking;
 use App\Models\BookingChangeRequest;
 use App\Models\SurfSpot;
 use App\Notifications\BookingDeclinedNotification;
+use App\Notifications\SessionAttendanceNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
 use App\Services\BookingChangeService;
@@ -132,12 +134,12 @@ class BookingController extends Controller
         });
 
         $attendanceDue = Booking::where('instructor_id', $user->id)
-            ->whereNull('attendance_status')
             ->whereIn('status', [
                 BookingStatus::Confirmed,
                 BookingStatus::InProgress,
                 BookingStatus::Completed,
             ])
+            ->whereNull('attendance_status')
             ->get()
             ->filter(fn (Booking $booking) => $booking->canMarkAttendance())
             ->count();
@@ -176,7 +178,9 @@ class BookingController extends Controller
             'student.studentProfile',
             'student.latestSkillAssessment',
             'student.skillUpgradeRequests',
+            'instructor.instructorProfile.surfSpots',
             'surfSpot',
+            'previousSurfSpot',
             'payment',
             'latestRefund',
             'refunds',
@@ -187,7 +191,26 @@ class BookingController extends Controller
             'changeRequests' => fn ($query) => $query->with(['requestedBy', 'reviewedBy'])->latest('id'),
         ]);
 
-        $surfSpots = SurfSpot::where('is_active', true)->orderBy('name')->get(['id', 'name', 'difficulty']);
+        $sessionGroup = $availabilityService->overlappingSessionBookings($booking);
+        $groupSkills = $sessionGroup->map(fn (Booking $b) => $b->skill_level ?? \App\Enums\SkillLevel::Beginner->value);
+        $effectiveSkill = $groupSkills->isNotEmpty()
+            ? \App\Enums\SkillLevel::mostRestrictive($groupSkills)
+            : ($booking->skill_level instanceof \App\Enums\SkillLevel
+                ? $booking->skill_level
+                : (\App\Enums\SkillLevel::tryFrom((string) $booking->skill_level) ?? \App\Enums\SkillLevel::Beginner));
+
+        $profile = $booking->instructor?->instructorProfile;
+        $surfSpots = $profile
+            ? $profile->bookableSurfSpotsFor($effectiveSkill)
+                ->map(fn (SurfSpot $spot) => [
+                    'id' => $spot->id,
+                    'name' => $spot->name,
+                    'difficulty' => $spot->difficulty,
+                    'area' => $spot->area,
+                ])
+                ->values()
+                ->all()
+            : SurfSpot::where('is_active', true)->orderBy('name')->get(['id', 'name', 'difficulty', 'area']);
 
         // Surface the same board maths the roster and the student flow use, so
         // the detail page never re-implements the recommendation client side.
@@ -241,6 +264,8 @@ class BookingController extends Controller
             'hasConversation' => $booking->conversation !== null,
             'isRescheduled' => $booking->isRescheduled(),
             'pendingRescheduleProposal' => $proposal?->toProposalPayload(),
+            'canChangeSurfSpot' => $booking->canChangeSurfSpot(),
+            'sharedSessionCount' => $sessionGroup->where('status', '!=', BookingStatus::Reserved)->count(),
             'paymentHoldMinutes' => Booking::PAYMENT_HOLD_MINUTES,
             'paymentTimeRemaining' => $isReserved ? 0 : $booking->getPaymentTimeRemaining(),
         ]);
@@ -268,6 +293,48 @@ class BookingController extends Controller
     }
 
     /**
+     * Update the surf spot for this session (and any shared-slot bookings)
+     * with a required reason sent to every affected student.
+     */
+    public function updateSurfSpot(
+        Request $request,
+        Booking $booking,
+        BookingChangeService $changeService
+    ): RedirectResponse {
+        if ($booking->instructor_id !== auth()->id()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'surf_spot_id' => 'required|integer|exists:surf_spots,id',
+            'reason' => 'required|string|min:5|max:500',
+        ], [
+            'reason.required' => 'Tell your student(s) why the surf location is changing.',
+            'reason.min' => 'Please enter at least 5 characters explaining the surf spot change.',
+        ]);
+
+        $spot = SurfSpot::findOrFail($validated['surf_spot_id']);
+
+        try {
+            $updatedGroup = $changeService->updateSurfSpot(
+                $booking,
+                $spot,
+                $validated['reason'],
+                auth()->user()
+            );
+        } catch (BookingChangeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        $notifiedCount = $updatedGroup->where('status', '!=', BookingStatus::Reserved)->count();
+        $message = $notifiedCount > 1
+            ? "Surf spot updated to {$spot->name}. All {$notifiedCount} bookings in this shared session were updated and notified."
+            : "Surf spot updated to {$spot->name} and the student has been notified.";
+
+        return back()->with('success', $message);
+    }
+
+    /**
      * Confirm a booking request (FR 1.9.3).
      *
      * All of the GCash/cash work lives in BookingAcceptanceService so Instant
@@ -280,7 +347,7 @@ class BookingController extends Controller
         }
 
         try {
-            $accepted = $acceptanceService->accept($booking);
+            $accepted = $acceptanceService->accept($booking, auth()->user());
         } catch (BookingRequestException $exception) {
             return back()->with('error', $exception->getMessage());
         } catch (\Throwable $exception) {
@@ -309,57 +376,68 @@ class BookingController extends Controller
             abort(403);
         }
 
-        $blockReason = $booking->completeSessionBlockReason();
-        if ($blockReason !== null) {
-            return back()->with('error', $blockReason);
-        }
+        $cashReceived = $request->boolean('cash_received');
+        $upgradeStudent = $request->boolean('upgrade_student');
 
-        $booking->complete(auth()->id());
-        app(BookingEventService::class)->recordCompleted($booking, auth()->id());
+        $result = DB::transaction(function () use ($booking, $cashReceived, $upgradeStudent): array {
+            $locked = Booking::with(['payment', 'student.studentProfile'])
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        // If this is an unpaid Cash on Hand booking and the instructor confirmed
-        // cash collection in the completion modal, record the cash payment and
-        // generate the student's receipt immediately.
-        if ($request->boolean('cash_received') && $booking->canRecordCashPayment()) {
-            $this->recordCashPayment($booking);
-        }
-
-        app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
-
-        // Skill Progression Logic
-        if ($request->boolean('upgrade_student') && $booking->student->studentProfile) {
-            $studentProfile = $booking->student->studentProfile;
-            $currentLevel = $studentProfile->skill_level;
-            $nextLevel = null;
-            
-            if ($currentLevel === \App\Enums\SkillLevel::Beginner->value) {
-                $nextLevel = \App\Enums\SkillLevel::Intermediate->value;
-            } elseif ($currentLevel === \App\Enums\SkillLevel::Intermediate->value) {
-                $nextLevel = \App\Enums\SkillLevel::Advanced->value;
+            $blockReason = $locked->completeSessionBlockReason();
+            if ($blockReason !== null) {
+                return ['status' => 'error', 'message' => $blockReason];
             }
-            
-            if ($nextLevel) {
-                // Check if there is already a pending request to prevent duplicates
-                $existingRequest = \App\Models\SkillUpgradeRequest::where('student_id', $booking->student_id)
-                                    ->where('status', 'pending')
-                                    ->first();
-                                    
-                if (!$existingRequest) {
-                    \App\Models\SkillUpgradeRequest::create([
-                        'student_id' => $booking->student_id,
-                        'instructor_id' => $booking->instructor_id,
-                        'booking_id' => $booking->id,
-                        'current_level' => $currentLevel,
-                        'requested_level' => $nextLevel,
-                        'status' => 'pending'
-                    ]);
-                    
-                    return back()->with('success', 'Session completed! A skill upgrade request has been sent to the Admin.');
+
+            $locked->complete(auth()->id());
+            app(BookingEventService::class)->recordCompleted($locked, auth()->id());
+
+            // If this is an unpaid Cash on Hand booking and the instructor confirmed
+            // cash collection in the completion modal, record the cash payment and
+            // generate the student's receipt immediately.
+            if ($cashReceived && $locked->canRecordCashPayment()) {
+                $this->recordCashPayment($locked);
+            }
+
+            app(EarningsLedgerService::class)->syncBookingToLedger($locked->fresh(['payment']));
+
+            // Skill Progression Logic
+            if ($upgradeStudent && $locked->student?->studentProfile) {
+                $studentProfile = $locked->student->studentProfile;
+                $currentLevel = $studentProfile->skill_level;
+                $nextLevel = null;
+
+                if ($currentLevel === \App\Enums\SkillLevel::Beginner->value) {
+                    $nextLevel = \App\Enums\SkillLevel::Intermediate->value;
+                } elseif ($currentLevel === \App\Enums\SkillLevel::Intermediate->value) {
+                    $nextLevel = \App\Enums\SkillLevel::Advanced->value;
+                }
+
+                if ($nextLevel) {
+                    $existingRequest = \App\Models\SkillUpgradeRequest::where('student_id', $locked->student_id)
+                        ->where('status', 'pending')
+                        ->first();
+
+                    if (! $existingRequest) {
+                        \App\Models\SkillUpgradeRequest::create([
+                            'student_id' => $locked->student_id,
+                            'instructor_id' => $locked->instructor_id,
+                            'booking_id' => $locked->id,
+                            'current_level' => $currentLevel,
+                            'requested_level' => $nextLevel,
+                            'status' => 'pending',
+                        ]);
+
+                        return ['status' => 'success', 'message' => 'Session completed! A skill upgrade request has been sent to the Admin.'];
+                    }
                 }
             }
-        }
 
-        return back()->with('success', 'Session completed! Great job.');
+            return ['status' => 'success', 'message' => 'Session completed! Great job.'];
+        });
+
+        return back()->with($result['status'], $result['message']);
     }
     /**
      * Request a standalone skill upgrade for a completed session.
@@ -565,11 +643,6 @@ class BookingController extends Controller
             abort(403);
         }
 
-        $blockReason = $booking->attendanceBlockReason();
-        if ($blockReason !== null) {
-            return back()->with('error', $blockReason);
-        }
-
         $validated = $request->validate([
             'attendance_status' => ['required', \Illuminate\Validation\Rule::enum(AttendanceStatus::class)],
         ]);
@@ -577,74 +650,96 @@ class BookingController extends Controller
         $status = AttendanceStatus::from($validated['attendance_status']);
         $cashReceived = $request->boolean('cash_received');
 
-        DB::transaction(function () use ($booking, $status, $cashReceived) {
+        $error = DB::transaction(function () use ($booking, $status, $cashReceived): ?string {
+            $locked = Booking::with(['payment', 'student', 'instructor', 'surfSpot'])
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $blockReason = $locked->attendanceBlockReason();
+            if ($blockReason !== null) {
+                return $blockReason;
+            }
+
             $eventService = app(BookingEventService::class);
 
             // Records attendance_status / attendance_marked_at / attendance_marked_by.
-            $booking->markAttendance($status, auth()->id());
-            $eventService->recordAttendanceMarked($booking, $status, auth()->id());
+            $locked->markAttendance($status, auth()->id());
+            $eventService->recordAttendanceMarked($locked, $status, auth()->id());
+
+            // Cash on Hand: settle payment before transitioning an Absent session
+            // into NoShow (so payment receipt generation sees a recordable booking).
+            if ($cashReceived && $locked->canRecordCashPayment()) {
+                $this->recordCashPayment($locked);
+                $locked->refresh();
+            }
 
             $tz = config('app.timezone', 'Asia/Manila');
-            $lessonEnd = $booking->lessonEndAt();
+            $lessonEnd = $locked->lessonEndAt();
 
             if ($status->countsAsAttended()) {
-                if ($booking->status === BookingStatus::Confirmed) {
+                if ($locked->status === BookingStatus::Confirmed) {
                     if ($lessonEnd && now($tz)->greaterThanOrEqualTo($lessonEnd)) {
-                        $booking->complete(auth()->id());
-                        $eventService->recordCompleted($booking, auth()->id());
+                        $locked->complete(auth()->id());
+                        $eventService->recordCompleted($locked, auth()->id());
                     } else {
-                        $booking->update([
+                        $locked->update([
                             'status' => BookingStatus::InProgress,
-                            'started_at' => $booking->started_at ?? now(),
+                            'started_at' => $locked->started_at ?? now(),
                         ]);
                     }
                 }
             } elseif ($status === AttendanceStatus::Absent) {
-                if (in_array($booking->status, [BookingStatus::Confirmed, BookingStatus::InProgress], true)) {
-                    $payment = $booking->payment;
-                    $retainedAmount = ($payment && $payment->payment_method === PaymentMethod::GCash && $booking->isPaid())
-                        ? $booking->effectiveLessonPrice()
+                if (in_array($locked->status, [BookingStatus::Confirmed, BookingStatus::InProgress], true)) {
+                    $payment = $locked->payment;
+                    $retainedAmount = ($payment && $payment->payment_method === PaymentMethod::GCash && $locked->isPaid())
+                        ? $locked->effectiveLessonPrice()
                         : 0.0;
 
-                    $booking->update([
+                    $locked->update([
                         'status' => BookingStatus::NoShow,
-                        'cancellation_reason' => \App\Enums\CancellationReason::StudentNoShow,
-                        'cancellation_note' => $booking->cancellation_note ?: 'Student did not arrive for the scheduled lesson.',
+                        'ended_at' => $locked->ended_at ?? now(),
+                        'completed_at' => null,
+                        'cancellation_reason' => CancellationReason::StudentNoShow,
+                        'cancellation_note' => $locked->cancellation_note ?: 'Student did not arrive for the scheduled lesson.',
                         'refund_amount' => 0.0,
                         'instructor_retained_amount' => $retainedAmount,
                     ]);
 
-                    DB::afterCommit(function () use ($booking, $retainedAmount) {
-                        $fresh = $booking->fresh(['student', 'instructor', 'surfSpot']);
+                    DB::afterCommit(function () use ($locked, $retainedAmount) {
+                        $fresh = $locked->fresh(['student', 'instructor', 'surfSpot']);
                         $fresh?->student?->notify(new \App\Notifications\BookingNoShowNotification($fresh, $retainedAmount));
                     });
                 }
             }
 
-            // Cash on Hand: if the instructor confirmed collection in the
-            // completion modal, settle the payment and issue the receipt.
-            // This is independent of attendance outcome — a cash booking can be
-            // settled for a present OR an absent student.
-            if ($cashReceived && $booking->canRecordCashPayment()) {
-                $this->recordCashPayment($booking);
-            }
+            app(EarningsLedgerService::class)->syncBookingToLedger($locked->fresh(['payment']));
 
-            app(EarningsLedgerService::class)->syncBookingToLedger($booking->fresh(['payment']));
+            DB::afterCommit(function () use ($locked, $status) {
+                $fresh = $locked->fresh(['student', 'instructor']);
 
-            DB::afterCommit(function () use ($booking, $status) {
+                if (! $fresh) {
+                    return;
+                }
+
                 try {
-                    broadcast(new SessionAttendanceMarked(
-                        $booking->fresh(['student', 'instructor']),
-                        $status
-                    ))->toOthers();
+                    broadcast(new SessionAttendanceMarked($fresh, $status))->toOthers();
                 } catch (\Throwable $exception) {
                     Log::warning('Failed to broadcast attendance marked.', [
-                        'booking_id' => $booking->id,
+                        'booking_id' => $fresh->id,
                         'error' => $exception->getMessage(),
                     ]);
                 }
+
+                $fresh->student?->notify(new SessionAttendanceNotification($fresh, $status));
             });
+
+            return null;
         });
+
+        if ($error !== null) {
+            return back()->with('error', $error);
+        }
 
         return back()->with('success', 'Attendance recorded: ' . $status->label() . '.');
     }

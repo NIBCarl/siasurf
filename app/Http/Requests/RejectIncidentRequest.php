@@ -15,6 +15,7 @@ class RejectIncidentRequest extends FormRequest
     {
         return [
             'reason' => ['required', 'string', 'min:10', 'max:2000'],
+            'admin_note' => ['nullable', 'string', 'min:5', 'max:2000'],
         ];
     }
 }

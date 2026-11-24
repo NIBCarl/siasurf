@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Head, useForm, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
@@ -18,24 +19,40 @@ interface Booking {
   student: { name: string }
 }
 
+interface OutcomeOption {
+  value: string
+  label: string
+  strikes: number
+  is_critical: boolean
+}
+
 interface Props {
   instructors: Instructor[]
   bookings: Booking[]
   categories: { value: string; label: string; group: string; strikes: number | null }[]
+  reportTopics: { value: string; label: string }[]
+  outcomeOptions: OutcomeOption[]
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const form = useForm({
   instructor_id: '',
   booking_id: '',
+  report_type: '',
   category: '',
   type: 'injury',
-  severity: 'minor',
+  final_outcome: '1_strike',
   description: '',
   location: '',
+  decision_reason: '',
+  admin_note: '',
   instructor_summary: '',
+  place_manual_hold: false,
+  manual_hold_days: 7,
 })
+
+const isCritical = computed(() => form.final_outcome === 'critical')
 
 const submit = () => {
   form.post(route('admin.incidents.store'))
@@ -47,17 +64,17 @@ const submit = () => {
 
   <AppLayout>
     <div class="py-12 px-6 max-w-4xl mx-auto">
-      
+
       <div class="mb-12">
         <Link :href="route('admin.incidents.index')" class="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors flex items-center mb-4">
            &larr; Back to Monitoring
         </Link>
         <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">Record Safety Incident</h1>
-        <p class="text-slate-500 mt-2">Document occurrences to maintain platform transparency and safety standards.</p>
+        <p class="text-slate-500 mt-2">Document occurrences and record SISA's decision and penalty outcome.</p>
       </div>
 
       <form @submit.prevent="submit" class="bg-white rounded-[3rem] p-12 border border-slate-100 shadow-xl shadow-slate-200/50 space-y-8">
-         
+
          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <!-- Instructor -->
             <div>
@@ -69,18 +86,28 @@ const submit = () => {
                <InputError :message="form.errors.instructor_id" />
             </div>
 
+            <!-- Report Topic -->
+            <div>
+               <InputLabel value="Report Type (optional)" class="mb-2" />
+               <select v-model="form.report_type" class="w-full border-slate-200 rounded-2xl focus:ring-rose-500 focus:border-rose-500">
+                  <option value="">Infer from category</option>
+                  <option v-for="t in reportTopics" :key="t.value" :value="t.value">{{ t.label }}</option>
+               </select>
+               <InputError :message="form.errors.report_type" />
+            </div>
+
             <!-- Category -->
             <div>
                <InputLabel value="Concern Category (optional)" class="mb-2" />
                <select v-model="form.category" class="w-full border-slate-200 rounded-2xl focus:ring-rose-500 focus:border-rose-500">
                   <option value="">Unclassified / admin description only</option>
-                  <optgroup label="Minor â€” 1 strike">
+                  <optgroup label="Minor">
                      <option v-for="c in categories.filter(x => x.group === 'minor')" :key="c.value" :value="c.value">{{ c.label }}</option>
                   </optgroup>
-                  <optgroup label="Major â€” 2 strikes">
+                  <optgroup label="Major">
                      <option v-for="c in categories.filter(x => x.group === 'major')" :key="c.value" :value="c.value">{{ c.label }}</option>
                   </optgroup>
-                  <optgroup label="Critical â€” 3 strikes">
+                  <optgroup label="Critical">
                      <option v-for="c in categories.filter(x => x.group === 'critical')" :key="c.value" :value="c.value">{{ c.label }}</option>
                   </optgroup>
                   <optgroup label="Other">
@@ -101,23 +128,37 @@ const submit = () => {
                <InputError :message="form.errors.type" />
             </div>
 
-            <!-- Severity -->
-            <div>
-               <InputLabel value="Severity Level" class="mb-2" />
-               <select v-model="form.severity" class="w-full border-slate-200 rounded-2xl focus:ring-rose-500 focus:border-rose-500 font-bold text-rose-600">
-                  <option value="minor">Minor - 1 Strike</option>
-                  <option value="major">Major - 2 Strikes</option>
-                  <option value="critical">Critical - Immediate Suspension</option>
+            <!-- Outcome -->
+            <div class="md:col-span-2">
+               <InputLabel value="SISA Final Outcome" class="mb-2" />
+               <select v-model="form.final_outcome" class="w-full border-slate-200 rounded-2xl focus:ring-rose-500 focus:border-rose-500 font-bold text-rose-600">
+                  <option v-for="opt in outcomeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                </select>
+               <InputError :message="form.errors.final_outcome" />
             </div>
 
+         </div>
+
+         <div v-if="isCritical" class="rounded-2xl border border-rose-200 bg-rose-50 p-5 space-y-3">
+            <p class="text-xs font-bold text-rose-900">
+               Critical incidents are recorded for SISA external handling with 0 in-system strikes and no automatic suspension.
+            </p>
+            <label class="flex items-start gap-3 text-sm font-semibold text-rose-950">
+               <input type="checkbox" v-model="form.place_manual_hold" class="mt-0.5 rounded border-rose-300 text-rose-600 focus:ring-rose-500" />
+               <span>Also place a manual administrative hold (hide instructor from booking while handled externally)</span>
+            </label>
+            <div v-if="form.place_manual_hold" class="max-w-xs">
+               <InputLabel value="Hold Duration (days)" class="mb-1" />
+               <input type="number" min="1" max="365" v-model="form.manual_hold_days" class="w-full rounded-xl border-rose-200 text-sm focus:border-rose-500 focus:ring-rose-500" />
+               <InputError :message="form.errors.manual_hold_days" />
+            </div>
          </div>
 
          <!-- Description -->
          <div>
             <InputLabel value="Detailed Description" class="mb-2" />
-            <textarea 
-               v-model="form.description" 
+            <textarea
+               v-model="form.description"
                class="w-full border-slate-200 rounded-3xl focus:ring-rose-500 focus:border-rose-500 h-40"
                placeholder="Provide an objective account of what happened, people involved, and any immediate actions taken."
             ></textarea>
@@ -130,13 +171,35 @@ const submit = () => {
             <TextInput v-model="form.location" placeholder="e.g. Cloud 9 - North Break" class="w-full" />
          </div>
 
+         <!-- Decision Reason & Admin Note -->
+         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+               <InputLabel value="Decision Reason (required)" class="mb-2" />
+               <textarea
+                  v-model="form.decision_reason"
+                  class="w-full border-slate-200 rounded-3xl focus:ring-rose-500 focus:border-rose-500 h-28"
+                  placeholder="Basis for SISA's final decision (minimum 10 characters)."
+               ></textarea>
+               <InputError :message="form.errors.decision_reason" />
+            </div>
+            <div>
+               <InputLabel value="Internal SISA Admin Note (required)" class="mb-2" />
+               <textarea
+                  v-model="form.admin_note"
+                  class="w-full border-slate-200 rounded-3xl focus:ring-rose-500 focus:border-rose-500 h-28"
+                  placeholder="Internal SISA audit note (minimum 5 characters)."
+               ></textarea>
+               <InputError :message="form.errors.admin_note" />
+            </div>
+         </div>
+
          <!-- Instructor-facing summary -->
          <div>
             <InputLabel value="Summary shown to the instructor (optional)" class="mb-2" />
             <textarea
                v-model="form.instructor_summary"
                class="w-full border-slate-200 rounded-3xl focus:ring-rose-500 focus:border-rose-500 h-24"
-               placeholder="Redact the student's identity and sensitive details before this appears on the suspension record."
+               placeholder="Redact sensitive details before this appears on the instructor record."
             ></textarea>
             <InputError :message="form.errors.instructor_summary" />
          </div>
@@ -156,4 +219,3 @@ const submit = () => {
     </div>
   </AppLayout>
 </template>
-

@@ -292,7 +292,7 @@ class InstructorSurfZonesAndOfferingsTest extends TestCase
 
     public function test_level_3_instructor_can_select_all_surf_zones_and_onboarding_validates_spots_by_level(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $level3 = $this->createVerifiedInstructor(InstructorLevel::Level3);
 
@@ -602,12 +602,43 @@ class InstructorSurfZonesAndOfferingsTest extends TestCase
         $instructor->instructorProfile->surfSpots()->sync([
             $this->beginnerSpotA->id,
             $this->intermediateSpot->id,
+            $this->advancedSpot->id,
         ]);
 
         $intermediate = $this->createStudent('intermediate');
 
-        // Intermediate booking form offers Coaching ONLY (not Guiding, since instructor opted out).
+        // Because the instructor opted out of Guiding (strictly assigned to Intermediate),
+        // an Intermediate student sees no available service options and cannot book.
         $this->actingAs($intermediate)
+            ->get(route('bookings.create', $instructor->id))
+            ->assertOk()
+            ->assertInertia(function (AssertableJson $page) {
+                $props = $page->toArray()['props'];
+                $types = collect($props['serviceOptions'])->pluck('type')->all();
+
+                $this->assertSame([], $types);
+                $this->assertSame('', $props['defaultSessionType']);
+            });
+
+        // Attempting to book Guiding or substitute Coaching as Intermediate is rejected.
+        $this->actingAs($intermediate)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->intermediateSpot, [
+                'session_type' => 'guiding',
+            ]))
+            ->assertSessionHas('error');
+
+        $this->actingAs($intermediate)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->intermediateSpot, [
+                'session_type' => 'coaching',
+            ]))
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Booking::count());
+
+        // Advanced student IS assigned to Coaching and sees + books Coaching at ₱1,850/hr.
+        $advanced = $this->createStudent('advanced');
+
+        $this->actingAs($advanced)
             ->get(route('bookings.create', $instructor->id))
             ->assertOk()
             ->assertInertia(function (AssertableJson $page) {
@@ -616,20 +647,11 @@ class InstructorSurfZonesAndOfferingsTest extends TestCase
 
                 $this->assertSame(['coaching'], $types);
                 $this->assertSame('coaching', $props['defaultSessionType']);
+                $this->assertSame(120, $props['minimumDurationMinutes']);
             });
 
-        // Attempting to book Guiding directly is rejected.
-        $this->actingAs($intermediate)
-            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->intermediateSpot, [
-                'session_type' => 'guiding',
-            ]))
-            ->assertSessionHas('error');
-
-        $this->assertSame(0, Booking::count());
-
-        // Booking Coaching (and default when session_type omitted) succeeds at ₱1,850/hr.
-        $this->actingAs($intermediate)
-            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->intermediateSpot))
+        $this->actingAs($advanced)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->advancedSpot))
             ->assertRedirect();
 
         $booking = Booking::firstOrFail();

@@ -48,6 +48,7 @@ class BookingCancellationService
         ?User $actor = null,
         ?float $overrideAmount = null,
         ?string $studentNotificationMessage = null,
+        bool $notifyInstructor = true,
     ): array {
         $result = DB::transaction(function () use (
             $booking,
@@ -55,7 +56,8 @@ class BookingCancellationService
             $note,
             $actor,
             $overrideAmount,
-            $studentNotificationMessage
+            $studentNotificationMessage,
+            $notifyInstructor
         ) {
             $locked = Booking::with(['payment', 'student', 'instructor', 'surfSpot'])
                 ->whereKey($booking->id)
@@ -64,6 +66,17 @@ class BookingCancellationService
 
             if ($locked->status === BookingStatus::Cancelled) {
                 throw new BookingChangeException('This booking has already been cancelled.');
+            }
+
+            if (! in_array($locked->status, [
+                BookingStatus::Reserved,
+                BookingStatus::Pending,
+                BookingStatus::AwaitingPayment,
+                BookingStatus::Confirmed,
+            ], true)) {
+                throw new BookingChangeException(
+                    'This booking can no longer be cancelled because it is ' . $locked->status->label() . '.'
+                );
             }
 
             $effectiveReason = ($reason === CancellationReason::Student && $locked->hasPendingRescheduleResponse())
@@ -112,14 +125,18 @@ class BookingCancellationService
                 $refund,
                 $note,
                 $studentNotificationMessage,
-                $refundSummary
+                $refundSummary,
+                $actor,
+                $notifyInstructor
             ) {
                 $this->notifyAndDispatch(
                     $freshBooking,
                     $refund,
                     $note,
                     $studentNotificationMessage,
-                    $refundSummary
+                    $refundSummary,
+                    $actor,
+                    $notifyInstructor
                 );
             });
 
@@ -157,8 +174,9 @@ class BookingCancellationService
                 RefundStatus::Processing->value,
                 RefundStatus::Completed->value,
                 RefundStatus::ManualRequired->value,
+                RefundStatus::Failed->value,
             ])->exists()) {
-                throw new BookingChangeException('A refund has already been requested or completed for this booking.');
+                throw new BookingChangeException('A refund record already exists for this booking. Retry or complete the existing refund instead.');
             }
 
             $calculation = $this->buildOverrideCalculation($locked, $amount);
@@ -302,7 +320,7 @@ class BookingCancellationService
             instructorRetainedAmount: $retained,
             daysBeforeSession: $base->daysBeforeSession,
             daysSincePayment: $base->daysSincePayment,
-            canAutoDispatch: in_array($dispatchMode, ['paymongo', 'mock'], true),
+            canAutoDispatch: in_array($dispatchMode, ['paymongo', 'xendit', 'mock'], true),
             dispatchMode: $dispatchMode,
             summary: $clamped > 0
                 ? 'SISA Admin issued a refund of ₱' . number_format($clamped, 2) . '.'
@@ -394,6 +412,8 @@ class BookingCancellationService
         ?string $note,
         ?string $studentMessage,
         array $refundSummary,
+        ?User $actor = null,
+        bool $notifyInstructor = true,
     ): void {
         try {
             broadcast(new BookingCancelled($booking, $note, $refundSummary))->toOthers();
@@ -410,11 +430,13 @@ class BookingCancellationService
             $refundSummary
         ));
 
-        $booking->instructor?->notify(new BookingCancelledNotification(
-            $booking,
-            $note,
-            $refundSummary
-        ));
+        if ($notifyInstructor && ($actor === null || $actor->id !== $booking->instructor_id)) {
+            $booking->instructor?->notify(new BookingCancelledNotification(
+                $booking,
+                $note,
+                $refundSummary
+            ));
+        }
 
         if (! $refund) {
             return;

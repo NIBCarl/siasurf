@@ -3,7 +3,6 @@
 namespace App\Events;
 
 use App\Models\SafetyIncident;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -45,8 +44,14 @@ class IncidentReported implements ShouldBroadcast
                 'status' => $this->incident->status?->value,
                 'category' => $this->incident->category,
                 'category_label' => $category?->label() ?? 'Unclassified concern',
+                'report_type' => $this->incident->report_type,
                 'severity' => $this->incident->severity?->value,
                 'severity_label' => $this->incident->severity?->label() ?? 'Pending classification',
+                'suggested_outcome' => $this->incident->suggested_outcome?->value,
+                'suggested_outcome_label' => $this->incident->suggested_outcome?->label(),
+                'final_outcome' => $this->incident->final_outcome?->value,
+                'final_outcome_label' => $this->incident->final_outcome?->label(),
+                'handled_externally' => $this->incident->isExternallyHandled(),
                 'strike_weight' => $this->incident->strike_weight,
                 'description' => $this->incident->description,
                 'location' => $this->incident->location,
@@ -64,7 +69,7 @@ class IncidentReported implements ShouldBroadcast
                 'id' => $this->incident->reporter->id,
                 'name' => $this->incident->reporter->name,
             ] : null,
-            'message' => 'New ' . ($category?->label() ?? 'session concern') . ' reported for SISA review.',
+            'message' => 'New '.($category?->label() ?? 'session concern').' reported for SISA review.',
             'timestamp' => now()->toIso8601String(),
         ];
     }

@@ -129,7 +129,7 @@ class RefundCalculatorService
                 instructorRetainedAmount: 0.0,
                 daysBeforeSession: $daysBeforeSession,
                 daysSincePayment: $daysSincePayment,
-                canAutoDispatch: in_array($dispatchMode, ['paymongo', 'mock'], true),
+                canAutoDispatch: in_array($dispatchMode, ['paymongo', 'xendit', 'mock'], true),
                 dispatchMode: $dispatchMode,
                 summary: $this->formatSummary(100, $lessonPrice, $serviceFee, $dispatchMode, $basis),
             );
@@ -193,7 +193,7 @@ class RefundCalculatorService
             instructorRetainedAmount: $instructorRetained,
             daysBeforeSession: $daysBeforeSession,
             daysSincePayment: $daysSincePayment,
-            canAutoDispatch: in_array($dispatchMode, ['paymongo', 'mock'], true),
+            canAutoDispatch: in_array($dispatchMode, ['paymongo', 'xendit', 'mock'], true),
             dispatchMode: $dispatchMode,
             summary: $this->formatSummary($percentage, $refundAmount, $serviceFee, $dispatchMode, $basis),
         );
@@ -267,14 +267,34 @@ class RefundCalculatorService
         $transactionId = $payment->transaction_id;
 
         if (! empty($gatewayId)) {
-            return str_starts_with((string) $gatewayId, 'mock_') ? 'mock' : 'paymongo';
+            if (str_starts_with((string) $gatewayId, 'mock_')) {
+                return 'mock';
+            }
+
+            if (str_starts_with((string) $gatewayId, 'ewc_')) {
+                return 'xendit';
+            }
+
+            return 'paymongo';
         }
 
-        if (! empty($transactionId) && str_starts_with((string) $transactionId, 'mock_')) {
-            return 'mock';
+        // Receipt-verified manual GCash transfers without a gateway payment ID
+        // must always complete manually rather than calling gateway/mock APIs.
+        if ($payment->hasReceipt()) {
+            return 'manual_required';
         }
 
-        // Receipt-verified manual GCash transfers have no PayMongo payment ID.
+        if (! empty($transactionId)) {
+            if (str_starts_with((string) $transactionId, 'mock_')) {
+                return 'mock';
+            }
+
+            if (str_starts_with((string) $transactionId, 'ewc_')) {
+                return 'xendit';
+            }
+        }
+
+        // Fallback for manual GCash transfers with no gateway payment ID.
         return 'manual_required';
     }
 

@@ -48,7 +48,7 @@ class MaintenanceCommandsTest extends TestCase
         return $instructor;
     }
 
-    public function test_expired_suspension_is_lifted_and_strikes_are_cleared(): void
+    public function test_expired_suspension_awaits_admin_reinstatement_before_clearing_strikes(): void
     {
         $instructor = $this->instructorWithProfile();
 
@@ -56,6 +56,24 @@ class MaintenanceCommandsTest extends TestCase
 
         $profile = $instructor->instructorProfile->fresh();
 
+        // P487: Reinstatement requires SISA admin approval; cron only marks it awaiting reinstatement.
+        $this->assertSame('suspended', $profile->status->value);
+        $this->assertSame(3, $profile->strike_count);
+        $this->assertDatabaseHas('instructor_suspensions', [
+            'instructor_id' => $instructor->id,
+            'status' => \App\Enums\SuspensionStatus::AwaitingReinstatement->value,
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $admin->assignRole('admin');
+
+        $this->actingAs($admin)
+            ->post(route('admin.instructors.reactivate', $instructor), [
+                'reinstatement_note' => 'Approved by SISA after suspension period elapsed.',
+            ])
+            ->assertRedirect();
+
+        $profile->refresh();
         $this->assertSame('active', $profile->status->value);
         $this->assertNull($profile->suspended_until);
         $this->assertSame(0, $profile->strike_count);

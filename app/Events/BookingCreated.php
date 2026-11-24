@@ -75,6 +75,7 @@ class BookingCreated implements ShouldBroadcast
                 'id' => $this->booking->surfSpot->id,
                 'name' => $this->booking->surfSpot->name,
             ],
+            'message' => "New booking request from {$this->booking->student->name} for {$this->booking->date->format('M j')} at {$this->booking->surfSpot->name}.",
             'timestamp' => now()->toIso8601String(),
         ];
     }

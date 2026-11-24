@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3'
+import { computed, ref } from 'vue'
+import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { 
-    ChartBarIcon, 
     ArrowTrendingUpIcon, 
     UserIcon, 
     MapPinIcon,
@@ -12,15 +12,72 @@ import RevenueChart from '@/Components/Organisms/RevenueChart.vue'
 import BookingDistributionChart from '@/Components/Organisms/BookingDistributionChart.vue'
 import PopularSpotsChart from '@/Components/Organisms/PopularSpotsChart.vue'
 
+interface AnalyticsSummary {
+  service_fee_percent: number
+  revenue_growth_pct: number | null
+  total_bookings: number
+  beginner_share_pct: number
+  dominant_skill_label: string
+  dominant_skill_pct: number
+  peak_age_group: string
+  peak_age_pct: number
+  peak_age_note: string
+  busiest_day: string
+  busiest_day_pct: number
+  busiest_day_note: string
+}
+
 interface Props {
   analytics: {
     revenue: any
     bookings: any
     spots: any
+    summary?: AnalyticsSummary
   }
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+const revenuePeriod = ref<'monthly' | 'yearly'>('monthly')
+const refreshing = ref(false)
+
+const summary = computed<AnalyticsSummary>(() => props.analytics.summary ?? {
+  service_fee_percent: 7,
+  revenue_growth_pct: null,
+  total_bookings: 0,
+  beginner_share_pct: 0,
+  dominant_skill_label: 'Beginner',
+  dominant_skill_pct: 0,
+  peak_age_group: '—',
+  peak_age_pct: 0,
+  peak_age_note: 'Age demographics populate once bookings are recorded.',
+  busiest_day: '—',
+  busiest_day_pct: 0,
+  busiest_day_note: 'Day-of-week trends populate once bookings are recorded.',
+})
+
+const growthBadgeText = computed(() => {
+  const pct = summary.value.revenue_growth_pct
+  if (pct === null || pct === undefined) return 'No prior month data'
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct}% vs Last Month`
+})
+
+const syncData = () => {
+  refreshing.value = true
+  router.reload({
+    only: ['analytics'],
+    onFinish: () => {
+      refreshing.value = false
+    },
+  })
+}
+
+const exportReport = () => {
+  if (typeof window !== 'undefined') {
+    window.print()
+  }
+}
 </script>
 
 <template>
@@ -41,7 +98,7 @@ defineProps<Props>()
                                 <svg class="w-3 h-3 text-slate-300 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
                                     <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/>
                                 </svg>
-                                <span class="ml-1 text-sm font-bold text-ocean-600 md:ml-2">Insights</span>
+                                <span class="ml-1 text-sm font-bold text-lagoon-700 md:ml-2">Insights</span>
                             </div>
                         </li>
                     </ol>
@@ -50,11 +107,20 @@ defineProps<Props>()
                 <p class="text-slate-500 mt-1">Deep dive into SiaSurf's performance and trends.</p>
             </div>
             <div class="flex gap-2">
-                <button class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-                    Export PDF
+                <button
+                    type="button"
+                    @click="exportReport"
+                    class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                >
+                    Print / Export PDF
                 </button>
-                <button class="px-4 py-2 bg-ocean-600 text-white rounded-xl text-sm font-bold hover:bg-ocean-700 transition-colors shadow-lg shadow-ocean-600/20">
-                    Sync Data
+                <button
+                    type="button"
+                    :disabled="refreshing"
+                    @click="syncData"
+                    class="px-4 py-2 bg-coral-700 text-white rounded-xl text-sm font-bold hover:bg-coral-800 transition-colors shadow-card disabled:opacity-60"
+                >
+                    {{ refreshing ? 'Syncing...' : 'Sync Data' }}
                 </button>
             </div>
         </div>
@@ -69,64 +135,87 @@ defineProps<Props>()
                 </div>
                 
                 <div class="relative z-10">
-                    <div class="flex items-center justify-between mb-8">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
                         <div>
                             <h3 class="text-xl font-bold text-slate-900">Revenue Velocity</h3>
-                            <p class="text-slate-500 text-sm">Monthly 7% platform service fee revenue patterns</p>
+                            <p class="text-slate-500 text-sm">
+                                {{ revenuePeriod === 'monthly' ? 'Monthly' : 'Yearly' }} {{ summary.service_fee_percent }}% platform service fee revenue patterns
+                            </p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-full">
-                                +12.4% vs Last Month
+                            <span
+                                class="px-3 py-1 text-[10px] font-black uppercase rounded-full"
+                                :class="
+                                    summary.revenue_growth_pct === null
+                                        ? 'bg-slate-100 text-slate-600'
+                                        : summary.revenue_growth_pct >= 0
+                                            ? 'bg-emerald-50 text-emerald-700'
+                                            : 'bg-rose-50 text-rose-700'
+                                "
+                            >
+                                {{ growthBadgeText }}
                             </span>
                             <div class="flex bg-slate-100 p-1 rounded-lg">
-                                <button class="px-3 py-1 bg-white text-[10px] font-bold rounded-md shadow-sm">Monthly</button>
-                                <button class="px-3 py-1 text-[10px] font-bold text-slate-500">Yearly</button>
+                                <button
+                                    type="button"
+                                    @click="revenuePeriod = 'monthly'"
+                                    class="px-3 py-1 text-[10px] font-bold rounded-md transition-colors"
+                                    :class="revenuePeriod === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+                                >
+                                    Monthly
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="revenuePeriod = 'yearly'"
+                                    class="px-3 py-1 text-[10px] font-bold rounded-md transition-colors"
+                                    :class="revenuePeriod === 'yearly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+                                >
+                                    Yearly
+                                </button>
                             </div>
                         </div>
                     </div>
                     
                     <div class="h-[300px] w-full">
-                        <RevenueChart />
+                        <RevenueChart :period="revenuePeriod" />
                     </div>
                 </div>
             </div>
 
             <!-- Distribution Card -->
-            <div class="md:col-span-2 bg-slate-900 rounded-[2.5rem] p-8 border border-slate-800 shadow-xl relative overflow-hidden group">
-                <div class="absolute inset-0 bg-gradient-to-br from-ocean-600/10 to-transparent"></div>
-                
+            <div class="md:col-span-2 bg-white rounded-[2.5rem] p-8 border border-sand-200 border-t-4 border-t-deep-900 shadow-sm relative overflow-hidden group">
                 <div class="relative z-10 h-full flex flex-col">
-                    <div class="mb-6 text-white">
-                        <h3 class="text-xl font-bold">Skill Distribution</h3>
-                        <p class="text-slate-400 text-sm">Engagement by surfer level</p>
+                    <div class="mb-6">
+                        <h3 class="text-xl font-bold text-deep-950">Booking Status Distribution</h3>
+                        <p class="text-stone-500 text-sm">Live breakdown across booking states</p>
                     </div>
                     
-                    <div class="flex-grow flex items-center justify-center p-4">
-                        <BookingDistributionChart />
+                    <div class="flex-grow flex items-center justify-center p-2">
+                        <BookingDistributionChart :dark="false" class="w-full" />
                     </div>
 
-                    <div class="mt-6 pt-6 border-t border-white/5 space-y-3">
+                    <div class="mt-6 pt-6 border-t border-sand-200 space-y-3">
                         <div class="flex items-center justify-between text-xs">
-                            <span class="text-slate-400">Beginner focus</span>
-                            <span class="text-ocean-400 font-bold">64%</span>
+                            <span class="text-stone-600 font-medium">{{ summary.dominant_skill_label }} focus</span>
+                            <span class="text-lagoon-700 font-bold">{{ summary.dominant_skill_pct }}%</span>
                         </div>
-                        <div class="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                            <div class="bg-ocean-500 h-full w-[64%] animate-shimmer"></div>
+                        <div class="w-full bg-sand-100 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-lagoon-600 h-full transition-all duration-500" :style="{ width: `${summary.dominant_skill_pct}%` }"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Regional Hotspots -->
-            <div class="md:col-span-6 lg:col-span-3 bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm overflow-hidden group">
+            <div class="md:col-span-6 lg:col-span-3 bg-white rounded-[2.5rem] p-8 border border-sand-200 shadow-sm overflow-hidden group">
                 <div class="flex items-center justify-between mb-8">
                     <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-礁-50 rounded-2xl flex items-center justify-center">
-                            <MapPinIcon class="w-6 h-6 text-reef-600" />
+                        <div class="w-12 h-12 bg-lagoon-50 rounded-2xl flex items-center justify-center">
+                            <MapPinIcon class="w-6 h-6 text-lagoon-700" />
                         </div>
                         <div>
-                            <h3 class="text-xl font-bold text-slate-900">Regional Hotspots</h3>
-                            <p class="text-slate-500 text-sm">Most booked surf spots this season</p>
+                            <h3 class="text-xl font-bold text-deep-950">Regional Hotspots</h3>
+                            <p class="text-stone-500 text-sm">Most booked surf spots</p>
                         </div>
                     </div>
                 </div>
@@ -139,23 +228,23 @@ defineProps<Props>()
             <!-- Secondary Insights -->
             <div class="md:col-span-6 lg:col-span-3 grid grid-cols-2 gap-6">
                 <!-- Data Insight 1 -->
-                <div class="bg-reef-600 rounded-[2rem] p-6 text-white relative overflow-hidden group shadow-lg shadow-reef-600/20">
-                    <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-125 transition-transform duration-700">
-                        <UserIcon class="w-24 h-24" />
+                <div class="bg-white rounded-[2rem] p-6 border border-sand-200 border-t-4 border-t-lagoon-600 text-deep-950 relative overflow-hidden group shadow-sm">
+                    <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
+                        <UserIcon class="w-24 h-24 text-lagoon-700" />
                     </div>
-                    <p class="text-white/70 text-sm font-bold uppercase tracking-wider mb-1">Peak Student Age</p>
-                    <h4 class="text-3xl font-bold">18-24</h4>
-                    <p class="text-white/60 text-xs mt-4">Generation Z accounts for 42% of total island bookings.</p>
+                    <p class="text-stone-500 text-sm font-bold uppercase tracking-wider mb-1">Peak Student Age</p>
+                    <h4 class="text-3xl font-bold text-lagoon-700">{{ summary.peak_age_group }}</h4>
+                    <p class="text-stone-600 text-xs mt-4">{{ summary.peak_age_note }}</p>
                 </div>
 
                 <!-- Data Insight 2 -->
-                <div class="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm relative overflow-hidden group text-slate-900">
+                <div class="bg-white rounded-[2rem] p-6 border border-sand-200 border-t-4 border-t-deep-800 shadow-sm relative overflow-hidden group text-deep-950">
                     <div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
-                        <CalendarIcon class="w-24 h-24 text-ocean-600" />
+                        <CalendarIcon class="w-24 h-24 text-deep-900" />
                     </div>
-                    <p class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-1">Busiest Day</p>
-                    <h4 class="text-3xl font-bold text-ocean-600">Saturday</h4>
-                    <p class="text-slate-500 text-xs mt-4">Weekend surges see 3.5x more bookings than weekdays.</p>
+                    <p class="text-stone-500 text-sm font-bold uppercase tracking-wider mb-1">Busiest Day</p>
+                    <h4 class="text-3xl font-bold text-deep-900">{{ summary.busiest_day }}</h4>
+                    <p class="text-stone-600 text-xs mt-4">{{ summary.busiest_day_note }}</p>
                 </div>
             </div>
 

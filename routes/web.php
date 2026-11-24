@@ -24,6 +24,7 @@ use App\Http\Controllers\Instructor\QrController as InstructorQrController;
 use App\Http\Controllers\Instructor\SuspensionController;
 use App\Http\Controllers\InstructorSearchController;
 use App\Http\Controllers\InstructorVerificationController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileAvatarController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QRCodeController;
@@ -114,6 +115,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/profile/avatar', [ProfileAvatarController::class, 'destroy'])
         ->middleware('throttle:20,1')
         ->name('profile.avatar.destroy');
+
+    // Persisted notification feed. The bell loads this on mount so history
+    // survives navigation, which a broadcast-only feed cannot do.
+    Route::get('/notifications', [NotificationController::class, 'index'])
+        ->name('notifications.index');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])
+        ->name('notifications.read');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])
+        ->name('notifications.read-all');
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])
+        ->name('notifications.destroy');
+    Route::delete('/notifications', [NotificationController::class, 'clear'])
+        ->name('notifications.clear');
 });
 
 // Booking-scoped chat. The booking policy decides who is a participant, so the
@@ -237,6 +251,7 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
         // FR 1.9.4 - cancel or reschedule (admin approval when under 24 hours)
         Route::post('/bookings/{booking}/change-request', [InstructorBookingController::class, 'requestChange'])->name('bookings.change-request');
         Route::delete('/bookings/{booking}/change-request', [InstructorBookingController::class, 'cancelChangeRequest'])->name('bookings.change-request.cancel');
+        Route::patch('/bookings/{booking}/surf-spot', [InstructorBookingController::class, 'updateSurfSpot'])->name('bookings.update-spot');
 
         // FR 1.10.1 - mark student attendance
         Route::post('/bookings/{booking}/attendance', [InstructorBookingController::class, 'markAttendance'])->name('bookings.attendance');
@@ -320,6 +335,8 @@ Route::middleware(['auth', 'verified', 'role:admin'])->prefix('admin')->as('admi
     Route::post('/instructors/{instructor}/reject', [InstructorController::class, 'reject'])->name('instructors.reject');
     Route::post('/instructors/{instructor}/suspend', [InstructorController::class, 'suspend'])->name('instructors.suspend');
     Route::post('/instructors/{instructor}/reactivate', [InstructorController::class, 'reactivate'])->name('instructors.reactivate');
+    Route::post('/instructors/{instructor}/fines/{fine}/mark-paid', [InstructorController::class, 'markFinePaid'])->name('instructors.fines.mark-paid');
+    Route::post('/instructors/{instructor}/fines/{fine}/waive', [InstructorController::class, 'waiveFine'])->name('instructors.fines.waive');
 
     // Certificate management
     Route::post('/instructors/{instructor}/certificates', [CertificateController::class, 'store'])->name('certificates.store');

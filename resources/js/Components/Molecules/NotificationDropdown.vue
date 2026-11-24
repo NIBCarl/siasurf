@@ -16,6 +16,7 @@ const {
   removeNotification,
   clearAll,
   initializeEcho,
+  openNotification,
 } = useNotifications()
 
 const isOpen = ref(false)
@@ -85,23 +86,32 @@ const formatTime = (date: Date | string) => {
       v-if="isOpen"
       class="absolute right-0 mt-2 w-80 bg-white rounded-3xl shadow-2xl shadow-slate-300/40 border border-slate-100 z-50 overflow-hidden"
     >
-      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
         <h3 class="text-xs font-black uppercase tracking-widest text-slate-900">Notifications</h3>
-        <button
-          v-if="notifications.length > 0"
-          type="button"
-          @click="unreadCount > 0 ? markAllAsRead() : clearAll()"
-          class="text-[10px] font-black uppercase tracking-widest text-ocean-600 hover:text-ocean-800 transition-colors"
-        >
-          {{ unreadCount > 0 ? 'Mark all read' : 'Clear all' }}
-        </button>
+        <div v-if="notifications.length > 0" class="flex items-center gap-3">
+          <button
+            v-if="unreadCount > 0"
+            type="button"
+            @click="markAllAsRead()"
+            class="text-[10px] font-black uppercase tracking-widest text-ocean-600 hover:text-ocean-800 transition-colors"
+          >
+            Mark all read
+          </button>
+          <button
+            type="button"
+            @click="clearAll()"
+            class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-600 transition-colors"
+          >
+            Clear all
+          </button>
+        </div>
       </div>
 
       <div class="max-h-96 overflow-y-auto">
         <div
           v-for="notification in notifications"
           :key="notification.id"
-          @click="markAsRead(notification.id)"
+          @click="openNotification(notification)"
           :class="[
             'px-5 py-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors',
             !notification.read ? 'bg-ocean-50/60' : ''

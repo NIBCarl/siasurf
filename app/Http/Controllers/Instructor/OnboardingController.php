@@ -79,7 +79,7 @@ class OnboardingController extends Controller
             }
         }
 
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $disk = config('filesystems.default') === 's3' ? 's3' : 'local';
         $storedCertificates = [];
 
         try {

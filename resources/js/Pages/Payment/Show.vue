@@ -12,6 +12,7 @@ import { computed, ref } from 'vue'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
 import BaseButton from '@/Components/Atoms/BaseButton.vue'
 import Badge from '@/Components/Atoms/Badge.vue'
+import { formatDate, formatDateTime } from '@/utils/date'
 import { formatPhilippineDateTime } from '@/utils/philippineTime'
 import {
   CreditCardIcon,
@@ -156,7 +157,7 @@ const startGCash = () => {
           <div>
             <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Lesson</p>
             <p class="mt-1 text-sm font-semibold text-slate-900">
-              {{ booking.date }}
+              {{ formatDate(booking.date) }}
               <span class="capitalize text-slate-500">· {{ booking.time_period }}</span>
             </p>
             <p v-if="booking.start_time" class="mt-0.5 text-xs text-slate-500">
@@ -176,7 +177,7 @@ const startGCash = () => {
             <div class="flex-1">
               <p class="text-sm font-semibold text-slate-900">Payment received</p>
               <p class="text-xs text-slate-500">
-                {{ payment?.paid_at ? `Paid ${payment.paid_at}` : 'Thank you!' }}
+                {{ payment?.paid_at ? `Paid ${formatDateTime(payment.paid_at)}` : 'Thank you!' }}
               </p>
             </div>
             <a :href="route('payments.receipt', booking.id)">

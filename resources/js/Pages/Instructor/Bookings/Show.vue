@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router, useForm } from '@inertiajs/vue3'
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import AppButton from '@/Components/UI/AppButton.vue'
@@ -51,6 +51,10 @@ interface Booking {
   } | null
   skill_level: string
   session_type?: string | null
+  surf_spot_id?: number
+  previous_surf_spot_id?: number | null
+  spot_change_reason?: string | null
+  spot_changed_at?: string | null
   student_age: number
   height: number | null
   weight: number | null
@@ -69,7 +73,8 @@ interface Booking {
     studentProfile?: { skill_level: string }
     skillUpgradeRequests?: any[]
   }
-  surf_spot: { name: string; difficulty?: string }
+  surf_spot: { id?: number; name: string; difficulty?: string }
+  previous_surf_spot?: { id?: number; name: string; difficulty?: string } | null
   payment?: {
     amount: number
     payment_method: string
@@ -160,7 +165,7 @@ interface RescheduleProposal {
 interface Props {
   booking: Booking
   studentAssessment?: StudentAssessment | null
-  surfSpots?: Array<{ id: number; name: string; difficulty: string }>
+  surfSpots?: Array<{ id: number; name: string; difficulty: string; area?: string | null }>
   isReserved?: boolean
   holdTimeRemaining?: number
   acceptTimeRemaining?: number
@@ -176,6 +181,8 @@ interface Props {
   hasConversation?: boolean
   isRescheduled?: boolean
   pendingRescheduleProposal?: RescheduleProposal | null
+  canChangeSurfSpot?: boolean
+  sharedSessionCount?: number
   paymentHoldMinutes?: number
   paymentTimeRemaining?: number
 }
@@ -649,9 +656,83 @@ const submitCash = () => {
   })
 }
 
+const sessionTypeLabel = computed(() => {
+  const type = props.booking.session_type
+  if (!type) return null
+  return type.charAt(0).toUpperCase() + type.slice(1)
+})
+
+const currentSpotId = computed(() => props.booking.surf_spot_id ?? props.booking.surf_spot?.id ?? null)
+
+const alternativeSurfSpots = computed(() =>
+  (props.surfSpots ?? []).filter((spot) => Number(spot.id) !== Number(currentSpotId.value)),
+)
+
+const canEditSurfSpot = computed(
+  () => Boolean(props.canChangeSurfSpot) && alternativeSurfSpots.value.length > 0 && !isReservedHold.value,
+)
+
+const showSpotModal = ref(false)
+const spotForm = useForm({
+  surf_spot_id: '' as number | string,
+  reason: '',
+})
+
+const openSpotModal = () => {
+  spotForm.reset()
+  spotForm.clearErrors()
+  spotForm.surf_spot_id = alternativeSurfSpots.value[0]?.id ?? ''
+  showSpotModal.value = true
+}
+
+const submitSpotChange = () => {
+  spotForm.patch(route('instructor.bookings.update-spot', props.booking.id), {
+    preserveScroll: true,
+    onSuccess: (page) => {
+      const flash = (page.props as any)?.flash
+      if (!flash?.error) {
+        showSpotModal.value = false
+        spotForm.reset()
+      }
+    },
+  })
+}
+
+const page = usePage()
+const flash = computed(() => (page.props as any)?.flash ?? {})
+
+const formatThirdPersonSkill = (label: string): string => {
+  let formatted = label.trim()
+  if (/^I can\s+/i.test(formatted)) {
+    formatted = 'Can ' + formatted.replace(/^I can\s+/i, '')
+  } else if (/^I am\s+/i.test(formatted)) {
+    formatted = 'Is ' + formatted.replace(/^I am\s+/i, '')
+  } else if (/^I have\s+/i.test(formatted)) {
+    formatted = 'Has ' + formatted.replace(/^I have\s+/i, '')
+  }
+  return formatted
+    .replace(/\bon my own\b/gi, 'independently')
+    .replace(/\bwith me\b/gi, 'with the instructor')
+    .replace(/\bmyself\b/gi, 'themselves')
+}
+
+const formatThirdPersonSafetyFlag = (message: string): string =>
+  message
+    .trim()
+    .replace(
+      /\bYour level is capped at beginner and the instructor sees a warning\./gi,
+      "The student's level is capped at beginner and flagged for extra supervision.",
+    )
+    .replace(/\bYour level\b/g, "The student's level")
+    .replace(/\byour level\b/g, "the student's level")
+
 // Everything that does not deserve a permanent slot in the header.
 const hasMoreActions = computed(
-  () => canRecordCash.value || canChangeBooking.value || (attendanceStatusEligible.value && props.booking.status !== 'completed'),
+  () =>
+    canRecordCash.value ||
+    canChangeBooking.value ||
+    canEditSurfSpot.value ||
+    (attendanceStatusEligible.value && props.booking.status !== 'completed'),
 )
 
 const showPrimaryAttendance = computed(
@@ -670,6 +751,29 @@ const showCompleteAction = computed(
     <template #header>Lesson details</template>
 
     <div class="mx-auto w-full max-w-6xl space-y-3">
+      <!-- Flash notifications -->
+      <div
+        v-if="flash.error"
+        role="alert"
+        class="rounded-card border border-rose-200 bg-rose-50 px-4 py-3 text-body-sm font-semibold text-rose-900"
+      >
+        {{ flash.error }}
+      </div>
+      <div
+        v-else-if="flash.info"
+        role="status"
+        class="rounded-card border border-ocean-200 bg-ocean-50 px-4 py-3 text-body-sm font-semibold text-ocean-900"
+      >
+        {{ flash.info }}
+      </div>
+      <div
+        v-else-if="flash.success"
+        role="status"
+        class="rounded-card border border-emerald-200 bg-emerald-50 px-4 py-3 text-body-sm font-semibold text-emerald-900"
+      >
+        {{ flash.success }}
+      </div>
+
       <!-- Command bar: identity, state and the one action that matters now -->
       <section class="surface relative z-20 p-4">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -689,6 +793,9 @@ const showCompleteAction = computed(
                 </h1>
                 <StatusPill :variant="statusMeta(isReservedHold ? 'reserved' : booking.status).variant">
                   {{ statusMeta(isReservedHold ? 'reserved' : booking.status).label }}
+                </StatusPill>
+                <StatusPill v-if="sessionTypeLabel" variant="neutral">
+                  {{ sessionTypeLabel }}
                 </StatusPill>
                 <StatusPill v-if="isReservedHold" variant="pending">
                   {{ holdSecondsLeft > 0 ? `Hold · ${holdCountdown} left` : 'Hold expiring' }}
@@ -840,6 +947,14 @@ const showCompleteAction = computed(
                   {{ booking.attendance_label ? 'Edit attendance' : 'Mark attendance' }}
                 </button>
                 <button
+                  v-if="canEditSurfSpot"
+                  type="button"
+                  class="menu-item"
+                  @click="openSpotModal"
+                >
+                  Change surf spot
+                </button>
+                <button
                   v-if="canChangeBooking"
                   type="button"
                   class="menu-item"
@@ -965,10 +1080,26 @@ const showCompleteAction = computed(
       <!-- Four facts the instructor needs before walking to the water -->
       <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div class="surface p-3">
-          <p class="eyebrow">Surf spot</p>
+          <div class="flex items-center justify-between gap-2">
+            <p class="eyebrow">Surf spot</p>
+            <button
+              v-if="canEditSurfSpot"
+              type="button"
+              class="text-label font-semibold text-lagoon-700 hover:text-lagoon-900 hover:underline"
+              @click="openSpotModal"
+            >
+              Change spot
+            </button>
+          </div>
           <p class="mt-1 truncate text-body font-semibold text-deep-950">{{ booking.surf_spot.name }}</p>
           <p class="mt-0.5 text-body-sm capitalize text-stone-600">
             {{ booking.surf_spot.difficulty ?? 'Difficulty not recorded' }}
+          </p>
+          <p
+            v-if="booking.spot_changed_at && booking.spot_change_reason"
+            class="mt-1.5 rounded bg-ocean-50 px-2 py-1 text-[11px] text-ocean-900"
+          >
+            Moved<template v-if="booking.previous_surf_spot?.name"> from {{ booking.previous_surf_spot.name }}</template>: {{ booking.spot_change_reason }}
           </p>
         </div>
 
@@ -978,7 +1109,7 @@ const showCompleteAction = computed(
             {{ booking.student_count }} {{ booking.student_count === 1 ? 'surfer' : 'surfers' }}
           </p>
           <p class="mt-0.5 text-body-sm capitalize text-stone-600">
-            {{ booking.skill_level }} · age {{ booking.student_age }}
+            {{ booking.skill_level }}<template v-if="sessionTypeLabel"> · {{ sessionTypeLabel }}</template> · age {{ booking.student_age }}
           </p>
         </div>
 
@@ -1174,7 +1305,7 @@ const showCompleteAction = computed(
                 ]"
               >
                 <ExclamationTriangleIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{{ flag.message }}</span>
+                <span>{{ formatThirdPersonSafetyFlag(flag.message) }}</span>
               </div>
             </div>
 
@@ -1210,7 +1341,7 @@ const showCompleteAction = computed(
                 </p>
                 <ul v-if="studentAssessment.ticked_skills.length > 0" class="mt-2 list-disc space-y-1 pl-4 text-body-sm text-stone-700">
                   <li v-for="(skill, idx) in studentAssessment.ticked_skills" :key="idx">
-                    {{ skill.label }}
+                    {{ formatThirdPersonSkill(skill.label) }}
                   </li>
                 </ul>
                 <p v-else class="mt-2 text-body-sm text-stone-500">No skills ticked.</p>
@@ -1877,6 +2008,72 @@ const showCompleteAction = computed(
             </AppButton>
             <AppButton variant="danger" :loading="rejectReceiptForm.processing" @click="submitRejectReceipt">
               Reject receipt
+            </AppButton>
+          </div>
+        </div>
+      </Modal>
+
+      <!-- Change Surf Spot modal (updates shared session bookings & notifies students) -->
+      <Modal :show="showSpotModal" @close="showSpotModal = false" maxWidth="md">
+        <div class="p-6">
+          <h2 class="text-title font-semibold text-deep-950">Change surf spot</h2>
+          <p class="mt-1 text-body-sm text-stone-600">
+            Move this session to another verified break safe for your surfer(s). Every student in the session will be notified automatically with your reason.
+          </p>
+
+          <div
+            v-if="(sharedSessionCount ?? 1) > 1"
+            class="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-body-sm text-amber-950"
+          >
+            <strong>Shared session:</strong> {{ sharedSessionCount }} overlapping bookings share this time window and will all be updated together so everyone meets at the same beach.
+          </div>
+
+          <div class="mt-4">
+            <label for="new-surf-spot" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+              New surf spot
+            </label>
+            <select
+              id="new-surf-spot"
+              v-model="spotForm.surf_spot_id"
+              class="mt-2 w-full appearance-none rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+            >
+              <option v-for="spot in alternativeSurfSpots" :key="spot.id" :value="spot.id">
+                {{ spot.name }} — {{ spot.area ?? 'Siargao' }} ({{ spot.difficulty.charAt(0).toUpperCase() + spot.difficulty.slice(1) }})
+              </option>
+            </select>
+            <p v-if="spotForm.errors.surf_spot_id" class="mt-1 text-body-sm font-semibold text-rose-700">
+              {{ spotForm.errors.surf_spot_id }}
+            </p>
+          </div>
+
+          <div class="mt-4">
+            <label for="spot-change-reason" class="block text-label font-semibold uppercase tracking-[0.06em] text-stone-500">
+              Reason for the student(s) *
+            </label>
+            <textarea
+              id="spot-change-reason"
+              v-model="spotForm.reason"
+              rows="3"
+              maxlength="500"
+              required
+              placeholder="e.g. Strong onshore wind / shallow low tide at the original spot — moving to safer clean waves."
+              class="mt-2 w-full rounded-control border border-sand-200 bg-white px-3 py-2.5 text-body text-deep-900 focus:border-lagoon-600 focus:ring-lagoon-600"
+            ></textarea>
+            <p v-if="spotForm.errors.reason" class="mt-1 text-body-sm font-semibold text-rose-700">
+              {{ spotForm.errors.reason }}
+            </p>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <AppButton variant="secondary" :disabled="spotForm.processing" @click="showSpotModal = false">
+              Keep {{ booking.surf_spot.name }}
+            </AppButton>
+            <AppButton
+              :loading="spotForm.processing"
+              :disabled="spotForm.processing || !spotForm.surf_spot_id || spotForm.reason.trim().length < 5"
+              @click="submitSpotChange"
+            >
+              Update spot &amp; notify
             </AppButton>
           </div>
         </div>

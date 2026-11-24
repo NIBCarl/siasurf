@@ -50,6 +50,8 @@ interface Props {
   height?: string
   emptyMessage?: string
   showGallery?: boolean
+  locked?: boolean
+  stacked?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -58,6 +60,8 @@ const props = withDefaults(defineProps<Props>(), {
   height: '380px',
   emptyMessage: 'No surf zones match your current filter.',
   showGallery: false,
+  locked: false,
+  stacked: false,
 })
 
 const emit = defineEmits<{
@@ -293,19 +297,21 @@ const buildPopupHtml = (spot: SurfZoneSpot, selected: boolean): string => {
 }
 
 const toggleOrSelectSpot = (spot: SurfZoneSpot, panToMarker = false) => {
-  if (props.mode === 'multi') {
-    const next = new Set(selectedIds.value)
-    if (next.has(spot.id)) {
-      next.delete(spot.id)
-    } else {
-      next.add(spot.id)
+  if (!props.locked) {
+    if (props.mode === 'multi') {
+      const next = new Set(selectedIds.value)
+      if (next.has(spot.id)) {
+        next.delete(spot.id)
+      } else {
+        next.add(spot.id)
+      }
+      emit('update:modelValue', Array.from(next))
+    } else if (props.mode === 'single') {
+      emit('update:modelValue', spot.id)
     }
-    emit('update:modelValue', Array.from(next))
-  } else if (props.mode === 'single') {
-    emit('update:modelValue', spot.id)
-  }
 
-  emit('select', spot)
+    emit('select', spot)
+  }
 
   if (panToMarker && map.value) {
     const coords = markerCoords.get(spot.id)
@@ -407,6 +413,8 @@ const fitAllZones = (force = false) => {
   }
 }
 
+let resizeObserver: ResizeObserver | null = null
+
 const initMap = async () => {
   await nextTick()
   if (!container.value || map.value) return
@@ -430,6 +438,13 @@ const initMap = async () => {
   fitAllZones(true)
 
   window.setTimeout(() => map.value?.invalidateSize(), 180)
+
+  if (typeof ResizeObserver !== 'undefined' && container.value) {
+    resizeObserver = new ResizeObserver(() => {
+      map.value?.invalidateSize()
+    })
+    resizeObserver.observe(container.value)
+  }
 }
 
 watch(
@@ -462,6 +477,8 @@ watch(
 onMounted(initMap)
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
   map.value?.remove()
   map.value = null
   markerLayer.value = null
@@ -472,9 +489,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-3">
-    <div class="grid gap-4 lg:grid-cols-[1.25fr_1fr]">
+    <div
+      :class="stacked ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]'"
+    >
       <!-- Interactive Leaflet Map -->
-      <div class="relative isolate overflow-hidden rounded-2xl border border-sand-200 bg-sand-100 shadow-sm">
+      <div class="relative isolate min-w-0 overflow-hidden rounded-2xl border border-sand-200 bg-sand-100 shadow-sm">
         <div
           ref="container"
           :style="{ height }"
@@ -531,7 +550,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Paired Spot Search & Selection List -->
-      <div class="flex flex-col rounded-2xl border border-sand-200 bg-white p-3.5 shadow-sm" :style="{ maxHeight: height }">
+      <div class="flex min-w-0 flex-col rounded-2xl border border-sand-200 bg-white p-3.5 shadow-sm" :style="{ maxHeight: height }">
         <div class="space-y-2.5 border-b border-sand-100 pb-3">
           <div class="flex items-center justify-between gap-2">
             <span class="text-xs font-bold uppercase tracking-wider text-stone-600">
@@ -539,7 +558,7 @@ onBeforeUnmount(() => {
                 {{ selectedSpots.length }} zone{{ selectedSpots.length === 1 ? '' : 's' }} selected
               </template>
               <template v-else-if="mode === 'single'">
-                {{ singleSelectedSpot ? '1 spot chosen' : 'Choose 1 surf spot' }}
+                {{ locked ? 'Surf spot locked for shared session' : (singleSelectedSpot ? '1 spot chosen' : 'Choose 1 surf spot') }}
               </template>
               <template v-else>
                 {{ spots.length }} surf zone{{ spots.length === 1 ? '' : 's' }}

@@ -170,6 +170,11 @@ return [
     ],
 
     'strikes' => [
+        'fine_amount' => (float) env('SIASURF_STRIKE_FINE_AMOUNT', 500),
+        'tier2_threshold' => 2,
+        'tier2_suspension_days' => (int) env('SIASURF_TIER2_SUSPENSION_DAYS', 7),
+        'tier3_threshold' => (int) env('SIASURF_STRIKE_THRESHOLD', 3),
+        'tier3_suspension_days' => (int) env('SIASURF_SUSPENSION_DAYS', 30),
         'threshold' => env('SIASURF_STRIKE_THRESHOLD', 3),
         'suspension_days' => env('SIASURF_SUSPENSION_DAYS', 30),
     ],

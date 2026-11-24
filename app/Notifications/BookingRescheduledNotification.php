@@ -22,7 +22,7 @@ class BookingRescheduledNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        return ['database', 'mail'];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -66,6 +66,7 @@ class BookingRescheduledNotification extends Notification implements ShouldQueue
             'admin_note' => $this->adminNote,
             'message' => "Booking {$ref} has been rescheduled to {$dateLabel} ({$timeRange}).",
             'type' => 'booking_rescheduled',
+            'url' => route('student.bookings.show', $this->booking->id),
         ];
     }
 }

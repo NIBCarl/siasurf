@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Enums\BookingStatus;
 use App\Enums\FeedbackCategory;
+use App\Enums\IncidentReportTopic;
 use App\Enums\IncidentSource;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreFeedbackRequest;
@@ -38,11 +39,12 @@ class FeedbackController extends Controller
         return Inertia::render('Student/Feedback/Create', [
             'booking' => $booking,
             'review' => $review,
-            'report' => $report,
+            'report' => $report?->toStudentPayload(),
             'canReview' => $review === null,
             'canReport' => $report === null,
             'positiveTags' => FeedbackCategory::positiveOptions(),
-            'concernCategories' => FeedbackCategory::concernOptions(),
+            'reportTopics' => IncidentReportTopic::options(),
+            'concernCategories' => FeedbackCategory::studentConcernOptions(),
         ]);
     }
 
@@ -57,12 +59,9 @@ class FeedbackController extends Controller
         $result = $service->submit($booking, $request->user(), $data);
 
         $message = match (true) {
-            $result['review'] !== null && $result['incident'] !== null
-                => 'Your public review was published and your private concern was sent to SISA for review.',
-            $result['review'] !== null
-                => 'Your public review was published.',
-            default
-                => 'Your private concern was sent to SISA for review. No strike is applied until SISA confirms it.',
+            $result['review'] !== null && $result['incident'] !== null => 'Your public review was published and your private incident report was sent to SISA for review.',
+            $result['review'] !== null => 'Your public review was published.',
+            default => 'Your private incident report was sent to SISA for review.',
         };
 
         return redirect()->route('student.bookings.show', $booking)->with('success', $message);

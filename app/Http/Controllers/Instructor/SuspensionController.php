@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers\Instructor;
 
+use App\Enums\AppealGround;
 use App\Enums\InstructorStatus;
 use App\Enums\StrikeStatus;
-use App\Enums\SuspensionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAppealRequest;
+use App\Models\InstructorFine;
 use App\Models\InstructorSuspension;
 use App\Services\AppealService;
 use Illuminate\Http\RedirectResponse;
@@ -25,7 +26,7 @@ class SuspensionController extends Controller
         }
 
         $suspension = InstructorSuspension::where('instructor_id', $user->id)
-            ->where('status', SuspensionStatus::Active->value)
+            ->enforced()
             ->latest()
             ->first();
 
@@ -33,6 +34,7 @@ class SuspensionController extends Controller
 
         $tz = config('app.timezone', 'Asia/Manila');
 
+        // Instructor-safe strike breakdown: never expose suggested_outcome or admin_note.
         $strikes = $user->instructorStrikes()
             ->with('incident')
             ->where('status', StrikeStatus::Active->value)
@@ -42,10 +44,23 @@ class SuspensionController extends Controller
                 'id' => $strike->id,
                 'weight' => $strike->weight,
                 'reason' => $strike->incident?->instructor_summary
-                    ?? $strike->reason_text
-                    ?? $strike->reason_code,
+                    ?: ($strike->reason_text ?? $strike->reason_code),
                 'category' => $strike->incident?->category,
                 'applied_at' => $strike->applied_at?->copy()->timezone($tz)->format('M d, Y'),
+            ])
+            ->values();
+
+        $fines = $user->instructorFines()
+            ->orderByDesc('issued_at')
+            ->get()
+            ->map(fn (InstructorFine $fine) => [
+                'id' => $fine->id,
+                'amount' => (float) $fine->amount,
+                'status' => $fine->status?->value,
+                'status_label' => $fine->status?->label(),
+                'reason' => $fine->reason,
+                'issued_at' => $fine->issued_at?->copy()->timezone($tz)->format('M d, Y'),
+                'paid_at' => $fine->paid_at?->copy()->timezone($tz)->format('M d, Y'),
             ])
             ->values();
 
@@ -60,12 +75,19 @@ class SuspensionController extends Controller
                 'id' => $suspension->id,
                 'type' => $suspension->type?->value,
                 'type_label' => $suspension->type?->label(),
+                'tier_label' => $suspension->tierLabel(),
+                'strike_tier' => $suspension->strike_tier,
                 'status' => $suspension->status?->value,
+                'status_label' => $suspension->status?->label(),
+                'is_awaiting_reinstatement' => $suspension->isAwaitingReinstatement(),
+                'requires_sisa_id_confiscation' => (bool) $suspension->requires_sisa_id_confiscation,
                 'reason' => $suspension->reason,
                 'starts_at' => $suspension->starts_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
                 'ends_at' => $suspension->ends_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
+                'reinstatement_eligible_at' => $suspension->reinstatement_eligible_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
             ] : null,
             'strikes' => $strikes,
+            'fines' => $fines,
             'appeal' => $appeal ? [
                 'id' => $appeal->id,
                 'status' => $appeal->status?->value,
@@ -76,7 +98,7 @@ class SuspensionController extends Controller
                 'reviewed_at' => $appeal->reviewed_at?->copy()->timezone($tz)->format('M d, Y g:i A'),
             ] : null,
             'canAppeal' => $suspension !== null && $appeal === null,
-            'appealGrounds' => collect(\App\Enums\AppealGround::cases())->map(fn ($ground) => [
+            'appealGrounds' => collect(AppealGround::cases())->map(fn ($ground) => [
                 'value' => $ground->value,
                 'label' => $ground->label(),
             ])->values(),
@@ -88,7 +110,7 @@ class SuspensionController extends Controller
         $user = $request->user();
 
         $suspension = InstructorSuspension::where('instructor_id', $user->id)
-            ->where('status', SuspensionStatus::Active->value)
+            ->enforced()
             ->latest()
             ->first();
 

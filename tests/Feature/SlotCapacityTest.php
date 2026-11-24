@@ -99,7 +99,7 @@ class SlotCapacityTest extends TestCase
 
     private function payload(array $overrides = []): array
     {
-        return array_merge([
+        $payload = array_merge([
             'date' => $this->day->format('Y-m-d'),
             'start_time' => '07:00',
             'end_time' => '09:00',
@@ -110,6 +110,29 @@ class SlotCapacityTest extends TestCase
             'has_board' => false,
             'surf_spot_id' => $this->spot->id,
         ], $overrides);
+
+        $count = (int) ($payload['student_count'] ?? 1);
+        if ($count > 1 && ! array_key_exists('participants', $overrides)) {
+            $skill = $payload['skill_level'] ?? match ($payload['session_type'] ?? 'teaching') {
+                'guiding' => 'intermediate',
+                'coaching' => 'advanced',
+                default => 'beginner',
+            };
+            $participants = [];
+            for ($i = 0; $i < $count; $i++) {
+                $participants[] = [
+                    'full_name' => 'Surfer '.($i + 1),
+                    'age' => $payload['student_age'],
+                    'height' => $payload['height'],
+                    'weight' => $payload['weight'],
+                    'skill_level' => $skill,
+                    'has_board' => (bool) $payload['has_board'],
+                ];
+            }
+            $payload['participants'] = $participants;
+        }
+
+        return $payload;
     }
 
     private function bookingFor(User $instructor, array $attributes = []): Booking
@@ -949,5 +972,69 @@ class SlotCapacityTest extends TestCase
             ->get(route('bookings.parental-consent', $booking->id))
             ->assertRedirect(route('bookings.create', $instructor->id))
             ->assertSessionHas('info');
+    }
+
+    /** @test */
+    public function non_contiguous_open_slots_cannot_be_booked_across_closed_break_hours(): void
+    {
+        $instructor = User::factory()->create(['role' => 'instructor']);
+        $instructor->assignRole('instructor');
+        $instructor->instructorProfile()->create([
+            'level' => InstructorLevel::Level3,
+            'status' => 'active',
+            'rate_per_hour' => 1000,
+            'guiding_rate' => 1200,
+            'coaching_rate' => 1800,
+            'auto_accept_bookings' => false,
+        ]);
+
+        // 08:00 is closed as a break; only 07:00, 09:00, and 10:00 are open.
+        Availability::create([
+            'user_id' => $instructor->id,
+            'day_of_week' => (int) $this->day->format('w'),
+            'time_period' => 'morning',
+            'is_available' => true,
+            'start_time' => '06:00',
+            'end_time' => '12:00',
+            'open_slots' => ['07:00', '09:00', '10:00'],
+            'slot_duration_minutes' => 60,
+            'specific_date' => null,
+        ]);
+
+        $intermediate = $this->anotherStudent('intermediate');
+        $date = $this->day->format('Y-m-d');
+
+        // Guiding (2h minimum) cannot start at 07:00 because 08:00 is closed; 09:00 IS contiguous (09:00-11:00).
+        $guidingAvail = $this->actingAs($intermediate)->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $date,
+            'skill_level' => 'intermediate',
+            'session_type' => 'guiding',
+        ]))->assertOk();
+
+        $this->assertNotContains('07:00', $guidingAvail->json('periods.morning.slots'));
+        $this->assertContains('09:00', $guidingAvail->json('periods.morning.slots'));
+
+        // Teaching (1h minimum) starting at 07:00 can only end at 08:00 — never spanning closed 08:00 to 09:00.
+        $endTimes = $this->actingAs($this->student)->getJson(route('api.availability.end-times', [
+            'instructor' => $instructor->id,
+            'date' => $date,
+            'start_time' => '07:00',
+            'students' => 1,
+            'skill_level' => 'beginner',
+            'session_type' => 'teaching',
+        ]))->assertOk();
+
+        $this->assertSame(['08:00'], $endTimes->json('end_times'));
+
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $instructor->id), $this->payload([
+                'start_time' => '07:00',
+                'end_time' => '09:00',
+                'session_type' => 'teaching',
+            ]))
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Booking::where('instructor_id', $instructor->id)->count());
     }
 }

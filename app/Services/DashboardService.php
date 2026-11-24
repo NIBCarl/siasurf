@@ -3,11 +3,16 @@
 namespace App\Services;
 
 use App\Enums\BookingStatus;
+use App\Enums\IncidentOutcome;
+use App\Enums\IncidentSeverity;
+use App\Enums\IncidentStatus;
 use App\Enums\InstructorStatus;
 use App\Enums\PaymentStatus;
-use App\Enums\IncidentSeverity;
+use App\Enums\SuspensionStatus;
 use App\Models\Booking;
+use App\Models\InstructorFine;
 use App\Models\InstructorProfile;
+use App\Models\InstructorSuspension;
 use App\Models\Payment;
 use App\Models\SafetyIncident;
 use App\Models\User;
@@ -32,6 +37,7 @@ class DashboardService
             'active_instructors' => [
                 'value' => InstructorProfile::where('status', InstructorStatus::Active->value)->count(),
                 'pending_verification' => InstructorProfile::where('status', InstructorStatus::PendingVerification->value)->count(),
+                'awaiting_reinstatement' => InstructorSuspension::where('status', SuspensionStatus::AwaitingReinstatement->value)->count(),
             ],
             'revenue' => [
                 'total' => $this->formatCurrency($this->sumServiceFeeRevenue()),
@@ -42,7 +48,12 @@ class DashboardService
             ],
             'incidents' => [
                 'total' => SafetyIncident::count(),
-                'critical' => SafetyIncident::where('severity', IncidentSeverity::Critical->value)->count(),
+                'critical' => SafetyIncident::where('status', IncidentStatus::Confirmed->value)
+                    ->where(function ($q) {
+                        $q->where('final_outcome', IncidentOutcome::Critical->value)
+                            ->orWhere('handled_externally', true);
+                    })
+                    ->count(),
                 'this_month' => SafetyIncident::whereMonth('created_at', now()->month)->count(),
             ],
             'ongoing_sessions' => [
@@ -58,6 +69,28 @@ class DashboardService
     {
         $data = [];
         $labels = [];
+
+        if ($period === 'yearly') {
+            $anchorYear = now()->startOfYear();
+
+            for ($i = 4; $i >= 0; $i--) {
+                $yearDate = $anchorYear->copy()->subYears($i);
+
+                $revenue = $this->sumServiceFeeRevenue(
+                    $yearDate->copy()->startOfYear(),
+                    $yearDate->copy()->endOfYear()
+                );
+
+                $labels[] = $yearDate->format('Y');
+                $data[] = round($revenue, 2);
+            }
+
+            return [
+                'labels' => $labels,
+                'data' => $data,
+            ];
+        }
+
         $anchor = now()->startOfMonth();
 
         for ($i = $months - 1; $i >= 0; $i--) {
@@ -75,6 +108,114 @@ class DashboardService
         return [
             'labels' => $labels,
             'data' => $data,
+        ];
+    }
+
+    /**
+     * Real platform insights for Admin Analytics (never hardcoded placeholders).
+     *
+     * @return array<string, mixed>
+     */
+    public function getAnalyticsSummary(): array
+    {
+        $thisMonthRevenue = $this->sumServiceFeeRevenue(now()->startOfMonth(), now()->endOfMonth());
+        $lastMonthRevenue = $this->sumServiceFeeRevenue(
+            now()->subMonth()->startOfMonth(),
+            now()->subMonth()->endOfMonth()
+        );
+
+        $revenueGrowthPct = null;
+        if ($lastMonthRevenue > 0) {
+            $revenueGrowthPct = round((($thisMonthRevenue - $lastMonthRevenue) / $lastMonthRevenue) * 100, 1);
+        } elseif ($thisMonthRevenue > 0) {
+            $revenueGrowthPct = 100.0;
+        }
+
+        $bookings = Booking::query()
+            ->whereNotNull('date')
+            ->get(['skill_level', 'student_age', 'date']);
+
+        $totalBookings = $bookings->count();
+        $skillCounts = ['beginner' => 0, 'intermediate' => 0, 'advanced' => 0];
+        $ageBuckets = ['5–12' => 0, '13–17' => 0, '18–24' => 0, '25–34' => 0, '35+' => 0];
+        $dayCounts = [];
+        $agedCount = 0;
+
+        foreach ($bookings as $booking) {
+            $skill = $booking->skill_level instanceof \BackedEnum
+                ? $booking->skill_level->value
+                : (string) $booking->skill_level;
+
+            if (isset($skillCounts[$skill])) {
+                $skillCounts[$skill]++;
+            }
+
+            $age = (int) ($booking->student_age ?? 0);
+            if ($age > 0) {
+                $agedCount++;
+                if ($age <= 12) {
+                    $ageBuckets['5–12']++;
+                } elseif ($age <= 17) {
+                    $ageBuckets['13–17']++;
+                } elseif ($age <= 24) {
+                    $ageBuckets['18–24']++;
+                } elseif ($age <= 34) {
+                    $ageBuckets['25–34']++;
+                } else {
+                    $ageBuckets['35+']++;
+                }
+            }
+
+            if ($booking->date) {
+                $dayName = $booking->date->format('l');
+                $dayCounts[$dayName] = ($dayCounts[$dayName] ?? 0) + 1;
+            }
+        }
+
+        $topSkillKey = 'beginner';
+        $topSkillCount = 0;
+        foreach ($skillCounts as $key => $count) {
+            if ($count > $topSkillCount) {
+                $topSkillKey = $key;
+                $topSkillCount = $count;
+            }
+        }
+
+        $dominantSkillPct = $totalBookings > 0 ? round(($topSkillCount / $totalBookings) * 100) : 0;
+        $beginnerSharePct = $totalBookings > 0 ? round(($skillCounts['beginner'] / $totalBookings) * 100) : 0;
+
+        $peakAgeGroup = '—';
+        $peakAgeCount = 0;
+        foreach ($ageBuckets as $bucket => $count) {
+            if ($count > $peakAgeCount) {
+                $peakAgeGroup = $bucket;
+                $peakAgeCount = $count;
+            }
+        }
+        $peakAgePct = $agedCount > 0 ? round(($peakAgeCount / $agedCount) * 100) : 0;
+
+        arsort($dayCounts);
+        $busiestDay = ! empty($dayCounts) ? (string) array_key_first($dayCounts) : '—';
+        $busiestDayCount = ! empty($dayCounts) ? (int) reset($dayCounts) : 0;
+        $busiestDayPct = $totalBookings > 0 ? round(($busiestDayCount / $totalBookings) * 100) : 0;
+
+        return [
+            'service_fee_percent' => PricingService::serviceFeePercent(),
+            'revenue_growth_pct' => $revenueGrowthPct,
+            'total_bookings' => $totalBookings,
+            'beginner_share_pct' => $beginnerSharePct,
+            'dominant_skill_label' => $totalBookings > 0 ? ucfirst($topSkillKey) : 'No bookings',
+            'dominant_skill_pct' => $dominantSkillPct,
+            'peak_age_group' => $peakAgeGroup,
+            'peak_age_pct' => $peakAgePct,
+            'peak_age_note' => $agedCount > 0
+                ? "Represents {$peakAgePct}% of {$agedCount} recorded booking" . ($agedCount === 1 ? '' : 's') . '.'
+                : 'Age demographics populate once bookings are recorded.',
+            'busiest_day' => $busiestDay,
+            'busiest_day_pct' => $busiestDayPct,
+            'busiest_day_note' => $totalBookings > 0
+                ? "{$busiestDayCount} of {$totalBookings} booking" . ($totalBookings === 1 ? '' : 's') . " ({$busiestDayPct}%)."
+                : 'Day-of-week trends populate once bookings are recorded.',
         ];
     }
 
@@ -412,6 +553,19 @@ class DashboardService
             ->limit(3)
             ->get();
 
+        $dueFines = $user->instructorFines()
+            ->due()
+            ->orderByDesc('issued_at')
+            ->get()
+            ->map(fn (InstructorFine $fine) => [
+                'id' => $fine->id,
+                'amount' => (float) $fine->amount,
+                'reason' => $fine->reason,
+                'issued_at' => $fine->issued_at?->format('M d, Y'),
+            ])
+            ->values()
+            ->toArray();
+
         return [
             'stats' => [
                 'total_bookings' => $user->bookingsAsInstructor()->count(),
@@ -427,6 +581,7 @@ class DashboardService
                 'average_rating' => round($user->reviewsAsInstructor()->avg('rating') ?? 0, 1),
                 'level' => $profile->level->value,
             ],
+            'due_fines' => $dueFines,
             'activities' => [
                 'ongoing_session' => $ongoingSession ? [
                     'id' => $ongoingSession->id,

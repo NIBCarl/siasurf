@@ -51,6 +51,15 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+
+        $user = Auth::user();
+        if ($user && $user->isStudent() && $user->studentProfile?->status === 'banned') {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => 'Your account has been suspended by SISA administration.',
+            ]);
+        }
     }
 
     /**

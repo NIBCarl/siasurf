@@ -12,7 +12,7 @@ enum SuspensionType: string
     {
         return match ($this) {
             self::Manual => 'Manual suspension by SISA',
-            self::Automatic => 'Automatic 3-strike suspension',
+            self::Automatic => 'Automatic strike-ladder suspension',
             self::Legacy => 'Legacy suspension',
         };
     }

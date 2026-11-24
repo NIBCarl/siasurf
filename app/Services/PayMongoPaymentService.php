@@ -169,12 +169,16 @@ class PayMongoPaymentService implements PaymentServiceInterface
         }
 
         $timestamp = $parts['t'] ?? '';
-        if ($timestamp === '') {
+        if ($timestamp === '' || ! ctype_digit((string) $timestamp)) {
+            return false;
+        }
+
+        if (abs(now()->timestamp - (int) $timestamp) > 300) {
             return false;
         }
 
         $expectedSignature = $this->mode === 'live'
-            ? ($parts['li'] ?? $parts['te'] ?? '')
+            ? ($parts['li'] ?? '')
             : ($parts['te'] ?? $parts['li'] ?? '');
 
         if ($expectedSignature === '') {
@@ -300,21 +304,52 @@ class PayMongoPaymentService implements PaymentServiceInterface
      */
     private function processSuccessfulPayment(int $bookingId, string $transactionId, ?string $gatewayPaymentId = null): void
     {
-        $booking = Booking::findOrFail($bookingId);
+        $booking = DB::transaction(function () use ($bookingId, $transactionId, $gatewayPaymentId) {
+            $locked = Booking::with('payment')
+                ->whereKey($bookingId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $booking->update([
-            'status' => 'confirmed',
-            'payment_status' => PaymentStatus::Completed,
-            'payment_deadline_at' => null,
-        ]);
+            if ($locked->status === \App\Enums\BookingStatus::Confirmed && $locked->payment_status === PaymentStatus::Completed) {
+                return null;
+            }
 
-        if ($booking->payment) {
-            $booking->payment->update([
-                'status' => PaymentStatus::Completed,
-                'transaction_id' => $transactionId,
-                'gateway_payment_id' => $gatewayPaymentId ?? $booking->payment->gateway_payment_id,
-                'paid_at' => now(),
+            if (! in_array($locked->status, [
+                \App\Enums\BookingStatus::AwaitingPayment,
+                \App\Enums\BookingStatus::Confirmed,
+            ], true)) {
+                Log::warning('Ignoring late/invalid PayMongo payment success webhook.', [
+                    'booking_id' => $locked->id,
+                    'status' => $locked->status?->value,
+                    'transaction_id' => $transactionId,
+                ]);
+
+                return null;
+            }
+
+            $locked->update([
+                'status' => 'confirmed',
+                'payment_status' => PaymentStatus::Completed,
+                'payment_deadline_at' => null,
             ]);
+
+            if ($locked->payment) {
+                $existingTx = (string) ($locked->payment->transaction_id ?? '');
+                $resolvedTx = str_starts_with($existingTx, 'pi_') ? $existingTx : $transactionId;
+
+                $locked->payment->update([
+                    'status' => PaymentStatus::Completed,
+                    'transaction_id' => $resolvedTx,
+                    'gateway_payment_id' => $gatewayPaymentId ?? $locked->payment->gateway_payment_id,
+                    'paid_at' => $locked->payment->paid_at ?? now(),
+                ]);
+            }
+
+            return $locked->fresh(['student', 'instructor', 'surfSpot', 'payment']);
+        });
+
+        if (! $booking) {
+            return;
         }
 
         // Phase 11 - broadcast so the student's booking page and the admin
@@ -326,10 +361,10 @@ class PayMongoPaymentService implements PaymentServiceInterface
         $eventService->recordConfirmed($booking, $booking->student_id, 'GCash');
 
         try {
-            $booking->loadMissing(['student', 'instructor', 'surfSpot']);
-
             if ($booking->payment) {
                 broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
+
+                $booking->student?->notify(new \App\Notifications\PaymentReceivedNotification($booking->payment->fresh()));
             }
 
             broadcast(new \App\Events\BookingConfirmed($booking))->toOthers();

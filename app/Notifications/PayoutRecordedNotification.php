@@ -20,7 +20,7 @@ class PayoutRecordedNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        return ['database', 'mail'];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -76,6 +76,7 @@ class PayoutRecordedNotification extends Notification implements ShouldQueue
             'cash_fees_settled' => (float) $this->payout->cash_fees_settled,
             'message' => $message,
             'type' => 'payout_recorded',
+            'url' => route('instructor.earnings.index'),
         ];
     }
 }

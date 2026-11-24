@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\BookingStatus;
 use App\Enums\InstructorLevel;
+use App\Enums\PaymentStatus;
 use App\Enums\SessionType;
 use App\Enums\SkillLevel;
 use App\Enums\TimePeriod;
@@ -11,8 +12,10 @@ use App\Exceptions\BookingRequestException;
 use App\Models\Availability;
 use App\Models\Booking;
 use App\Models\InstructorProfile;
+use App\Models\SurfSpot;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 /**
  * Single source of truth for locking and releasing an instructor's time slots.
  *
@@ -418,19 +421,23 @@ class AvailabilityService
      */
     public function releaseExpiredCheckoutHolds(int $instructorId): int
     {
+        $count = 0;
+
         $expiredHolds = Booking::query()
             ->where('instructor_id', $instructorId)
             ->inStudentCheckout()
             ->where('payment_deadline_at', '<', now())
             ->get();
 
-        $count = 0;
-
         foreach ($expiredHolds as $booking) {
             $booking->expireAcceptance('Waiver and checkout hold expired after ' . Booking::CHECKOUT_HOLD_MINUTES . ' minutes.');
             $this->releaseForBooking($booking);
             $count++;
         }
+
+        $count += $this->releaseExpiredAwaitingPayments(
+            Booking::query()->where('instructor_id', $instructorId)
+        );
 
         return $count;
     }
@@ -441,18 +448,81 @@ class AvailabilityService
      */
     public function releaseExpiredCheckoutHoldsForStudent(int $studentId): int
     {
+        $count = 0;
+
         $expiredHolds = Booking::query()
             ->where('student_id', $studentId)
             ->inStudentCheckout()
             ->where('payment_deadline_at', '<', now())
             ->get();
 
-        $count = 0;
-
         foreach ($expiredHolds as $booking) {
             $booking->expireAcceptance('Waiver and checkout hold expired after ' . Booking::CHECKOUT_HOLD_MINUTES . ' minutes.');
             $this->releaseForBooking($booking);
             $count++;
+        }
+
+        $count += $this->releaseExpiredAwaitingPayments(
+            Booking::query()->where('student_id', $studentId)
+        );
+
+        return $count;
+    }
+
+    /**
+     * Lazily expire AwaitingPayment holds whose 15-minute payment deadline
+     * passed without a completed payment or receipt awaiting verification.
+     */
+    private function releaseExpiredAwaitingPayments($scopedQuery): int
+    {
+        $ids = (clone $scopedQuery)
+            ->where('status', BookingStatus::AwaitingPayment)
+            ->whereNotNull('payment_deadline_at')
+            ->where('payment_deadline_at', '<', now())
+            ->where('payment_status', '!=', PaymentStatus::Completed->value)
+            ->whereDoesntHave('payment', function ($q) {
+                $q->whereIn('status', [
+                    PaymentStatus::Completed->value,
+                    PaymentStatus::PendingVerification->value,
+                ]);
+            })
+            ->pluck('id');
+
+        $count = 0;
+
+        foreach ($ids as $id) {
+            $released = DB::transaction(function () use ($id): bool {
+                $locked = Booking::with('payment')
+                    ->whereKey($id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $locked || $locked->status !== BookingStatus::AwaitingPayment) {
+                    return false;
+                }
+
+                if ($locked->payment?->isCompleted() || $locked->payment?->isAwaitingVerification()) {
+                    return false;
+                }
+
+                if ($locked->payment_deadline_at && $locked->payment_deadline_at->isFuture()) {
+                    return false;
+                }
+
+                $locked->markPaymentTimedOut();
+
+                if ($locked->payment && $locked->payment->status === PaymentStatus::Pending) {
+                    $locked->payment->update(['status' => PaymentStatus::Failed]);
+                }
+
+                $this->releaseForBooking($locked);
+
+                return true;
+            });
+
+            if ($released) {
+                $count++;
+            }
         }
 
         return $count;
@@ -493,6 +563,7 @@ class AvailabilityService
         $this->releaseExpiredCheckoutHolds($instructorId);
 
         return Booking::query()
+            ->with('surfSpot')
             ->where('instructor_id', $instructorId)
             ->whereDate('date', $day->format('Y-m-d'))
             ->whereIn('status', array_map(
@@ -600,21 +671,22 @@ class AvailabilityService
         string $endTime,
         ?int $exceptBookingId = null,
         ?SkillLevel $skill = null,
-        ?SessionType $sessionType = null
+        ?SessionType $sessionType = null,
+        ?int $surfSpotId = null
     ): int {
         $level = $this->instructorLevel($instructorId);
         $capacity = $this->slotCapacity($instructorId, $skill);
         $overlapping = $this->bookingsInRange($instructorId, $date, $startTime, $endTime, $exceptBookingId);
 
-        return $this->remainingCapacityWithin($overlapping, $level, $capacity, $startTime, $endTime, $skill, $sessionType);
+        return $this->remainingCapacityWithin($overlapping, $level, $capacity, $startTime, $endTime, $skill, $sessionType, $surfSpotId);
     }
 
     /**
      * Same calculation, without hitting the database again.
      *
-     * Shared slots require the same skill level and the same service type.
-     * Capacity is skill-dependent (e.g., Level 2 holds max 1 beginner or max 2
-     * intermediates; Level 3 holds max 3 students of the same level).
+     * Evaluated hour-by-hour across `[start, end)` so a longer span cannot
+     * hide a second-hour skill/service/spot conflict or double-count
+     * back-to-back bookings across consecutive hours.
      */
     private function remainingCapacityWithin(
         Collection $liveBookings,
@@ -623,7 +695,8 @@ class AvailabilityService
         string $startTime,
         string $endTime,
         ?SkillLevel $skill = null,
-        ?SessionType $sessionType = null
+        ?SessionType $sessionType = null,
+        ?int $surfSpotId = null
     ): int {
         $start = $this->timeString($startTime) ?? (string) $startTime;
         $end = $this->timeString($endTime) ?? (string) $endTime;
@@ -638,29 +711,93 @@ class AvailabilityService
             return $skill !== null ? $level->maxStudentsFor($skill) : $capacity;
         }
 
-        if ($level->holdsSlotWhilePending()) {
+        // An instructor cannot teach at two beaches simultaneously or bridge
+        // across consecutive bookings at different surf spots.
+        $distinctSpotIds = $overlapping
+            ->pluck('surf_spot_id')
+            ->filter(fn ($id) => $id !== null)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($distinctSpotIds->count() > 1) {
             return 0;
         }
 
-        $first = $overlapping->first();
-        $existingSkill = $first instanceof Booking ? $this->skillOf($first) : null;
-        $existingService = $first instanceof Booking ? $this->sessionTypeOf($first) : null;
-
-        if ($skill !== null && $existingSkill !== null && $existingSkill !== $skill) {
+        if ($surfSpotId !== null && $distinctSpotIds->count() === 1 && $distinctSpotIds->first() !== $surfSpotId) {
             return 0;
         }
 
-        if ($sessionType !== null && $existingService !== null && $existingService !== $sessionType) {
+        $cursor = Carbon::createFromFormat('H:i', substr($start, 0, 5));
+        $finish = Carbon::createFromFormat('H:i', substr($end, 0, 5));
+
+        if (! $cursor || ! $finish || $cursor->greaterThanOrEqualTo($finish)) {
             return 0;
         }
 
-        $effectiveCapacity = $existingSkill !== null
-            ? $level->maxStudentsFor($existingSkill)
-            : $capacity;
+        $minRemaining = $skill !== null ? $level->maxStudentsFor($skill) : $capacity;
 
-        $booked = (int) $overlapping->sum(fn (Booking $booking) => $this->studentsIn($booking));
+        while ($cursor->lessThan($finish)) {
+            $next = $cursor->copy()->addHour();
+            if ($next->greaterThan($finish)) {
+                $next = $finish->copy();
+            }
 
-        return max(0, $effectiveCapacity - $booked);
+            $hStart = $cursor->format('H:i');
+            $hEnd = $next->format('H:i');
+
+            $hourBookings = $overlapping->filter(function (Booking $booking) use ($hStart, $hEnd) {
+                $range = $this->bookingRange($booking);
+
+                return $range !== null && $range[0] < $hEnd && $range[1] > $hStart;
+            });
+
+            if ($hourBookings->isEmpty()) {
+                $hourRemaining = $skill !== null ? $level->maxStudentsFor($skill) : $capacity;
+            } elseif ($level->holdsSlotWhilePending()) {
+                return 0;
+            } else {
+                $firstExistingSkill = null;
+
+                foreach ($hourBookings as $existingBooking) {
+                    if (! $existingBooking instanceof Booking) {
+                        continue;
+                    }
+
+                    $existingSkill = $this->skillOf($existingBooking);
+                    $existingService = $this->sessionTypeOf($existingBooking);
+
+                    if ($firstExistingSkill === null && $existingSkill !== null) {
+                        $firstExistingSkill = $existingSkill;
+                    }
+
+                    if ($skill !== null && $existingSkill !== null && $existingSkill !== $skill) {
+                        return 0;
+                    }
+
+                    if ($sessionType !== null && $existingService !== null && $existingService !== $sessionType) {
+                        return 0;
+                    }
+                }
+
+                $effectiveCapacity = $firstExistingSkill !== null
+                    ? $level->maxStudentsFor($firstExistingSkill)
+                    : $capacity;
+
+                $booked = (int) $hourBookings->sum(fn (Booking $booking) => $this->studentsIn($booking));
+                $hourRemaining = max(0, $effectiveCapacity - $booked);
+            }
+
+            $minRemaining = min($minRemaining, $hourRemaining);
+
+            if ($minRemaining <= 0) {
+                return 0;
+            }
+
+            $cursor = $next;
+        }
+
+        return max(0, $minRemaining);
     }
 
     private function skillOf(Booking $booking): ?SkillLevel
@@ -692,37 +829,151 @@ class AvailabilityService
         string $end,
         ?int $exceptBookingId,
         ?SkillLevel $skill,
-        ?SessionType $sessionType
+        ?SessionType $sessionType,
+        ?int $surfSpotId = null
     ): ?string {
-        if ($skill === null && $sessionType === null) {
-            return null;
-        }
-
         $overlapping = $this->bookingsInRange($instructorId, $day, $start, $end, $exceptBookingId);
-        $first = $overlapping->first();
 
-        if (! $first instanceof Booking) {
+        if ($overlapping->isEmpty()) {
             return null;
         }
 
-        $existingSkill = $this->skillOf($first);
-        $existingService = $this->sessionTypeOf($first);
-
-        if ($skill !== null && $existingSkill !== null && $existingSkill !== $skill) {
-            return sprintf(
-                'This time slot is already reserved for a %s session. Shared slots require all students to be the same skill level.',
-                $existingSkill->label()
-            );
+        if ($skill !== null) {
+            foreach ($overlapping as $existing) {
+                $existingSkill = $this->skillOf($existing);
+                if ($existingSkill !== null && $existingSkill !== $skill) {
+                    return sprintf(
+                        'This time slot is already reserved for a %s session. Shared slots require all students to be the same skill level.',
+                        $existingSkill->label()
+                    );
+                }
+            }
         }
 
-        if ($sessionType !== null && $existingService !== null && $existingService !== $sessionType) {
+        if ($sessionType !== null) {
+            foreach ($overlapping as $existing) {
+                $existingService = $this->sessionTypeOf($existing);
+                if ($existingService !== null && $existingService !== $sessionType) {
+                    return sprintf(
+                        'This time slot is already reserved for a %s session. Please pick another time.',
+                        $existingService->label()
+                    );
+                }
+            }
+        }
+
+        $distinctSpotIds = $overlapping
+            ->pluck('surf_spot_id')
+            ->filter(fn ($id) => $id !== null)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($distinctSpotIds->count() > 1) {
+            return 'This time range overlaps existing sessions at different surf spots. Choose a shorter duration or another start time.';
+        }
+
+        if ($surfSpotId !== null && $distinctSpotIds->count() === 1 && $distinctSpotIds->first() !== $surfSpotId) {
+            $spotName = $overlapping->first()?->surfSpot?->name ?? 'the scheduled beach';
+
             return sprintf(
-                'This time slot is already reserved for a %s session. Please pick another time or matching service.',
-                $existingService->label()
+                'This shared time slot is already scheduled at %s. Joining this slot requires matching the existing surf spot.',
+                $spotName
             );
         }
 
         return null;
+    }
+
+    /**
+     * When all bookings overlapping `[startTime, endTime)` share a single surf spot,
+     * return that SurfSpot so new students joining the shared slot are locked to it.
+     */
+    public function lockedSurfSpotForRange(
+        int $instructorId,
+        Carbon|string $date,
+        string $startTime,
+        string $endTime,
+        ?int $exceptBookingId = null
+    ): ?SurfSpot {
+        $overlapping = $this->bookingsInRange($instructorId, $date, $startTime, $endTime, $exceptBookingId);
+
+        if ($overlapping->isEmpty()) {
+            return null;
+        }
+
+        $distinctSpotIds = $overlapping
+            ->pluck('surf_spot_id')
+            ->filter(fn ($id) => $id !== null)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($distinctSpotIds->count() !== 1) {
+            return null;
+        }
+
+        return $overlapping->first(fn (Booking $b) => $b->surf_spot_id === $distinctSpotIds->first())?->surfSpot;
+    }
+
+    /**
+     * Return all slot-holding bookings connected to `$booking` through overlapping
+     * hours on the same instructor & date (including `$booking` itself).
+     *
+     * @return Collection<int, Booking>
+     */
+    public function overlappingSessionBookings(Booking $booking): Collection
+    {
+        $this->releaseExpiredCheckoutHolds($booking->instructor_id);
+
+        $day = $this->dateOf($booking);
+        $targetRange = $this->bookingRange($booking);
+
+        $bookings = Booking::query()
+            ->with(['student', 'surfSpot', 'instructor'])
+            ->where('instructor_id', $booking->instructor_id)
+            ->whereDate('date', $day)
+            ->whereIn('status', array_map(
+                fn (BookingStatus $status) => $status->value,
+                BookingStatus::slotHolding()
+            ))
+            ->orderBy('id')
+            ->get();
+
+        if ($targetRange === null) {
+            return $bookings->where('id', $booking->id)->values();
+        }
+
+        $clusterIds = [$booking->id => true];
+        $clusterRanges = [$targetRange];
+
+        do {
+            $added = false;
+
+            foreach ($bookings as $candidate) {
+                if (isset($clusterIds[$candidate->id])) {
+                    continue;
+                }
+
+                $candidateRange = $this->bookingRange($candidate);
+                if ($candidateRange === null) {
+                    continue;
+                }
+
+                foreach ($clusterRanges as $existingRange) {
+                    if ($candidateRange[0] < $existingRange[1] && $candidateRange[1] > $existingRange[0]) {
+                        $clusterIds[$candidate->id] = true;
+                        $clusterRanges[] = $candidateRange;
+                        $added = true;
+                        break;
+                    }
+                }
+            }
+        } while ($added);
+
+        return $bookings
+            ->filter(fn (Booking $candidate) => isset($clusterIds[$candidate->id]))
+            ->values();
     }
 
     /**
@@ -792,7 +1043,7 @@ class AvailabilityService
 
         // 3. Live bookings holding slots in the range, keyed by date.
         $liveBookings = Booking::query()
-            ->with('instructor')
+            ->with(['instructor', 'surfSpot'])
             ->where('instructor_id', $instructorId)
             ->whereBetween('date', [$from->format('Y-m-d'), $to->format('Y-m-d')])
             ->whereIn('status', array_map(
@@ -804,7 +1055,8 @@ class AvailabilityService
             ->groupBy(fn (Booking $booking) => $this->dateOf($booking));
 
         $level = $this->instructorLevel($instructorId);
-        $capacity = $level->slotCapacity($skill);
+        $capacity = $this->slotCapacity($instructorId, $skill);
+        $minimumMinutes = $this->minimumLessonMinutes($sessionType, $skill);
         $result = [];
 
         for ($offset = 0; $offset < $days; $offset++) {
@@ -845,7 +1097,7 @@ class AvailabilityService
                         $settings['start'],
                         $settings['end'],
                         $settings['step'],
-                        $this->minimumLessonMinutes(),
+                        $minimumMinutes,
                         $settings['open_slots']
                     );
 
@@ -865,7 +1117,6 @@ class AvailabilityService
                 }
 
                 if ($reason === null) {
-                    $minimumMinutes = $this->minimumLessonMinutes();
                     $bestRemaining = 0;
 
                     foreach ($afterCutOffStarts as $candidate) {
@@ -1036,6 +1287,7 @@ class AvailabilityService
             ->all();
 
         $level = $this->instructorLevel($instructorId);
+        $minimumMinutes = $this->minimumLessonMinutes($sessionType, $skill);
         $result = [];
 
         foreach (TimePeriod::cases() as $period) {
@@ -1065,6 +1317,10 @@ class AvailabilityService
                 ? $this->reservedStartTimes($instructorId, $day, $value, $students, $exceptBookingId, $skill, $sessionType)
                 : [];
 
+            $reservedSlotDetails = $reason === null && ! empty($reservedSlots)
+                ? $this->reservedSlotDetails($instructorId, $day, $reservedSlots, $exceptBookingId, $skill, $sessionType, $minimumMinutes)
+                : [];
+
             if ($reason === null && empty($slots)) {
                 $reason = $this->unbookableReason($instructorId, $day, $value)
                     ?? (! empty($reservedSlots)
@@ -1081,7 +1337,7 @@ class AvailabilityService
                     $instructorId,
                     $day,
                     $slots[0],
-                    Carbon::createFromFormat('H:i', $slots[0])->addHour()->format('H:i'),
+                    Carbon::createFromFormat('H:i', $slots[0])->addMinutes($minimumMinutes)->format('H:i'),
                     $exceptBookingId,
                     $skill,
                     $sessionType,
@@ -1092,12 +1348,13 @@ class AvailabilityService
                 'reason' => $reason,
                 'slots' => $reason === null ? $slots : [],
                 'reserved_slots' => $reservedSlots,
+                'reserved_slot_details' => $reservedSlotDetails,
                 'slot_remaining' => $reason === null ? collect($slots)->mapWithKeys(fn (string $slotTime) => [
                     $slotTime => $this->remainingCapacity(
                         $instructorId,
                         $day,
                         $slotTime,
-                        Carbon::createFromFormat('H:i', $slotTime)->addHour()->format('H:i'),
+                        Carbon::createFromFormat('H:i', $slotTime)->addMinutes($minimumMinutes)->format('H:i'),
                         $exceptBookingId,
                         $skill,
                         $sessionType,
@@ -1106,6 +1363,7 @@ class AvailabilityService
                 // Lesson length the student will actually book by default
                 // (drives the pre-selected end time and the price estimate).
                 'duration_minutes' => $this->sessionMinutesFor($instructorId, $day, $value),
+                'minimum_minutes' => $minimumMinutes,
                 'capacity' => $this->slotCapacity($instructorId, $skill),
                 'remaining_capacity' => $remaining,
             ];
@@ -1138,11 +1396,7 @@ class AvailabilityService
 
         $settings = $this->scheduleSettings($instructorId, $day, $period);
 
-        // The start list is about "which hours still have room", not about one
-        // fixed lesson length: the student chooses the end time separately, so
-        // a start only has to fit the one-hour minimum here. bookableEndTimes()
-        // then refines exactly how long the lesson may run.
-        $minimumMinutes = $this->minimumLessonMinutes();
+        $minimumMinutes = $this->minimumLessonMinutes($sessionType, $skill);
         $candidateSlots = $this->slotsInRange(
             $settings['start'],
             $settings['end'],
@@ -1168,7 +1422,7 @@ class AvailabilityService
                 continue;
             }
 
-            // Capacity is measured across the whole one-hour minimum window.
+            // Capacity is measured across the full minimum lesson window.
             $slotEnd = $slotStart->copy()->addMinutes($minimumMinutes)->format('H:i');
 
             if ($this->remainingCapacityWithin($liveBookings, $level, $capacity, $time, $slotEnd, $skill, $sessionType) < $requested) {
@@ -1210,7 +1464,7 @@ class AvailabilityService
         }
 
         $settings = $this->scheduleSettings($instructorId, $day, $period);
-        $minimumMinutes = $this->minimumLessonMinutes();
+        $minimumMinutes = $this->minimumLessonMinutes($sessionType, $skill);
         $candidateSlots = $this->slotsInRange(
             $settings['start'],
             $settings['end'],
@@ -1255,12 +1509,138 @@ class AvailabilityService
     }
 
     /**
+     * Structured explanations for reserved start times so the UI can distinguish
+     * a full slot from a cross-skill / cross-service lock or seat limit.
+     *
+     * @param  array<int, string>  $reservedSlots
+     * @return array<string, array{reason_code: string, existing_skill: ?string, existing_service: ?string, label: string, short_label: string}>
+     */
+    private function reservedSlotDetails(
+        int $instructorId,
+        Carbon $day,
+        array $reservedSlots,
+        ?int $exceptBookingId,
+        ?SkillLevel $skill,
+        ?SessionType $sessionType,
+        int $minimumMinutes
+    ): array {
+        $liveBookings = $this->liveBookingsOnDate($instructorId, $day, $exceptBookingId);
+        $level = $this->instructorLevel($instructorId);
+        $capacity = $this->slotCapacity($instructorId, $skill);
+        $details = [];
+
+        foreach ($reservedSlots as $time) {
+            $slotEnd = Carbon::createFromFormat('H:i', $time)->addMinutes($minimumMinutes)->format('H:i');
+            $clockLabel = Carbon::createFromFormat('H:i', $time)->format('g:i A');
+
+            $overlapping = $liveBookings->filter(function (Booking $booking) use ($time, $slotEnd) {
+                $range = $this->bookingRange($booking);
+
+                return $range !== null && $range[0] < $slotEnd && $range[1] > $time;
+            })->values();
+
+            $mismatchSkill = null;
+            $mismatchService = null;
+
+            foreach ($overlapping as $existing) {
+                $existingSkill = $this->skillOf($existing);
+                $existingService = $this->sessionTypeOf($existing);
+
+                if ($skill !== null && $existingSkill !== null && $existingSkill !== $skill) {
+                    $mismatchSkill = $existingSkill;
+                    $mismatchService = $existingService;
+                    break;
+                }
+
+                if ($sessionType !== null && $existingService !== null && $existingService !== $sessionType) {
+                    $mismatchService = $existingService;
+                }
+            }
+
+            $first = $overlapping->first();
+            $firstSkill = $first instanceof Booking ? $this->skillOf($first) : null;
+            $firstService = $first instanceof Booking ? $this->sessionTypeOf($first) : null;
+
+            if ($mismatchSkill !== null) {
+                $details[$time] = [
+                    'reason_code' => 'skill_mismatch',
+                    'existing_skill' => $mismatchSkill->value,
+                    'existing_service' => $mismatchService?->value,
+                    'label' => "{$clockLabel} — Reserved for a {$mismatchSkill->label()} session",
+                    'short_label' => "Reserved ({$mismatchSkill->label()})",
+                ];
+                continue;
+            }
+
+            if ($mismatchService !== null) {
+                $details[$time] = [
+                    'reason_code' => 'service_mismatch',
+                    'existing_skill' => $firstSkill?->value,
+                    'existing_service' => $mismatchService->value,
+                    'label' => "{$clockLabel} — Reserved for {$mismatchService->label()}",
+                    'short_label' => "Reserved ({$mismatchService->label()})",
+                ];
+                continue;
+            }
+
+            $distinctSpots = $overlapping
+                ->pluck('surf_spot_id')
+                ->filter(fn ($id) => $id !== null)
+                ->map(fn ($id) => (int) $id)
+                ->unique();
+
+            if ($distinctSpots->count() > 1) {
+                $details[$time] = [
+                    'reason_code' => 'spot_conflict',
+                    'existing_skill' => $firstSkill?->value,
+                    'existing_service' => $firstService?->value,
+                    'label' => "{$clockLabel} — Already reserved",
+                    'short_label' => 'Already reserved',
+                ];
+                continue;
+            }
+
+            $remainingForOne = $this->remainingCapacityWithin(
+                $overlapping,
+                $level,
+                $capacity,
+                $time,
+                $slotEnd,
+                $skill,
+                $sessionType
+            );
+
+            if ($remainingForOne > 0) {
+                $seatWord = $remainingForOne === 1 ? 'seat' : 'seats';
+                $details[$time] = [
+                    'reason_code' => 'insufficient_seats',
+                    'existing_skill' => $firstSkill?->value,
+                    'existing_service' => $firstService?->value,
+                    'label' => "{$clockLabel} — Only {$remainingForOne} {$seatWord} left",
+                    'short_label' => "{$remainingForOne} {$seatWord} left",
+                ];
+                continue;
+            }
+
+            $details[$time] = [
+                'reason_code' => 'full',
+                'existing_skill' => $firstSkill?->value,
+                'existing_service' => $firstService?->value,
+                'label' => "{$clockLabel} — Already reserved",
+                'short_label' => 'Already reserved',
+            ];
+        }
+
+        return $details;
+    }
+
+    /**
      * The end times a student may pick for a chosen start.
      *
      * Lesson length is expressed in whole hours (the pricing engine, the
      * session countdown and the change-request flow all assume integer hours).
-     * An end time is offered only when the whole range still has enough
-     * capacity for the party.
+     * Stops extending as soon as an hour is closed on the schedule or lacks
+     * enough seats/compatibility for the party.
      *
      * @return array<int, string>
      */
@@ -1287,7 +1667,7 @@ class AvailabilityService
             return [];
         }
 
-        $minimumMinutes = $this->minimumLessonMinutes();
+        $minimumMinutes = $this->minimumLessonMinutes($sessionType, $skill);
 
         if (!in_array($start, $this->slotsInRange(
             $settings['start'],
@@ -1305,7 +1685,7 @@ class AvailabilityService
         $requested = max(1, $students);
 
         $ends = [];
-        $cursor = Carbon::createFromFormat('H:i', $start)->addHour();
+        $cursor = Carbon::createFromFormat('H:i', $start)->addMinutes($minimumMinutes);
         $finish = Carbon::createFromFormat('H:i', $settings['end']);
 
         if ($cursor->greaterThan($finish)) {
@@ -1315,10 +1695,15 @@ class AvailabilityService
         while ($cursor->lessThanOrEqualTo($finish)) {
             $end = $cursor->format('H:i');
 
-            if ($this->remainingCapacityWithin($liveBookings, $level, $capacity, $start, $end, $skill, $sessionType) >= $requested) {
-                $ends[] = $end;
+            if (! $this->rangeFitsOpenSlots($start, $end, $settings)) {
+                break;
             }
 
+            if ($this->remainingCapacityWithin($liveBookings, $level, $capacity, $start, $end, $skill, $sessionType) < $requested) {
+                break;
+            }
+
+            $ends[] = $end;
             $cursor->addHour();
         }
 
@@ -1376,7 +1761,8 @@ class AvailabilityService
                         $students,
                         $booking->id,
                         $skill,
-                        $sessionType
+                        $sessionType,
+                        $booking->surf_spot_id ? (int) $booking->surf_spot_id : null
                     );
 
                     if ($reason !== null) {
@@ -1444,8 +1830,9 @@ class AvailabilityService
             ];
         }
 
+        $minimumMinutes = $this->minimumLessonMinutes($sessionType, $skill);
         $minimumEnd = Carbon::createFromFormat('H:i', $start)
-            ->addMinutes($this->minimumLessonMinutes())
+            ->addMinutes($minimumMinutes)
             ->format('H:i');
 
         if ($minimumEnd <= $start) {
@@ -1504,15 +1891,14 @@ class AvailabilityService
     }
 
     /**
-     * The shortest lesson the engine will quote.
-     *
-     * Booking length is validated in whole hours (pricing, the session countdown
-     * and change requests all assume integer hours), so the picker always
-     * offers one-hour steps even when an instructor configured a shorter slot.
+     * Shortest lesson allowed for the requested service/skill level:
+     * Teaching -> 60 mins (1h), Guiding -> 120 mins (2h), Coaching -> 120 mins (2h).
      */
-    private function minimumLessonMinutes(): int
+    public function minimumLessonMinutes(?SessionType $sessionType = null, ?SkillLevel $skill = null): int
     {
-        return 60;
+        $service = $sessionType ?? ($skill !== null ? SessionType::forSkill($skill) : null);
+
+        return $service?->minimumMinutes() ?? 60;
     }
 
     /**
@@ -1610,18 +1996,70 @@ class AvailabilityService
 
         $slots = [];
 
-        // The lesson must fit: cursor + duration <= finish.
+        // The lesson must fit AND every consecutive hour must be in open_slots.
         while ($cursor->copy()->addMinutes($duration)->lessThanOrEqualTo($finish)) {
             $value = $cursor->format('H:i');
 
-            if ($allowed === null || isset($allowed[$value])) {
+            if ($allowed === null) {
                 $slots[] = $value;
+            } else {
+                $rangeEnd = $cursor->copy()->addMinutes($duration);
+                $probe = $cursor->copy();
+                $allHoursOpen = true;
+
+                while ($probe->lessThan($rangeEnd)) {
+                    if (! isset($allowed[$probe->format('H:i')])) {
+                        $allHoursOpen = false;
+                        break;
+                    }
+                    $probe->addHour();
+                }
+
+                if ($allHoursOpen) {
+                    $slots[] = $value;
+                }
             }
 
             $cursor->addMinutes($step);
         }
 
         return $slots;
+    }
+
+    /**
+     * Verify every 1-hour block in [start, end) falls inside the schedule's
+     * working bounds and open_slots whitelist (when customized).
+     *
+     * @param  array{start: string, end: string, step: int, duration: int, open_slots: ?array<int, string>}  $settings
+     */
+    private function rangeFitsOpenSlots(string $start, string $end, array $settings): bool
+    {
+        if ($start < $settings['start'] || $end > $settings['end']) {
+            return false;
+        }
+
+        $openSlots = $settings['open_slots'] ?? null;
+        if (! is_array($openSlots)) {
+            return true;
+        }
+
+        $allowed = array_flip(array_map(fn ($slot) => substr((string) $slot, 0, 5), $openSlots));
+        $cursor = Carbon::createFromFormat('H:i', $start);
+        $finish = Carbon::createFromFormat('H:i', $end);
+
+        if (! $cursor || ! $finish || $cursor->greaterThanOrEqualTo($finish)) {
+            return false;
+        }
+
+        while ($cursor->lessThan($finish)) {
+            if (! isset($allowed[$cursor->format('H:i')])) {
+                return false;
+            }
+
+            $cursor->addHour();
+        }
+
+        return true;
     }
 
     private function timeString(mixed $value): ?string
@@ -1750,7 +2188,8 @@ class AvailabilityService
         int $students = 1,
         ?int $exceptBookingId = null,
         ?SkillLevel $skill = null,
-        ?SessionType $sessionType = null
+        ?SessionType $sessionType = null,
+        ?int $surfSpotId = null
     ): ?string {
         $day = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
 
@@ -1773,10 +2212,30 @@ class AvailabilityService
             return 'The end time must be after the start time.';
         }
 
+        [$startHour, $startMinute] = array_map('intval', explode(':', $start));
+        $slotStart = $day->copy()->startOfDay()->setTime($startHour, $startMinute);
+
+        if ($slotStart->lessThanOrEqualTo(now()->addHours(Booking::PRE_LESSON_BUFFER_HOURS))) {
+            return 'Too soon to book — lessons need at least '
+                . Booking::PRE_LESSON_BUFFER_HOURS . ' hour of lead time.';
+        }
+
         $minutes = Carbon::createFromFormat('H:i', $start)
             ->diffInMinutes(Carbon::createFromFormat('H:i', $end));
 
-        if ($minutes < 60) {
+        $minimumMinutes = $exceptBookingId !== null
+            ? 60
+            : $this->minimumLessonMinutes($sessionType, $skill);
+
+        if ($minutes < $minimumMinutes) {
+            if ($minimumMinutes > 60) {
+                $service = $sessionType ?? ($skill !== null ? SessionType::forSkill($skill) : null);
+                $label = $service?->label() ?? 'This';
+                $minHours = (int) ($minimumMinutes / 60);
+
+                return "{$label} sessions require a minimum of {$minHours} hours.";
+            }
+
             return 'A lesson must run for at least one hour.';
         }
 
@@ -1802,7 +2261,7 @@ class AvailabilityService
         }
 
         if (!$verdict['available']) {
-            if (($mismatch = $this->slotMismatchReason($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType)) !== null) {
+            if (($mismatch = $this->slotMismatchReason($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType, $surfSpotId)) !== null) {
                 return $mismatch;
             }
 
@@ -1820,7 +2279,7 @@ class AvailabilityService
             $settings['start'],
             $settings['end'],
             $settings['step'],
-            $this->minimumLessonMinutes(),
+            $minimumMinutes,
             $settings['open_slots']
         );
 
@@ -1828,11 +2287,15 @@ class AvailabilityService
             return 'That start time is not available on this date.';
         }
 
+        if (! $this->rangeFitsOpenSlots($start, $end, $settings)) {
+            return 'One or more hours in the selected range are closed on this instructor\'s schedule.';
+        }
+
         $requested = max(1, $students);
-        $remaining = $this->remainingCapacity($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType);
+        $remaining = $this->remainingCapacity($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType, $surfSpotId);
 
         if ($remaining < $requested) {
-            if ($remaining === 0 && ($mismatch = $this->slotMismatchReason($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType)) !== null) {
+            if (($mismatch = $this->slotMismatchReason($instructorId, $day, $start, $end, $exceptBookingId, $skill, $sessionType, $surfSpotId)) !== null) {
                 return $mismatch;
             }
 
@@ -1878,7 +2341,8 @@ class AvailabilityService
         int $students = 1,
         ?int $exceptBookingId = null,
         ?SkillLevel $skill = null,
-        ?SessionType $sessionType = null
+        ?SessionType $sessionType = null,
+        ?int $surfSpotId = null
     ): void {
         $reason = $this->rangeBookabilityReason(
             $instructorId,
@@ -1888,7 +2352,8 @@ class AvailabilityService
             $students,
             $exceptBookingId,
             $skill,
-            $sessionType
+            $sessionType,
+            $surfSpotId
         );
 
         if ($reason !== null) {
