@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -15,12 +16,16 @@ class CashRemittanceOverdueNotification extends Notification implements ShouldQu
         public float $overdueAmount,
         public int $overdueDaysCount,
         public string $earliestDueDate,
+        public ?int $instructorId = null,
+        public ?string $instructorName = null,
     ) {
     }
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        return $notifiable instanceof User && $notifiable->isAdmin()
+            ? ['database']
+            : ['database', 'mail'];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -39,6 +44,23 @@ class CashRemittanceOverdueNotification extends Notification implements ShouldQu
     public function toArray(object $notifiable): array
     {
         $amount = '₱' . number_format($this->overdueAmount, 2);
+        $isAdmin = $notifiable instanceof User && $notifiable->isAdmin();
+
+        if ($isAdmin) {
+            $instructorLabel = $this->instructorName ?? 'An instructor';
+
+            return [
+                'instructor_id' => $this->instructorId,
+                'overdue_amount' => round($this->overdueAmount, 2),
+                'overdue_days_count' => $this->overdueDaysCount,
+                'earliest_due_date' => $this->earliestDueDate,
+                'message' => "{$instructorLabel} has {$amount} in overdue cash service fees (earliest due {$this->earliestDueDate}).",
+                'type' => 'cash_remittance_overdue',
+                'url' => $this->instructorId
+                    ? route('admin.payouts.show', $this->instructorId)
+                    : route('admin.payouts.index'),
+            ];
+        }
 
         return [
             'overdue_amount' => round($this->overdueAmount, 2),

@@ -6,9 +6,12 @@ use App\Enums\CertificateStatus;
 use App\Enums\CertificateType;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
+use App\Models\User;
+use App\Notifications\CertificateSubmittedNotification;
 use App\Services\FileScanService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class CertificateController extends Controller
 {
@@ -31,6 +34,8 @@ class CertificateController extends Controller
             'certificates.*.mimes' => 'Documents must be a PDF, JPG, or PNG file.',
             'certificates.*.uploaded' => 'A document could not be uploaded because it is larger than this server allows (max '.$this->uploadMaxSizeLabel().' per file). Compress it and try again.',
         ]);
+
+        $uploadedCount = 0;
 
         if ($request->hasFile('certificates')) {
             foreach ($request->file('certificates') as $file) {
@@ -55,7 +60,23 @@ class CertificateController extends Controller
                     'file_path' => $path,
                     'status' => CertificateStatus::PendingVerification,
                 ]);
+
+                $uploadedCount++;
             }
+        }
+
+        if ($uploadedCount > 0) {
+            User::query()->admins()->get()->each(function (User $admin) use ($user, $uploadedCount): void {
+                try {
+                    $admin->notify(new CertificateSubmittedNotification($user, $uploadedCount));
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to notify admin of uploaded instructor certificates.', [
+                        'instructor_id' => $user->id,
+                        'admin_id' => $admin->id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            });
         }
 
         return back()->with('success', 'Certificates uploaded successfully and are pending verification.');

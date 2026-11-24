@@ -14,9 +14,12 @@ use App\Exceptions\BookingRequestException;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\BookingChangeRequest;
+use App\Models\SkillUpgradeRequest;
 use App\Models\SurfSpot;
+use App\Models\User;
 use App\Notifications\BookingDeclinedNotification;
 use App\Notifications\SessionAttendanceNotification;
+use App\Notifications\SkillUpgradeRequestedNotification;
 use App\Services\AvailabilityService;
 use App\Services\BookingAcceptanceService;
 use App\Services\BookingChangeService;
@@ -430,7 +433,7 @@ class BookingController extends Controller
                         ->first();
 
                     if (! $existingRequest) {
-                        \App\Models\SkillUpgradeRequest::create([
+                        $upgradeRequest = SkillUpgradeRequest::create([
                             'student_id' => $locked->student_id,
                             'instructor_id' => $locked->instructor_id,
                             'booking_id' => $locked->id,
@@ -438,6 +441,10 @@ class BookingController extends Controller
                             'requested_level' => $nextLevel,
                             'status' => 'pending',
                         ]);
+
+                        DB::afterCommit(fn () => $this->notifyAdminsOfSkillUpgrade(
+                            $upgradeRequest->fresh(['student', 'instructor', 'booking'])
+                        ));
 
                         return ['status' => 'success', 'message' => 'Session completed! A skill upgrade request has been sent to the Admin.'];
                     }
@@ -487,7 +494,7 @@ class BookingController extends Controller
             return back()->with('error', 'A skill upgrade request is already pending for this student.');
         }
 
-        \App\Models\SkillUpgradeRequest::create([
+        $upgradeRequest = SkillUpgradeRequest::create([
             'student_id' => $booking->student_id,
             'instructor_id' => $booking->instructor_id,
             'booking_id' => $booking->id,
@@ -495,6 +502,8 @@ class BookingController extends Controller
             'requested_level' => $nextLevel,
             'status' => 'pending'
         ]);
+
+        $this->notifyAdminsOfSkillUpgrade($upgradeRequest->fresh(['student', 'instructor', 'booking']));
 
         return back()->with('success', 'Skill upgrade request submitted to admin for approval.');
     }
@@ -810,6 +819,25 @@ class BookingController extends Controller
             }
 
             app(ReceiptService::class)->sendPaymentReceipts($fresh);
+        });
+    }
+
+    private function notifyAdminsOfSkillUpgrade(?SkillUpgradeRequest $upgradeRequest): void
+    {
+        if (! $upgradeRequest) {
+            return;
+        }
+
+        User::query()->admins()->get()->each(function (User $admin) use ($upgradeRequest): void {
+            try {
+                $admin->notify(new SkillUpgradeRequestedNotification($upgradeRequest));
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify admin of skill upgrade request.', [
+                    'skill_upgrade_request_id' => $upgradeRequest->id,
+                    'admin_id' => $admin->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         });
     }
 }

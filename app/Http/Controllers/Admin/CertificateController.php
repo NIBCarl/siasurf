@@ -6,9 +6,11 @@ use App\Enums\CertificateStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\User;
+use App\Notifications\CertificateStatusNotification;
 use App\Services\FileScanService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -126,6 +128,15 @@ class CertificateController extends Controller
             'expires_at' => $validated['expires_at'] ?? null,
         ]);
 
+        try {
+            $certificate->user?->notify(new CertificateStatusNotification($certificate->fresh(), verified: true));
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to send certificate verified notification.', [
+                'certificate_id' => $certificate->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
         return back()->with('success', 'Certificate verified successfully.');
     }
 
@@ -144,6 +155,19 @@ class CertificateController extends Controller
             'status' => CertificateStatus::Rejected,
             'admin_notes' => $validated['notes'],
         ]);
+
+        try {
+            $certificate->user?->notify(new CertificateStatusNotification(
+                $certificate->fresh(),
+                verified: false,
+                notes: $validated['notes']
+            ));
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to send certificate rejected notification.', [
+                'certificate_id' => $certificate->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         return back()->with('success', 'Certificate rejected.');
     }

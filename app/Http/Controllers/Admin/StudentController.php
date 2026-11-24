@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Notifications\StudentAccountStatusNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class StudentController extends Controller
@@ -83,9 +85,20 @@ class StudentController extends Controller
             ]);
         }
 
+        $isBanned = $profile->status === 'active';
+
         $profile->update([
-            'status' => $profile->status === 'active' ? 'banned' : 'active'
+            'status' => $isBanned ? 'banned' : 'active'
         ]);
+
+        try {
+            $user->notify(new StudentAccountStatusNotification($isBanned));
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to notify student of account status change.', [
+                'student_id' => $user->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         $statusMessage = $profile->status === 'active' ? 'unbanned' : 'banned';
 

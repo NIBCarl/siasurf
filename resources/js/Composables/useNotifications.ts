@@ -24,6 +24,8 @@ export interface AppNotification {
 const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
     incident_report: 'error',
     incident_outcome: 'error',
+    certificate_expired: 'error',
+    student_account_banned: 'error',
     booking_awaiting_payment: 'warning',
     booking_cancelled: 'warning',
     booking_declined: 'warning',
@@ -31,6 +33,12 @@ const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
     booking_no_show: 'warning',
     booking_spot_changed: 'warning',
     instructor_rejected: 'warning',
+    instructor_pending_verification: 'warning',
+    certificate_rejected: 'warning',
+    certificate_expiring_soon: 'warning',
+    skill_upgrade_rejected: 'warning',
+    gcash_receipt_rejected: 'warning',
+    cash_underpayment_flagged: 'warning',
     account_suspended: 'warning',
     instructor_suspended: 'warning',
     strike_recorded: 'warning',
@@ -40,6 +48,12 @@ const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
     booking_confirmed: 'success',
     payment_received: 'success',
     instructor_verified: 'success',
+    certificate_verified: 'success',
+    skill_upgrade_approved: 'success',
+    student_account_unbanned: 'success',
+    review_received: 'success',
+    fine_settled: 'success',
+    strike_revoked: 'success',
     account_reactivated: 'success',
     appeal_resolved: 'success',
     payout_recorded: 'success',
@@ -48,6 +62,25 @@ const SEVERITY_BY_TYPE: Record<string, AppNotification['type']> = {
 const TITLE_BY_TYPE: Record<string, string> = {
     incident_report: 'Safety Incident Reported',
     incident_outcome: 'Incident Outcome',
+    new_user_registered: 'New User Registered',
+    instructor_pending_verification: 'Instructor Verification Needed',
+    certificate_submitted: 'Certificate Submitted',
+    certificate_verified: 'Certificate Verified',
+    certificate_rejected: 'Certificate Rejected',
+    certificate_expired: 'Certificate Expired',
+    certificate_expiring_soon: 'Certificate Expiring Soon',
+    skill_upgrade_requested: 'Skill Upgrade Request',
+    skill_upgrade_approved: 'Skill Level Upgraded',
+    skill_upgrade_rejected: 'Skill Upgrade Declined',
+    gcash_receipt_uploaded: 'GCash Receipt Uploaded',
+    gcash_receipt_rejected: 'GCash Receipt Rejected',
+    cash_underpayment_flagged: 'Cash Underpayment Flagged',
+    student_account_banned: 'Account Restricted',
+    student_account_unbanned: 'Account Reinstated',
+    review_received: 'New Lesson Review',
+    review_response: 'Instructor Replied to Review',
+    fine_settled: 'Fine Settled',
+    strike_revoked: 'Strike Revoked',
     booking_requested: 'New Booking Request',
     booking_awaiting_payment: 'Payment Required',
     booking_confirmed: 'Booking Confirmed',
@@ -267,6 +300,7 @@ export function useNotifications() {
             subscribedChannels.push(channel)
 
             echo.private(channel)
+                .listen('.notification.created', () => toNotification())
                 .listen('.booking.confirmed', (e: any) =>
                     toNotification(e, 'Booking Confirmed', 'success'))
                 .listen('.booking.awaiting_payment', (e: any) =>
@@ -304,6 +338,7 @@ export function useNotifications() {
             subscribedChannels.push(channel)
 
             echo.private(channel)
+                .listen('.notification.created', () => toNotification())
                 // FR 1.9.1 - real-time booking request notification.
                 .listen('.booking.created', (e: any) =>
                     toNotification(e, 'New Booking Request', 'info'))
@@ -343,6 +378,7 @@ export function useNotifications() {
             subscribedChannels.push(channel)
 
             echo.private(channel)
+                .listen('.notification.created', () => toNotification())
                 .listen('.booking.created', (e: any) =>
                     toNotification(e, 'New Booking', 'info'))
                 .listen('.booking.confirmed', (e: any) =>

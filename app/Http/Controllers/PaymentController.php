@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Models\User;
 use App\Enums\BookingStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Notifications\CashUnderpaymentFlaggedNotification;
+use App\Notifications\GcashReceiptRejectedNotification;
+use App\Notifications\GcashReceiptUploadedNotification;
 use App\Services\PaymentReceiptService;
 use App\Services\ReceiptService;
 use App\Contracts\PaymentServiceInterface;
@@ -135,6 +139,23 @@ class PaymentController extends Controller
             ]);
         }
 
+        try {
+            $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
+            if ($fresh) {
+                $notification = new GcashReceiptUploadedNotification($fresh);
+                $fresh->instructor?->notify($notification);
+
+                User::query()->admins()->get()->each(
+                    fn (User $admin) => $admin->notify($notification)
+                );
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to send GCash receipt upload notification.', [
+                'booking_id' => $booking->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
         return back()->with(
             'success',
             'Receipt uploaded. Your instructor will verify it and confirm your booking.'
@@ -171,7 +192,9 @@ class PaymentController extends Controller
             'note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $error = DB::transaction(function () use ($booking, $payment, $validated): ?string {
+        $verifierId = auth()->id();
+
+        $error = DB::transaction(function () use ($booking, $payment, $validated, $verifierId): ?string {
             $lockedBooking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $lockedPayment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
 
@@ -183,7 +206,7 @@ class PaymentController extends Controller
                 return 'There is no receipt waiting for verification.';
             }
 
-            $lockedPayment->markReceiptVerified(auth()->id(), $validated['note'] ?? null);
+            $lockedPayment->markReceiptVerified($verifierId, $validated['note'] ?? null);
 
             $lockedBooking->update([
                 'payment_status' => PaymentStatus::Completed,
@@ -191,14 +214,14 @@ class PaymentController extends Controller
             ]);
 
             $eventService = app(\App\Services\BookingEventService::class);
-            $eventService->recordPaymentCompleted($lockedBooking, $lockedPayment->fresh(), auth()->id());
+            $eventService->recordPaymentCompleted($lockedBooking, $lockedPayment->fresh(), $verifierId);
 
             // The lesson was only waiting on the money: confirming it now turns
             // the held slot into a confirmed booking.
             $lockedBooking->confirm();
-            $eventService->recordConfirmed($lockedBooking, auth()->id(), 'GCash receipt');
+            $eventService->recordConfirmed($lockedBooking, $verifierId, 'GCash receipt');
 
-            DB::afterCommit(function () use ($lockedBooking) {
+            DB::afterCommit(function () use ($lockedBooking, $verifierId) {
                 $fresh = $lockedBooking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
                 if (! $fresh) {
                     return;
@@ -273,6 +296,16 @@ class PaymentController extends Controller
 
         if ($error !== null) {
             return back()->with('error', $error);
+        }
+
+        try {
+            $fresh = $booking->fresh(['student', 'instructor', 'payment']);
+            $fresh?->student?->notify(new GcashReceiptRejectedNotification($fresh, $validated['note']));
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to send GCash receipt rejected notification.', [
+                'booking_id' => $booking->id,
+                'error' => $exception->getMessage(),
+            ]);
         }
 
         return back()->with('success', 'Receipt rejected. The student can upload a corrected one.');
@@ -471,11 +504,30 @@ class PaymentController extends Controller
             auth()->id()
         );
 
+        $actorId = auth()->id();
         $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
 
         try {
             if ($fresh?->payment) {
                 broadcast(new \App\Events\PaymentReceived($fresh->payment))->toOthers();
+            }
+
+            if ($isUnderpaid && $fresh) {
+                $underpaidNotification = new CashUnderpaymentFlaggedNotification(
+                    $fresh,
+                    $amountReceived,
+                    $totalDue,
+                    $shortfall,
+                    (string) $validated['notes']
+                );
+
+                $fresh->student?->notify($underpaidNotification);
+
+                User::query()->admins()->get()->each(function (User $admin) use ($underpaidNotification, $actorId): void {
+                    if ($admin->id !== $actorId) {
+                        $admin->notify($underpaidNotification);
+                    }
+                });
             }
         } catch (\Throwable $exception) {
             Log::warning('Failed to broadcast cash payment.', [

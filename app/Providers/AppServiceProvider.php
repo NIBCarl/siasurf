@@ -4,10 +4,13 @@ namespace App\Providers;
 
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Notifications\Events\NotificationSent;
+use App\Events\NotificationFeedUpdated;
 use App\Models\Booking;
 use App\Models\User;
 use App\Models\SafetyIncident;
@@ -53,6 +56,21 @@ class AppServiceProvider extends ServiceProvider
 
         // Every confirmed booking gets exactly one private chat thread.
         Booking::observe(BookingObserver::class);
+
+        Event::listen(NotificationSent::class, function (NotificationSent $event): void {
+            if ($event->channel !== 'database' || ! $event->notifiable instanceof User) {
+                return;
+            }
+
+            try {
+                broadcast(new NotificationFeedUpdated(
+                    $event->notifiable->id,
+                    (string) $event->notifiable->role
+                ));
+            } catch (\Throwable) {
+                // A dead or unconfigured socket must never fail a database notification.
+            }
+        });
 
         // Explicit registration keeps chat authorization predictable even if
         // the model/policy naming ever changes.

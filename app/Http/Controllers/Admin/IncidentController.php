@@ -20,10 +20,12 @@ use App\Models\SafetyIncident;
 use App\Models\User;
 use App\Notifications\IncidentOutcomeNotification;
 use App\Notifications\InstructorStrikeRecordedNotification;
+use App\Notifications\StrikeRevokedNotification;
 use App\Services\StrikeService;
 use App\Services\SuspensionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -406,6 +408,16 @@ class IncidentController extends Controller
                 $request->user(),
                 'Automatic suspension adjusted after confirmed strike revocation: '.$reason
             );
+
+            try {
+                $incident->instructor->notify(new StrikeRevokedNotification($incident->fresh(), $reason));
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify instructor of strike revocation.', [
+                    'incident_id' => $incident->id,
+                    'instructor_id' => $incident->instructor_id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         }
 
         return back()->with('success', 'Incident strike revoked. The instructor record was updated.');

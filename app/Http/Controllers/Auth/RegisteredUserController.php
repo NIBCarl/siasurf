@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Notifications\NewUserRegisteredNotification;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -72,6 +74,18 @@ class RegisteredUserController extends Controller
             report($exception);
             $mailSent = false;
         }
+
+        User::query()->admins()->get()->each(function (User $admin) use ($user): void {
+            try {
+                $admin->notify(new NewUserRegisteredNotification($user));
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify admin of new user registration.', [
+                    'user_id' => $user->id,
+                    'admin_id' => $admin->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        });
 
         Auth::login($user);
 

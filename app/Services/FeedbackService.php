@@ -12,6 +12,7 @@ use App\Models\Review;
 use App\Models\SafetyIncident;
 use App\Models\User;
 use App\Notifications\NewIncidentReportNotification;
+use App\Notifications\ReviewReceivedNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -131,6 +132,21 @@ class FeedbackService
                 ]);
             }
         });
+
+        if ($review) {
+            $review = $review->fresh(['student', 'booking', 'instructor']);
+
+            try {
+                $booking->loadMissing('instructor');
+                $booking->instructor?->notify(new ReviewReceivedNotification($review));
+            } catch (\Throwable $exception) {
+                \Log::warning('Failed to notify instructor of new review.', [
+                    'review_id' => $review->id,
+                    'booking_id' => $booking->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
 
         if ($incident) {
             $incident = $incident->fresh(['instructor', 'booking', 'reporter', 'review']);

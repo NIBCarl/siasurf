@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Enums\CertificateStatus;
 use App\Models\Certificate;
 use App\Models\User;
+use App\Notifications\CertificateExpiryNotification;
 use Illuminate\Console\Command;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -28,7 +30,10 @@ class ExpireCertificates extends Command
     {
         $dryRun = (bool) $this->option('dry-run');
 
+        $admins = $dryRun ? collect() : User::query()->admins()->get();
+
         $newlyExpired = Certificate::query()
+            ->with('user')
             ->where('status', CertificateStatus::Verified->value)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', now())
@@ -50,10 +55,34 @@ class ExpireCertificates extends Command
                 'expired_at' => $certificate->expires_at?->toIso8601String(),
             ]);
 
+            $expiredNotification = new CertificateExpiryNotification($certificate, expired: true);
+
+            try {
+                $certificate->user?->notify($expiredNotification);
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify instructor of expired certificate.', [
+                    'certificate_id' => $certificate->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
+            foreach ($admins as $admin) {
+                try {
+                    $admin->notify($expiredNotification);
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to notify admin of expired certificate.', [
+                        'certificate_id' => $certificate->id,
+                        'admin_id' => $admin->id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
             $this->line("Expired: #{$certificate->id} ({$certificate->type->label()}) for user {$certificate->user_id}");
         }
 
         $expiringSoon = Certificate::query()
+            ->with('user')
             ->where('status', CertificateStatus::Verified->value)
             ->expiringSoon(30)
             ->get();
@@ -66,6 +95,53 @@ class ExpireCertificates extends Command
                 'user_id' => $certificate->user_id,
                 'days_left' => $days,
             ]);
+
+            if ($dryRun) {
+                continue;
+            }
+
+            $expiresDate = $certificate->expires_at?->toDateString();
+            $alreadyNotified = DatabaseNotification::query()
+                ->where('notifiable_type', User::class)
+                ->where('notifiable_id', $certificate->user_id)
+                ->where('data->type', 'certificate_expiring_soon')
+                ->where('data->certificate_id', $certificate->id)
+                ->when(
+                    $expiresDate !== null,
+                    fn ($query) => $query->where('data->expires_at', $expiresDate)
+                )
+                ->exists();
+
+            if ($alreadyNotified) {
+                continue;
+            }
+
+            $expiringNotification = new CertificateExpiryNotification(
+                $certificate,
+                expired: false,
+                daysLeft: max(0, $days)
+            );
+
+            try {
+                $certificate->user?->notify($expiringNotification);
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify instructor of expiring certificate.', [
+                    'certificate_id' => $certificate->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
+            foreach ($admins as $admin) {
+                try {
+                    $admin->notify($expiringNotification);
+                } catch (\Throwable $exception) {
+                    Log::warning('Failed to notify admin of expiring certificate.', [
+                        'certificate_id' => $certificate->id,
+                        'admin_id' => $admin->id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            }
         }
 
         $verb = $dryRun ? 'would expire' : 'expired';

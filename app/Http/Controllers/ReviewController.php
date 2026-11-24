@@ -8,8 +8,11 @@ use App\Http\Resources\ReviewResource;
 use App\Models\Booking;
 use App\Models\Review;
 use App\Models\User;
+use App\Notifications\ReviewReceivedNotification;
+use App\Notifications\ReviewResponseNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -147,6 +150,17 @@ class ReviewController extends Controller
             $review->update(['photo_path' => $photoPath]);
         }
 
+        try {
+            $booking->loadMissing('instructor');
+            $booking->instructor?->notify(new ReviewReceivedNotification($review->fresh(['student', 'booking'])));
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to notify instructor of new review.', [
+                'review_id' => $review->id,
+                'booking_id' => $booking->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
         return redirect()->route('student.bookings.show', $booking)
             ->with('success', 'Thank you for your review!');
     }
@@ -213,6 +227,16 @@ class ReviewController extends Controller
         ]);
 
         $review->respond($validated['response']);
+
+        try {
+            $review->loadMissing('student');
+            $review->student?->notify(new ReviewResponseNotification($review->fresh(['instructor', 'booking'])));
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to notify student of review response.', [
+                'review_id' => $review->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         return redirect()->back()
             ->with('success', 'Response posted successfully.');

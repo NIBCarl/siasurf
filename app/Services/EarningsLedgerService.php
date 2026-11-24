@@ -579,6 +579,10 @@ class EarningsLedgerService
                 ->whereNull('overdue_notified_at')
                 ->groupBy('instructor_id');
 
+            $admins = $unnotifiedByInstructor->isNotEmpty()
+                ? User::query()->admins()->get()
+                : collect();
+
             foreach ($unnotifiedByInstructor as $rows) {
                 $instructor = $rows->first()?->instructor;
                 if (! $instructor) {
@@ -605,6 +609,26 @@ class EarningsLedgerService
                         'instructor_id' => $instructor->id,
                         'error' => $exception->getMessage(),
                     ]);
+
+                    continue;
+                }
+
+                foreach ($admins as $admin) {
+                    try {
+                        $admin->notify(new CashRemittanceOverdueNotification(
+                            $overdueAmount,
+                            $rows->count(),
+                            $earliestDue,
+                            $instructor->id,
+                            $instructor->name
+                        ));
+                    } catch (\Throwable $exception) {
+                        Log::warning('Failed to notify admin of overdue cash remittance.', [
+                            'instructor_id' => $instructor->id,
+                            'admin_id' => $admin->id,
+                            'error' => $exception->getMessage(),
+                        ]);
+                    }
                 }
             }
         }

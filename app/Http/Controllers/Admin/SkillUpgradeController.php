@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\SkillUpgradeRequest;
+use App\Notifications\SkillUpgradeResolvedNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -40,6 +42,8 @@ class SkillUpgradeController extends Controller
         $skillUpgradeRequest->status = 'approved';
         $skillUpgradeRequest->save();
 
+        $this->notifyParties($skillUpgradeRequest, approved: true);
+
         return back()->with('success', 'Skill upgrade approved successfully.');
     }
 
@@ -53,6 +57,34 @@ class SkillUpgradeController extends Controller
         $skillUpgradeRequest->status = 'rejected';
         $skillUpgradeRequest->save();
 
+        $this->notifyParties($skillUpgradeRequest, approved: false);
+
         return back()->with('success', 'Skill upgrade rejected.');
+    }
+
+    private function notifyParties(SkillUpgradeRequest $skillUpgradeRequest, bool $approved): void
+    {
+        $fresh = $skillUpgradeRequest->fresh(['student', 'instructor', 'booking']);
+        if (! $fresh) {
+            return;
+        }
+
+        $notification = new SkillUpgradeResolvedNotification($fresh, $approved);
+
+        foreach ([$fresh->student, $fresh->instructor] as $recipient) {
+            if (! $recipient) {
+                continue;
+            }
+
+            try {
+                $recipient->notify($notification);
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify party of skill upgrade outcome.', [
+                    'skill_upgrade_request_id' => $fresh->id,
+                    'user_id' => $recipient->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
     }
 }

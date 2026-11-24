@@ -8,11 +8,14 @@ use App\Enums\InstructorStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\SurfSpot;
+use App\Models\User;
+use App\Notifications\InstructorPendingVerificationNotification;
 use App\Services\FileScanService;
 use App\Services\PricingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class OnboardingController extends Controller
@@ -83,6 +86,7 @@ class OnboardingController extends Controller
 
         $disk = config('filesystems.default') === 's3' ? 's3' : 'local';
         $storedCertificates = [];
+        $isResubmission = $user->instructorProfile?->status === InstructorStatus::Rejected;
 
         try {
             foreach ($files as $file) {
@@ -133,6 +137,26 @@ class OnboardingController extends Controller
 
             throw $exception;
         }
+
+        $levelValue = (int) $validated['level'];
+        $certificateCount = count($storedCertificates);
+
+        User::query()->admins()->get()->each(function (User $admin) use ($user, $levelValue, $certificateCount, $isResubmission): void {
+            try {
+                $admin->notify(new InstructorPendingVerificationNotification(
+                    $user,
+                    $levelValue,
+                    $certificateCount,
+                    $isResubmission
+                ));
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to notify admin of pending instructor verification.', [
+                    'instructor_id' => $user->id,
+                    'admin_id' => $admin->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        });
 
         return redirect()->route('instructor.pending')->with('success', 'Profile and certificates submitted successfully. Please wait for Admin verification.');
     }

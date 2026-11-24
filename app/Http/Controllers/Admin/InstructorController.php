@@ -16,6 +16,7 @@ use App\Models\InstructorStatusLog;
 use App\Models\InstructorSuspension;
 use App\Models\SurfSpot;
 use App\Models\User;
+use App\Notifications\FineSettledNotification;
 use App\Notifications\InstructorReactivated;
 use App\Notifications\InstructorRejected;
 use App\Notifications\InstructorVerified;
@@ -25,6 +26,7 @@ use App\Services\SuspensionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -531,6 +533,16 @@ class InstructorController extends Controller
             'settlement_note' => $validated['settlement_note'] ?? 'Fine paid to SISA outside the system.',
         ]);
 
+        try {
+            $instructor->notify(new FineSettledNotification($fine->fresh(), waived: false));
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to send fine paid notification.', [
+                'fine_id' => $fine->id,
+                'instructor_id' => $instructor->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
         return back()->with('success', 'Fine marked as paid.');
     }
 
@@ -561,6 +573,16 @@ class InstructorController extends Controller
             'settled_by' => $request->user()->id,
             'settlement_note' => $validated['settlement_note'],
         ]);
+
+        try {
+            $instructor->notify(new FineSettledNotification($fine->fresh(), waived: true));
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to send fine waived notification.', [
+                'fine_id' => $fine->id,
+                'instructor_id' => $instructor->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         return back()->with('success', 'Fine waived by SISA.');
     }
