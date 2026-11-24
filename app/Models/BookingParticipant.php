@@ -61,7 +61,9 @@ class BookingParticipant extends Model
 
     public function isMinor(): bool
     {
-        return $this->age !== null && $this->age < 18;
+        $effectiveAge = $this->birthday?->age ?? $this->age;
+
+        return $effectiveAge !== null && $effectiveAge < 18;
     }
 
     /**

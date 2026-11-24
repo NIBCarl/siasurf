@@ -11,6 +11,9 @@ use App\Exceptions\BookingRequestException;
 use App\Jobs\ExpirePaymentWindowJob;
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Models\User;
+use App\Notifications\BookingAwaitingPaymentNotification;
+use App\Notifications\BookingConfirmedNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -35,24 +38,31 @@ class BookingAcceptanceService
      *
      * @throws BookingRequestException
      */
-    public function accept(Booking $booking): Booking
+    public function accept(Booking $booking, ?User $actor = null): Booking
     {
-        $this->assertAcceptable($booking);
+        return DB::transaction(function () use ($booking, $actor) {
+            User::query()->whereKey($booking->instructor_id)->lockForUpdate()->first();
 
-        return DB::transaction(function () use ($booking) {
-            $booking->update([
-                'accepted_at' => $booking->accepted_at ?? now(),
+            $locked = Booking::with(['instructor.instructorProfile', 'payment'])
+                ->whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertAcceptable($locked);
+
+            $locked->update([
+                'accepted_at' => $locked->accepted_at ?? now(),
             ]);
 
             // FR 1.8.3 - the lesson now owns this slot. Level 3 keeps the
             // calendar open until its fifth student is booked.
-            $this->availabilityService->lockIfSlotIsFull($booking);
+            $this->availabilityService->lockIfSlotIsFull($locked);
 
-            $booking->refresh();
+            $locked->refresh();
 
-            return $this->paymentMethodFor($booking) === PaymentMethod::GCash
-                ? $this->awaitPayment($booking)
-                : $this->confirmWithCash($booking);
+            return $this->paymentMethodFor($locked) === PaymentMethod::GCash
+                ? $this->awaitPayment($locked)
+                : $this->confirmWithCash($locked, $actor);
         });
     }
 
@@ -131,6 +141,8 @@ class BookingAcceptanceService
 
         broadcast(new BookingAwaitingPayment($booking))->toOthers();
 
+        $booking->student?->notify(new BookingAwaitingPaymentNotification($booking));
+
         // The lock releases on its own, clamped to the lesson start.
         ExpirePaymentWindowJob::dispatch($booking)
             ->delay($deadline);
@@ -141,13 +153,19 @@ class BookingAcceptanceService
     /**
      * Cash: the lesson is confirmed straight away and paid at the beach.
      */
-    private function confirmWithCash(Booking $booking): Booking
+    private function confirmWithCash(Booking $booking, ?User $actor = null): Booking
     {
         $booking->update(['status' => BookingStatus::Confirmed]);
 
         $booking->refresh()->load(['instructor', 'student', 'surfSpot']);
 
         broadcast(new BookingConfirmed($booking))->toOthers();
+
+        $booking->student?->notify(new BookingConfirmedNotification($booking));
+
+        if ($actor === null || $actor->id !== $booking->instructor_id) {
+            $booking->instructor?->notify(new BookingConfirmedNotification($booking));
+        }
 
         return $booking;
     }

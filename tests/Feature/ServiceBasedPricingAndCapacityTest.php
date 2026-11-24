@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\Fluent\AssertableJson;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -358,5 +359,255 @@ class ServiceBasedPricingAndCapacityTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertSame(1, Booking::where('instructor_id', $instructor->id)->count());
+    }
+
+    public function test_service_type_is_strictly_fixed_to_student_skill_level_and_enforces_two_hour_minimum_for_guiding_and_coaching(): void
+    {
+        $instructor = $this->createInstructor(InstructorLevel::Level3);
+        Availability::create([
+            'user_id' => $instructor->id,
+            'day_of_week' => (int) $this->day->format('w'),
+            'time_period' => 'afternoon',
+            'is_available' => true,
+            'start_time' => '12:00',
+            'end_time' => '18:00',
+            'slot_duration_minutes' => 60,
+            'specific_date' => null,
+        ]);
+
+        $beginner = $this->createStudent('beginner');
+        $intermediate = $this->createStudent('intermediate');
+        $advanced = $this->createStudent('advanced');
+        $dateStr = $this->day->format('Y-m-d');
+
+        // Beginner is locked to Teaching (1h intro allowed; Guiding/Coaching rejected).
+        $this->actingAs($beginner)
+            ->get(route('bookings.create', $instructor->id))
+            ->assertOk()
+            ->assertInertia(fn (AssertableJson $page) => $page
+                ->where('serviceOptions.0.type', 'teaching')
+                ->where('defaultSessionType', 'teaching')
+                ->where('minimumDurationMinutes', 60)
+                ->has('serviceOptions', 1));
+
+        $this->actingAs($beginner)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->beginnerSpot, [
+                'session_type' => 'coaching',
+            ]))
+            ->assertSessionHas('error');
+
+        $this->actingAs($beginner)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->beginnerSpot, [
+                'session_type' => 'teaching',
+                'start_time' => '06:00',
+                'end_time' => '07:00',
+            ]))
+            ->assertRedirect();
+
+        // Intermediate is locked to Guiding (minimum 2h: 11:00 & 17:00 excluded; 1h POST rejected; 2h & 3h extended accepted).
+        $this->actingAs($intermediate)
+            ->get(route('bookings.create', $instructor->id))
+            ->assertOk()
+            ->assertInertia(fn (AssertableJson $page) => $page
+                ->where('serviceOptions.0.type', 'guiding')
+                ->where('defaultSessionType', 'guiding')
+                ->where('minimumDurationMinutes', 120)
+                ->has('serviceOptions', 1));
+
+        $intAvail = $this->actingAs($intermediate)->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $dateStr,
+            'skill_level' => 'intermediate',
+            'session_type' => 'guiding',
+        ]))->assertOk();
+
+        $this->assertNotContains('11:00', $intAvail->json('periods.morning.slots'));
+        $this->assertNotContains('17:00', $intAvail->json('periods.afternoon.slots'));
+        $this->assertContains('10:00', $intAvail->json('periods.morning.slots'));
+        $this->assertContains('16:00', $intAvail->json('periods.afternoon.slots'));
+        $this->assertContains('06:00', $intAvail->json('periods.morning.reserved_slots'));
+        $this->assertSame('skill_mismatch', $intAvail->json('periods.morning.reserved_slot_details.06:00.reason_code'));
+
+        $this->actingAs($intermediate)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->intermediateSpot, [
+                'session_type' => 'teaching',
+                'start_time' => '08:00',
+                'end_time' => '10:00',
+            ]))
+            ->assertSessionHas('error');
+
+        $this->actingAs($intermediate)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->intermediateSpot, [
+                'session_type' => 'guiding',
+                'start_time' => '07:00',
+                'end_time' => '08:00',
+            ]))
+            ->assertSessionHas('error');
+
+        $this->actingAs($intermediate)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->intermediateSpot, [
+                'session_type' => 'guiding',
+                'start_time' => '13:00',
+                'end_time' => '16:00',
+            ]))
+            ->assertRedirect();
+
+        // Advanced is locked to Coaching (minimum 2h: 11:00 & 17:00 excluded; 1h POST rejected; 2h+ accepted).
+        $this->actingAs($advanced)
+            ->get(route('bookings.create', $instructor->id))
+            ->assertOk()
+            ->assertInertia(fn (AssertableJson $page) => $page
+                ->where('serviceOptions.0.type', 'coaching')
+                ->where('defaultSessionType', 'coaching')
+                ->where('minimumDurationMinutes', 120)
+                ->has('serviceOptions', 1));
+
+        $advAvail = $this->actingAs($advanced)->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $dateStr,
+            'skill_level' => 'advanced',
+            'session_type' => 'coaching',
+        ]))->assertOk();
+
+        $this->assertNotContains('11:00', $advAvail->json('periods.morning.slots'));
+        $this->assertNotContains('17:00', $advAvail->json('periods.afternoon.slots'));
+
+        $this->actingAs($advanced)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->advancedSpot, [
+                'session_type' => 'coaching',
+                'start_time' => '07:00',
+                'end_time' => '08:00',
+            ]))
+            ->assertSessionHas('error');
+
+        $this->actingAs($advanced)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($this->advancedSpot, [
+                'session_type' => 'coaching',
+                'start_time' => '07:00',
+                'end_time' => '09:00',
+            ]))
+            ->assertRedirect();
+    }
+
+    public function test_rolling_per_hour_capacity_reconciles_extended_and_standard_coaching_bookings_with_spot_lock(): void
+    {
+        $spotA = $this->advancedSpot;
+        $spotB = SurfSpot::factory()->create(['difficulty' => 'advanced', 'name' => 'Pacifico Reef']);
+
+        $instructor = $this->createInstructor(InstructorLevel::Level3);
+        $adv1 = $this->createStudent('advanced');
+        $adv2 = $this->createStudent('advanced');
+        $adv3 = $this->createStudent('advanced');
+        $adv4 = $this->createStudent('advanced');
+        $dateStr = $this->day->format('Y-m-d');
+
+        // Student A books an extended 3-hour Coaching session (06:00-09:00) at Spot A (1/3 seats).
+        $this->actingAs($adv1)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($spotA, [
+                'start_time' => '06:00',
+                'end_time' => '09:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertRedirect();
+
+        // Student B checking 06:00 end-times gets 08:00 minimum (no 07:00) and surf spot locked to Spot A.
+        $endTimesResp = $this->actingAs($adv2)->getJson(route('api.availability.end-times', [
+            'instructor' => $instructor->id,
+            'date' => $dateStr,
+            'start_time' => '06:00',
+            'students' => 1,
+            'skill_level' => 'advanced',
+            'session_type' => 'coaching',
+        ]))->assertOk();
+
+        $this->assertSame(['08:00', '09:00', '10:00', '11:00', '12:00'], $endTimesResp->json('end_times'));
+        $this->assertSame($spotA->id, $endTimesResp->json('end_time_spots.08:00.id'));
+        $this->assertSame($spotA->id, $endTimesResp->json('locked_surf_spot.id'));
+
+        // Student B cannot join 06:00-08:00 at a DIFFERENT surf spot (Spot B).
+        $this->actingAs($adv2)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($spotB, [
+                'start_time' => '06:00',
+                'end_time' => '08:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertSessionHas('error');
+
+        // Student B CAN join 06:00-08:00 (standard 2h) at locked Spot A while Student A continues until 09:00.
+        $this->actingAs($adv2)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($spotA, [
+                'start_time' => '06:00',
+                'end_time' => '08:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertRedirect();
+
+        // Rolling capacity check: 06:00-08:00 has 1 seat left (2/3 used), while 08:00-10:00 has 2 seats left!
+        $availC = $this->actingAs($adv3)->getJson(route('api.availability', [
+            'instructor' => $instructor->id,
+            'date' => $dateStr,
+            'students' => 1,
+            'skill_level' => 'advanced',
+            'session_type' => 'coaching',
+        ]))->assertOk();
+
+        $this->assertSame(1, $availC->json('periods.morning.slot_remaining.06:00'));
+        $this->assertSame(2, $availC->json('periods.morning.slot_remaining.08:00'));
+
+        // Student C takes the 3rd seat in 06:00-08:00 at Spot A.
+        $this->actingAs($adv3)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($spotA, [
+                'start_time' => '06:00',
+                'end_time' => '08:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertRedirect();
+
+        // Student D is blocked from 06:00-08:00 (now 3/3 full), but CAN book 08:00-10:00 overlapping Student A's 3rd hour!
+        $this->actingAs($adv4)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($spotA, [
+                'start_time' => '06:00',
+                'end_time' => '08:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertSessionHas('error');
+
+        $this->actingAs($adv4)
+            ->post(route('bookings.store-details', $instructor->id), $this->bookingPayload($spotA, [
+                'start_time' => '08:00',
+                'end_time' => '10:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertRedirect();
+
+        // Bridging two non-overlapping bookings at different spots (06:00-08:00 Spot A + 08:00-10:00 Spot B) is rejected.
+        $bridgeInstructor = $this->createInstructor(InstructorLevel::Level3);
+        $s1 = $this->createStudent('advanced');
+        $s2 = $this->createStudent('advanced');
+        $s3 = $this->createStudent('advanced');
+
+        $this->actingAs($s1)
+            ->post(route('bookings.store-details', $bridgeInstructor->id), $this->bookingPayload($spotA, [
+                'start_time' => '06:00',
+                'end_time' => '08:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertRedirect();
+
+        $this->actingAs($s2)
+            ->post(route('bookings.store-details', $bridgeInstructor->id), $this->bookingPayload($spotB, [
+                'start_time' => '08:00',
+                'end_time' => '10:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertRedirect();
+
+        $this->actingAs($s3)
+            ->post(route('bookings.store-details', $bridgeInstructor->id), $this->bookingPayload($spotA, [
+                'start_time' => '07:00',
+                'end_time' => '09:00',
+                'session_type' => 'coaching',
+            ]))
+            ->assertSessionHas('error');
     }
 }

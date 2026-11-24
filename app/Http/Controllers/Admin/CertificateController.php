@@ -6,6 +6,7 @@ use App\Enums\CertificateStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\User;
+use App\Services\FileScanService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -18,6 +19,8 @@ class CertificateController extends Controller
      */
     public function store(Request $request, User $instructor): RedirectResponse
     {
+        abort_unless($instructor->isInstructor(), 404);
+
         $validated = $request->validate([
             'certificate' => [
                 'required',
@@ -30,14 +33,24 @@ class CertificateController extends Controller
 
         $file = $request->file('certificate');
 
+        try {
+            app(FileScanService::class)->assertSafe($file);
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors([
+                'certificate' => $exception->getMessage(),
+            ]);
+        }
+
         // Generate unique filename
         $filename = $validated['type'].'_'.time().'_'.Str::random(8).'.pdf';
+
+        $disk = config('filesystems.default') === 's3' ? 's3' : 'local';
 
         // Store file
         $path = $file->storeAs(
             "instructors/{$instructor->id}/certificates",
             $filename,
-            'local'
+            $disk
         );
 
         // Create certificate record
@@ -81,7 +94,7 @@ class CertificateController extends Controller
     {
         $candidates = config('filesystems.default') === 's3'
             ? ['s3']
-            : ['public', 'local'];
+            : ['local', 'public'];
 
         foreach ($candidates as $disk) {
             try {
@@ -142,9 +155,14 @@ class CertificateController extends Controller
     {
         $this->authorize('delete', $certificate);
 
-        // Delete file from storage
-        if (Storage::disk('local')->exists($certificate->file_path)) {
-            Storage::disk('local')->delete($certificate->file_path);
+        foreach (['local', 'public'] as $disk) {
+            try {
+                if (Storage::disk($disk)->exists($certificate->file_path)) {
+                    Storage::disk($disk)->delete($certificate->file_path);
+                }
+            } catch (\Throwable) {
+                // Ignore unconfigured storage disks during cleanup.
+            }
         }
 
         $certificate->delete();

@@ -244,7 +244,8 @@ class AvailabilityController extends Controller
 
         $query = Availability::where('user_id', $user->id)
             ->where('specific_date', $validated['date'])
-            ->where('is_available', false);
+            ->where('is_available', false)
+            ->whereNull('blocked_by_booking_id');
 
         if ($validated['time_period']) {
             $query->where('time_period', $validated['time_period']);
@@ -370,6 +371,7 @@ class AvailabilityController extends Controller
         $students = (int) ($validated['students'] ?? 1);
         [$skill, $sessionType] = $this->resolveSkillAndService($request, $validated);
         $availability = app(AvailabilityService::class);
+        $minimumMinutes = $availability->minimumLessonMinutes($sessionType, $skill);
 
         $endTimes = $availability->bookableEndTimes(
             (int) $instructorId,
@@ -382,7 +384,7 @@ class AvailabilityController extends Controller
         );
 
         $candidateEnd = \Carbon\Carbon::createFromFormat('H:i', $validated['start_time'])
-            ->addHour()
+            ->addMinutes($minimumMinutes)
             ->format('H:i');
         $probeEnd = $candidateEnd > $validated['start_time']
             ? $candidateEnd
@@ -400,11 +402,25 @@ class AvailabilityController extends Controller
             )
             : ['is_reserved' => false, 'reason' => null];
 
+        $endTimeSpots = [];
+        foreach ($endTimes as $end) {
+            $spot = $availability->lockedSurfSpotForRange(
+                (int) $instructorId,
+                $validated['date'],
+                $validated['start_time'],
+                $end
+            );
+            $endTimeSpots[$end] = $spot?->toMapPayload();
+        }
+
         return response()->json([
             'date' => $validated['date'],
             'start_time' => $validated['start_time'],
             'students' => $students,
+            'minimum_minutes' => $minimumMinutes,
             'end_times' => $endTimes,
+            'end_time_spots' => $endTimeSpots,
+            'locked_surf_spot' => ! empty($endTimes) ? ($endTimeSpots[$endTimes[0]] ?? null) : null,
             'is_reserved' => $unavailable['is_reserved'],
             'reason' => $unavailable['reason'],
             'remaining_capacity' => $availability->remainingCapacity(
@@ -433,9 +449,11 @@ class AvailabilityController extends Controller
         }
 
         $skill = $rawSkill !== null ? SkillLevel::tryFrom((string) $rawSkill) : null;
-        $sessionType = isset($validated['session_type'])
-            ? SessionType::tryFrom((string) $validated['session_type'])
-            : null;
+        $sessionType = $skill !== null
+            ? SessionType::forSkill($skill)
+            : (isset($validated['session_type'])
+                ? SessionType::tryFrom((string) $validated['session_type'])
+                : null);
 
         return [$skill, $sessionType];
     }

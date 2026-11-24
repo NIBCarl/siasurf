@@ -97,7 +97,6 @@ enum FeedbackCategory: string
         'other_concern' => 'Other concern (SISA will classify it)',
     ];
 
-
     private const DESCRIPTIONS = [
         'positive_coaching' => 'Explained the skill clearly and gave useful feedback.',
         'positive_safety' => 'Stayed with the group, checked conditions, and kept the lesson safe.',
@@ -136,7 +135,6 @@ enum FeedbackCategory: string
         'critical_other' => 'Describe another critical safety or conduct concern.',
         'other_concern' => 'Describe what happened and SISA will assign the appropriate severity.',
     ];
-
 
     public function group(): string
     {
@@ -179,14 +177,97 @@ enum FeedbackCategory: string
         };
     }
 
+    public function suggestedOutcome(): ?IncidentOutcome
+    {
+        return match ($this->group()) {
+            'minor' => IncidentOutcome::OneStrike,
+            'major' => IncidentOutcome::TwoStrikes,
+            'critical' => IncidentOutcome::Critical,
+            default => null,
+        };
+    }
+
     public function suggestedStrikeWeight(): ?int
     {
-        return $this->suggestedSeverity()?->strikes();
+        return $this->suggestedOutcome()?->strikes();
+    }
+
+    public function reportTopic(): IncidentReportTopic
+    {
+        return match ($this) {
+            self::MajorConditionsIgnored,
+            self::MajorSkillMismatch,
+            self::CriticalDangerousSpot => IncidentReportTopic::UnsafeSurfZone,
+
+            self::MajorNoSafetyBriefing,
+            self::MajorRatioExceeded,
+            self::MajorSupervisionLapse,
+            self::MajorPressure,
+            self::MajorEquipmentSafety,
+            self::MajorFirstAid,
+            self::MajorUnverifiedHelper,
+            self::CriticalAbandonment,
+            self::CriticalContinuedAfterStop,
+            self::CriticalUnverifiedTeaching,
+            self::CriticalNegligence => IncidentReportTopic::NoSafetyProtocol,
+
+            self::MinorLanguage,
+            self::MinorDistraction,
+            self::MajorBoundaries,
+            self::CriticalHarassment,
+            self::CriticalIntoxication,
+            self::CriticalViolence,
+            self::CriticalFraud => IncidentReportTopic::UnprofessionalConduct,
+
+            self::MinorLate,
+            self::MinorCommunication,
+            self::MinorLessonPlan,
+            self::MinorEquipment,
+            self::MinorOffPlatformPayment => IncidentReportTopic::ServiceComplaint,
+
+            default => IncidentReportTopic::Other,
+        };
     }
 
     public function defaultIncidentType(): IncidentType
     {
         return IncidentType::RuleViolation;
+    }
+
+    /**
+     * Pick the highest-precedence suggested outcome across checked items (never sums).
+     *
+     * @param  array<int, string>  $categoryValues
+     */
+    public static function suggestedOutcomeForCategories(array $categoryValues): ?IncidentOutcome
+    {
+        $outcomes = collect($categoryValues)
+            ->map(fn ($value) => self::tryFrom((string) $value))
+            ->filter(fn (?self $category) => $category !== null && $category->isConcern())
+            ->map(fn (self $category) => $category->suggestedOutcome());
+
+        return IncidentOutcome::highest($outcomes);
+    }
+
+    /**
+     * Pick the primary concern category with the highest suggested outcome precedence.
+     *
+     * @param  array<int, string>  $categoryValues
+     */
+    public static function highestCategory(array $categoryValues): ?self
+    {
+        $categories = collect($categoryValues)
+            ->map(fn ($value) => self::tryFrom((string) $value))
+            ->filter(fn (?self $category) => $category !== null && $category->isConcern())
+            ->values();
+
+        if ($categories->isEmpty()) {
+            return null;
+        }
+
+        return $categories
+            ->sortByDesc(fn (self $category) => $category->suggestedOutcome()?->precedence() ?? -1)
+            ->first();
     }
 
     /**
@@ -202,6 +283,8 @@ enum FeedbackCategory: string
     }
 
     /**
+     * Admin-only concern options including internal severity and suggested strike outcome.
+     *
      * @return array<int, array<string, mixed>>
      */
     public static function concernOptions(): array
@@ -214,18 +297,57 @@ enum FeedbackCategory: string
     }
 
     /**
+     * Student-facing concern checklist options grouped by neutral topic.
+     * Never exposes severity tiers, strike weights, or suggested outcomes.
+     *
+     * @return array<int, array<string, string>>
+     */
+    public static function studentConcernOptions(): array
+    {
+        $hiddenFromStudents = [self::MinorOther, self::MajorOther, self::CriticalOther];
+
+        return collect(self::cases())
+            ->filter(fn (self $category) => $category->isConcern() && ! in_array($category, $hiddenFromStudents, true))
+            ->map(fn (self $category) => $category->toStudentOption())
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toOption(): array
     {
+        $outcome = $this->suggestedOutcome();
+
         return [
             'value' => $this->value,
             'label' => $this->label(),
             'description' => $this->description(),
             'group' => $this->group(),
+            'topic' => $this->reportTopic()->value,
+            'topic_label' => $this->reportTopic()->label(),
             'severity' => $this->suggestedSeverity()?->value,
             'severity_label' => $this->suggestedSeverity()?->label(),
             'strikes' => $this->suggestedStrikeWeight(),
+            'suggested_outcome' => $outcome?->value,
+            'suggested_outcome_label' => $outcome?->label(),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function toStudentOption(): array
+    {
+        $topic = $this->reportTopic();
+
+        return [
+            'value' => $this->value,
+            'label' => $this->label(),
+            'description' => $this->description(),
+            'topic' => $topic->value,
+            'topic_label' => $topic->label(),
         ];
     }
 }

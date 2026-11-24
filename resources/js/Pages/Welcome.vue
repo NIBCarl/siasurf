@@ -25,34 +25,34 @@ onMounted(() => {
 <template>
     <Head title="SiaSurf | Smart Booking & Instructor Verification" />
 
-    <div class="min-h-screen bg-slate-50 font-sans text-slate-900
-        selection:bg-teal-500 selection:text-white">
+    <div class="min-h-screen bg-sand-50 font-sans text-deep-950
+        selection:bg-lagoon-600 selection:text-white">
         <!-- Navigation -->
         <nav 
             :class="[
                 'fixed top-0 z-50 w-full transition-all duration-300 px-6 py-4',
-                isScrolled ? 'bg-white/80 backdrop-blur-md shadow-sm py-3' : 'bg-transparent'
+                isScrolled ? 'bg-white/95 backdrop-blur-md shadow-sm py-3' : 'bg-transparent'
             ]"
         >
             <div class="mx-auto flex max-w-7xl items-center justify-between">
                 <div class="flex items-center gap-2">
                     <img src="/assets/images/siargao_cloud9_sunset.png" class="h-10 w-10 object-cover rounded-lg" alt="SiaSurf Logo" />
-                    <span :class="['text-xl font-bold tracking-tight transition-colors duration-300', isScrolled ? 'text-slate-900' : 'text-white']">
-                        Sia<span class="text-teal-500">Surf</span>
+                    <span :class="['text-xl font-bold tracking-tight transition-colors duration-300', isScrolled ? 'text-deep-950' : 'text-white']">
+                        Sia<span class="text-lagoon-400">Surf</span>
                     </span>
                 </div>
 
                 <div class="hidden items-center gap-8 md:flex">
-                    <Link v-if="userRole !== 'instructor'" :href="route('instructors.search')" :class="['text-sm font-medium transition-colors duration-300 hover:text-teal-500', isScrolled ? 'text-slate-600' : 'text-white/90']">Find Instructors</Link>
-                    <a href="#features" :class="['text-sm font-medium transition-colors duration-300 hover:text-teal-500', isScrolled ? 'text-slate-600' : 'text-white/90']">Safety Features</a>
-                    <a href="#about" :class="['text-sm font-medium transition-colors duration-300 hover:text-teal-500', isScrolled ? 'text-slate-600' : 'text-white/90']">About Siargao</a>
+                    <Link v-if="userRole !== 'instructor'" :href="route('instructors.search')" :class="['text-sm font-medium transition-colors duration-300 hover:text-lagoon-400', isScrolled ? 'text-stone-700' : 'text-white/90']">Find Instructors</Link>
+                    <a href="#features" :class="['text-sm font-medium transition-colors duration-300 hover:text-lagoon-400', isScrolled ? 'text-stone-700' : 'text-white/90']">Safety Features</a>
+                    <a href="#about" :class="['text-sm font-medium transition-colors duration-300 hover:text-lagoon-400', isScrolled ? 'text-stone-700' : 'text-white/90']">About Siargao</a>
                 </div>
 
                 <div v-if="canLogin" class="flex items-center gap-3">
                     <Link
                         v-if="$page.props.auth.user"
                         :href="route('dashboard')"
-                        class="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                        class="rounded-full bg-deep-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-deep-800"
                     >
                         Dashboard
                     </Link>
@@ -60,7 +60,7 @@ onMounted(() => {
                     <template v-else>
                         <Link
                             :href="route('login')"
-                            :class="['px-4 py-2 text-sm font-semibold transition-colors duration-300 hover:text-teal-500', isScrolled ? 'text-slate-700' : 'text-white']"
+                            :class="['px-4 py-2 text-sm font-semibold transition-colors duration-300 hover:text-lagoon-400', isScrolled ? 'text-deep-900' : 'text-white']"
                         >
                             Log in
                         </Link>
@@ -68,7 +68,7 @@ onMounted(() => {
                         <Link
                             v-if="canRegister"
                             :href="route('register')"
-                            class="rounded-full bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-teal-100 transition hover:bg-teal-700"
+                            class="rounded-full bg-coral-700 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-coral-800"
                         >
                             Join SiaSurf
                         </Link>
@@ -83,22 +83,22 @@ onMounted(() => {
             <div class="absolute inset-0 z-0">
                 <img 
                     src="/images/hero_siargao.png" 
-                    class="h-full w-full object-cover brightness-[0.85]" 
+                    class="h-full w-full object-cover brightness-[0.8]" 
                     alt="Siargao Surf"
                 />
-                <div class="absolute inset-0 bg-gradient-to-b from-slate-900/40 via-transparent to-slate-50"></div>
+                <div class="absolute inset-0 bg-gradient-to-b from-deep-950/80 via-deep-900/60 to-deep-950/75"></div>
             </div>
 
             <div class="container relative z-10 mx-auto px-6 text-center">
                 <div class="animate-fade-in-up">
-                    <span class="mb-4 inline-block rounded-full bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md">
+                    <span class="mb-4 inline-block rounded-full border border-white/25 bg-deep-950/50 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-lagoon-200 backdrop-blur-md">
                         Siargao's Official Surf Booking
                     </span>
-                    <h1 class="mx-auto mb-6 max-w-4xl text-[clamp(2.25rem,6vw,4.5rem)] font-extrabold leading-[1.05] tracking-tight text-white">
+                    <h1 class="mx-auto mb-6 max-w-4xl text-[clamp(2.25rem,6vw,4.5rem)] font-extrabold leading-[1.05] tracking-tight text-white drop-shadow-sm">
                         Surf with Confidence. <br/> 
-                        <span class="text-teal-300 italic">Verified</span> by SiaSurf.
+                        <span class="text-lagoon-300 italic">Verified</span> by SiaSurf.
                     </h1>
-                    <p class="mx-auto mb-10 max-w-2xl text-lg text-slate-100 md:text-xl">
+                    <p class="mx-auto mb-10 max-w-2xl text-lg text-white/95 md:text-xl">
                         The first centralized platform for Siargao's surfing community. 
                         Find certified instructors, monitor real-time safety, and enjoy professional surfing tourism.
                     </p>
@@ -107,7 +107,7 @@ onMounted(() => {
                         <Link
                             v-if="userRole === 'instructor'"
                             :href="route('dashboard')"
-                            class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-teal-600 px-8 py-4 text-lg font-bold text-white transition-all hover:bg-teal-700 sm:w-auto"
+                            class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-coral-700 px-8 py-4 text-lg font-bold text-white shadow-lg transition-all hover:bg-coral-800 sm:w-auto"
                         >
                             <span>Go to Instructor Portal</span>
                             <svg class="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -117,7 +117,7 @@ onMounted(() => {
                         <Link
                             v-else-if="userRole === 'admin'"
                             :href="route('admin.dashboard')"
-                            class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-teal-600 px-8 py-4 text-lg font-bold text-white transition-all hover:bg-teal-700 sm:w-auto"
+                            class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-coral-700 px-8 py-4 text-lg font-bold text-white shadow-lg transition-all hover:bg-coral-800 sm:w-auto"
                         >
                             <span>Admin Dashboard</span>
                             <svg class="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -127,7 +127,7 @@ onMounted(() => {
                         <template v-else>
                             <Link
                                 :href="route('instructors.search')"
-                                class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-teal-600 px-8 py-4 text-lg font-bold text-white transition-all hover:bg-teal-700 sm:w-auto"
+                                class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-coral-700 px-8 py-4 text-lg font-bold text-white shadow-lg transition-all hover:bg-coral-800 sm:w-auto"
                             >
                                 <span>Book a Lesson</span>
                                 <svg class="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -137,7 +137,7 @@ onMounted(() => {
                             <Link
                                 v-if="!user"
                                 :href="route('register', { role: 'instructor' })"
-                                class="flex w-full items-center justify-center rounded-full bg-white/10 px-8 py-4 text-lg font-bold text-white backdrop-blur-md transition hover:bg-white/20 sm:w-auto"
+                                class="flex w-full items-center justify-center rounded-full border border-white/30 bg-white/15 px-8 py-4 text-lg font-bold text-white backdrop-blur-md transition hover:bg-white/25 sm:w-auto"
                             >
                                 Instructor Portal
                             </Link>
@@ -149,30 +149,30 @@ onMounted(() => {
             <!-- Wave Decoration -->
             <div class="absolute bottom-0 left-0 w-full overflow-hidden leading-[0]">
                 <svg class="relative block h-[100px] w-[calc(100%+1.3px)]" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
-                    <path d="M321.39,56.44c12.2,2.37,24.3,4.42,36,6.36,12.72,2,25.43,3.92,38.15,5.77,13.62,2,27.24,3.87,40.85,5.64,15.11,2,30.22,3.8,45.33,5.43,18.45,2,36.8,3.74,55.15,5.1,23.59,1.75,47.11,3,70.52,3.64l.1,0h.1a1200,1200,0,0,1,56.55-1.93l.1,0h.1c23.09-.64,44.75-2.06,64.71-3.64,18.84-1.5,35.31-3.35,49.19-5.1a1200,1200,0,0,1,135-11.41l.1,0h.1a1200,1200,0,0,1,164.88,0c10.43.34,20.87.89,31.3,1.6a1200,1200,0,0,1,10.43,8.4c0,2.1.05,4.21.15,6.31V120H0V84.09l.15-6.31a1200,1200,0,0,1,10.43-8.4c10.43-.71,20.87-1.26,31.3-1.6a1200,1200,0,0,1,164.88,0l.1,0h.1a1200,1200,0,0,1,135,11.41c13.88,1.75,30.35,3.6,49.19,5.1,20,1.58,41.62,3,64.71,3.64h.1l.1,0L321.39,56.44Z" class="fill-slate-50"></path>
+                    <path d="M321.39,56.44c12.2,2.37,24.3,4.42,36,6.36,12.72,2,25.43,3.92,38.15,5.77,13.62,2,27.24,3.87,40.85,5.64,15.11,2,30.22,3.8,45.33,5.43,18.45,2,36.8,3.74,55.15,5.1,23.59,1.75,47.11,3,70.52,3.64l.1,0h.1a1200,1200,0,0,1,56.55-1.93l.1,0h.1c23.09-.64,44.75-2.06,64.71-3.64,18.84-1.5,35.31-3.35,49.19-5.1a1200,1200,0,0,1,135-11.41l.1,0h.1a1200,1200,0,0,1,164.88,0c10.43.34,20.87.89,31.3,1.6a1200,1200,0,0,1,10.43,8.4c0,2.1.05,4.21.15,6.31V120H0V84.09l.15-6.31a1200,1200,0,0,1,10.43-8.4c10.43-.71,20.87-1.26,31.3-1.6a1200,1200,0,0,1,164.88,0l.1,0h.1a1200,1200,0,0,1,135,11.41c13.88,1.75,30.35,3.6,49.19,5.1,20,1.58,41.62,3,64.71,3.64h.1l.1,0L321.39,56.44Z" class="fill-sand-50"></path>
                 </svg>
             </div>
         </section>
 
         <!-- Stats Section -->
-        <section class="bg-slate-50 py-20">
+        <section class="bg-sand-50 py-20">
             <div class="container mx-auto px-6">
                 <div class="grid gap-12 text-center md:grid-cols-4">
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-2 text-4xl font-black text-teal-600">500+</div>
-                        <div class="text-sm font-bold uppercase tracking-widest text-slate-500">Verified Instructors</div>
+                        <div class="mb-2 text-4xl font-black text-deep-950">31 Breaks</div>
+                        <div class="text-sm font-bold uppercase tracking-widest text-stone-600">14 Beginner-Safe Zones</div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-2 text-4xl font-black text-teal-600">12k+</div>
-                        <div class="text-sm font-bold uppercase tracking-widest text-slate-500">Safe Sessions</div>
+                        <div class="mb-2 text-4xl font-black text-lagoon-700">100% Live</div>
+                        <div class="text-sm font-bold uppercase tracking-widest text-stone-600">SISA QR Verification</div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-2 text-4xl font-black text-teal-600">100%</div>
-                        <div class="text-sm font-bold uppercase tracking-widest text-slate-500">Safety Regulated</div>
+                        <div class="mb-2 text-4xl font-black text-deep-950">₱600 / hr</div>
+                        <div class="text-sm font-bold uppercase tracking-widest text-stone-600">Standardized SISA Base Rate</div>
                     </div>
                     <div class="group transform transition hover:-translate-y-2">
-                        <div class="mb-2 text-4xl font-black text-teal-600">PayMongo</div>
-                        <div class="text-sm font-bold uppercase tracking-widest text-slate-500">Secure GCash Payments</div>
+                        <div class="mb-2 text-4xl font-black text-coral-700">GCash &amp; Cash</div>
+                        <div class="text-sm font-bold uppercase tracking-widest text-stone-600">Official Digital Receipts</div>
                     </div>
                 </div>
             </div>
@@ -221,7 +221,7 @@ onMounted(() => {
         </section>
 
         <!-- Surf Spots Gallery -->
-        <section id="spots" class="bg-slate-50 py-24">
+        <section id="spots" class="bg-sand-50 py-24">
             <div class="container mx-auto px-6">
                 <div class="mb-16 text-center">
                     <h2 class="mb-4 text-3xl font-bold text-slate-900 md:text-5xl">Explore the Island's Best</h2>
@@ -273,43 +273,43 @@ onMounted(() => {
                         <h2 class="mb-2 text-3xl font-bold text-slate-900 md:text-5xl">Meet Our Pros</h2>
                         <p class="text-slate-600">Every instructor on SiaSurf is SISA-certified and safety-verified.</p>
                     </div>
-                    <Link :href="route('instructors.search')" class="rounded-full border-2 border-slate-900 px-8 py-3 font-bold text-slate-900 transition hover:bg-slate-900 hover:text-white">
-                        View All 500+ Pros
+                    <Link :href="route('instructors.search')" class="rounded-full border-2 border-deep-900 px-8 py-3 font-bold text-deep-900 transition hover:bg-deep-900 hover:text-white">
+                        Browse Verified Instructors
                     </Link>
                 </div>
 
                 <div class="grid gap-12 lg:grid-cols-2">
-                    <div class="flex flex-col items-center gap-8 rounded-[2rem] bg-slate-50 p-8 md:flex-row md:p-12">
+                    <div class="flex flex-col items-center gap-8 rounded-[2rem] bg-sand-50 p-8 md:flex-row md:p-12">
                         <img src="/images/instructor_male.png" class="h-48 w-48 rounded-3xl object-cover shadow-xl" alt="Instructor" />
                         <div>
                             <div class="mb-4 flex items-center gap-3">
-                                <span class="rounded-full bg-teal-600 px-3 py-1 text-xs font-bold text-white uppercase">Level 3 Expert</span>
+                                <span class="rounded-full bg-deep-900 px-3 py-1 text-xs font-bold text-white uppercase">Level 3 Expert</span>
                                 <div class="flex text-amber-400">
                                     <svg v-for="i in 5" :key="i" class="h-4 w-4 fill-current" viewBox="0 0 20 20">
                                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                     </svg>
                                 </div>
                             </div>
-                            <h3 class="mb-2 text-2xl font-bold text-slate-900">Junrey 'Bogs' Capistrano</h3>
-                            <p class="mb-6 text-slate-600">Local legend with 15 years at Cloud 9. Specializes in advanced tube riding and safety rescue.</p>
-                            <button class="font-bold text-teal-600 hover:text-teal-700">View Fully Verified Profile →</button>
+                            <h3 class="mb-2 text-2xl font-bold text-deep-950">Junrey 'Bogs' Capistrano</h3>
+                            <p class="mb-6 text-stone-600">Local legend with 15 years at Cloud 9. Specializes in advanced tube riding and safety rescue.</p>
+                            <Link :href="route('instructors.search')" class="inline-flex items-center font-bold text-lagoon-700 hover:text-lagoon-800">Browse Verified Instructors →</Link>
                         </div>
                     </div>
 
-                    <div class="flex flex-col items-center gap-8 rounded-[2rem] bg-slate-50 p-8 md:flex-row md:p-12">
+                    <div class="flex flex-col items-center gap-8 rounded-[2rem] bg-sand-50 p-8 md:flex-row md:p-12">
                         <img src="/images/instructor_female.png" class="h-48 w-48 rounded-3xl object-cover shadow-xl" alt="Instructor" />
                         <div>
                             <div class="mb-4 flex items-center gap-3">
-                                <span class="rounded-full bg-teal-600 px-3 py-1 text-xs font-bold text-white uppercase">Level 2 Pro</span>
+                                <span class="rounded-full bg-lagoon-700 px-3 py-1 text-xs font-bold text-white uppercase">Level 2 Pro</span>
                                 <div class="flex text-amber-400">
                                     <svg v-for="i in 5" :key="i" class="h-4 w-4 fill-current" viewBox="0 0 20 20">
                                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                     </svg>
                                 </div>
                             </div>
-                            <h3 class="mb-2 text-2xl font-bold text-slate-900">Ana 'Maui' San Jose</h3>
-                            <p class="mb-6 text-slate-600">ISA certified instructor focusing on intermediate women's surf camps and longboarding style.</p>
-                            <button class="font-bold text-teal-600 hover:text-teal-700">View Fully Verified Profile →</button>
+                            <h3 class="mb-2 text-2xl font-bold text-deep-950">Ana 'Maui' San Jose</h3>
+                            <p class="mb-6 text-stone-600">ISA certified instructor focusing on intermediate women's surf camps and longboarding style.</p>
+                            <Link :href="route('instructors.search')" class="inline-flex items-center font-bold text-lagoon-700 hover:text-lagoon-800">Browse Verified Instructors →</Link>
                         </div>
                     </div>
                 </div>
@@ -317,29 +317,29 @@ onMounted(() => {
         </section>
 
         <!-- CTA Section -->
-        <section class="py-20">
+        <section class="py-20 bg-sand-50">
             <div class="container mx-auto px-6">
-                <div class="relative overflow-hidden rounded-[2rem] bg-teal-600 px-10 py-16 text-center text-white md:px-20 md:py-24">
-                    <div class="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-teal-500 opacity-20"></div>
-                    <div class="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-teal-500 opacity-20"></div>
+                <div class="relative overflow-hidden rounded-[2rem] bg-deep-900 px-10 py-16 text-center text-white md:px-20 md:py-24">
+                    <div class="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-lagoon-500 opacity-20"></div>
+                    <div class="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-lagoon-500 opacity-20"></div>
                     
                     <h2 class="relative z-10 mb-6 text-3xl font-bold md:text-5xl">Ready to catch your first wave?</h2>
-                    <p class="relative z-10 mx-auto mb-10 max-w-xl text-teal-50 opacity-90">Join Siargao's most trusted surfing community today. Adventure is waiting, safety is guaranteed.</p>
+                    <p class="relative z-10 mx-auto mb-10 max-w-xl text-cyan-100/90">Join Siargao's most trusted surfing community today. Adventure is waiting, safety is guaranteed.</p>
                     <div class="relative z-10 flex flex-col justify-center gap-4 sm:flex-row">
-                        <Link :href="route('instructors.search')" class="rounded-full bg-white px-10 py-4 font-bold text-teal-600 transition hover:bg-teal-50">View All Instructors</Link>
-                        <Link :href="route('register')" class="rounded-full bg-teal-700 px-10 py-4 font-bold text-white transition hover:bg-teal-800">Create Private Account</Link>
+                        <Link :href="route('instructors.search')" class="rounded-full bg-coral-700 px-10 py-4 font-bold text-white shadow-lg transition hover:bg-coral-800">View All Instructors</Link>
+                        <Link :href="route('register')" class="rounded-full border border-white/25 bg-white/15 px-10 py-4 font-bold text-white transition hover:bg-white/25">Create Private Account</Link>
                     </div>
                 </div>
             </div>
         </section>
 
         <!-- Footer -->
-        <footer class="bg-slate-900 py-20 text-slate-400">
+        <footer class="bg-deep-950 py-20 text-slate-400">
             <div class="container mx-auto px-6">
-                <div class="grid gap-12 border-b border-slate-800 pb-20 lg:grid-cols-4">
+                <div class="grid gap-12 border-b border-white/10 pb-20 lg:grid-cols-4">
                     <div class="col-span-2">
                         <div class="mb-6 flex items-center gap-2">
-                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-lagoon-600 text-white">
                                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                                 </svg>
@@ -354,8 +354,8 @@ onMounted(() => {
                         <h4 class="mb-6 font-bold text-white">Platform</h4>
                         <ul class="space-y-4">
                             <li><Link :href="route('instructors.search')" class="hover:text-white">Find Instructors</Link></li>
-                            <li><a href="#" class="hover:text-white">Surf Spots</a></li>
-                            <li><a href="#" class="hover:text-white">Safety Rules</a></li>
+                            <li><Link :href="route('surf-spots.index')" class="hover:text-white">Surf Spots</Link></li>
+                            <li><a href="#features" class="hover:text-white">Safety Rules</a></li>
                         </ul>
                     </div>
                     <div>

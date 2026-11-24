@@ -41,11 +41,7 @@ class BookingFactory extends Factory
             'surf_spot_id' => SurfSpot::factory(),
             'date' => fake()->dateTimeBetween('+1 day', '+30 days')->format('Y-m-d'),
             'time_period' => fake()->randomElement([TimePeriod::Morning->value, TimePeriod::Afternoon->value]),
-            'skill_level' => fake()->randomElement([
-                SkillLevel::Beginner->value,
-                SkillLevel::Intermediate->value,
-                SkillLevel::Advanced->value,
-            ]),
+            'skill_level' => SkillLevel::Beginner->value,
             'student_age' => fake()->numberBetween(13, 50),
             'student_count' => $studentCount,
             'status' => BookingStatus::Pending->value,

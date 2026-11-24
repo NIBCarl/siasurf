@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+
+const props = withDefaults(defineProps<{ period?: 'monthly' | 'yearly' }>(), {
+    period: 'monthly',
+})
 
 const revenueData = ref({
     labels: [] as string[],
@@ -9,9 +13,12 @@ const revenueData = ref({
 const isLoading = ref(true)
 const hasError = ref(false)
 
-onMounted(async () => {
+const loadRevenue = async () => {
+    isLoading.value = true
+    hasError.value = false
+
     try {
-        const response = await fetch('/admin/api/dashboard/revenue')
+        const response = await fetch(`/admin/api/dashboard/revenue?period=${encodeURIComponent(props.period)}`)
         if (!response.ok) throw new Error('Request failed')
         const result = await response.json()
         revenueData.value = result.revenue ?? { labels: [], data: [] }
@@ -20,7 +27,10 @@ onMounted(async () => {
     } finally {
         isLoading.value = false
     }
-})
+}
+
+watch(() => props.period, loadRevenue)
+onMounted(loadRevenue)
 
 const maxValue = computed(() => Math.max(...revenueData.value.data.map(Number), 1))
 const hasData = computed(() => revenueData.value.data.some((value) => Number(value) > 0))
@@ -30,7 +40,7 @@ const barHeight = (value: number) => `${(Number(value) / maxValue.value) * 100}%
 const formatCurrency = (value: number) => {
     const amount = Number(value ?? 0)
     if (amount >= 1000) return '₱' + (amount / 1000).toFixed(1) + 'k'
-    return '₱' + amount.toLocaleString()
+    return '₱' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 </script>
 
@@ -45,7 +55,7 @@ const formatCurrency = (value: number) => {
             class="flex h-full flex-col items-center justify-center gap-1 text-center"
         >
             <p class="text-body-sm font-semibold text-deep-900">No revenue recorded yet</p>
-            <p class="text-label text-stone-500">Paid bookings will appear here.</p>
+            <p class="text-label text-stone-500">Collected service fees from paid bookings will appear here.</p>
         </div>
 
         <div v-else class="flex h-full flex-col">

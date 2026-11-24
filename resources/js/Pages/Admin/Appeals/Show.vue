@@ -72,7 +72,7 @@ const formatDateTime = (value: string | null | undefined) => {
 
           <section v-if="appeal.status === 'pending'" class="rounded-3xl border border-amber-200 bg-white p-6 shadow-sm">
             <h2 class="text-lg font-extrabold text-slate-900">Decide appeal</h2>
-            <p class="mt-1 text-sm text-slate-500">Approving an automatic suspension appeal requires selecting enough incidents to bring the active strike count below 3.</p>
+            <p class="mt-1 text-sm text-slate-500">Approving an automatic suspension appeal requires selecting enough incidents to reduce strikes below the tier threshold (below 2 lifts the suspension; reducing from 3 to 2 downgrades a 1-month suspension to 1 week).</p>
 
             <form @submit.prevent="approve" class="mt-5 space-y-4">
               <div>

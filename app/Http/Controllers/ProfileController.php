@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BookingStatus;
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\Booking;
 use App\Services\AvatarService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -46,7 +49,22 @@ class ProfileController extends Controller
         if ($user->isStudent() && (array_key_exists('birthday', $validated) || array_key_exists('country', $validated))) {
             $profileData = [];
             if (array_key_exists('birthday', $validated)) {
-                $profileData['birthday'] = $validated['birthday'] ?: null;
+                $newBirthday = $validated['birthday'] ?: null;
+                $currentBirthday = $user->studentProfile?->birthday?->format('Y-m-d');
+
+                if ($newBirthday !== $currentBirthday) {
+                    $hasActiveBooking = Booking::where('student_id', $user->id)
+                        ->whereIn('status', array_map(fn (BookingStatus $s) => $s->value, BookingStatus::slotHolding()))
+                        ->exists();
+
+                    if ($hasActiveBooking) {
+                        throw ValidationException::withMessages([
+                            'birthday' => 'You cannot change your date of birth while you have an active booking.',
+                        ]);
+                    }
+                }
+
+                $profileData['birthday'] = $newBirthday;
             }
             if (array_key_exists('country', $validated)) {
                 $profileData['country'] = filled($validated['country']) ? trim((string) $validated['country']) : null;

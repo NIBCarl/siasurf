@@ -85,8 +85,11 @@ const statusMeta = (status: string): { label: string; variant: PillVariant } => 
     }
 }
 
-const formatDate = (date: string) =>
-    new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const formatDate = (date: string) => {
+    const [y, m, d] = String(date).slice(0, 10).split('-').map(Number)
+    const parsed = y && m && d ? new Date(y, m - 1, d) : new Date(date)
+    return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 const formatAmount = (amount: number) => Number(amount ?? 0).toLocaleString()
 

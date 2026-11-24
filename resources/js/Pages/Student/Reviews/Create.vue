@@ -70,7 +70,9 @@ const submitReview = () => {
 }
 
 const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  const [y, m, d] = String(dateString).slice(0, 10).split('-').map(Number)
+  const parsed = y && m && d ? new Date(y, m - 1, d) : new Date(dateString)
+  return parsed.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',

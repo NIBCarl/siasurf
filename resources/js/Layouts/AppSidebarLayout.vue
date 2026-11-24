@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import NotificationDropdown from '@/Components/Molecules/NotificationDropdown.vue';
@@ -59,6 +59,25 @@ const isRestrictedInstructor = computed(() => {
 });
 const shouldShowSidebar = computed(() => hasUser.value && !props.hideSidebar && !isRestrictedInstructor.value);
 
+let desktopMediaQuery: MediaQueryList | null = null;
+const handleDesktopMediaChange = (event: MediaQueryListEvent) => {
+    if (event.matches) {
+        isSidebarOpen.value = false;
+    }
+};
+
+onMounted(() => {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+        desktopMediaQuery = window.matchMedia('(min-width: 1024px)');
+        desktopMediaQuery.addEventListener('change', handleDesktopMediaChange);
+    }
+});
+
+onUnmounted(() => {
+    desktopMediaQuery?.removeEventListener('change', handleDesktopMediaChange);
+    desktopMediaQuery = null;
+});
+
 watch(
     () => page.url,
     () => {
@@ -67,7 +86,7 @@ watch(
 );
 
 const roleLabel = computed(() => {
-    if (role.value === 'admin') return 'SIA management';
+    if (role.value === 'admin') return 'SISA Management';
     if (role.value === 'instructor') return 'Instructor portal';
     if (role.value === 'student') return 'Student experience';
     return 'Siargao surf booking';

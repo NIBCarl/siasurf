@@ -41,10 +41,13 @@ class StudentOnboardingTest extends TestCase
     /** @test */
     public function saving_details_stores_them_and_marks_the_profile_complete()
     {
+        $dob = now()->subYears(28)->format('Y-m-d');
+
         $this->actingAs($this->student)
             ->post(route('student.onboarding.store'), [
                 'phone' => '+63 917 000 9999',
-                'date_of_birth' => now()->subYears(28)->format('Y-m-d'),
+                'date_of_birth' => $dob,
+                'country' => '  Philippines  ',
                 'height' => 175,
                 'weight' => 70,
                 'has_board' => false,
@@ -57,6 +60,8 @@ class StudentOnboardingTest extends TestCase
         $profile = $this->profile();
 
         $this->assertSame('+63 917 000 9999', $this->student->fresh()->phone);
+        $this->assertSame($dob, $profile->birthday->format('Y-m-d'));
+        $this->assertSame('Philippines', $profile->country);
         $this->assertSame(28, $profile->age);
         $this->assertSame('175.00', $profile->height);
         $this->assertSame('70.00', $profile->weight);
@@ -67,11 +72,11 @@ class StudentOnboardingTest extends TestCase
     }
 
     /** @test */
-    public function age_is_derived_from_date_of_birth_and_does_not_go_stale()
+    public function age_is_derived_from_birthday_and_does_not_go_stale()
     {
         // Born exactly 10 years ago: still a minor under the 5-12 safety rule.
         $profile = $this->profile();
-        $profile->forceFill(['date_of_birth' => now()->subYears(10)])->save();
+        $profile->forceFill(['birthday' => now()->subYears(10)])->save();
 
         $this->assertSame(10, $profile->fresh()->age);
 
@@ -348,5 +353,34 @@ class StudentOnboardingTest extends TestCase
                 'intended' => '/bookings/create/3',
             ])
             ->assertRedirect('/bookings/create/3');
+    }
+
+    /** @test */
+    public function onboarding_exposes_profile_birthday_and_country()
+    {
+        $this->student->studentProfile->update([
+            'birthday' => '1999-05-15',
+            'country' => 'Australia',
+        ]);
+
+        $this->actingAs($this->student)
+            ->get(route('student.onboarding'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Student/Onboarding')
+                ->where('profile.date_of_birth', '1999-05-15')
+                ->where('profile.country', 'Australia')
+            );
+    }
+
+    /** @test */
+    public function country_longer_than_100_characters_is_rejected()
+    {
+        $this->actingAs($this->student)
+            ->post(route('student.onboarding.store'), [
+                'country' => str_repeat('a', 101),
+                'has_board' => true,
+            ])
+            ->assertSessionHasErrors('country');
     }
 }

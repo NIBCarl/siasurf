@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Student;
 
+use App\Enums\BookingStatus;
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
 use App\Services\SkillAssessmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,6 +28,7 @@ class OnboardingController extends Controller
         $user = auth()->user();
         $profile = $user->studentProfile;
         $latestAssessment = $user->latestSkillAssessment;
+        $dob = $profile?->birthday?->format('Y-m-d');
 
         return Inertia::render('Student/Onboarding', [
             'profile' => [
@@ -32,7 +36,8 @@ class OnboardingController extends Controller
                 'skill_assessed_at' => $profile?->skill_assessed_at?->toIso8601String(),
                 'is_first_time' => (bool) ($profile?->is_first_time ?? true),
                 'phone' => $user->phone,
-                'date_of_birth' => $profile?->date_of_birth?->format('Y-m-d'),
+                'date_of_birth' => $dob,
+                'country' => $profile?->country,
                 'age' => $profile?->age,
                 'height' => $profile?->height !== null ? (float) $profile->height : null,
                 'weight' => $profile?->weight !== null ? (float) $profile->weight : null,
@@ -74,7 +79,20 @@ class OnboardingController extends Controller
             'confirmed.accepted' => 'Please confirm that your answers are accurate.',
         ]);
 
-        $assessment = $assessmentService->recordForStudent($request->user(), $validated);
+        $user = $request->user();
+
+        if ($user->isStudent()) {
+            $hasActiveBooking = Booking::where('student_id', $user->id)
+                ->whereIn('status', array_map(fn (BookingStatus $s) => $s->value, BookingStatus::slotHolding()))
+                ->exists();
+
+            if ($hasActiveBooking) {
+                return redirect()->back()
+                    ->with('error', 'You cannot change your skill assessment while you have an active booking.');
+            }
+        }
+
+        $assessment = $assessmentService->recordForStudent($user, $validated);
         $intended = $this->safeIntended($request->input('intended'));
         $params = $intended !== null ? ['intended' => $intended] : [];
 
@@ -107,6 +125,7 @@ class OnboardingController extends Controller
                     }
                 },
             ],
+            'country' => ['nullable', 'string', 'max:100'],
             'height' => 'nullable|numeric|min:50|max:250',
             'weight' => 'nullable|numeric|min:10|max:200',
             'has_board' => 'required|boolean',
@@ -132,8 +151,27 @@ class OnboardingController extends Controller
 
         $profile = $user->studentProfile()->firstOrNew(['user_id' => $user->id]);
 
+        $dob = $validated['date_of_birth'] ?? null;
+        $currentDob = $profile->birthday?->format('Y-m-d');
+
+        if ($dob !== $currentDob && $user->isStudent()) {
+            $hasActiveBooking = Booking::where('student_id', $user->id)
+                ->whereIn('status', array_map(fn (BookingStatus $s) => $s->value, BookingStatus::slotHolding()))
+                ->exists();
+
+            if ($hasActiveBooking) {
+                throw ValidationException::withMessages([
+                    'date_of_birth' => 'You cannot change your date of birth while you have an active booking.',
+                ]);
+            }
+        }
+        $country = isset($validated['country']) && trim((string) $validated['country']) !== ''
+            ? trim((string) $validated['country'])
+            : null;
+
         $profile->fill([
-            'date_of_birth' => $validated['date_of_birth'] ?? null,
+            'birthday' => $dob,
+            'country' => $country,
             'height' => $validated['height'] ?? null,
             'weight' => $validated['weight'] ?? null,
             'has_board' => (bool) $validated['has_board'],

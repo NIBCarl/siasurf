@@ -59,7 +59,7 @@ interface Student {
       birthday?: string | null
       country?: string | null
       status: string
-      // Derived from date_of_birth / birthday, so it is always current.
+      // Derived from birthday, so it is always current.
       age?: number | null
       height: string | null
       weight: string | null

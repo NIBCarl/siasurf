@@ -404,7 +404,13 @@ class SafetyService
     ): bool {
         $query = Booking::where('instructor_id', $instructorId)
             ->where('date', $date)
-            ->whereNotIn('status', [BookingStatus::Cancelled, BookingStatus::NoShow])
+            ->whereNotIn('status', [
+                BookingStatus::Cancelled,
+                BookingStatus::NoShow,
+                BookingStatus::Expired,
+                BookingStatus::Declined,
+                BookingStatus::PaymentTimeout,
+            ])
             ->where(function ($q) use ($startTime, $endTime) {
                 $q->whereBetween('start_time', [$startTime, $endTime])
                     ->orWhereBetween('end_time', [$startTime, $endTime])
@@ -428,7 +434,13 @@ class SafetyService
     {
         return Booking::where('instructor_id', $instructorId)
             ->where('date', $date)
-            ->whereNotIn('status', [BookingStatus::Cancelled, BookingStatus::NoShow])
+            ->whereNotIn('status', [
+                BookingStatus::Cancelled,
+                BookingStatus::NoShow,
+                BookingStatus::Expired,
+                BookingStatus::Declined,
+                BookingStatus::PaymentTimeout,
+            ])
             ->get(['start_time', 'end_time'])
             ->map(fn ($b) => [
                 'start_time' => $b->start_time,

@@ -12,6 +12,7 @@ interface Profile {
     is_first_time: boolean;
     phone: string | null;
     date_of_birth: string | null;
+    country: string | null;
     age: number | null;
     height: number | null;
     weight: number | null;
@@ -110,9 +111,37 @@ function submitAssessment() {
     });
 }
 
+const maxBirthday = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 5);
+    return d.toISOString().split('T')[0];
+})();
+
+const commonCountries = [
+    'Philippines',
+    'Australia',
+    'United States',
+    'United Kingdom',
+    'Canada',
+    'France',
+    'Germany',
+    'Spain',
+    'Netherlands',
+    'Italy',
+    'Switzerland',
+    'Sweden',
+    'Japan',
+    'South Korea',
+    'Singapore',
+    'New Zealand',
+    'Israel',
+    'Brazil',
+];
+
 const form = useForm({
     phone: props.profile.phone ?? '',
     date_of_birth: props.profile.date_of_birth ?? '',
+    country: props.profile.country ?? '',
     height: props.profile.height ?? ('' as number | string),
     weight: props.profile.weight ?? ('' as number | string),
     has_board: props.profile.has_board,
@@ -468,19 +497,20 @@ function skip() {
                         <p class="text-eyebrow uppercase tracking-widest text-lagoon-600">Step 2 · Booking details</p>
                         <h2 class="mt-1 text-h3 text-deep-900">About you</h2>
                         <p class="mt-1 text-body-sm text-stone-600">
-                            Age decides which breaks and instructors are safe for you, and your phone lets your instructor reach you if a lesson needs to move.
+                            Used to prefill your surf lesson waiver and check age-based safety rules, and your phone lets your instructor reach you if a lesson needs to move.
                         </p>
 
                         <div class="mt-5 grid gap-5 sm:grid-cols-2">
                             <div>
                                 <label for="date_of_birth" class="block text-body-sm font-semibold text-deep-900">
-                                    Date of birth
+                                    Birthday
                                 </label>
                                 <input
                                     id="date_of_birth"
                                     v-model="form.date_of_birth"
                                     type="date"
-                                    :max="new Date().toISOString().split('T')[0]"
+                                    :max="maxBirthday"
+                                    min="1920-01-01"
                                     class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
                                 />
                                 <InputError :message="form.errors.date_of_birth" class="mt-1.5" />
@@ -490,23 +520,46 @@ function skip() {
                             </div>
 
                             <div>
-                                <label for="phone" class="block text-body-sm font-semibold text-deep-900">
-                                    Your phone number
+                                <label for="country" class="block text-body-sm font-semibold text-deep-900">
+                                    Country
                                 </label>
                                 <input
-                                    id="phone"
-                                    v-model="form.phone"
-                                    type="tel"
-                                    maxlength="30"
-                                    autocomplete="tel"
-                                    placeholder="+63 917 000 0000"
+                                    id="country"
+                                    v-model="form.country"
+                                    type="text"
+                                    list="onboarding-country-options"
+                                    maxlength="100"
+                                    autocomplete="country-name"
+                                    placeholder="e.g. Philippines"
                                     class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
                                 />
-                                <InputError :message="form.errors.phone" class="mt-1.5" />
+                                <datalist id="onboarding-country-options">
+                                    <option v-for="country in commonCountries" :key="country" :value="country" />
+                                </datalist>
+                                <InputError :message="form.errors.country" class="mt-1.5" />
                                 <p class="mt-1.5 text-body-sm text-stone-500">
-                                    Used by your instructor or SISA if a lesson needs to be moved.
+                                    Prefilled on your surf lesson waiver.
                                 </p>
                             </div>
+                        </div>
+
+                        <div class="mt-5">
+                            <label for="phone" class="block text-body-sm font-semibold text-deep-900">
+                                Your phone number
+                            </label>
+                            <input
+                                id="phone"
+                                v-model="form.phone"
+                                type="tel"
+                                maxlength="30"
+                                autocomplete="tel"
+                                placeholder="+63 917 000 0000"
+                                class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
+                            />
+                            <InputError :message="form.errors.phone" class="mt-1.5" />
+                            <p class="mt-1.5 text-body-sm text-stone-500">
+                                Used by your instructor or SISA if a lesson needs to be moved.
+                            </p>
                         </div>
 
                         <p

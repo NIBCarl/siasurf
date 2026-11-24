@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import AppButton from '@/Components/UI/AppButton.vue'
@@ -38,6 +39,7 @@ interface Props {
     revenue: {
       total: string
       this_month: string
+      service_fee_percent?: number
     }
     incidents: {
       total: number
@@ -66,7 +68,9 @@ interface Props {
   }>
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+const serviceFeePercent = computed(() => Number(props.stats.revenue.service_fee_percent ?? 7))
 
 /**
  * Format a session start timestamp for the live-session table.
@@ -137,7 +141,7 @@ const quickActions = [
                 <StatCard
                     label="Net revenue"
                     :value="stats.revenue.total"
-                    :meta="`${stats.revenue.this_month} this month`"
+                    :meta="`${stats.revenue.this_month} this month · ${serviceFeePercent}% fee`"
                     tone="positive"
                     :icon="BanknotesIcon"
                 />
@@ -162,7 +166,7 @@ const quickActions = [
                         <SectionHeader
                             eyebrow="Performance"
                             title="Revenue velocity"
-                            description="Net revenue collected over time."
+                            :description="`${serviceFeePercent}% platform service fee revenue collected over time.`"
                         />
                         <div class="mt-4">
                             <RevenueChart />

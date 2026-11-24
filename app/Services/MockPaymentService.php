@@ -139,22 +139,43 @@ class MockPaymentService implements PaymentServiceInterface
      */
     private function processSuccessfulPayment(int $bookingId, string $transactionId): void
     {
-        $booking = Booking::findOrFail($bookingId);
-        
-        // Update booking
-        $booking->update([
-            'status' => 'confirmed',
-            'payment_status' => PaymentStatus::Completed,
-        ]);
+        $booking = \Illuminate\Support\Facades\DB::transaction(function () use ($bookingId, $transactionId) {
+            $locked = Booking::with('payment')
+                ->whereKey($bookingId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        // Update payment record
-        if ($booking->payment) {
-            $booking->payment->update([
-                'status' => PaymentStatus::Completed,
-                'transaction_id' => $transactionId,
-                'gateway_payment_id' => $booking->payment->gateway_payment_id ?: ('mock_pay_' . Str::random(12)),
-                'paid_at' => now(),
+            if ($locked->status === \App\Enums\BookingStatus::Confirmed && $locked->payment_status === PaymentStatus::Completed) {
+                return null;
+            }
+
+            if (! in_array($locked->status, [
+                \App\Enums\BookingStatus::AwaitingPayment,
+                \App\Enums\BookingStatus::Confirmed,
+            ], true)) {
+                return null;
+            }
+
+            $locked->update([
+                'status' => 'confirmed',
+                'payment_status' => PaymentStatus::Completed,
+                'payment_deadline_at' => null,
             ]);
+
+            if ($locked->payment) {
+                $locked->payment->update([
+                    'status' => PaymentStatus::Completed,
+                    'transaction_id' => $transactionId,
+                    'gateway_payment_id' => $locked->payment->gateway_payment_id ?: ('mock_pay_' . Str::random(12)),
+                    'paid_at' => $locked->payment->paid_at ?? now(),
+                ]);
+            }
+
+            return $locked->fresh(['student', 'instructor', 'surfSpot', 'payment']);
+        });
+
+        if (! $booking) {
+            return;
         }
 
         // Update simulated storage
@@ -176,6 +197,8 @@ class MockPaymentService implements PaymentServiceInterface
 
             if ($booking->payment) {
                 broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
+
+                $booking->student?->notify(new \App\Notifications\PaymentReceivedNotification($booking->payment->fresh()));
             }
         } catch (\Throwable $exception) {
             \Log::warning('Failed to broadcast payment received.', [

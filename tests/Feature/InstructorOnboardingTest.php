@@ -53,7 +53,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_instructor_can_add_a_certificate_from_the_profile_page(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $user = $this->instructor('extra-cert@example.test');
         $user->instructorProfile()->create([
@@ -75,12 +75,12 @@ class InstructorOnboardingTest extends TestCase
             'status' => 'pending_verification',
         ]);
 
-        Storage::disk('public')->assertExists($user->certificates()->first()->file_path);
+        Storage::disk('local')->assertExists($user->certificates()->first()->file_path);
     }
 
     public function test_onboarding_with_certificate_succeeds(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $user = $this->instructor();
 
         $this->actingAs($user)
@@ -97,7 +97,7 @@ class InstructorOnboardingTest extends TestCase
             'status' => 'pending_verification',
         ]);
         $this->assertDatabaseCount('certificates', 1);
-        Storage::disk('public')->assertExists($user->certificates()->first()->file_path);
+        Storage::disk('local')->assertExists($user->certificates()->first()->file_path);
 
         // WITH a certificate the dashboard no longer bounces back to onboarding
         $this->actingAs($user->fresh())->get('/dashboard')->assertRedirect(route('instructor.pending'));
@@ -230,7 +230,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_certificate_type_is_detected_from_filename(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $user = $this->instructor('typedetect@example.test');
 
         $this->actingAs($user)->post('/instructor/onboarding', [
@@ -268,7 +268,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_onboarding_omits_latitude_and_longitude_and_saves_area_and_meeting_point(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $user = $this->instructor('location@example.test');
         InstructorProfile::create([
             'user_id' => $user->id,
@@ -315,7 +315,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_level_3_onboarding_requires_at_least_1500_coaching_rate(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $user = $this->instructor('level3min@example.test');
 
         $this->actingAs($user)
@@ -356,7 +356,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_unonboarded_instructor_cannot_bypass_onboarding_across_routes(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $user = $this->instructor('unonboarded@example.test');
 
@@ -406,7 +406,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_pending_instructor_is_restricted_to_pending_and_cannot_resubmit_onboarding(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $user = $this->instructor('pending@example.test');
         $user->instructorProfile()->create([
@@ -479,7 +479,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_verified_active_instructor_cannot_reenter_onboarding_pending_or_suspended_screens(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $user = $this->instructor('active@example.test');
         $user->instructorProfile()->create([
@@ -537,7 +537,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_admin_rejection_sends_instructor_back_to_onboarding_for_resubmission(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $admin = User::factory()->admin()->create();
         $admin->assignRole('admin');
@@ -582,7 +582,7 @@ class InstructorOnboardingTest extends TestCase
 
     public function test_failed_file_scan_does_not_leave_a_partial_instructor_profile(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $this->mock(FileScanService::class, function ($mock) {
             $mock->shouldReceive('assertSafe')
@@ -605,7 +605,7 @@ class InstructorOnboardingTest extends TestCase
 
         $this->assertDatabaseCount('instructor_profiles', 0);
         $this->assertDatabaseCount('certificates', 0);
-        $this->assertSame([], Storage::disk('public')->allFiles('certificates'));
+        $this->assertSame([], Storage::disk('local')->allFiles('certificates'));
     }
 
     public function test_register_page_honors_role_query_parameter(): void

@@ -70,13 +70,29 @@ class FeedbackService
                     ]);
                 }
 
-                $category = FeedbackCategory::tryFrom((string) ($data['concern_category'] ?? ''));
+                $rawCategories = $data['concern_categories'] ?? [];
+                if (empty($rawCategories) && ! empty($data['concern_category'])) {
+                    $rawCategories = [$data['concern_category']];
+                }
 
-                if (! $category || ! $category->isConcern()) {
+                $validCategories = collect(is_array($rawCategories) ? $rawCategories : [$rawCategories])
+                    ->map(fn ($value) => FeedbackCategory::tryFrom((string) $value))
+                    ->filter(fn (?FeedbackCategory $cat) => $cat !== null && $cat->isConcern())
+                    ->unique(fn (FeedbackCategory $cat) => $cat->value)
+                    ->values();
+
+                if ($validCategories->isEmpty()) {
                     throw ValidationException::withMessages([
-                        'concern_category' => 'Choose a valid concern category.',
+                        'concern_categories' => 'Choose at least one concern category.',
                     ]);
                 }
+
+                $checkedItems = $validCategories->map(fn (FeedbackCategory $cat) => $cat->value)->all();
+                $category = FeedbackCategory::highestCategory($checkedItems);
+                $suggestedOutcome = FeedbackCategory::suggestedOutcomeForCategories($checkedItems);
+                $reportType = ! empty($data['report_type'])
+                    ? (string) $data['report_type']
+                    : $category?->reportTopic()->value;
 
                 $evidencePath = null;
 
@@ -99,11 +115,16 @@ class FeedbackService
                     'reported_by' => $student->id,
                     'source' => IncidentSource::StudentFeedback,
                     'status' => IncidentStatus::Pending,
-                    'category' => $category->value,
+                    'category' => $category?->value,
+                    'report_type' => $reportType,
+                    'checked_items' => $checkedItems,
                     'type' => $type,
-                    'severity' => $category->suggestedSeverity(),
-                    'suggested_severity' => $category->suggestedSeverity(),
+                    'severity' => null,
+                    'suggested_severity' => $suggestedOutcome?->severity(),
+                    'suggested_outcome' => $suggestedOutcome,
+                    'final_outcome' => null,
                     'strike_weight' => 0,
+                    'handled_externally' => false,
                     'description' => $data['concern_details'],
                     'evidence_path' => $evidencePath,
                     'location' => $booking->surfSpot?->name,

@@ -33,21 +33,25 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const holdSeconds = ref<number>(Math.max(0, props.holdRemainingSeconds ?? 0))
+const holdDeadlineMs = ref<number>(Date.now() + Math.max(0, props.holdRemainingSeconds ?? 0) * 1000)
+const nowTick = ref<number>(Date.now())
+const holdSeconds = computed<number>(() =>
+  Math.max(0, Math.floor((holdDeadlineMs.value - nowTick.value) / 1000)),
+)
+const isHoldExpired = computed(() => props.holdRemainingSeconds !== undefined && holdSeconds.value <= 0)
 let holdTimer: ReturnType<typeof setInterval> | null = null
 
 watch(
   () => props.holdRemainingSeconds,
   (val) => {
-    holdSeconds.value = Math.max(0, val ?? 0)
+    holdDeadlineMs.value = Date.now() + Math.max(0, val ?? 0) * 1000
+    nowTick.value = Date.now()
   }
 )
 
 onMounted(() => {
   holdTimer = setInterval(() => {
-    if (holdSeconds.value > 0) {
-      holdSeconds.value -= 1
-    }
+    nowTick.value = Date.now()
   }, 1000)
 })
 
@@ -148,11 +152,11 @@ const goBack = () => {
   <Head title="Secure Payment" />
 
   <AppSidebarLayout title="Secure Payment">
-    <div class="py-12 bg-slate-50 min-h-screen">
+    <div class="py-12 bg-sand-50 min-h-screen">
       <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <!-- Progress Stepper -->
-        <BookingStepper :current="step" />
+        <BookingStepper :current="3" />
 
         <!-- Exclusive Slot Hold Banner -->
         <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
@@ -166,9 +170,9 @@ const goBack = () => {
             <span
               v-if="holdRemainingSeconds !== undefined"
               class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
-              :class="holdSeconds <= 180 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'"
+              :class="isHoldExpired ? 'bg-rose-100 text-rose-900' : holdSeconds <= 180 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'"
             >
-              Hold expires in {{ formatHoldTimer(holdSeconds) }}
+              {{ isHoldExpired ? 'Hold expired — release & rebook' : `Hold expires in ${formatHoldTimer(holdSeconds)}` }}
             </span>
             <button
               type="button"
@@ -194,12 +198,12 @@ const goBack = () => {
                 <!-- GCash Option -->
                 <label 
                   :class="[
-                    'relative flex items-center p-6 border-2 rounded-2xl cursor-pointer transition-all hover:bg-ocean-50/50',
-                    form.payment_method === 'gcash' ? 'border-ocean-600 bg-ocean-50/50 shadow-md ring-4 ring-ocean-100/50' : 'border-slate-100'
+                    'relative flex items-center p-6 border-2 rounded-2xl cursor-pointer transition-all hover:bg-lagoon-50/50',
+                    form.payment_method === 'gcash' ? 'border-lagoon-600 bg-lagoon-50/50 shadow-md ring-4 ring-lagoon-100/50' : 'border-sand-200'
                   ]"
                 >
                   <input type="radio" v-model="form.payment_method" value="gcash" class="sr-only">
-                  <div class="flex items-center justify-center w-12 h-12 bg-ocean-600 rounded-xl mr-4 shadow-sm">
+                  <div class="flex items-center justify-center w-12 h-12 bg-lagoon-700 rounded-xl mr-4 shadow-sm">
                     <span class="text-white font-black text-xl italic tracking-tighter">G</span>
                   </div>
                   <div class="flex-1">
@@ -209,7 +213,7 @@ const goBack = () => {
                     </div>
                     <p class="text-sm text-slate-500 mt-1">Pay online via GCash as soon as your instructor confirms</p>
                   </div>
-                  <div v-if="form.payment_method === 'gcash'" class="text-ocean-600">
+                  <div v-if="form.payment_method === 'gcash'" class="text-lagoon-700">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
@@ -268,6 +272,7 @@ const goBack = () => {
                     variant="primary" 
                     size="lg" 
                     class="w-2/3 justify-center group"
+                    :disabled="form.processing || isHoldExpired"
                     :loading="form.processing"
                   >
                     <span v-if="form.payment_method === 'gcash'">Send Request (GCash) &rarr;</span>
@@ -276,7 +281,7 @@ const goBack = () => {
                  </div>
                  <p class="text-center text-xs text-slate-500 mt-1">
                    By submitting this booking request, you agree to our 
-                   <button type="button" @click="showRefundPolicyModal = true" class="text-ocean-600 underline hover:text-ocean-800">
+                   <button type="button" @click="showRefundPolicyModal = true" class="text-lagoon-700 underline hover:text-deep-900">
                      Cancellation &amp; Refund Policy
                    </button>.
                  </p>
@@ -292,7 +297,7 @@ const goBack = () => {
                 PCI-DSS Compliant
               </span>
               <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 shadow-sm">
-                <span class="inline-block h-2 w-2 rounded-full bg-ocean-500"></span>
+                <span class="inline-block h-2 w-2 rounded-full bg-lagoon-600"></span>
                 Secured by PayMongo &amp; GCash
               </span>
             </div>
@@ -300,9 +305,9 @@ const goBack = () => {
 
           <!-- Right: Order Summary -->
           <div class="md:col-span-2 space-y-6">
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden sticky top-8">
-              <div class="p-6 bg-slate-50 border-b border-slate-100">
-                <h3 class="text-lg font-bold text-slate-900">Order Summary</h3>
+            <div class="bg-white rounded-2xl shadow-sm border border-sand-200 overflow-hidden sticky top-8">
+              <div class="p-6 bg-sand-50 border-b border-sand-200">
+                <h3 class="text-lg font-bold text-deep-950">Order Summary</h3>
               </div>
               
               <div class="p-6 space-y-4">
@@ -322,21 +327,21 @@ const goBack = () => {
                 <div class="pt-6 border-t border-slate-100">
                   <div class="flex justify-between items-end">
                     <span class="text-base font-bold text-slate-900">Total Amount</span>
-                    <span class="text-3xl font-black text-ocean-600">₱{{ Number(booking.total_amount).toLocaleString() }}</span>
+                    <span class="text-3xl font-black text-deep-950">₱{{ Number(booking.total_amount).toLocaleString() }}</span>
                   </div>
                 </div>
               </div>
 
               <!-- Mini Details -->
-              <div class="p-6 bg-ocean-50/50 border-t border-ocean-50 space-y-2">
-                <div class="flex items-center text-xs text-slate-600">
-                   <svg class="w-4 h-4 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="p-6 bg-lagoon-50/60 border-t border-lagoon-100 space-y-2">
+                <div class="flex items-center text-xs text-slate-700">
+                   <svg class="w-4 h-4 text-lagoon-700 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                    </svg>
                    {{ formatDate(booking.date) }} • {{ formatBookingTime(booking) }}
                 </div>
-                 <div class="flex items-center text-xs text-slate-600">
-                   <svg class="w-4 h-4 text-ocean-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <div class="flex items-center text-xs text-slate-700">
+                   <svg class="w-4 h-4 text-lagoon-700 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                    </svg>

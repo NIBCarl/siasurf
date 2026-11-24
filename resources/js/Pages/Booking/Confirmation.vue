@@ -114,7 +114,9 @@ const formatCountdown = (seconds: number) => {
 }
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('en-US', {
+  const [y, m, d] = String(date).slice(0, 10).split('-').map(Number)
+  const parsed = y && m && d ? new Date(y, m - 1, d) : new Date(date)
+  return parsed.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -216,7 +218,7 @@ onBeforeUnmount(() => {
     <div class="py-12 bg-white min-h-screen">
       <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <!-- Progress Stepper -->
-        <BookingStepper :current="6" class="mt-6" />
+        <BookingStepper :current="4" class="mt-6" />
 
         <!-- =============================================================== -->
         <!-- STATE 1: WAITING FOR INSTRUCTOR CONFIRMATION (status = pending) -->

@@ -134,9 +134,14 @@ class BookingControllerTest extends TestCase
             'student_age' => 25,
             'height' => 170,
             'weight' => 65,
-            'student_count' => 3, // Exceeds Level 1 max of 2
+            'student_count' => 3, // Exceeds Level 1 max of 1
             'has_board' => true,
             'surf_spot_id' => $this->surfSpot->id,
+            'participants' => [
+                ['full_name' => 'Primary Surfer', 'age' => 25, 'skill_level' => 'beginner', 'has_board' => true],
+                ['full_name' => 'Companion One', 'age' => 25, 'skill_level' => 'beginner', 'has_board' => true],
+                ['full_name' => 'Companion Two', 'age' => 25, 'skill_level' => 'beginner', 'has_board' => true],
+            ],
         ];
 
         $response = $this->actingAs($this->student)

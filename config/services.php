@@ -46,6 +46,12 @@ return [
         'mode' => env('PAYMONGO_MODE', 'test'),
     ],
 
+    'xendit' => [
+        'secret_key' => env('XENDIT_SECRET_KEY'),
+        'webhook_token' => env('XENDIT_WEBHOOK_TOKEN'),
+        'callback_url' => env('XENDIT_CALLBACK_URL'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Upload malware scanning

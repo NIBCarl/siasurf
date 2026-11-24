@@ -10,7 +10,6 @@ class StudentProfile extends Model
         'user_id',
         'skill_level',
         'skill_assessed_at',
-        'date_of_birth',
         'height',
         'weight',
         'has_board',
@@ -30,7 +29,6 @@ class StudentProfile extends Model
         'birthday' => 'date:Y-m-d',
         'has_board' => 'boolean',
         'skill_assessed_at' => 'datetime',
-        'date_of_birth' => 'date',
         'height' => 'decimal:2',
         'weight' => 'decimal:2',
         'onboarding_completed_at' => 'datetime',
@@ -51,9 +49,7 @@ class StudentProfile extends Model
      */
     public function getAgeAttribute(): ?int
     {
-        $dob = $this->date_of_birth ?? $this->birthday;
-
-        return $dob?->age;
+        return $this->birthday?->age;
     }
 
     /**
@@ -64,7 +60,7 @@ class StudentProfile extends Model
      */
     public function hasBookingDetails(): bool
     {
-        if (($this->date_of_birth ?? $this->birthday) === null) {
+        if ($this->birthday === null) {
             return false;
         }
 

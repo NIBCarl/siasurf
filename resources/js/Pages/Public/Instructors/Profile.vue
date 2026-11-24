@@ -3,6 +3,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import InstructorDirectoryMap from '@/Components/Organisms/InstructorDirectoryMap.vue';
 import SurfZoneMap, { type SurfZoneSpot } from '@/Components/Organisms/SurfZoneMap.vue';
+import SurfZoneTabs from '@/Components/Molecules/SurfZoneTabs.vue';
 import { 
     StarIcon, 
     CheckBadgeIcon, 
@@ -120,7 +121,7 @@ const instructorLevelDescription: Record<number, string> = {
                 <Link
                     v-if="!studentBookingBlockReason"
                     :href="route('bookings.create', instructor.id)" 
-                    class="rounded-2xl bg-ocean-600 px-8 py-3.5 text-sm font-black text-white shadow-xl shadow-ocean-100 transition-all hover:bg-ocean-700 active:scale-95"
+                    class="rounded-2xl bg-coral-700 px-8 py-3.5 text-sm font-black text-white shadow-card transition-all hover:bg-coral-800 active:scale-95"
                 >
                     Book This Expert
                 </Link>
@@ -166,10 +167,17 @@ const instructorLevelDescription: Record<number, string> = {
                             </div>
                             
                             <div class="flex flex-wrap items-center justify-center md:justify-start gap-6 text-slate-500">
-                                <div class="flex items-center gap-2 font-black text-xs uppercase tracking-widest text-ocean-600">
+                                <div v-if="totalReviews > 0" class="flex items-center gap-2 font-black text-xs uppercase tracking-widest text-lagoon-700">
                                     <ChatBubbleLeftRightIcon class="h-5 w-5" />
                                     <span>{{ totalReviews }} reviews</span>
                                 </div>
+                                <span
+                                    v-else
+                                    class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800"
+                                >
+                                    <StarIcon class="h-3.5 w-3.5 text-emerald-700" />
+                                    New SISA-Verified Coach
+                                </span>
                                 <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-widest">
                                     <MapPinIcon class="h-5 w-5 text-slate-400" />
                                     <span>Siargao, PH</span>
@@ -270,16 +278,7 @@ const instructorLevelDescription: Record<number, string> = {
                         </span>
                     </div>
 
-                    <div class="mb-5 flex flex-wrap gap-2">
-                        <span
-                            v-for="spot in props.surfSpots"
-                            :key="spot.id"
-                            class="inline-flex items-center gap-1.5 rounded-full border border-ocean-200 bg-ocean-50 px-3 py-1 text-xs font-bold text-ocean-800"
-                        >
-                            {{ spot.name }}
-                            <span class="text-[10px] uppercase text-ocean-600">({{ spot.difficulty }})</span>
-                        </span>
-                    </div>
+                    <SurfZoneTabs :spots="props.surfSpots!" class="mb-5" />
 
                     <SurfZoneMap
                         mode="view"
@@ -371,28 +370,28 @@ const instructorLevelDescription: Record<number, string> = {
             <!-- Right Column: Booking Widget -->
             <div class="lg:col-span-1">
                 <div class="sticky top-28 space-y-8">
-                    <div class="overflow-hidden rounded-[3rem] bg-slate-900 p-10 text-white shadow-[0_40px_80px_-20px_rgba(15,23,42,0.3)] relative group">
+                    <div class="overflow-hidden rounded-[3rem] bg-deep-900 p-10 text-white shadow-lift relative group">
                         <!-- Decorative element -->
-                        <div class="absolute -top-12 -right-12 h-40 w-40 bg-ocean-500/20 rounded-full blur-3xl transition-all group-hover:scale-150 duration-700" />
+                        <div class="absolute -top-12 -right-12 h-40 w-40 bg-lagoon-500/20 rounded-full blur-3xl transition-all group-hover:scale-150 duration-700" />
                         
                         <div class="relative">
                             <div class="mb-8 flex items-center justify-between">
                                 <div>
-                                    <div class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">
+                                    <div class="text-[10px] font-black uppercase tracking-[0.3em] text-lagoon-200/80 mb-2">
                                         {{ serviceRates && serviceRates.length > 1 ? 'Starting Hourly Rate' : 'Hourly Investment' }}
                                     </div>
                                     <div class="flex items-baseline gap-2">
-                                        <span class="text-[10px] font-black text-slate-400">PHP</span>
+                                        <span class="text-[10px] font-black text-lagoon-200/80">PHP</span>
                                         <span class="text-5xl font-black tracking-tight italic">₱{{ Number(startingRate ?? instructor.instructor_profile.rate_per_hour ?? 600).toLocaleString() }}</span>
                                     </div>
                                 </div>
                                 <div class="h-16 w-16 rounded-3xl bg-white/10 flex items-center justify-center backdrop-blur-xl border border-white/10 group-hover:rotate-12 transition-transform duration-500">
-                                    <BanknotesIcon class="h-8 w-8 text-ocean-400" />
+                                    <BanknotesIcon class="h-8 w-8 text-lagoon-300" />
                                 </div>
                             </div>
 
                             <div v-if="serviceRates && serviceRates.length > 0" class="mb-8 space-y-2.5">
-                                <p class="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Service Rates (per hour)</p>
+                                <p class="text-[10px] font-black uppercase tracking-[0.25em] text-lagoon-200/80">Service Rates (per hour)</p>
                                 <div
                                     v-for="service in serviceRates"
                                     :key="service.type"
@@ -400,27 +399,27 @@ const instructorLevelDescription: Record<number, string> = {
                                 >
                                     <div>
                                         <p class="text-xs font-black uppercase tracking-wider text-white">{{ service.label }}</p>
-                                        <p class="text-[10px] text-slate-400">{{ service.description }}</p>
+                                        <p class="text-[10px] text-cyan-100/75">{{ service.description }}</p>
                                     </div>
-                                    <span class="ml-3 shrink-0 text-sm font-black text-ocean-300">
+                                    <span class="ml-3 shrink-0 text-sm font-black text-lagoon-300">
                                         ₱{{ Number(service.rate).toLocaleString() }}/hr
                                     </span>
                                 </div>
                             </div>
 
                             <div class="space-y-6 mb-10">
-                                <div class="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+                                <div class="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
                                     <ShieldCheckOutline class="h-6 w-6 shrink-0 text-emerald-400" />
                                     <div>
-                                        <p class="text-xs font-black uppercase tracking-widest mb-1 text-emerald-400">Safety Guard</p>
-                                        <p class="text-[10px] font-bold text-slate-400 leading-tight">Board-certified safety and CPR standards.</p>
+                                        <p class="text-xs font-black uppercase tracking-widest mb-1 text-emerald-300">Safety Guard</p>
+                                        <p class="text-[10px] font-bold text-cyan-100/75 leading-tight">Board-certified safety and CPR standards.</p>
                                     </div>
                                 </div>
-                                <div class="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-                                    <CalendarIcon class="h-6 w-6 shrink-0 text-ocean-400" />
+                                <div class="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
+                                    <CalendarIcon class="h-6 w-6 shrink-0 text-lagoon-300" />
                                     <div>
-                                        <p class="text-xs font-black uppercase tracking-widest mb-1 text-ocean-400">Smart Booking</p>
-                                        <p class="text-[10px] font-bold text-slate-400 leading-tight">Real-time availability and instant confirmation.</p>
+                                        <p class="text-xs font-black uppercase tracking-widest mb-1 text-lagoon-300">Smart Booking</p>
+                                        <p class="text-[10px] font-bold text-cyan-100/75 leading-tight">Real-time availability and instant confirmation.</p>
                                     </div>
                                 </div>
                             </div>
@@ -435,7 +434,7 @@ const instructorLevelDescription: Record<number, string> = {
                             <Link
                                 v-else-if="isStudent"
                                 :href="route('bookings.create', instructor.id)"
-                                class="flex h-16 w-full items-center justify-center rounded-2xl bg-ocean-500 text-sm font-black text-white shadow-2xl shadow-ocean-900/40 transition-all hover:bg-ocean-400 active:scale-95 group/btn"
+                                class="flex h-16 w-full items-center justify-center rounded-2xl bg-coral-700 text-sm font-black text-white shadow-lg transition-all hover:bg-coral-800 active:scale-95 group/btn"
                             >
                                 START BOOKING SESSION
                                 <ArrowLeftIcon class="w-4 h-4 ml-3 rotate-180 group-hover/btn:translate-x-1 transition-transform" />
@@ -444,32 +443,32 @@ const instructorLevelDescription: Record<number, string> = {
                             <div v-else-if="!isAuthenticated" class="space-y-3">
                                 <Link
                                     :href="route('bookings.create', instructor.id)"
-                                    class="flex h-16 w-full items-center justify-center rounded-2xl bg-ocean-500 text-sm font-black text-white shadow-2xl shadow-ocean-900/40 transition-all hover:bg-ocean-400 active:scale-95"
+                                    class="flex h-16 w-full items-center justify-center rounded-2xl bg-coral-700 text-sm font-black text-white shadow-lg transition-all hover:bg-coral-800 active:scale-95"
                                 >
                                     SIGN IN TO BOOK
                                     <ArrowLeftIcon class="w-4 h-4 ml-3 rotate-180" />
                                 </Link>
                                 <Link
                                     :href="route('register')"
-                                    class="flex h-12 w-full items-center justify-center rounded-2xl border border-white/15 bg-white/5 text-xs font-black uppercase tracking-widest text-slate-200 transition hover:bg-white/10"
+                                    class="flex h-12 w-full items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-xs font-black uppercase tracking-widest text-white transition hover:bg-white/15"
                                 >
                                     Create a free account
                                 </Link>
-                                <p class="text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                <p class="text-center text-[10px] font-bold uppercase tracking-widest text-cyan-100/70">
                                     Browsing is free · sign in only when you book
                                 </p>
                             </div>
 
-                            <p v-else class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-xs font-semibold text-slate-300">
+                            <p v-else class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-xs font-semibold text-cyan-100">
                                 Booking is available to student accounts.
                             </p>
 
                             <div class="mt-8 flex items-center justify-center gap-3">
-                                <div class="h-1 w-1 rounded-full bg-slate-700" />
-                                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                    Trusted by 1000+ Students
+                                <div class="h-1 w-1 rounded-full bg-lagoon-400/50" />
+                                <p class="text-[10px] font-black uppercase tracking-widest text-cyan-100/70">
+                                    SISA-Verified Safety Standards
                                 </p>
-                                <div class="h-1 w-1 rounded-full bg-slate-700" />
+                                <div class="h-1 w-1 rounded-full bg-lagoon-400/50" />
                             </div>
                         </div>
                     </div>

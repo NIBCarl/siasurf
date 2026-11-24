@@ -46,8 +46,8 @@ class CertificateController extends Controller
 
                 $type = CertificateType::fromFilename($file->getClientOriginalName());
 
-                // Store file based on environment configuration
-                $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+                // Store file on private disk based on environment configuration
+                $disk = config('filesystems.default') === 's3' ? 's3' : 'local';
                 $path = $file->store('certificates', $disk);
 
                 $user->certificates()->create([
