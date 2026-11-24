@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\BookingStatus;
 use App\Enums\CancellationReason;
+use App\Enums\InstructorLevel;
 use App\Enums\PaymentStatus;
 use App\Enums\RefundStatus;
 use App\Enums\SessionType;
@@ -135,6 +136,26 @@ class BookingController extends Controller
         $studentUser = auth()->user();
         $studentProfile = $studentUser->studentProfile;
 
+        $tz = config('app.timezone', 'Asia/Manila');
+        $initialDate = null;
+        $rawDate = $request->query('date');
+        if (is_string($rawDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawDate)) {
+            try {
+                $parsedDate = Carbon::createFromFormat('Y-m-d', $rawDate, $tz);
+                if ($parsedDate && $parsedDate->format('Y-m-d') === $rawDate && $parsedDate->greaterThanOrEqualTo(today($tz))) {
+                    $initialDate = $rawDate;
+                }
+            } catch (\Throwable) {
+                $initialDate = null;
+            }
+        }
+
+        $initialStartTime = null;
+        $rawStart = $request->query('start_time');
+        if ($initialDate !== null && is_string($rawStart) && preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $rawStart)) {
+            $initialStartTime = $rawStart;
+        }
+
         return Inertia::render('Booking/Create', [
             'instructor' => $instructor,
             'surfSpots' => $surfSpots,
@@ -164,6 +185,8 @@ class BookingController extends Controller
             // Details captured during onboarding, so the student is not asked
             // for their height and weight on every booking.
             'prefill' => $studentProfile?->bookingPrefill() ?? [],
+            'initialDate' => $initialDate,
+            'initialStartTime' => $initialStartTime,
             'step' => 1,
         ]);
     }
@@ -221,7 +244,7 @@ class BookingController extends Controller
                 Rule::requiredIf(fn() => empty($request->input('participants'))
                     && !$request->boolean('has_board')),
             ],
-            'student_count' => 'required|integer|min:1|max:10',
+            'student_count' => 'nullable|integer|min:1|max:1',
             'surf_spot_id' => 'required|exists:surf_spots,id',
             'has_board' => 'required|boolean',
             'needs_hotel_pickup' => 'nullable|boolean',
@@ -230,9 +253,9 @@ class BookingController extends Controller
             'student_country' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:1000',
 
-            // Everyone surfing. When present the first entry is the account
-            // holder; the rest are declared companions.
-            'participants' => 'nullable|array|max:10',
+            // Single registered student per booking (1 account = 1 seat).
+            'participants' => 'nullable|array|max:1',
+            'companions' => 'nullable|array|max:0',
             'participants.*.full_name' => 'required|string|max:255',
             'participants.*.birthday' => ['nullable', 'date', 'after:1920-01-01', 'before_or_equal:' . now()->subYears(5)->toDateString()],
             'participants.*.age' => 'required|integer|min:5|max:100',
@@ -252,16 +275,12 @@ class BookingController extends Controller
             'height.required' => 'Height is needed to recommend a board. Tick “I have my own board” if you do not need one.',
             'weight.required' => 'Weight is needed to recommend a board. Tick “I have my own board” if you do not need one.',
             'hotel_name.required_if' => 'Please enter the hotel or accommodation name where the instructor will pick you up.',
+            'student_count.max' => 'Each booking reserves 1 seat for the signed-in student. For group sessions, each surfer must sign in with their own account and book an open seat in the same time slot.',
+            'participants.max' => 'Each booking reserves 1 seat for the signed-in student. For group sessions, each surfer must sign in with their own account and book an open seat in the same time slot.',
+            'companions.max' => 'Each booking reserves 1 seat for the signed-in student. For group sessions, each surfer must sign in with their own account and book an open seat in the same time slot.',
         ]);
 
-        $studentCount = (int) $validated['student_count'];
         $rawParticipants = $request->input('participants');
-
-        if ($studentCount > 1 && (! is_array($rawParticipants) || count($rawParticipants) !== $studentCount)) {
-            throw ValidationException::withMessages([
-                'participants' => 'Please provide details (name, age, skill level, and board info) for every surfer in the group.',
-            ]);
-        }
 
         // Per-participant board-size fields follow the same rule: only required
         // when that surfer does not have their own board.
@@ -370,32 +389,30 @@ class BookingController extends Controller
         $participantsInput = $validated['participants'] ?? null;
         $hasExplicitParticipants = !empty($participantsInput);
 
+        $validated['student_count'] = 1;
+
         if ($hasExplicitParticipants) {
-            // Index 0 is the account holder; override any client-supplied level.
-            $participantsInput[0]['skill_level'] = $primarySkill;
-            $participantsInput[0]['birthday'] = $primaryBirthday ?? ($participantsInput[0]['birthday'] ?? null);
-            $participantsInput[0]['email'] = $primaryEmail;
-            $participantsInput[0]['country'] = $primaryCountry ?? ($participantsInput[0]['country'] ?? null);
+            // Index 0 is the sole account holder; override any client-supplied level.
+            $participantsInput = [array_merge($participantsInput[0], [
+                'full_name' => $studentUser->name ?: ($participantsInput[0]['full_name'] ?? ''),
+                'skill_level' => $primarySkill,
+                'birthday' => $primaryBirthday ?? ($participantsInput[0]['birthday'] ?? null),
+                'email' => $primaryEmail,
+                'country' => $primaryCountry ?? ($participantsInput[0]['country'] ?? null),
+            ])];
+
             if ($studentProfile?->age !== null) {
                 $participantsInput[0]['age'] = $studentProfile->age;
+            } elseif (! empty($participantsInput[0]['birthday'])) {
+                $participantsInput[0]['age'] = Carbon::parse($participantsInput[0]['birthday'])->age;
             }
-
-            // Always derive authoritative age from birthday when present so
-            // companions or primary surfers cannot pair a child birthday with an adult age.
-            foreach ($participantsInput as $idx => $entry) {
-                if (! empty($entry['birthday'])) {
-                    $participantsInput[$idx]['age'] = Carbon::parse($entry['birthday'])->age;
-                }
-            }
-
-            $validated['student_count'] = count($participantsInput);
 
             $primary = $participantsInput[0];
             $validated['skill_level'] = $primarySkill;
             $validated['student_age'] = $primary['age'];
             $validated['height'] = $primary['height'] ?? null;
             $validated['weight'] = $primary['weight'] ?? null;
-            $validated['has_board'] = $primary['has_board'];
+            $validated['has_board'] = (bool) ($primary['has_board'] ?? $validated['has_board']);
         } else {
             // Single-person payload: synthesise the primary participant.
             $primaryAge = $studentProfile?->birthday?->age ?? $studentProfile?->age ?? $validated['student_age'];
@@ -465,28 +482,15 @@ class BookingController extends Controller
             $durationMinutes
         );
 
-        // Safety validation. With an explicit party, every participant
-        // is checked (all must be the same skill level); otherwise use the
-        // single-person rules so older clients keep working.
+        // Safety validation: every booking represents 1 verified student account.
         try {
-            if ($hasExplicitParticipants) {
-                $this->safetyService->validateParticipants(
-                    $participantsInput,
-                    $instructorLevelValue,
-                    $surfSpot->difficulty,
-                    auth()->id(),
-                    $sessionType
-                );
-            } else {
-                $this->safetyService->validateBookingSafety([
-                    'instructor_level' => $instructorLevelValue,
-                    'session_type' => $sessionType->value,
-                    'student_count' => $validated['student_count'],
-                    'skill_level' => $validated['skill_level'],
-                    'student_age' => $validated['student_age'],
-                    'surf_spot_difficulty' => $surfSpot->difficulty,
-                ], auth()->id());
-            }
+            $this->safetyService->validateParticipants(
+                $participantsInput,
+                $instructorLevelValue,
+                $surfSpot->difficulty,
+                auth()->id(),
+                $sessionType
+            );
         } catch (SafetyViolationException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -925,7 +929,7 @@ class BookingController extends Controller
     {
         Gate::authorize('view', $booking);
 
-        $booking->load(['instructor', 'surfSpot', 'payment.verifiedBy', 'waiver', 'changeRequests', 'conversation']);
+        $booking->load(['instructor.instructorProfile', 'surfSpot', 'payment.verifiedBy', 'waiver', 'changeRequests', 'conversation']);
         $booking->setAttribute('is_rescheduled', $booking->isRescheduled());
         $booking->setAttribute('pending_reschedule_proposal', $booking->pendingRescheduleProposal()?->toProposalPayload());
         $booking->setAttribute('has_conversation', $booking->conversation !== null);
@@ -935,6 +939,7 @@ class BookingController extends Controller
             'step' => 4,
             'acceptRemainingSeconds' => $booking->getAcceptTimeRemaining(),
             'paymentRemainingSeconds' => $booking->getPaymentTimeRemaining(),
+            'slotShare' => $this->buildSlotSharePayload($booking),
         ]);
     }
 
@@ -1036,7 +1041,7 @@ class BookingController extends Controller
         }
 
         $booking->load([
-            'instructor',
+            'instructor.instructorProfile',
             'surfSpot',
             'previousSurfSpot',
             'payment',
@@ -1083,7 +1088,78 @@ class BookingController extends Controller
 
         return Inertia::render('Student/Bookings/Show', [
             'booking' => $booking,
+            'slotShare' => $this->buildSlotSharePayload($booking),
         ]);
+    }
+
+    /**
+     * Build shared-slot invite metadata for Level 2/3 group sessions so
+     * friends can join the exact slot using their own registered accounts.
+     *
+     * @return array{max_seats: int, remaining_seats: int, share_url: string}|null
+     */
+    private function buildSlotSharePayload(Booking $booking): ?array
+    {
+        if (! in_array($booking->status, [
+            BookingStatus::Reserved,
+            BookingStatus::Pending,
+            BookingStatus::AwaitingPayment,
+            BookingStatus::Confirmed,
+            BookingStatus::InProgress,
+        ], true)) {
+            return null;
+        }
+
+        if (! $booking->date || ! $booking->start_time || ! $booking->end_time) {
+            return null;
+        }
+
+        $level = $booking->instructor?->instructorProfile?->level;
+        if (! $level instanceof InstructorLevel) {
+            $level = InstructorLevel::tryFrom((int) $level);
+        }
+
+        $skill = $booking->skill_level instanceof SkillLevel
+            ? $booking->skill_level
+            : SkillLevel::tryFrom((string) $booking->skill_level);
+
+        if (! $level || ! $skill) {
+            return null;
+        }
+
+        $maxSeats = $level->maxStudentsFor($skill);
+        if ($maxSeats <= 1) {
+            return null;
+        }
+
+        $service = $booking->session_type instanceof SessionType
+            ? $booking->session_type
+            : SessionType::tryFrom((string) $booking->session_type);
+
+        $date = $booking->date->format('Y-m-d');
+        $startTime = $booking->start_time->format('H:i');
+        $endTime = $booking->end_time->format('H:i');
+
+        $remaining = $this->availabilityService->remainingCapacity(
+            $booking->instructor_id,
+            $date,
+            $startTime,
+            $endTime,
+            null,
+            $skill,
+            $service,
+            $booking->surf_spot_id ? (int) $booking->surf_spot_id : null
+        );
+
+        return [
+            'max_seats' => $maxSeats,
+            'remaining_seats' => max(0, $remaining),
+            'share_url' => route('bookings.create', [
+                'instructor' => $booking->instructor_id,
+                'date' => $date,
+                'start_time' => $startTime,
+            ]),
+        ];
     }
 
     /**

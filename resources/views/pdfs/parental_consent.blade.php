@@ -123,10 +123,10 @@
         <div class="info-grid">
             <div>
                 <div class="info-item">
-                    <strong>Minor's Name:</strong> {{ $booking->student->name }}
+                    <strong>Minor's Name:</strong> {{ $minor_name ?? $booking->student?->name }}
                 </div>
                 <div class="info-item">
-                    <strong>Minor's Age:</strong> {{ $booking->student_age }} years old
+                    <strong>Minor's Age:</strong> {{ $minor_age ?? $booking->student_age }} years old
                 </div>
                 <div class="info-item">
                     <strong>Booking Date:</strong> {{ $booking->date->format('F d, Y') }}
@@ -134,16 +134,31 @@
             </div>
             <div>
                 <div class="info-item">
-                    <strong>Instructor:</strong> {{ $booking->instructor->name }}
+                    <strong>Instructor:</strong> {{ $booking->instructor?->name }}
                 </div>
                 <div class="info-item">
-                    <strong>Location:</strong> {{ $booking->surfSpot->name }}
+                    <strong>Location:</strong> {{ $booking->surfSpot?->name }}
                 </div>
                 <div class="info-item">
                     <strong>Skill Level:</strong> {{ ucfirst($booking->skill_level instanceof \App\Enums\SkillLevel ? $booking->skill_level->value : $booking->skill_level) }}
                 </div>
             </div>
         </div>
+        @if(!empty($guardian_relationship) || !empty($guardian_email))
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+            <div class="info-item">
+                <strong>Parent / Legal Guardian:</strong> {{ $parent_name }}
+                @if(!empty($guardian_relationship))
+                    ({{ $guardian_relationship }})
+                @endif
+            </div>
+            @if(!empty($guardian_email))
+            <div class="info-item">
+                <strong>Guardian Verification Email:</strong> {{ $guardian_email }}
+            </div>
+            @endif
+        </div>
+        @endif
     </div>
 
     <div class="emergency-box">
@@ -169,7 +184,7 @@
     <div class="content">
         <h2>PARENT/GUARDIAN CONSENT</h2>
         
-        <p>I, {{ $parent_name }}, being the parent or legal guardian of {{ $booking->student->name }}, hereby grant permission for my minor child to participate in surfing instruction and related water activities provided by {{ $company_name }}.</p>
+        <p>I, {{ $parent_name }}, being the {{ !empty($guardian_relationship) ? strtolower($guardian_relationship) : 'parent or legal guardian' }} of {{ $minor_name ?? $booking->student?->name }}, hereby grant permission for my minor child to participate in surfing instruction and related water activities provided by {{ $company_name }}.</p>
 
         <h2>ACKNOWLEDGMENT OF RISKS</h2>
         
@@ -220,14 +235,20 @@
         <div class="info-grid">
             <div>
                 <p><strong>Parent/Guardian Signature:</strong></p>
-                <div class="signature-line">
+                @if(!empty($signature_image))
+                    <img src="{{ $signature_image }}" alt="Parent/Guardian Signature" style="max-height: 48px; max-width: 220px; display: block; margin-top: 10px; margin-bottom: 6px;">
+                @endif
+                <div class="signature-line" style="{{ !empty($signature_image) ? 'margin-top: 6px;' : '' }}">
                     {{ $parent_name }}
+                    @if(!empty($guardian_relationship))
+                        ({{ $guardian_relationship }})
+                    @endif
                 </div>
             </div>
             <div>
                 <p><strong>Date Signed:</strong></p>
                 <div class="signature-line">
-                    {{ $signed_at }}
+                    {{ $signed_at_datetime ?? $signed_at }}
                 </div>
             </div>
         </div>

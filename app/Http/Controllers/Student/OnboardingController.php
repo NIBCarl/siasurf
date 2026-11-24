@@ -9,6 +9,7 @@ use App\Services\SkillAssessmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -57,7 +58,29 @@ class OnboardingController extends Controller
 
     public function storeAssessment(Request $request, SkillAssessmentService $assessmentService): RedirectResponse
     {
+        $user = $request->user();
+        $hasSavedBirthday = $user?->studentProfile?->birthday !== null;
+
         $validated = $request->validate([
+            'date_of_birth' => [
+                Rule::requiredIf(! $hasSavedBirthday),
+                'nullable',
+                'date',
+                'before:today',
+                function ($attribute, $value, $fail) {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+
+                    $age = Carbon::parse($value)->age;
+
+                    if ($age < 5) {
+                        $fail('Surfing lessons start at age 5.');
+                    } elseif ($age > 100) {
+                        $fail('Please check the date of birth — that would make you over 100.');
+                    }
+                },
+            ],
             'can_swim_deep_water' => ['required', 'boolean'],
             'is_first_time' => ['required', 'boolean'],
             'skills' => ['nullable', 'array'],
@@ -75,11 +98,12 @@ class OnboardingController extends Controller
             'confirmed' => ['accepted'],
             'intended' => ['nullable', 'string'],
         ], [
+            'date_of_birth.required' => 'Please enter your date of birth so we can verify age eligibility.',
+            'date_of_birth.date' => 'Enter your date of birth as a valid date.',
+            'date_of_birth.before' => 'Your date of birth must be in the past.',
             'answers.0.required' => 'Please answer the water safety question before continuing.',
             'confirmed.accepted' => 'Please confirm that your answers are accurate.',
         ]);
-
-        $user = $request->user();
 
         if ($user->isStudent()) {
             $hasActiveBooking = Booking::where('student_id', $user->id)
@@ -92,13 +116,23 @@ class OnboardingController extends Controller
             }
         }
 
-        $assessment = $assessmentService->recordForStudent($user, $validated);
+        $birthday = ! empty($validated['date_of_birth']) ? $validated['date_of_birth'] : null;
+        $assessment = $assessmentService->recordForStudent($user, $validated, $birthday);
         $intended = $this->safeIntended($request->input('intended'));
         $params = $intended !== null ? ['intended' => $intended] : [];
 
+        $effectiveAge = $user->studentProfile?->fresh()?->age;
+        $levelLabel = ucfirst($assessment->assessed_level);
+
+        $message = "Your assessed surf level is {$levelLabel}. Complete your booking details below whenever you’re ready.";
+        if ($effectiveAge !== null && $effectiveAge < 18) {
+            $message = "Your assessed surf level is {$levelLabel}. Because you are under 18, parent or guardian consent will be required in the waiver before booking"
+                .($effectiveAge <= 12 ? ' (and ages 5–12 require a Level 3 instructor).' : '.');
+        }
+
         return redirect()
             ->route('student.onboarding', $params)
-            ->with('success', 'Your assessed surf level is '.ucfirst($assessment->assessed_level).'. Complete your booking details below whenever you’re ready.');
+            ->with('success', $message);
     }
 
     public function store(Request $request): RedirectResponse

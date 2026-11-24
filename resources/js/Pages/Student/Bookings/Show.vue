@@ -156,9 +156,30 @@ interface Booking {
 
 interface Props {
   booking: Booking
+  slotShare?: {
+    max_seats: number
+    remaining_seats: number
+    share_url: string
+  } | null
 }
 
 const props = defineProps<Props>()
+
+const copiedSlotLink = ref(false)
+const copySlotShareLink = async () => {
+  const url = props.slotShare?.share_url
+  if (!url || typeof window === 'undefined') return
+
+  try {
+    await navigator.clipboard.writeText(url)
+    copiedSlotLink.value = true
+    setTimeout(() => {
+      copiedSlotLink.value = false
+    }, 2500)
+  } catch {
+    copiedSlotLink.value = false
+  }
+}
 
 const isReserved = computed(
   () => props.booking.status === 'reserved' || props.booking.is_reserved === true,
@@ -1307,6 +1328,29 @@ const canChat = computed(() =>
                                 Cancel booking
                             </AppButton>
                         </div>
+                    </AppCard>
+
+                    <AppCard
+                        v-if="slotShare && slotShare.max_seats > 1 && slotShare.remaining_seats > 0 && !isCancelled && !isDeclined"
+                        padding="md"
+                        class="border-lagoon-200 bg-lagoon-50/70"
+                    >
+                        <SectionHeader eyebrow="Group Slot" title="Surfing with friends?" />
+                        <p class="mt-2 text-body-sm text-stone-700">
+                            <strong>{{ slotShare.remaining_seats }}</strong> of {{ slotShare.max_seats }} seats still open in this slot. Each friend joins from their own SiaSurf account (same {{ booking.skill_level }} level).
+                        </p>
+                        <p class="mt-2 truncate rounded-control border border-lagoon-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-stone-600">
+                            {{ slotShare.share_url }}
+                        </p>
+                        <AppButton
+                            type="button"
+                            variant="secondary"
+                            block
+                            class="mt-3"
+                            @click="copySlotShareLink"
+                        >
+                            {{ copiedSlotLink ? 'Session Link Copied!' : 'Copy Session Link' }}
+                        </AppButton>
                     </AppCard>
                 </div>
             </div>

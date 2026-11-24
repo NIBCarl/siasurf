@@ -83,17 +83,49 @@ class WaiverServiceTest extends TestCase
             $signatureData,
             'Emergency Contact',
             '+63 912 345 6789',
-            'No known allergies'
+            'No known allergies',
+            null,
+            'Mother',
+            'jane.doe@example.com'
         );
 
         $this->assertInstanceOf(\App\Models\Waiver::class, $waiver);
         $this->assertEquals($booking->id, $waiver->booking_id);
         $this->assertEquals(WaiverType::ParentalConsent, $waiver->type);
         $this->assertEquals('Jane Doe', $waiver->signed_by);
+        $this->assertEquals('Mother', $waiver->guardian_relationship);
+        $this->assertEquals('jane.doe@example.com', $waiver->guardian_email);
+        $this->assertEquals($student->name, $waiver->participant_name);
+        $this->assertEquals(12, $waiver->age);
+        $this->assertTrue($waiver->signed_by_guardian);
         $this->assertNotNull($waiver->pdf_path);
 
         // Check PDF was created
         Storage::disk('local')->assertExists($waiver->pdf_path);
+
+        // Verify Blade template embeds guardian signature image & minor participant info
+        $html = view('pdfs.parental_consent', [
+            'booking' => $booking,
+            'minor_name' => $student->name,
+            'minor_age' => 12,
+            'parent_name' => 'Jane Doe',
+            'guardian_relationship' => 'Mother',
+            'guardian_email' => 'jane.doe@example.com',
+            'signature_image' => $signatureData,
+            'emergency_contact' => 'Emergency Contact',
+            'emergency_phone' => '+63 912 345 6789',
+            'medical_info' => 'No known allergies',
+            'signed_at' => now()->format('F d, Y'),
+            'signed_at_datetime' => now()->format('F d, Y h:i A'),
+            'company_name' => 'SiaSurf',
+            'logo_data_uri' => null,
+            'waiver_id' => 'WVR-PC-000001',
+        ])->render();
+
+        $this->assertStringContainsString('<img src="' . $signatureData . '"', $html);
+        $this->assertStringContainsString('Mother', $html);
+        $this->assertStringContainsString('jane.doe@example.com', $html);
+        $this->assertStringContainsString($student->name, $html);
     }
 
     /** @test */

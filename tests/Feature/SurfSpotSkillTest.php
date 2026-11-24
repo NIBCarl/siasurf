@@ -165,7 +165,7 @@ class SurfSpotSkillTest extends TestCase
     }
 
     /** @test */
-    public function a_beginner_companion_restricts_the_whole_group_to_beginner_breaks(): void
+    public function multi_student_companion_bookings_are_rejected_and_spot_cap_stays_enforced(): void
     {
         $student = $this->studentWithLevel('intermediate');
 
@@ -192,13 +192,13 @@ class SurfSpotSkillTest extends TestCase
 
         $this->actingAs($student)
             ->post(route('bookings.store-details', $this->instructor->id), $payload)
-            ->assertSessionHas('error');
+            ->assertSessionHasErrors('participants');
 
         $this->assertSame(0, Booking::count());
     }
 
     /** @test */
-    public function an_advanced_companion_does_not_raise_an_intermediate_primary(): void
+    public function an_intermediate_student_cannot_book_an_advanced_spot(): void
     {
         $student = $this->studentWithLevel('intermediate');
 
@@ -210,14 +210,6 @@ class SurfSpotSkillTest extends TestCase
                     'height' => 175,
                     'weight' => 70,
                     'skill_level' => 'intermediate',
-                    'has_board' => true,
-                ],
-                [
-                    'full_name' => 'Advanced Friend',
-                    'age' => 30,
-                    'height' => 180,
-                    'weight' => 75,
-                    'skill_level' => 'advanced',
                     'has_board' => true,
                 ],
             ],

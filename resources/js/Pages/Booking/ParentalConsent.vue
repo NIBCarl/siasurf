@@ -35,6 +35,8 @@ interface Participant {
   student_count?: number
   skill_level: string
   guardian_name?: string | null
+  guardian_relationship?: string | null
+  guardian_email?: string | null
   emergency_contact_name?: string | null
   emergency_contact_phone?: string | null
   medical_info?: string | null
@@ -54,6 +56,8 @@ const signaturePadRef = ref<InstanceType<typeof SignaturePad> | null>(null)
 
 const form = useForm({
   parent_name: props.participant?.guardian_name ?? '',
+  guardian_relationship: props.participant?.guardian_relationship ?? '',
+  guardian_email: props.participant?.guardian_email ?? '',
   parent_signature: '',
   emergency_contact_name: props.participant?.emergency_contact_name ?? '',
   emergency_contact_phone: props.participant?.emergency_contact_phone ?? '',
@@ -68,6 +72,8 @@ const form = useForm({
 const resetForParticipant = (participant: Participant | null) => {
   form.participant_id = participant?.id ?? null
   form.parent_name = participant?.guardian_name ?? ''
+  form.guardian_relationship = participant?.guardian_relationship ?? ''
+  form.guardian_email = participant?.guardian_email ?? ''
   form.emergency_contact_name = participant?.emergency_contact_name ?? ''
   form.emergency_contact_phone = participant?.emergency_contact_phone ?? ''
   form.medical_info = participant?.medical_info ?? ''
@@ -323,6 +329,48 @@ const goBack = () => {
                 />
                 <p v-if="form.errors.parent_name" class="mt-1 text-sm text-rose-600">
                   {{ form.errors.parent_name }}
+                </p>
+              </div>
+
+              <!-- Relationship to Minor -->
+              <div>
+                <label for="guardian_relationship" class="block text-sm font-medium text-slate-700 mb-2">
+                  Relationship to Minor *
+                </label>
+                <select
+                  id="guardian_relationship"
+                  v-model="form.guardian_relationship"
+                  required
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600 text-base sm:text-sm"
+                >
+                  <option value="" disabled>Select relationship</option>
+                  <option value="Mother">Mother</option>
+                  <option value="Father">Father</option>
+                  <option value="Legal Guardian">Legal Guardian</option>
+                </select>
+                <p v-if="form.errors.guardian_relationship" class="mt-1 text-sm text-rose-600">
+                  {{ form.errors.guardian_relationship }}
+                </p>
+              </div>
+
+              <!-- Guardian Verification Email -->
+              <div>
+                <label for="guardian_email" class="block text-sm font-medium text-slate-700 mb-2">
+                  Parent/Guardian Email Address *
+                </label>
+                <input
+                  id="guardian_email"
+                  v-model="form.guardian_email"
+                  type="email"
+                  required
+                  class="block w-full rounded-md border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600 text-base sm:text-sm"
+                  placeholder="parent@example.com"
+                />
+                <p class="mt-1 text-xs text-slate-500">
+                  A signed PDF copy of this consent form and lesson details will be emailed immediately to this address for verification.
+                </p>
+                <p v-if="form.errors.guardian_email" class="mt-1 text-sm text-rose-600">
+                  {{ form.errors.guardian_email }}
                 </p>
               </div>
 

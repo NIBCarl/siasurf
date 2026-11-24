@@ -27,6 +27,9 @@ class Waiver extends Model
         'instructor_name',
         'witness_name',
         'signed_by_guardian',
+        'guardian_relationship',
+        'guardian_email',
+        'guardian_notified_at',
         'signed_by',
         'signature_data',
         'pdf_path',
@@ -39,6 +42,7 @@ class Waiver extends Model
         'birthday' => 'date:Y-m-d',
         'age' => 'integer',
         'signed_by_guardian' => 'boolean',
+        'guardian_notified_at' => 'datetime',
         'signed_at' => 'datetime',
         'retention_until' => 'datetime',
     ];

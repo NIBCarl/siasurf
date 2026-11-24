@@ -32,7 +32,9 @@ class BookingParticipant extends Model
         'emergency_contact_phone',
         'medical_info',
         'guardian_name',
+        'guardian_relationship',
         'guardian_phone',
+        'guardian_email',
     ];
 
     protected $casts = [

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Head, useForm, Link } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppSidebarLayout from '@/Layouts/AppSidebarLayout.vue'
@@ -76,43 +76,11 @@ interface Props {
   }
   surfSpotRule?: string
   allowedSurfSpotDifficulties?: string[]
-}
-
-interface Companion {
-  full_name: string
-  birthday: string
-  age: number | string
-  email: string
-  country: string
-  height: number | string
-  weight: number | string
-  skill_level: string
-  has_board: boolean
-  emergency_contact_name: string
-  emergency_contact_phone: string
-  medical_info: string
-  guardian_name: string
-  guardian_phone: string
+  initialDate?: string | null
+  initialStartTime?: string | null
 }
 
 const props = defineProps<Props>()
-
-const emptyCompanion = (): Companion => ({
-  full_name: '',
-  birthday: '',
-  age: '',
-  email: '',
-  country: '',
-  height: '',
-  weight: '',
-  skill_level: props.studentSkillLevel || 'beginner',
-  has_board: false,
-  emergency_contact_name: '',
-  emergency_contact_phone: '',
-  medical_info: '',
-  guardian_name: '',
-  guardian_phone: '',
-})
 
 const maxBirthday = getPhilippineMaxBirthday(5)
 
@@ -163,7 +131,7 @@ const serviceOptions = computed<ServiceOption[]>(() => {
 const prefill = props.prefill ?? {}
 
 const form = useForm({
-  date: '',
+  date: props.initialDate ?? '',
   start_time: '',
   // The student now chooses both ends. The server validates the range against
   // the instructor's schedule and the slot's remaining student capacity.
@@ -186,9 +154,9 @@ const form = useForm({
   hotel_name: '',
   // Medical notes carry over so the instructor sees them without retyping.
   notes: prefill.medical_info ?? '',
-  // Declared companions (no accounts of their own).
-  companions: [] as Companion[],
 })
+
+const pendingInitialStartTime = ref<string | null>(props.initialStartTime ?? null)
 
 watch(() => form.student_birthday, (birthday) => {
   const computedAge = calculateAgeFromBirthday(birthday)
@@ -283,18 +251,23 @@ const fetchAvailability = async (date: string) => {
     )
     availability.value = data
 
-    // If the student increased party size beyond the remaining seats of the
-    // currently selected start time, clear the stale selection cleanly.
-    if (form.start_time) {
-      const openSlots = [
-        ...(data?.periods?.morning?.slots ?? []),
-        ...(data?.periods?.afternoon?.slots ?? []),
-      ]
-      if (!openSlots.includes(form.start_time)) {
-        form.start_time = ''
-        form.end_time = ''
-        endTimeOptions.value = []
+    const openSlots = [
+      ...(data?.periods?.morning?.slots ?? []),
+      ...(data?.periods?.afternoon?.slots ?? []),
+    ]
+
+    if (pendingInitialStartTime.value) {
+      if (openSlots.includes(pendingInitialStartTime.value)) {
+        form.start_time = pendingInitialStartTime.value
       }
+      pendingInitialStartTime.value = null
+    }
+
+    // If the previously selected start time is no longer open, clear the stale selection cleanly.
+    if (form.start_time && !openSlots.includes(form.start_time)) {
+      form.start_time = ''
+      form.end_time = ''
+      endTimeOptions.value = []
     }
   } catch (e) {
     availability.value = null
@@ -377,6 +350,7 @@ watch(lockedSurfSpot, (spot) => {
 
 watch(() => form.date, (date) => {
   // A previously chosen time may not exist on the new date.
+  pendingInitialStartTime.value = null
   form.start_time = ''
   form.end_time = ''
   endTimeOptions.value = []
@@ -385,9 +359,9 @@ watch(() => form.date, (date) => {
   fetchAvailability(date)
 })
 
-// Re-check availability when the party size or service type changes:
+// Re-check availability when the service type changes:
 // shared slots only match same-level + same-service bookings.
-watch([() => form.student_count, () => form.session_type], () => {
+watch(() => form.session_type, () => {
   if (form.date) {
     fetchAvailability(form.date)
   }
@@ -399,6 +373,12 @@ watch([() => form.student_count, () => form.session_type], () => {
 
 watch(() => form.start_time, () => {
   fetchEndTimes()
+})
+
+onMounted(() => {
+  if (form.date) {
+    fetchAvailability(form.date)
+  }
 })
 
 interface StartTimeOption {
@@ -577,47 +557,19 @@ const lessonDurationText = computed(() =>
     : `${lessonMinutes.value} Minutes`,
 )
 
-// Watch student_count to ensure it doesn't exceed max
-watch(() => maxStudents.value, (newMax) => {
-  if (form.student_count > newMax) {
-    form.student_count = newMax
-  }
-})
-
-// Keep the companion list in step with the chosen headcount (minus the
-// account holder, who is already described above).
-watch(() => form.student_count, (count) => {
-  const needed = Math.max(0, (count || 1) - 1)
-  while (form.companions.length < needed) {
-    form.companions.push(emptyCompanion())
-  }
-  while (form.companions.length > needed) {
-    form.companions.pop()
-  }
-})
-
 // A surfer may use an easier break than their level, never a harder one.
-const SKILL_RANK: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3 }
 const DIFFICULTIES_BY_SKILL: Record<string, string[]> = {
   beginner: ['beginner'],
   intermediate: ['beginner', 'intermediate'],
   advanced: ['beginner', 'intermediate', 'advanced'],
 }
 
-// The whole lesson is planned for the least experienced person in the party.
-const partySkill = computed(() => {
-  const levels = [props.studentSkillLevel, ...form.companions.map((c) => c.skill_level)]
-
-  return levels.reduce(
-    (lowest, level) => ((SKILL_RANK[level] ?? 1) < (SKILL_RANK[lowest] ?? 1) ? level : lowest),
-    'advanced',
-  )
-})
+const partySkill = computed(() => props.studentSkillLevel || 'beginner')
 
 const partyHasBeginner = computed(() => partySkill.value === 'beginner')
 
-// Filter spots: the party's least experienced surfer decides the hardest break
-// anyone may book. Beginner -> beginner only, Intermediate -> no advanced
+// Filter spots: the surfer's assessed level decides the hardest break
+// they may book. Beginner -> beginner only, Intermediate -> no advanced
 // breaks, Advanced -> all breaks.
 const ambientSpots = computed(() => {
   const allowed = DIFFICULTIES_BY_SKILL[partySkill.value] ?? ['beginner']
@@ -703,29 +655,15 @@ const estimatedPrice = computed(() => {
   }
 })
 
-// Server validates companions under participants.{n}.{field}; surface those
-// errors on the matching card.
-const companionError = (index: number, field: string): string | undefined =>
-  (form.errors as Record<string, string | undefined>)[`participants.${index + 1}.${field}`]
-
-const removeCompanion = (index: number) => {
-  form.companions.splice(index, 1)
-  // Keep the headcount in step; the watcher trims the list to match.
-  form.student_count = Math.max(1, form.companions.length + 1)
-}
-
 const childSafetyViolation = computed(() => {
   const level = props.instructor.instructor_profile.level
-  const ages = [
-    Number(form.student_age),
-    ...form.companions.map((c) => Number(c.age)).filter((a) => !Number.isNaN(a) && a > 0),
-  ]
+  const age = Number(form.student_age)
 
-  if (ages.some((age) => age > 0 && age < 5)) {
+  if (!Number.isNaN(age) && age > 0 && age < 5) {
     return 'Students must be at least 5 years old.'
   }
 
-  if (level !== 3 && ages.some((age) => age >= 5 && age <= 12)) {
+  if (level !== 3 && !Number.isNaN(age) && age >= 5 && age <= 12) {
     return 'For safety (BR-3.4), students aged 5–12 must be taught by a Level 3 Instructor (Expert). Please choose a Level 3 instructor for this age group.'
   }
 
@@ -748,13 +686,6 @@ const flashErrorTitle = (message: string): string => {
   return 'Safety Requirement Not Met'
 }
 
-const syncCompanionAge = (companion: Companion) => {
-  const age = calculateAgeFromBirthday(companion.birthday)
-  if (age !== null) {
-    companion.age = age
-  }
-}
-
 const canSubmit = computed(() => !(
   form.processing ||
   !form.date ||
@@ -773,9 +704,10 @@ const submit = () => {
     return
   }
 
-  // Send the full party: primary first (account holder), then companions.
+  // Every booking reserves 1 seat for the signed-in student account.
   form.transform((data) => ({
     ...data,
+    student_count: 1,
     hotel_name: data.needs_hotel_pickup ? data.hotel_name : null,
     skill_level: props.studentSkillLevel,
     participants: [
@@ -790,10 +722,6 @@ const submit = () => {
         skill_level: props.studentSkillLevel,
         has_board: data.has_board,
       },
-      ...data.companions.map((companion) => ({
-        ...companion,
-        skill_level: props.studentSkillLevel || 'beginner',
-      })),
     ],
   })).post(route('bookings.store-details', props.instructor.id))
 }
@@ -1031,8 +959,7 @@ const submit = () => {
                     </template>
 
                     <p class="mt-1 text-xs text-slate-500">
-                      Only times with enough room for {{ form.student_count }}
-                      {{ form.student_count === 1 ? 'student' : 'students' }} can be selected. Times already reserved by another student are marked and unavailable.
+                      Only times with an open seat for your skill level can be selected. Times already reserved or full are marked and unavailable.
                     </p>
                     <InputError class="mt-2" :message="form.errors.start_time" />
                   </div>
@@ -1246,25 +1173,24 @@ const submit = () => {
                     </p>
                   </div>
 
-                  <!-- Student Count -->
+                  <!-- Booking Seat (1 Account = 1 Seat) -->
                   <div>
-                    <InputLabel for="student_count" value="Number of Students" />
-                    <div class="mt-1 flex items-center space-x-4">
-                       <button 
-                        type="button" 
-                        @click="form.student_count > 1 && form.student_count--"
-                        class="min-h-[44px] min-w-[44px] rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50"
-                      >-</button>
-                      <span class="text-lg font-bold w-4 text-center">{{ form.student_count }}</span>
-                      <button 
-                        type="button" 
-                        @click="form.student_count < maxStudents && form.student_count++"
-                        class="min-h-[44px] min-w-[44px] rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50"
-                      >+</button>
+                    <InputLabel value="Booking Seat" />
+                    <div class="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <span class="text-sm font-semibold text-slate-800">1 Seat (Your Account)</span>
+                      <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {{ maxStudents > 1 ? `Up to ${maxStudents} in slot` : '1-on-1' }}
+                      </span>
                     </div>
                     <p class="mt-1 text-xs text-slate-500">
-                      Max {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }} ({{ maxStudents > 1 ? 'same skill level required' : '1-on-1' }})<span v-if="maxStudents > 1 && selectedSlotRemainingSeats !== null" class="font-semibold text-lagoon-700"> · {{ selectedSlotRemainingSeats }} of {{ maxStudents }} {{ selectedSlotRemainingSeats === 1 ? 'seat' : 'seats' }} open at {{ formatSlotLabel(form.start_time) }}</span>
+                      <template v-if="maxStudents > 1">
+                        Shared group slot (up to {{ maxStudents }} {{ studentSkillLevel }} surfers). Friends join this exact slot from their own SiaSurf account so everyone completes their own skill check and waiver<span v-if="selectedSlotRemainingSeats !== null" class="font-semibold text-lagoon-700"> · {{ selectedSlotRemainingSeats }} of {{ maxStudents }} {{ selectedSlotRemainingSeats === 1 ? 'seat' : 'seats' }} open at {{ formatSlotLabel(form.start_time) }}</span>.
+                      </template>
+                      <template v-else>
+                        1-on-1 private session for your verified account.
+                      </template>
                     </p>
+                    <InputError class="mt-1" :message="form.errors.student_count || (form.errors as Record<string, string | undefined>).participants" />
                   </div>
 
                   <!-- Primary participant's age -->
@@ -1496,13 +1422,13 @@ const submit = () => {
 
                       <p class="text-xs text-slate-500">
                         <template v-if="partyHasBeginner">
-                          Only beginner-rated breaks are shown because someone in your party is a beginner.
+                          Only beginner-rated breaks are shown for your beginner skill level.
                         </template>
                         <template v-else-if="partySkill === 'intermediate'">
                           Beginner and intermediate breaks only — advanced breaks require an advanced level.
                         </template>
                         <template v-else>
-                          All breaks are available because everyone in your party is advanced.
+                          All breaks are available for your advanced skill level.
                         </template>
                       </p>
                       <InputError :message="form.errors.surf_spot_id" />
@@ -1573,151 +1499,6 @@ const submit = () => {
                       </p>
                     </div>
                   </div>
-
-                <!-- Companions: everyone else in the party -->
-                <div v-if="form.student_count > 1" class="mt-8">
-                  <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-bold text-slate-900">Who else is surfing?</h3>
-                    <span class="text-xs text-slate-500">
-                      {{ form.companions.length }} companion{{ form.companions.length === 1 ? '' : 's' }}
-                    </span>
-                  </div>
-
-                  <div class="space-y-4">
-                    <div
-                      v-for="(companion, index) in form.companions"
-                      :key="index"
-                      class="rounded-2xl border border-slate-200 bg-white p-5"
-                    >
-                      <div class="mb-3 flex items-center justify-between">
-                        <h4 class="text-sm font-semibold text-slate-800">Companion {{ index + 1 }}</h4>
-                        <button
-                          type="button"
-                          class="text-xs font-semibold text-rose-600 hover:text-rose-700"
-                          @click="removeCompanion(index)"
-                        >
-                          Remove
-                        </button>
-                      </div>
-
-                      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <div class="md:col-span-3">
-                          <InputLabel :value="`Full Name`" />
-                          <TextInput v-model="companion.full_name" type="text" class="mt-1 block w-full" placeholder="Companion's full name" />
-                          <InputError class="mt-1" :message="companionError(index, 'full_name')" />
-                        </div>
-
-                        <div>
-                          <InputLabel value="Birthday" />
-                          <TextInput
-                            v-model="companion.birthday"
-                            type="date"
-                            :max="maxBirthday"
-                            min="1920-01-01"
-                            class="mt-1 block w-full"
-                            @input="syncCompanionAge(companion)"
-                            @change="syncCompanionAge(companion)"
-                          />
-                          <InputError class="mt-1" :message="companionError(index, 'birthday')" />
-                        </div>
-
-                        <div>
-                          <InputLabel value="Email" />
-                          <TextInput v-model="companion.email" type="email" class="mt-1 block w-full" placeholder="companion@email.com" />
-                          <InputError class="mt-1" :message="companionError(index, 'email')" />
-                        </div>
-
-                        <div>
-                          <InputLabel value="Country" />
-                          <TextInput v-model="companion.country" type="text" class="mt-1 block w-full" placeholder="e.g. Philippines" />
-                          <InputError class="mt-1" :message="companionError(index, 'country')" />
-                        </div>
-
-                        <div>
-                          <InputLabel value="Age" />
-                          <TextInput
-                            v-model="companion.age"
-                            type="number"
-                            min="5"
-                            max="100"
-                            :readonly="Boolean(companion.birthday)"
-                            :class="['mt-1 block w-full', companion.birthday ? 'bg-slate-100 text-slate-600' : '']"
-                          />
-                          <InputError class="mt-1" :message="companionError(index, 'age')" />
-                        </div>
-                        <template v-if="!companion.has_board">
-                          <div>
-                            <InputLabel value="Height (cm)" />
-                            <TextInput v-model="companion.height" type="number" min="50" max="250" class="mt-1 block w-full" />
-                            <InputError class="mt-1" :message="companionError(index, 'height')" />
-                          </div>
-                          <div>
-                            <InputLabel value="Weight (kg)" />
-                            <TextInput v-model="companion.weight" type="number" min="10" max="200" class="mt-1 block w-full" />
-                            <InputError class="mt-1" :message="companionError(index, 'weight')" />
-                          </div>
-                        </template>
-
-                        <div class="md:col-span-2">
-                          <InputLabel value="Skill Level" />
-                          <div class="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                            <span class="text-sm font-semibold capitalize text-slate-800">{{ studentSkillLevel }}</span>
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Same level required</span>
-                          </div>
-                          <p class="mt-1 text-[11px] text-slate-500">
-                            All surfers in a group session must share the same skill level for safety.
-                          </p>
-                          <InputError class="mt-1" :message="companionError(index, 'skill_level')" />
-                        </div>
-                        <div>
-                          <InputLabel value="Own Board?" />
-                          <div class="mt-2 flex items-center space-x-2">
-                            <input
-                              :id="`companion-board-${index}`"
-                              v-model="companion.has_board"
-                              type="checkbox"
-                              class="rounded border-slate-300 text-lagoon-600 focus:ring-lagoon-600"
-                            />
-                            <label :for="`companion-board-${index}`" class="text-sm text-slate-600">Yes</label>
-                          </div>
-                        </div>
-
-                        <div>
-                          <InputLabel value="Emergency Contact" />
-                          <TextInput v-model="companion.emergency_contact_name" type="text" class="mt-1 block w-full" placeholder="Name" />
-                        </div>
-                        <div>
-                          <InputLabel value="Emergency Phone" />
-                          <TextInput v-model="companion.emergency_contact_phone" type="text" class="mt-1 block w-full" placeholder="+63 ..." />
-                        </div>
-                        <div class="md:col-span-3">
-                          <InputLabel value="Medical Info (optional)" />
-                          <textarea
-                            v-model="companion.medical_info"
-                            rows="2"
-                            class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-lagoon-600 focus:ring-lagoon-600 text-base sm:text-sm"
-                            placeholder="Allergies or conditions the instructor should know about"
-                          ></textarea>
-                        </div>
-
-                        <!-- Guardian details for minors -->
-                        <template v-if="Number(companion.age) > 0 && Number(companion.age) < 18">
-                          <div>
-                            <InputLabel value="Guardian Name" />
-                            <TextInput v-model="companion.guardian_name" type="text" class="mt-1 block w-full" />
-                          </div>
-                          <div>
-                            <InputLabel value="Guardian Phone" />
-                            <TextInput v-model="companion.guardian_phone" type="text" class="mt-1 block w-full" />
-                          </div>
-                          <p class="md:col-span-3 text-xs text-amber-700">
-                            This companion is under 18 - a guardian will sign parental consent in the waiver step.
-                          </p>
-                        </template>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 <!-- Notes -->
                 <div>
@@ -1814,8 +1595,8 @@ const submit = () => {
                   <span class="font-medium text-slate-900">{{ lessonDurationText }}</span>
                 </div>
                 <div class="flex justify-between text-sm">
-                  <span class="text-slate-500">Students</span>
-                  <span class="font-medium text-slate-900">x {{ form.student_count }}</span>
+                  <span class="text-slate-500">Booking Seat</span>
+                  <span class="font-medium text-slate-900">1 surfer (your account)</span>
                 </div>
                 <div class="flex justify-between text-sm">
                   <span class="text-slate-500">Lesson Price</span>
@@ -1837,15 +1618,6 @@ const submit = () => {
               <!-- Safety Alerts -->
               <div class="mt-8 space-y-4">
                 <h4 class="text-xs font-bold uppercase tracking-widest text-slate-400">Safety Standards</h4>
-                
-                <div v-if="form.student_count > maxStudents" class="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start">
-                  <svg class="w-5 h-5 text-rose-500 mr-2 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <p class="text-xs text-rose-700 leading-tight">
-                    This instructor is limited to {{ maxStudents }} student{{ maxStudents > 1 ? 's' : '' }}. Please reduce the number of students or choose a different instructor.
-                  </p>
-                </div>
 
                 <div v-if="partyHasBeginner" class="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-start">
                   <svg class="w-5 h-5 text-emerald-500 mr-2 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

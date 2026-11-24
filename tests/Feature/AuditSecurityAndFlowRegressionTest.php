@@ -171,7 +171,7 @@ class AuditSecurityAndFlowRegressionTest extends TestCase
             'slot_duration_minutes' => 60,
         ]);
 
-        // Group size > 1 without companions array must fail validation.
+        // Multi-student bookings (> 1 seat in one account) must fail validation.
         $this->actingAs($this->student)
             ->post(route('bookings.store-details', $this->instructor->id), [
                 'date' => $day->format('Y-m-d'),
@@ -184,7 +184,7 @@ class AuditSecurityAndFlowRegressionTest extends TestCase
                 'has_board' => true,
                 'surf_spot_id' => $this->spot->id,
             ])
-            ->assertSessionHasErrors('participants');
+            ->assertSessionHasErrors('student_count');
 
         // Clear primary birthday to simulate legacy profile supplying a child birthday on waiver.
         $this->student->studentProfile->update(['birthday' => null, 'age' => null]);

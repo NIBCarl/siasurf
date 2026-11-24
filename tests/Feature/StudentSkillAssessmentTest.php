@@ -68,7 +68,7 @@ class StudentSkillAssessmentTest extends TestCase
         }
     }
 
-    public function test_assessment_requires_water_safety_answer_and_confirmation(): void
+    public function test_assessment_requires_date_of_birth_water_safety_answer_and_confirmation(): void
     {
         $this->actingAs($this->student)
             ->from(route('student.onboarding'))
@@ -79,12 +79,56 @@ class StudentSkillAssessmentTest extends TestCase
                 'answers' => [0 => null, 1 => 1, 2 => 0, 3 => 1],
                 'confirmed' => false,
             ])
-            ->assertSessionHasErrors(['answers.0', 'confirmed']);
+            ->assertSessionHasErrors(['date_of_birth', 'answers.0', 'confirmed']);
+    }
+
+    public function test_assessment_rejects_age_under_five_and_flags_minors_under_eighteen(): void
+    {
+        // Under 5 must be rejected cleanly.
+        $this->actingAs($this->student)
+            ->from(route('student.onboarding'))
+            ->post(route('student.onboarding.assessment'), [
+                'date_of_birth' => now()->subYears(4)->format('Y-m-d'),
+                'can_swim_deep_water' => true,
+                'is_first_time' => true,
+                'skills' => ['basic' => [], 'intermediate' => [], 'advanced' => []],
+                'answers' => [0 => 1, 1 => 1, 2 => 0, 3 => 1],
+                'confirmed' => true,
+            ])
+            ->assertSessionHasErrors('date_of_birth');
+
+        $this->assertDatabaseCount('student_skill_assessments', 0);
+
+        // Age 15 (under 18) proceeds, saves birthday, and flashes parental consent notice.
+        $minorDob = now()->subYears(15)->format('Y-m-d');
+
+        $this->actingAs($this->student)
+            ->post(route('student.onboarding.assessment'), [
+                'date_of_birth' => $minorDob,
+                'can_swim_deep_water' => true,
+                'is_first_time' => false,
+                'skills' => [
+                    'basic' => [0, 1],
+                    'intermediate' => [0, 1, 2, 3],
+                    'advanced' => [],
+                ],
+                'answers' => [0 => 1, 1 => 1, 2 => 0, 3 => 1],
+                'confirmed' => true,
+            ])
+            ->assertRedirect(route('student.onboarding'))
+            ->assertSessionHas('success', function (string $msg) {
+                return str_contains($msg, 'parent or guardian consent');
+            });
+
+        $profile = $this->student->studentProfile->fresh();
+        $this->assertSame($minorDob, $profile->birthday->format('Y-m-d'));
+        $this->assertSame('intermediate', $profile->skill_level);
     }
 
     public function test_submitting_assessment_sets_student_skill_level_and_locks_retakes(): void
     {
         $payload = [
+            'date_of_birth' => now()->subYears(24)->format('Y-m-d'),
             'can_swim_deep_water' => true,
             'is_first_time' => false,
             'skills' => [
@@ -129,6 +173,7 @@ class StudentSkillAssessmentTest extends TestCase
         // Student claims advanced skills & answers 4/4, but cannot swim in deep water.
         $this->actingAs($this->student)
             ->post(route('student.onboarding.assessment'), [
+                'date_of_birth' => now()->subYears(22)->format('Y-m-d'),
                 'can_swim_deep_water' => false,
                 'is_first_time' => false,
                 'skills' => [

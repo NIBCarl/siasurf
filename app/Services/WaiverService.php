@@ -125,25 +125,55 @@ class WaiverService
         string $emergencyContact,
         string $emergencyPhone,
         ?string $medicalInfo = null,
-        ?BookingParticipant $participant = null
+        ?BookingParticipant $participant = null,
+        ?string $guardianRelationship = null,
+        ?string $guardianEmail = null
     ): Waiver {
+        $booking->loadMissing(['student.studentProfile', 'instructor', 'surfSpot', 'primaryParticipant']);
+
+        $resolvedParticipant = $participant ?? $booking->primaryParticipant;
         $signedAt = now();
         $retentionUntil = $signedAt->copy()->addYears(7);
 
-        // Generate PDF with additional parental info
+        $minorName = $resolvedParticipant?->full_name
+            ?? $booking->student?->name
+            ?? 'Minor Participant';
+
+        $minorAge = $resolvedParticipant?->birthday?->age
+            ?? $resolvedParticipant?->age
+            ?? $booking->student_age;
+
+        $signatureImage = $this->validImageDataUri($parentSignature);
+
+        // Generate PDF with additional parental info and embedded signature
         $pdfPath = $this->generateParentalConsentPDF(
             $booking,
             $parentName,
             $emergencyContact,
             $emergencyPhone,
             $medicalInfo,
-            $signedAt
+            $signedAt,
+            [
+                'participant_id' => $resolvedParticipant?->id,
+                'minor_name' => $minorName,
+                'minor_age' => $minorAge !== null ? (int) $minorAge : null,
+                'guardian_relationship' => $guardianRelationship,
+                'guardian_email' => $guardianEmail,
+                'signature_image' => $signatureImage,
+            ]
         );
 
         return Waiver::create([
             'booking_id' => $booking->id,
-            'participant_id' => $participant?->id ?? $booking->primaryParticipant?->id,
+            'participant_id' => $resolvedParticipant?->id,
             'type' => WaiverType::ParentalConsent->value,
+            'participant_name' => $minorName,
+            'age' => $minorAge !== null ? (int) $minorAge : null,
+            'emergency_contact' => trim($emergencyContact . ' — ' . $emergencyPhone),
+            'medical_info' => $medicalInfo,
+            'signed_by_guardian' => true,
+            'guardian_relationship' => $guardianRelationship,
+            'guardian_email' => $guardianEmail,
             'signed_by' => $parentName,
             'signature_data' => $parentSignature,
             'pdf_path' => $pdfPath,
@@ -410,6 +440,8 @@ class WaiverService
 
     /**
      * Generate parental consent PDF
+     *
+     * @param  array<string, mixed>  $snapshot
      */
     private function generateParentalConsentPDF(
         Booking $booking,
@@ -417,12 +449,19 @@ class WaiverService
         string $emergencyContact,
         string $emergencyPhone,
         ?string $medicalInfo,
-        $signedAt
+        $signedAt,
+        array $snapshot = []
     ): string {
+        $booking->loadMissing(['student', 'instructor', 'surfSpot']);
         $phSignedAt = ($signedAt instanceof Carbon ? $signedAt->copy() : Carbon::parse($signedAt))->timezone(config('app.timezone', 'Asia/Manila'));
         $data = [
             'booking' => $booking,
+            'minor_name' => $snapshot['minor_name'] ?? ($booking->student?->name ?? 'Minor Participant'),
+            'minor_age' => $snapshot['minor_age'] ?? $booking->student_age,
             'parent_name' => $parentName,
+            'guardian_relationship' => $snapshot['guardian_relationship'] ?? null,
+            'guardian_email' => $snapshot['guardian_email'] ?? null,
+            'signature_image' => $snapshot['signature_image'] ?? null,
             'emergency_contact' => $emergencyContact,
             'emergency_phone' => $emergencyPhone,
             'medical_info' => $medicalInfo,
@@ -436,7 +475,9 @@ class WaiverService
         $pdf = Pdf::loadView('pdfs.parental_consent', $data);
         $pdf->setPaper('A4');
 
-        $filename = "waivers/parental_consent_booking_{$booking->id}_" . time() . '.pdf';
+        $participantKey = $snapshot['participant_id'] ?? 'primary';
+        $uniqueSuffix = substr(md5((string) microtime(true) . mt_rand()), 0, 6);
+        $filename = "waivers/parental_consent_booking_{$booking->id}_p{$participantKey}_" . time() . "_{$uniqueSuffix}.pdf";
         $content = $pdf->output();
 
         Storage::disk('local')->put($filename, $content);

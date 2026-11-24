@@ -335,7 +335,7 @@ class ServiceBasedPricingAndCapacityTest extends TestCase
                     ],
                 ],
             ]))
-            ->assertSessionHas('error');
+            ->assertSessionHasErrors(['student_count', 'participants']);
 
         $this->assertSame(0, Booking::count());
     }

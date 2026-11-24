@@ -18,6 +18,7 @@ interface Booking {
   rescheduled_by_instructor_at?: string | null
   is_rescheduled?: boolean
   status: string
+  skill_level?: string
   total_amount: number
   payment_status: string
   accept_deadline_at?: string | null
@@ -41,14 +42,37 @@ interface Booking {
   } | null
 }
 
+interface SlotShare {
+  max_seats: number
+  remaining_seats: number
+  share_url: string
+}
+
 interface Props {
   booking: Booking
   step?: number
   acceptRemainingSeconds?: number | null
   paymentRemainingSeconds?: number | null
+  slotShare?: SlotShare | null
 }
 
 const props = defineProps<Props>()
+
+const copiedSlotLink = ref(false)
+const copySlotShareLink = async () => {
+  const url = props.slotShare?.share_url
+  if (!url || typeof window === 'undefined') return
+
+  try {
+    await navigator.clipboard.writeText(url)
+    copiedSlotLink.value = true
+    setTimeout(() => {
+      copiedSlotLink.value = false
+    }, 2500)
+  } catch {
+    copiedSlotLink.value = false
+  }
+}
 
 const payingGCash = ref(false)
 const acceptSeconds = ref<number>(props.acceptRemainingSeconds ?? 0)
@@ -513,6 +537,35 @@ onBeforeUnmount(() => {
               </span>
             </div>
           </div>
+        </div>
+
+        <!-- Shared Group Slot Invite (Level 2/3 parallel bookings) -->
+        <div
+          v-if="slotShare && slotShare.max_seats > 1 && slotShare.remaining_seats > 0 && !isClosedOrDeclined"
+          class="mb-10 rounded-3xl border border-lagoon-200 bg-lagoon-50/80 p-6 text-left shadow-sm"
+        >
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
+              <p class="text-xs font-black uppercase tracking-wider text-lagoon-800">
+                Surfing with friends? · {{ slotShare.remaining_seats }} of {{ slotShare.max_seats }} seats open
+              </p>
+              <p class="mt-1 text-sm text-slate-700">
+                Share this exact slot link. Each friend signs in with their own SiaSurf account to complete their own skill pre-assessment and digital waiver (same {{ booking.skill_level ?? 'assessed' }} skill level required).
+              </p>
+            </div>
+            <BaseButton
+              type="button"
+              variant="secondary"
+              size="md"
+              class="shrink-0"
+              @click="copySlotShareLink"
+            >
+              {{ copiedSlotLink ? 'Link Copied!' : 'Copy Session Link' }}
+            </BaseButton>
+          </div>
+          <p class="mt-3 truncate rounded-xl border border-lagoon-200 bg-white px-3 py-2 font-mono text-xs text-slate-600">
+            {{ slotShare.share_url }}
+          </p>
         </div>
 
         <!-- Next Steps -->

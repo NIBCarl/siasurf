@@ -5,7 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import AppSwitch from '@/Components/UI/AppSwitch.vue';
 import InputError from '@/Components/InputError.vue';
-import { calculatePhilippineAge, getPhilippineMaxBirthday } from '@/utils/philippineTime';
+import { calculatePhilippineAge, getPhilippineMaxBirthday, getPhilippineTodayKey } from '@/utils/philippineTime';
 
 interface Profile {
     skill_level: string;
@@ -84,8 +84,10 @@ const page = usePage();
 const flashSuccess = computed(() => (page.props.flash as any)?.success ?? null);
 
 const assessmentLevels = ['beginner', 'intermediate', 'advanced'] as const;
+const todayKey = getPhilippineTodayKey();
 
 const assessmentForm = useForm({
+    date_of_birth: props.profile.date_of_birth ?? '',
     can_swim_deep_water: false,
     is_first_time: false,
     skills: {
@@ -98,8 +100,18 @@ const assessmentForm = useForm({
     intended: props.intended ?? '',
 });
 
+const assessmentAge = computed(() => calculatePhilippineAge(assessmentForm.date_of_birth));
+const assessmentTooYoung = computed(() => assessmentAge.value !== null && assessmentAge.value < 5);
+const assessmentIsMinor = computed(() => assessmentAge.value !== null && assessmentAge.value >= 5 && assessmentAge.value < 18);
+const assessmentNeedsLevel3 = computed(() => assessmentAge.value !== null && assessmentAge.value >= 5 && assessmentAge.value <= 12);
+
 const canSubmitAssessment = computed(
-    () => assessmentForm.answers[0] !== null && assessmentForm.confirmed && !assessmentForm.processing,
+    () =>
+        Boolean(assessmentForm.date_of_birth) &&
+        !assessmentTooYoung.value &&
+        assessmentForm.answers[0] !== null &&
+        assessmentForm.confirmed &&
+        !assessmentForm.processing,
 );
 
 function submitAssessment() {
@@ -150,6 +162,18 @@ const form = useForm({
 // Age is derived from the date of birth so the student sees what the safety
 // rules will actually use. Kept in sync as they type.
 const age = ref<number | null>(props.profile.age);
+
+watch(
+    () => props.profile.date_of_birth,
+    (value) => {
+        if (value && !form.date_of_birth) {
+            form.date_of_birth = value;
+        }
+        if (value && !assessmentForm.date_of_birth) {
+            assessmentForm.date_of_birth = value;
+        }
+    },
+);
 
 watch(
     () => form.date_of_birth,
@@ -251,6 +275,17 @@ function skip() {
                         </div>
                     </div>
 
+                    <div
+                        v-if="profile.age !== null && profile.age < 18"
+                        class="mt-4 rounded-control border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-body-sm text-amber-900"
+                    >
+                        <strong>Parent or Guardian Consent Required (Age {{ profile.age }}):</strong>
+                        You can continue using SiaSurf, but a parent or legal guardian must sign consent in the digital waiver before any booking is submitted.
+                        <template v-if="profile.age <= 12">
+                            For safety, surfers aged 5–12 must book with a Level 3 (Expert) instructor.
+                        </template>
+                    </div>
+
                     <!-- Breakdown rows -->
                     <dl class="mt-5 divide-y divide-sand-200 border-t border-sand-200 text-body-sm">
                         <div class="flex items-center justify-between gap-4 py-2.5">
@@ -315,6 +350,63 @@ function skip() {
                         </p>
 
                         <InputError :message="(assessmentForm.errors as Record<string, string>).assessment" class="mt-3" />
+
+                        <!-- Part 0: Date of Birth & Age Eligibility -->
+                        <fieldset class="mt-6 rounded-control border border-sand-200 bg-sand-50/40 p-4">
+                            <legend class="px-1.5 text-body-sm font-semibold text-deep-900">Date of Birth &amp; Age Eligibility</legend>
+                            <div class="mt-2 grid gap-4 sm:grid-cols-2 sm:items-end">
+                                <div>
+                                    <label for="assessment_date_of_birth" class="block text-body-sm font-semibold text-deep-900">
+                                        Your Date of Birth <span class="text-rose-600">*</span>
+                                    </label>
+                                    <input
+                                        id="assessment_date_of_birth"
+                                        v-model="assessmentForm.date_of_birth"
+                                        type="date"
+                                        required
+                                        min="1920-01-01"
+                                        :max="todayKey"
+                                        class="mt-1.5 block w-full rounded-control border border-sand-300 bg-white px-3 py-2 text-body text-deep-900 shadow-sm focus:border-lagoon-600 focus:outline-none focus:ring-2 focus:ring-lagoon-600/20"
+                                    />
+                                    <InputError :message="assessmentForm.errors.date_of_birth" class="mt-1.5" />
+                                </div>
+                                <div v-if="assessmentAge !== null" class="text-body-sm">
+                                    <span
+                                        v-if="assessmentTooYoung"
+                                        class="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 font-semibold text-rose-800 ring-1 ring-inset ring-rose-600/20"
+                                    >
+                                        Age {{ assessmentAge }} — Minimum age is 5
+                                    </span>
+                                    <span
+                                        v-else-if="assessmentIsMinor"
+                                        class="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/20"
+                                    >
+                                        Age {{ assessmentAge }} — Parental consent required
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-600/20"
+                                    >
+                                        Age {{ assessmentAge }} — Eligible
+                                    </span>
+                                </div>
+                            </div>
+                            <p
+                                v-if="assessmentTooYoung"
+                                class="mt-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-body-sm font-medium text-rose-800"
+                            >
+                                Students must be at least 5 years old to book surf lessons on SiaSurf.
+                            </p>
+                            <p
+                                v-else-if="assessmentIsMinor"
+                                class="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-body-sm text-amber-900"
+                            >
+                                <strong>Under 18 — Parent or Guardian Consent Required:</strong> You may continue with this pre-assessment and book a lesson, but your parent or legal guardian must provide their consent and signature in the digital waiver before submitting any booking.
+                                <template v-if="assessmentNeedsLevel3">
+                                    <strong>Safety rule:</strong> Surfers aged 5–12 must book with a Level 3 (Expert) instructor.
+                                </template>
+                            </p>
+                        </fieldset>
 
                         <!-- Part A: Basics -->
                         <fieldset class="mt-6 rounded-control border border-sand-200 bg-sand-50/40 p-4">
@@ -467,7 +559,15 @@ function skip() {
                                 See my level
                             </AppButton>
                             <p v-if="!canSubmitAssessment" class="text-body-sm text-stone-500">
-                                Answer the water safety question and confirm your answers to continue.
+                                <template v-if="!assessmentForm.date_of_birth">
+                                    Enter your date of birth, answer the water safety question, and confirm your answers to continue.
+                                </template>
+                                <template v-else-if="assessmentTooYoung">
+                                    Students must be at least 5 years old to take surf lessons.
+                                </template>
+                                <template v-else>
+                                    Answer the water safety question and confirm your answers to continue.
+                                </template>
                             </p>
                         </div>
                     </section>

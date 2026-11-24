@@ -117,14 +117,14 @@ class BookingControllerTest extends TestCase
     }
 
     /** @test */
-    public function booking_fails_safety_validation_for_level1_with_group()
+    public function booking_fails_validation_for_multi_student_payload_and_level1_blocks_second_student()
     {
         $level1Instructor = User::factory()->create(['role' => 'instructor']);
         $level1Instructor->assignRole('instructor');
         $level1Instructor->instructorProfile()->create([
-            'level' => 1, 
+            'level' => 1,
             'status' => 'active',
-            'rate_per_hour' => 800
+            'rate_per_hour' => 800,
         ]);
 
         $bookingData = [
@@ -134,7 +134,7 @@ class BookingControllerTest extends TestCase
             'student_age' => 25,
             'height' => 170,
             'weight' => 65,
-            'student_count' => 3, // Exceeds Level 1 max of 1
+            'student_count' => 3, // Multi-student booking rejected (1 account = 1 seat)
             'has_board' => true,
             'surf_spot_id' => $this->surfSpot->id,
             'participants' => [
@@ -144,11 +144,47 @@ class BookingControllerTest extends TestCase
             ],
         ];
 
-        $response = $this->actingAs($this->student)
-            ->post(route('bookings.store-details', $level1Instructor->id), $bookingData);
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $level1Instructor->id), $bookingData)
+            ->assertSessionHasErrors(['student_count', 'participants']);
 
-        $response->assertSessionHas('error');
         $this->assertDatabaseCount('bookings', 0);
+
+        // First beginner books the 1-on-1 Level 1 slot.
+        $this->actingAs($this->student)
+            ->post(route('bookings.store-details', $level1Instructor->id), [
+                'date' => now()->addDay()->format('Y-m-d'),
+                'start_time' => '09:00',
+                'skill_level' => 'beginner',
+                'student_age' => 25,
+                'height' => 170,
+                'weight' => 65,
+                'student_count' => 1,
+                'has_board' => true,
+                'surf_spot_id' => $this->surfSpot->id,
+            ])
+            ->assertRedirect();
+
+        // A second student account cannot share a Level 1 slot.
+        $otherStudent = User::factory()->create(['role' => 'student']);
+        $otherStudent->assignRole('student');
+        $otherStudent->studentProfile()->create(['skill_level' => 'beginner', 'status' => 'active']);
+
+        $this->actingAs($otherStudent)
+            ->post(route('bookings.store-details', $level1Instructor->id), [
+                'date' => now()->addDay()->format('Y-m-d'),
+                'start_time' => '09:00',
+                'skill_level' => 'beginner',
+                'student_age' => 24,
+                'height' => 168,
+                'weight' => 60,
+                'student_count' => 1,
+                'has_board' => true,
+                'surf_spot_id' => $this->surfSpot->id,
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseCount('bookings', 1);
     }
 
     /** @test */

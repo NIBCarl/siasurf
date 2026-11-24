@@ -161,9 +161,9 @@ class SkillAssessmentService
      *
      * @param  array<string, mixed>  $input
      */
-    public function recordForStudent(User $student, array $input): StudentSkillAssessment
+    public function recordForStudent(User $student, array $input, ?string $birthday = null): StudentSkillAssessment
     {
-        return DB::transaction(function () use ($student, $input) {
+        return DB::transaction(function () use ($student, $input, $birthday) {
             $profile = $student->studentProfile()->lockForUpdate()->first();
 
             if ($profile && $profile->skill_assessed_at !== null) {
@@ -181,17 +181,29 @@ class SkillAssessmentService
             ]);
 
             if (! $profile) {
-                $profile = $student->studentProfile()->create([
+                $profileData = [
                     'skill_level' => $evaluated['assessed_level'],
                     'is_first_time' => $evaluated['is_first_time'],
                     'skill_assessed_at' => $assessment->confirmed_at,
-                ]);
+                ];
+
+                if ($birthday !== null && $birthday !== '') {
+                    $profileData['birthday'] = $birthday;
+                }
+
+                $profile = $student->studentProfile()->create($profileData);
             } else {
-                $profile->forceFill([
+                $profileData = [
                     'skill_level' => $evaluated['assessed_level'],
                     'is_first_time' => $evaluated['is_first_time'],
                     'skill_assessed_at' => $assessment->confirmed_at,
-                ])->save();
+                ];
+
+                if ($birthday !== null && $birthday !== '') {
+                    $profileData['birthday'] = $birthday;
+                }
+
+                $profile->forceFill($profileData)->save();
             }
 
             return $assessment;

@@ -9,6 +9,7 @@ use App\Exceptions\SafetyViolationException;
 use App\Models\Booking;
 use App\Models\BookingParticipant;
 use App\Models\Waiver;
+use App\Notifications\ParentalConsentRecordedNotification;
 use App\Services\AvailabilityService;
 use App\Services\SafetyService;
 use App\Services\WaiverService;
@@ -16,6 +17,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -562,18 +564,27 @@ class WaiverController extends Controller
 
         $validated = $request->validate([
             'parent_name' => 'required|string|max:255',
+            'guardian_relationship' => ['required', 'string', 'in:Mother,Father,Legal Guardian'],
+            'guardian_email' => ['required', 'email', 'max:255'],
             'parent_signature' => 'required|string',
             'emergency_contact_name' => 'required|string|max:255',
             'emergency_contact_phone' => 'required|string|max:50',
             'medical_info' => 'nullable|string|max:1000',
             'agreement' => 'required|accepted',
             'participant_id' => 'nullable|integer',
+        ], [
+            'guardian_relationship.required' => 'Please select your relationship to the minor participant.',
+            'guardian_email.required' => 'Please enter a parent or guardian email address so a verification copy can be sent.',
+            'guardian_email.email' => 'Please enter a valid parent or guardian email address.',
         ]);
+
+        $guardianEmail = strtolower(trim((string) $validated['guardian_email']));
 
         try {
             $earlyRedirect = null;
+            $createdWaiver = null;
 
-            DB::transaction(function () use ($booking, $validated, &$earlyRedirect): void {
+            DB::transaction(function () use ($booking, $validated, $guardianEmail, &$earlyRedirect, &$createdWaiver): void {
                 $lockedBooking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
 
                 if ($lockedBooking->checkoutHoldExpired()) {
@@ -623,14 +634,16 @@ class WaiverController extends Controller
                     }
                 }
 
-                $this->waiverService->createParentalConsent(
+                $createdWaiver = $this->waiverService->createParentalConsent(
                     $lockedBooking,
                     $validated['parent_name'],
                     $validated['parent_signature'],
                     $validated['emergency_contact_name'],
                     $validated['emergency_contact_phone'],
                     $validated['medical_info'] ?? null,
-                    $participant
+                    $participant,
+                    $validated['guardian_relationship'],
+                    $guardianEmail
                 );
 
                 // The guardian details also apply to the participant's record.
@@ -640,7 +653,9 @@ class WaiverController extends Controller
                         'emergency_contact_phone' => $validated['emergency_contact_phone'],
                         'medical_info' => $validated['medical_info'] ?? $participant->medical_info,
                         'guardian_name' => $validated['parent_name'],
-                        'guardian_phone' => $participant->guardian_phone,
+                        'guardian_relationship' => $validated['guardian_relationship'],
+                        'guardian_phone' => $participant->guardian_phone ?: $validated['emergency_contact_phone'],
+                        'guardian_email' => $guardianEmail,
                     ]);
                 }
             });
@@ -649,8 +664,22 @@ class WaiverController extends Controller
                 return $earlyRedirect;
             }
 
+            if ($createdWaiver !== null && ! empty($createdWaiver->guardian_email)) {
+                try {
+                    Notification::route('mail', $createdWaiver->guardian_email)
+                        ->notify(new ParentalConsentRecordedNotification(
+                            $booking->fresh(['student', 'instructor', 'surfSpot']),
+                            $createdWaiver
+                        ));
+
+                    $createdWaiver->update(['guardian_notified_at' => now()]);
+                } catch (\Throwable $mailException) {
+                    report($mailException);
+                }
+            }
+
             return $this->continueFlow($booking->fresh())
-                ->with('success', 'Parental consent provided.');
+                ->with('success', 'Parental consent recorded. A signed PDF copy has been emailed to the parent/guardian.');
         } catch (\RuntimeException $e) {
             if ($e->getMessage() === 'HOLD_EXPIRED') {
                 $booking->expireAcceptance('Waiver and checkout hold expired after '.Booking::CHECKOUT_HOLD_MINUTES.' minutes.');
