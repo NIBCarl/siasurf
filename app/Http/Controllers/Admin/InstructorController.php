@@ -44,33 +44,36 @@ class InstructorController extends Controller
     public function index(Request $request): Response
     {
         $query = User::with('instructorProfile')
-            ->where('role', 'instructor')
-            ->whereHas('instructorProfile');
+            ->join('instructor_profiles', 'instructor_profiles.user_id', '=', 'users.id')
+            ->select('users.*')
+            ->where('users.role', 'instructor');
 
         // Filter by status
-        if ($request->has('status')) {
-            $query->whereHas('instructorProfile', function ($q) use ($request) {
-                $q->where('status', $request->status);
-            });
+        if ($request->filled('status')) {
+            $query->where('instructor_profiles.status', $request->status);
         }
 
         // Filter by level
-        if ($request->has('level')) {
-            $query->whereHas('instructorProfile', function ($q) use ($request) {
-                $q->where('level', $request->level);
-            });
+        if ($request->filled('level')) {
+            $query->where('instructor_profiles.level', $request->level);
         }
 
         // Search by name or email
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+                $q->where('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%");
             });
         }
 
-        $instructors = $query->paginate(20)
+        $instructors = $query
+            ->orderByRaw('CASE WHEN instructor_profiles.status = ? THEN 0 ELSE 1 END ASC', [
+                InstructorStatus::PendingVerification->value,
+            ])
+            ->orderByDesc('users.created_at')
+            ->orderByDesc('users.id')
+            ->paginate(20)
             ->withQueryString();
 
         return Inertia::render('Admin/Instructors/Index', [
@@ -211,6 +214,13 @@ class InstructorController extends Controller
                 'tone' => 'positive',
             ];
         }
+        if ($profile?->rejected_at) {
+            $auditTrail[] = [
+                'label' => 'Application rejected',
+                'date' => $profile->rejected_at->format('Y-m-d'),
+                'tone' => 'critical',
+            ];
+        }
         foreach ($instructor->instructorStrikes->sortByDesc('applied_at')->take(5) as $index => $strike) {
             $auditTrail[] = [
                 'label' => 'Strike #'.($index + 1).' ('.($strike->weight ?? 1).' pt)',
@@ -321,6 +331,8 @@ class InstructorController extends Controller
         $profile->update([
             'status' => InstructorStatus::Active->value,
             'qr_code_path' => $qrPath,
+            'rejection_reason' => null,
+            'rejected_at' => null,
         ]);
 
         // Send notification to instructor
@@ -351,23 +363,34 @@ class InstructorController extends Controller
         $this->authorize('verify', $profile);
 
         $validated = $request->validate([
-            'reason' => 'required|string',
+            'reason' => 'required|string|max:2000',
         ]);
 
+        $reason = trim($validated['reason']);
         $oldStatus = $profile->status;
 
         $profile->update([
             'status' => InstructorStatus::Rejected->value,
+            'rejection_reason' => $reason,
+            'rejected_at' => now(),
+        ]);
+
+        InstructorStatusLog::create([
+            'instructor_id' => $instructor->id,
+            'from_status' => $oldStatus?->value,
+            'to_status' => InstructorStatus::Rejected->value,
+            'reason' => $reason,
+            'changed_by' => $request->user()?->id,
         ]);
 
         // Send rejection notification
         try {
-            $instructor->notify(new InstructorRejected($validated['reason']));
+            $instructor->notify(new InstructorRejected($reason));
         } catch (\Exception $e) {
             \Log::error('Failed to send rejection notification: '.$e->getMessage());
         }
 
-        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Rejected, $validated['reason']);
+        $this->broadcastStatusChange($instructor, $oldStatus, InstructorStatus::Rejected, $reason);
 
         return back()->with('success', 'Instructor application rejected.');
     }
@@ -680,11 +703,16 @@ class InstructorController extends Controller
 
         $profile = $instructor->instructorProfile;
 
+        $clearRejection = $validated['status'] !== InstructorStatus::Rejected->value
+            ? ['rejection_reason' => null, 'rejected_at' => null]
+            : [];
+
         // Update profile
         $profile->update([
             'bio' => $validated['bio'] ?? null,
             'level' => $validated['level'],
             'status' => $validated['status'],
+            ...$clearRejection,
             ...$offerings,
             'area' => $validated['area'] ?? null,
             'meeting_point' => $validated['meeting_point'] ?? null,

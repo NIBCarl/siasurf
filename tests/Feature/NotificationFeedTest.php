@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Enums\InstructorStatus;
 use App\Models\Booking;
 use App\Models\User;
 use App\Notifications\BookingCancelledNotification;
+use App\Notifications\InstructorRejected;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -126,5 +129,48 @@ class NotificationFeedTest extends TestCase
     public function test_guests_cannot_reach_the_feed(): void
     {
         $this->getJson(route('notifications.index'))->assertUnauthorized();
+    }
+
+    public function test_feed_includes_rejection_reason_for_new_and_legacy_instructor_rejected_notifications(): void
+    {
+        $instructor = User::factory()->instructor()->create();
+        $instructor->instructorProfile()->create([
+            'bio' => 'Verified instructor',
+            'level' => 1,
+            'status' => InstructorStatus::Active->value,
+            'rate_per_hour' => 600,
+        ]);
+
+        // Legacy row where `message` omitted `reason` and `url`.
+        $instructor->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => InstructorRejected::class,
+            'data' => [
+                'type' => 'instructor_rejected',
+                'reason' => 'Blurry ID photo.',
+                'message' => 'Your instructor application was not approved.',
+            ],
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+
+        // New notification written via InstructorRejected::toArray().
+        $instructor->notify(new InstructorRejected('Missing BLS certificate.'));
+
+        $response = $this->actingAs($instructor->fresh())->getJson(route('notifications.index'));
+
+        $response->assertOk();
+        $response->assertJsonPath('items.0.type', 'instructor_rejected');
+        $response->assertJsonPath('items.0.url', route('instructor.onboarding'));
+        $response->assertJsonPath(
+            'items.0.message',
+            'Your instructor application was not approved. Reason: Missing BLS certificate.'
+        );
+        $response->assertJsonPath('items.1.type', 'instructor_rejected');
+        $response->assertJsonPath('items.1.url', route('instructor.onboarding'));
+        $response->assertJsonPath(
+            'items.1.message',
+            'Your instructor application was not approved. Reason: Blurry ID photo.'
+        );
     }
 }

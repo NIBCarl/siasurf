@@ -98,6 +98,8 @@ class OnboardingController extends Controller
                         'level' => $validated['level'],
                         ...$offerings,
                         'status' => InstructorStatus::PendingVerification,
+                        'rejection_reason' => null,
+                        'rejected_at' => null,
                         'area' => $validated['area'] ?? null,
                         'meeting_point' => $validated['meeting_point'] ?? null,
                     ]

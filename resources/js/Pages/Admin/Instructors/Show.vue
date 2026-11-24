@@ -57,6 +57,8 @@ interface Instructor {
     suspension_reason?: string | null
     suspended_at?: string | null
     suspended_until?: string | null
+    rejection_reason?: string | null
+    rejected_at?: string | null
   }
   certificates: Certificate[]
 }
@@ -267,6 +269,20 @@ const getStatusVariant = (status: string) => {
                     <ShieldCheckIcon class="w-4 h-4 mr-2" />
                     Approve Reinstatement
                 </BaseButton>
+            </div>
+        </div>
+
+        <div v-if="instructor.instructor_profile?.status === 'rejected'" class="rounded-3xl border border-rose-200 bg-rose-50 p-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.2em] text-rose-600">Application Rejected</p>
+                    <p class="mt-2 whitespace-pre-line text-sm font-semibold text-rose-900">
+                        {{ instructor.instructor_profile?.rejection_reason ?? 'No rejection reason recorded.' }}
+                    </p>
+                    <p v-if="instructor.instructor_profile?.rejected_at" class="mt-2 text-xs text-rose-700">
+                        Rejected {{ formatDateTime(instructor.instructor_profile.rejected_at) }}
+                    </p>
+                </div>
             </div>
         </div>
 
@@ -831,6 +847,7 @@ const getStatusVariant = (status: string) => {
                     placeholder="Enter reason for rejection..."
                     required
                 ></textarea>
+                <p v-if="rejectForm.errors.reason" class="mt-1 text-xs font-bold text-rose-600">{{ rejectForm.errors.reason }}</p>
             </div>
             <div class="flex justify-end gap-3">
                 <BaseButton variant="secondary" @click="showRejectModal = false">Cancel</BaseButton>

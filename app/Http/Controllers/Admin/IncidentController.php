@@ -38,7 +38,11 @@ class IncidentController extends Controller
         $instructorId = $request->query('instructor_id');
 
         $query = SafetyIncident::with(['instructor', 'booking', 'reporter', 'review'])
-            ->orderByDesc('created_at');
+            ->orderByRaw('CASE WHEN status = ? THEN 0 ELSE 1 END ASC', [
+                IncidentStatus::Pending->value,
+            ])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
 
         if ($status === 'critical_external') {
             $query->where('handled_externally', true);

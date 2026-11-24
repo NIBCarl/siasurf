@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ChangeRequestStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\BookingChangeRequest;
@@ -143,7 +144,11 @@ class BookingController extends Controller
             ])
             ->when($status === 'pending', fn ($query) => $query->awaitingAdmin())
             ->when($status !== 'pending' && $status !== 'all', fn ($query) => $query->where('status', $status))
-            ->latest()
+            ->orderByRaw('CASE WHEN status = ? THEN 0 ELSE 1 END ASC', [
+                ChangeRequestStatus::Pending->value,
+            ])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString();
 

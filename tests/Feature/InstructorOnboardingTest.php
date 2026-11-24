@@ -12,6 +12,7 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class InstructorOnboardingTest extends TestCase
@@ -561,10 +562,38 @@ class InstructorOnboardingTest extends TestCase
             'reason' => 'Certificate scan is unreadable.',
         ])->assertRedirect();
 
-        $this->assertSame(InstructorStatus::Rejected, $user->instructorProfile->fresh()->status);
+        $profile = $user->instructorProfile->fresh();
+        $this->assertSame(InstructorStatus::Rejected, $profile->status);
+        $this->assertSame('Certificate scan is unreadable.', $profile->rejection_reason);
+        $this->assertNotNull($profile->rejected_at);
+
+        $this->assertDatabaseHas('instructor_status_logs', [
+            'instructor_id' => $user->id,
+            'from_status' => InstructorStatus::PendingVerification->value,
+            'to_status' => InstructorStatus::Rejected->value,
+            'reason' => 'Certificate scan is unreadable.',
+            'changed_by' => $admin->id,
+        ]);
 
         $this->actingAs($user)->get('/dashboard')->assertRedirect(route('instructor.onboarding'));
-        $this->actingAs($user)->get(route('instructor.onboarding'))->assertOk();
+        $this->actingAs($user)->get(route('instructor.onboarding'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Instructor/Onboarding')
+                ->where('profile.status', InstructorStatus::Rejected->value)
+                ->where('profile.rejection_reason', 'Certificate scan is unreadable.')
+                ->where('profile.rejected_at', fn ($value) => is_string($value) && $value !== '')
+            );
+
+        $notification = $user->notifications()->latest()->first();
+        $this->assertNotNull($notification);
+        $this->assertSame('instructor_rejected', $notification->data['type']);
+        $this->assertSame('Certificate scan is unreadable.', $notification->data['reason']);
+        $this->assertSame(
+            'Your instructor application was not approved. Reason: Certificate scan is unreadable.',
+            $notification->data['message']
+        );
+        $this->assertSame(route('instructor.onboarding'), $notification->data['url']);
 
         $this->actingAs($user)->post(route('instructor.onboarding.store'), [
             'bio' => 'Updated bio with clear certificate scan.',
@@ -577,6 +606,8 @@ class InstructorOnboardingTest extends TestCase
             'user_id' => $user->id,
             'status' => InstructorStatus::PendingVerification->value,
             'rate_per_hour' => 650,
+            'rejection_reason' => null,
+            'rejected_at' => null,
         ]);
     }
 

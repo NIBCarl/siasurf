@@ -276,6 +276,9 @@ Route::middleware(['auth', 'verified', 'role:instructor', 'instructor.not_suspen
             'profile' => $profile ? [
                 'bio' => $profile->bio,
                 'level' => $profile->level->value,
+                'status' => $profile->status?->value,
+                'rejection_reason' => $profile->rejection_reason,
+                'rejected_at' => $profile->rejected_at?->toIso8601String(),
                 'offered_services' => $profile->offeredServiceValues(),
                 'rate_per_hour' => $profile->rate_per_hour !== null ? (float) $profile->rate_per_hour : null,
                 'guiding_rate' => $profile->guiding_rate !== null ? (float) $profile->guiding_rate : null,

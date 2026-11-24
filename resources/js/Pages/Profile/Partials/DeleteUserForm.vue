@@ -3,13 +3,13 @@ import DangerButton from '@/Components/DangerButton.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import Modal from '@/Components/Modal.vue';
+import PasswordInput from '@/Components/PasswordInput.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
 import { useForm } from '@inertiajs/vue3';
 import { nextTick, ref } from 'vue';
 
 const confirmingUserDeletion = ref(false);
-const passwordInput = ref<HTMLInputElement | null>(null);
+const passwordInput = ref<InstanceType<typeof PasswordInput> | null>(null);
 
 const form = useForm({
     password: '',
@@ -77,11 +77,10 @@ const closeModal = () => {
                         class="sr-only"
                     />
 
-                    <TextInput
+                    <PasswordInput
                         id="password"
                         ref="passwordInput"
                         v-model="form.password"
-                        type="password"
                         class="mt-1 block w-3/4"
                         placeholder="Password"
                         @keyup.enter="deleteUser"

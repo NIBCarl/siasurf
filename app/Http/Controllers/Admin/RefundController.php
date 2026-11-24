@@ -29,7 +29,17 @@ class RefundController extends Controller
             'initiatedBy',
         ])
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
-            ->latest()
+            ->orderByRaw(
+                'CASE WHEN status IN (?, ?, ?, ?) THEN 0 ELSE 1 END ASC',
+                [
+                    RefundStatus::ManualRequired->value,
+                    RefundStatus::Failed->value,
+                    RefundStatus::Requested->value,
+                    RefundStatus::Processing->value,
+                ]
+            )
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString();
 

@@ -13,7 +13,9 @@ class SkillUpgradeController extends Controller
     public function index(): Response
     {
         $requests = SkillUpgradeRequest::with(['student', 'instructor', 'booking'])
-            ->latest()
+            ->orderByRaw('CASE WHEN status = ? THEN 0 ELSE 1 END ASC', ['pending'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(15);
 
         return Inertia::render('Admin/SkillUpgrades/Index', [

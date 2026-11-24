@@ -56,7 +56,8 @@ class InstructorRejected extends Notification implements ShouldQueue
         return [
             'type' => 'instructor_rejected',
             'reason' => $this->reason,
-            'message' => 'Your instructor application was not approved.',
+            'message' => 'Your instructor application was not approved. Reason: ' . $this->reason,
+            'url' => route('instructor.onboarding'),
         ];
     }
 }

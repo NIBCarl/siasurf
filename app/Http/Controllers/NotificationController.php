@@ -80,18 +80,32 @@ class NotificationController extends Controller
                 ->latest()
                 ->limit(self::FEED_LIMIT)
                 ->get()
-                ->map(fn (DatabaseNotification $notification) => [
-                    'id' => $notification->id,
-                    'type' => $notification->data['type'] ?? '',
-                    'message' => $notification->data['message'] ?? 'You have a new update.',
-                    'data' => $notification->data,
-                    'read' => $notification->read_at !== null,
-                    'created_at' => $notification->created_at?->toIso8601String(),
-                    // Newer notifications carry their own role-aware url. Older
-                    // rows predate that field, so fall back to a safe guess
-                    // rather than leaving the item unclickable.
-                    'url' => $notification->data['url'] ?? $this->fallbackUrl($user, $notification->data),
-                ])
+                ->map(function (DatabaseNotification $notification) use ($user) {
+                    $data = $notification->data;
+                    $type = $data['type'] ?? '';
+                    $message = $data['message'] ?? 'You have a new update.';
+
+                    if (
+                        $type === 'instructor_rejected'
+                        && filled($data['reason'] ?? null)
+                        && ! str_contains($message, (string) $data['reason'])
+                    ) {
+                        $message = rtrim($message, '. ').'. Reason: '.$data['reason'];
+                    }
+
+                    return [
+                        'id' => $notification->id,
+                        'type' => $type,
+                        'message' => $message,
+                        'data' => $data,
+                        'read' => $notification->read_at !== null,
+                        'created_at' => $notification->created_at?->toIso8601String(),
+                        // Newer notifications carry their own role-aware url. Older
+                        // rows predate that field, so fall back to a safe guess
+                        // rather than leaving the item unclickable.
+                        'url' => $data['url'] ?? $this->fallbackUrl($user, $data),
+                    ];
+                })
                 ->values()
                 ->all(),
             'unread' => $user->unreadNotifications()->count(),
@@ -132,6 +146,10 @@ class NotificationController extends Controller
 
         if (is_numeric($data['appeal_id'] ?? null) && $user->isAdmin()) {
             return route('admin.appeals.show', (int) $data['appeal_id']);
+        }
+
+        if (($data['type'] ?? '') === 'instructor_rejected' && $user->isInstructor()) {
+            return route('instructor.onboarding');
         }
 
         return match ($user->role) {

@@ -73,8 +73,18 @@ class BookingController extends Controller
                     )
                 )
             )
-            ->orderByRaw("FIELD(status, 'reserved', 'pending', 'awaiting_payment', 'confirmed', 'in_progress') DESC")
-            ->orderByDesc('date')
+            ->orderByRaw(
+                'CASE status WHEN ? THEN 0 WHEN ? THEN 1 WHEN ? THEN 2 WHEN ? THEN 3 WHEN ? THEN 4 ELSE 5 END ASC',
+                [
+                    BookingStatus::Pending->value,
+                    BookingStatus::InProgress->value,
+                    BookingStatus::AwaitingPayment->value,
+                    BookingStatus::Confirmed->value,
+                    BookingStatus::Reserved->value,
+                ]
+            )
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(10)
             ->withQueryString();
 

@@ -24,7 +24,11 @@ class AppealController extends Controller
 
         $appeals = InstructorAppeal::with(['instructor', 'suspension'])
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
-            ->latest()
+            ->orderByRaw('CASE WHEN status = ? THEN 0 ELSE 1 END ASC', [
+                AppealStatus::Pending->value,
+            ])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString();
 

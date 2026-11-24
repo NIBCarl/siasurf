@@ -21,12 +21,17 @@ import {
   X,
   FileCheck
 } from '@lucide/vue'
+import { ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
+import { formatPhilippineDateTime } from '@/utils/philippineTime'
 import { computed, ref, watch, nextTick } from 'vue'
 
 const props = defineProps<{
   profile?: {
     bio: string | null;
     level: number;
+    status?: string | null;
+    rejection_reason?: string | null;
+    rejected_at?: string | null;
     offered_services?: string[] | null;
     rate_per_hour: number | null;
     guiding_rate?: number | null;
@@ -41,6 +46,7 @@ const props = defineProps<{
 
 const page = usePage()
 const uploadedCertificates = computed(() => Number(props.uploadedCertificates ?? 0))
+const isRejected = computed(() => props.profile?.status === 'rejected')
 
 // Real, server-reported limits. The UI must never promise more than PHP accepts,
 // otherwise oversized files are silently dropped and the form appears to reset.
@@ -347,9 +353,34 @@ const handleFileChange = (e: Event) => {
 
           <!-- Main Onboarding Form Column -->
           <div class="lg:col-span-8 space-y-10">
+            <!-- Persistent rejection feedback from SISA admin -->
+            <div
+              v-if="isRejected"
+              class="rounded-2xl border border-rose-200 bg-rose-50 p-6 shadow-sm"
+            >
+              <div class="flex items-start gap-3">
+                <ExclamationTriangleIcon class="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
+                <div class="flex-1 space-y-2">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="text-sm font-black text-rose-900 uppercase tracking-wider">Application Not Approved</h3>
+                    <span v-if="profile?.rejected_at" class="text-xs font-semibold text-rose-700">
+                      {{ formatPhilippineDateTime(profile.rejected_at) }}
+                    </span>
+                  </div>
+                  <p class="text-xs font-black uppercase tracking-widest text-rose-600">Reason from SISA Admin</p>
+                  <p class="whitespace-pre-line rounded-xl border border-rose-200/80 bg-white/80 p-4 text-sm font-medium leading-relaxed text-rose-950">
+                    {{ profile?.rejection_reason || 'No specific reason was provided. Please review your details and certificates, then resubmit.' }}
+                  </p>
+                  <p class="text-xs font-medium text-rose-800">
+                    Update your profile details and upload valid certificates below to resubmit your application for review.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <!-- Why the form came back: without this a validation bounce looks like a reset -->
             <div
-              v-if="$page.props.flash.error || validationErrors.length || fileErrors.length"
+              v-if="(!isRejected && $page.props.flash.error) || validationErrors.length || fileErrors.length"
               class="rounded-2xl border border-rose-200 bg-rose-50 p-6"
             >
               <div class="flex items-start gap-3">
@@ -358,7 +389,7 @@ const handleFileChange = (e: Event) => {
                 </svg>
                 <div class="flex-1">
                   <h3 class="text-sm font-black text-rose-800 uppercase tracking-wider">Application not submitted yet</h3>
-                  <p v-if="$page.props.flash.error" class="text-sm text-rose-700 mt-1 font-medium">{{ $page.props.flash.error }}</p>
+                  <p v-if="!isRejected && $page.props.flash.error" class="text-sm text-rose-700 mt-1 font-medium">{{ $page.props.flash.error }}</p>
                   <ul class="mt-2 space-y-1 list-disc list-inside text-sm text-rose-700 font-medium">
                     <li v-for="error in validationErrors" :key="error">{{ error }}</li>
                     <li v-for="error in fileErrors" :key="error">{{ error }}</li>

@@ -23,7 +23,9 @@ class AdminInstructorControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+
         \Spatie\Permission\Models\Role::findOrCreate('student', 'web');
         \Spatie\Permission\Models\Role::findOrCreate('instructor', 'web');
         \Spatie\Permission\Models\Role::findOrCreate('admin', 'web');
@@ -355,5 +357,60 @@ class AdminInstructorControllerTest extends TestCase
             'user_id' => $this->instructor->id,
             'status' => InstructorStatus::PendingVerification->value,
         ]);
+    }
+
+    #[Test]
+    public function instructors_index_prioritizes_pending_verification_newest_first_and_preserves_filters()
+    {
+        $olderPending = $this->instructor;
+        $olderPending->forceFill(['created_at' => now()->subDays(5)])->save();
+
+        $newerPending = User::factory()->create([
+            'role' => 'instructor',
+            'name' => 'Newer Pending Instructor',
+            'email' => 'newer-pending@example.test',
+        ]);
+        $newerPending->assignRole('instructor');
+        $newerPending->instructorProfile()->create([
+            'status' => InstructorStatus::PendingVerification,
+            'level' => 2,
+            'rate_per_hour' => 800,
+        ]);
+        $newerPending->forceFill(['created_at' => now()->subDay()])->save();
+
+        $newestActive = User::factory()->create([
+            'role' => 'instructor',
+            'name' => 'Newest Active Instructor',
+            'email' => 'newest-active@example.test',
+        ]);
+        $newestActive->assignRole('instructor');
+        $newestActive->instructorProfile()->create([
+            'status' => InstructorStatus::Active,
+            'level' => 2,
+            'rate_per_hour' => 900,
+        ]);
+        $newestActive->forceFill(['created_at' => now()])->save();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.instructors.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('instructors.data.0.id', $newerPending->id)
+                ->where('instructors.data.1.id', $olderPending->id)
+                ->where('instructors.data.2.id', $newestActive->id)
+            );
+
+        // Verify filters still operate properly with the instructor_profiles join.
+        $this->actingAs($this->admin)
+            ->get(route('admin.instructors.index', [
+                'status' => InstructorStatus::Active->value,
+                'level' => 2,
+                'search' => 'Newest Active',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('instructors.data', 1)
+                ->where('instructors.data.0.id', $newestActive->id)
+            );
     }
 }

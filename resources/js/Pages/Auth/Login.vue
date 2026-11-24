@@ -3,6 +3,7 @@ import Checkbox from '@/Components/Checkbox.vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
+import PasswordInput from '@/Components/PasswordInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
@@ -65,9 +66,8 @@ const submit = () => {
             <div>
                 <InputLabel for="password" value="Password" class="text-ocean-900" />
 
-                <TextInput
+                <PasswordInput
                     id="password"
-                    type="password"
                     class="mt-1 block w-full"
                     v-model="form.password"
                     placeholder="••••••••"

@@ -35,6 +35,8 @@ class InstructorProfile extends Model
         'suspended_until',
         'suspension_reason',
         'suspended_at',
+        'rejection_reason',
+        'rejected_at',
         'auto_accept_bookings',
     ];
 
@@ -50,6 +52,7 @@ class InstructorProfile extends Model
         'strike_count' => 'integer',
         'suspended_until' => 'datetime',
         'suspended_at' => 'datetime',
+        'rejected_at' => 'datetime',
         'auto_accept_bookings' => 'boolean',
     ];
 
