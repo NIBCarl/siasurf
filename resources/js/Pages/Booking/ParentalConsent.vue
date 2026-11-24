@@ -442,8 +442,8 @@ const goBack = () => {
                 :disabled="form.processing || !form.agreement || isHoldExpired"
                 :loading="form.processing"
                 variant="primary"
-                size="lg"
-                class="w-full sm:w-auto min-h-[48px]"
+                size="md"
+                class="w-full sm:w-auto min-h-[48px] h-auto py-3 px-5 sm:px-6 text-sm sm:text-base"
               >
                 Complete Consent &amp; Continue →
               </AppButton>
