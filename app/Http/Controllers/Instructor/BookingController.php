@@ -793,9 +793,13 @@ class BookingController extends Controller
         );
 
         DB::afterCommit(function () use ($booking) {
+            $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
+            if (! $fresh) {
+                return;
+            }
+
             try {
-                $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
-                if ($fresh?->payment) {
+                if ($fresh->payment) {
                     broadcast(new \App\Events\PaymentReceived($fresh->payment))->toOthers();
                 }
             } catch (\Throwable $exception) {
@@ -804,12 +808,8 @@ class BookingController extends Controller
                     'error' => $exception->getMessage(),
                 ]);
             }
-        });
 
-        try {
-            app(ReceiptService::class)->generateReceipt($booking);
-        } catch (\Throwable $e) {
-            report($e);
-        }
+            app(ReceiptService::class)->sendPaymentReceipts($fresh);
+        });
     }
 }

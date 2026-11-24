@@ -276,22 +276,8 @@ class PayMongoPaymentService implements PaymentServiceInterface
             throw new \InvalidArgumentException("Transaction {$transactionId} not found");
         }
 
-        $booking = $payment->booking;
-
         if ($success) {
-            $booking->update([
-                'status' => 'confirmed',
-                'payment_status' => PaymentStatus::Completed,
-            ]);
-
-            $payment->update([
-                'status' => PaymentStatus::Completed,
-                'paid_at' => now(),
-            ]);
-
-            $eventService = app(BookingEventService::class);
-            $eventService->recordPaymentCompleted($booking, $payment->fresh(), $booking->student_id);
-            $eventService->recordConfirmed($booking, $booking->student_id, 'GCash');
+            $this->processSuccessfulPayment($payment->booking_id, $transactionId, $transactionId);
         } else {
             $payment->update([
                 'status' => PaymentStatus::Failed,
@@ -363,8 +349,6 @@ class PayMongoPaymentService implements PaymentServiceInterface
         try {
             if ($booking->payment) {
                 broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
-
-                $booking->student?->notify(new \App\Notifications\PaymentReceivedNotification($booking->payment->fresh()));
             }
 
             broadcast(new \App\Events\BookingConfirmed($booking))->toOthers();
@@ -374,6 +358,8 @@ class PayMongoPaymentService implements PaymentServiceInterface
                 'error' => $exception->getMessage(),
             ]);
         }
+
+        app(ReceiptService::class)->sendPaymentReceipts($booking);
     }
 
     /**

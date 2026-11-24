@@ -215,6 +215,8 @@ class PaymentController extends Controller
                         'error' => $exception->getMessage(),
                     ]);
                 }
+
+                $this->receiptService->sendPaymentReceipts($fresh);
             });
 
             return null;
@@ -469,8 +471,9 @@ class PaymentController extends Controller
             auth()->id()
         );
 
+        $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
+
         try {
-            $fresh = $booking->fresh(['student', 'instructor', 'surfSpot', 'payment']);
             if ($fresh?->payment) {
                 broadcast(new \App\Events\PaymentReceived($fresh->payment))->toOthers();
             }
@@ -481,11 +484,15 @@ class PaymentController extends Controller
             ]);
         }
 
-        // Generate receipt reflecting actual amount paid and any balance due
-        try {
-            $this->receiptService->generateReceipt($booking);
-        } catch (\Throwable $e) {
-            report($e);
+        if ($isUnderpaid) {
+            // Generate receipt reflecting actual amount paid and any balance due
+            try {
+                $this->receiptService->generateReceipt($booking);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        } else {
+            $this->receiptService->sendPaymentReceipts($fresh ?? $booking);
         }
 
         if ($isUnderpaid) {
@@ -522,6 +529,7 @@ class PaymentController extends Controller
         $this->authorize('view', $booking);
 
         $payment = $booking->payment;
+        $transitionedToCompleted = false;
 
         // When returning from Xendit/PayMongo before an async webhook lands (or
         // on localhost without a webhook tunnel), verify the gateway status directly.
@@ -529,12 +537,12 @@ class PaymentController extends Controller
             $gatewayStatus = strtolower($this->paymentService->getPaymentStatus($payment->transaction_id));
 
             if (in_array($gatewayStatus, ['succeeded', 'paid', 'completed'], true)) {
-                DB::transaction(function () use ($booking, $payment) {
+                $transitionedToCompleted = DB::transaction(function () use ($booking, $payment): bool {
                     $lockedBooking = Booking::with('payment')->whereKey($booking->id)->lockForUpdate()->firstOrFail();
                     $lockedPayment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
 
                     if ($lockedPayment->isCompleted() && $lockedBooking->status === BookingStatus::Confirmed) {
-                        return;
+                        return false;
                     }
 
                     $lockedPayment->update([
@@ -552,9 +560,11 @@ class PaymentController extends Controller
                     $eventService = app(\App\Services\BookingEventService::class);
                     $eventService->recordPaymentCompleted($lockedBooking, $lockedPayment->fresh(), $lockedBooking->student_id);
                     $eventService->recordConfirmed($lockedBooking, $lockedBooking->student_id, 'GCash');
+
+                    return true;
                 });
 
-                $booking->refresh()->load('payment');
+                $booking->refresh()->load(['student', 'instructor', 'surfSpot', 'payment']);
             } elseif (in_array($gatewayStatus, ['failed', 'voided', 'expired'], true)) {
                 $payment->update([
                     'status' => PaymentStatus::Failed,
@@ -567,8 +577,21 @@ class PaymentController extends Controller
             }
         }
 
-        // Generate receipt if payment is completed
-        if ($booking->payment && $booking->payment->isCompleted()) {
+        if ($transitionedToCompleted) {
+            try {
+                if ($booking->payment) {
+                    broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
+                }
+                broadcast(new \App\Events\BookingConfirmed($booking))->toOthers();
+            } catch (\Throwable $exception) {
+                Log::warning('Failed to broadcast payment success redirect.', [
+                    'booking_id' => $booking->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+
+            $this->receiptService->sendPaymentReceipts($booking);
+        } elseif ($booking->payment && $booking->payment->isCompleted()) {
             $this->receiptService->generateReceipt($booking);
         }
 

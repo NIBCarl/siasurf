@@ -49,6 +49,11 @@ const props = defineProps<{
         }>;
     }>;
     averageRating?: number;
+    instructorSessionWarning?: {
+        in_session: boolean;
+        ends_at_label?: string | null;
+        message: string;
+    } | null;
 }>();
 
 const page = usePage();
@@ -158,9 +163,19 @@ const instructorLevelDescription: Record<number, string> = {
 
                         <div class="min-w-0 flex-1 text-center md:text-left">
                             <div class="mb-4">
-                                <span class="inline-block rounded-xl bg-sand-100 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-sand-700 mb-3 sm:mb-4">
-                                    Verified Surf Professional
-                                </span>
+                                <div class="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-3 sm:mb-4">
+                                    <span class="inline-block rounded-xl bg-sand-100 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-sand-700">
+                                        Verified Surf Professional
+                                    </span>
+                                    <span
+                                        v-if="instructorSessionWarning?.in_session"
+                                        class="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-900"
+                                        :title="instructorSessionWarning.message"
+                                    >
+                                        <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                                        Currently in session<template v-if="instructorSessionWarning.ends_at_label"> · until ~{{ instructorSessionWarning.ends_at_label }}</template>
+                                    </span>
+                                </div>
                                 <h1 class="text-3xl sm:text-5xl font-extrabold text-slate-900 capitalize tracking-tight leading-tight break-words">
                                     {{ instructor.name }}
                                 </h1>

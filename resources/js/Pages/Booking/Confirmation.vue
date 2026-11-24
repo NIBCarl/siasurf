@@ -48,12 +48,19 @@ interface SlotShare {
   share_url: string
 }
 
+interface InstructorSessionWarning {
+  in_session: boolean
+  ends_at_label?: string | null
+  message: string
+}
+
 interface Props {
   booking: Booking
   step?: number
   acceptRemainingSeconds?: number | null
   paymentRemainingSeconds?: number | null
   slotShare?: SlotShare | null
+  instructorSessionWarning?: InstructorSessionWarning | null
 }
 
 const props = defineProps<Props>()
@@ -206,7 +213,7 @@ const startGCashPayment = () => {
 
 const reloadBookingState = () => {
   router.reload({
-    only: ['booking', 'acceptRemainingSeconds', 'paymentRemainingSeconds'],
+    only: ['booking', 'acceptRemainingSeconds', 'paymentRemainingSeconds', 'instructorSessionWarning'],
   })
 }
 
@@ -302,6 +309,19 @@ onBeforeUnmount(() => {
                 <p class="text-[10px] font-bold uppercase tracking-wider text-amber-700">Response Window</p>
                 <p class="text-base font-mono font-black text-amber-950">{{ formatCountdown(acceptSeconds) }}</p>
               </div>
+            </div>
+
+            <div
+              v-if="instructorSessionWarning?.in_session"
+              role="status"
+              class="mt-4 pt-4 border-t border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-900"
+            >
+              <svg class="w-4 h-4 text-amber-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p>
+                <strong>Currently in the water:</strong> {{ instructorSessionWarning.message }}
+              </p>
             </div>
           </div>
         </template>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AvailabilityService;
 use App\Services\InstructorVerificationService;
 use App\Services\SisaIdCardService;
 use Inertia\Inertia;
@@ -16,7 +17,8 @@ class InstructorVerificationController extends Controller
     public function show(
         User $instructor,
         InstructorVerificationService $verification,
-        SisaIdCardService $idCardService
+        SisaIdCardService $idCardService,
+        AvailabilityService $availabilityService
     ): Response {
         abort_unless($instructor->isInstructor(), 404);
 
@@ -49,6 +51,9 @@ class InstructorVerificationController extends Controller
             ],
             'verification' => $summary,
             'idCard' => $idCardService->build($instructor),
+            'instructorSessionWarning' => $summary['can_book']
+                ? $availabilityService->activeSessionNotice($instructor)
+                : null,
             'recentReviews' => $reviews->map(fn ($review) => [
                 'id' => $review->id,
                 'rating' => $review->rating,

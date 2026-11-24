@@ -50,10 +50,17 @@ interface Instructor {
   reviews_count: number
 }
 
+interface InstructorSessionWarning {
+  in_session: boolean
+  ends_at_label?: string | null
+  message: string
+}
+
 interface Props {
   instructor: Instructor
   verification: Verification
   idCard: SisaIdCardData
+  instructorSessionWarning?: InstructorSessionWarning | null
   recentReviews: Array<{
     id: number
     rating: number | null
@@ -241,6 +248,20 @@ const bookLabel = computed(() => (isAuthenticated.value ? 'Book Lesson' : 'Sign 
                 <p v-if="suspendedUntilLabel" class="mt-1 text-xs font-semibold text-rose-700">
                   Suspended until {{ suspendedUntilLabel }}
                 </p>
+              </div>
+            </div>
+
+            <div
+              v-if="instructorSessionWarning?.in_session"
+              role="status"
+              class="mt-4 flex items-start gap-2.5 rounded-control border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900"
+            >
+              <ClockIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+              <div class="min-w-0">
+                <p class="font-bold text-amber-950">
+                  Currently in session<template v-if="instructorSessionWarning.ends_at_label"> · until ~{{ instructorSessionWarning.ends_at_label }}</template>
+                </p>
+                <p class="mt-0.5 leading-snug">{{ instructorSessionWarning.message }}</p>
               </div>
             </div>
 

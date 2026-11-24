@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\PaymentStatus;
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Notifications\PaymentReceivedNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class ReceiptService
@@ -112,16 +115,61 @@ class ReceiptService
     }
 
     /**
+     * Canonical download/attachment filename for a booking receipt PDF.
+     */
+    public function receiptFileName(Booking $booking): string
+    {
+        return "SiaSurf_Receipt_{$booking->id}.pdf";
+    }
+
+    /**
      * Stream a receipt for download
      */
     public function streamReceipt(Booking $booking)
     {
         $receiptPath = $this->generateReceipt($booking);
-        
+
         return response()->download(
             Storage::disk('local')->path($receiptPath),
-            "SiaSurf_Receipt_{$booking->id}.pdf"
+            $this->receiptFileName($booking)
         );
+    }
+
+    /**
+     * Generate the official receipt PDF once and send payment receipt
+     * notifications (email with PDF + database bell) to both student and instructor.
+     */
+    public function sendPaymentReceipts(Booking $booking): void
+    {
+        $booking->loadMissing(['student', 'instructor', 'surfSpot', 'payment']);
+
+        if (! $booking->payment || $booking->payment->status !== PaymentStatus::Completed) {
+            return;
+        }
+
+        $receiptPath = null;
+
+        try {
+            $receiptPath = $this->generateReceipt($booking);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        $recipients = collect([$booking->student, $booking->instructor])
+            ->filter()
+            ->unique('id');
+
+        foreach ($recipients as $recipient) {
+            try {
+                $recipient->notify(new PaymentReceivedNotification($booking->payment, $receiptPath));
+            } catch (\Throwable $e) {
+                Log::warning('Failed to send payment receipt notification.', [
+                    'booking_id' => $booking->id,
+                    'recipient_id' => $recipient->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**

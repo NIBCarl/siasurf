@@ -13,6 +13,7 @@ use App\Models\Availability;
 use App\Models\Booking;
 use App\Models\InstructorProfile;
 use App\Models\SurfSpot;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -2629,6 +2630,88 @@ class AvailabilityService
             'slot_capacity' => $level->maxStudents(),
             'summary' => $summary,
             'days' => $days,
+        ];
+    }
+
+    /**
+     * Build a non-blocking warning payload when the instructor is currently teaching
+     * or inside a confirmed live lesson window today (Option B).
+     *
+     * Suppressed when Instant Book is enabled because those requests auto-confirm
+     * without waiting on a manual instructor response.
+     *
+     * @return array{in_session: bool, ends_at_label: ?string, message: string}|null
+     */
+    public function activeSessionNotice(User|int $instructor, ?Carbon $at = null): ?array
+    {
+        $user = $instructor instanceof User
+            ? $instructor
+            : User::with('instructorProfile')->find($instructor);
+
+        if (! $user) {
+            return null;
+        }
+
+        $user->loadMissing('instructorProfile');
+
+        if ($user->instructorProfile?->usesInstantBook()) {
+            return null;
+        }
+
+        $tz = config('app.timezone', 'Asia/Manila');
+        $now = $at ? $at->copy()->timezone($tz) : now($tz);
+        $today = $now->format('Y-m-d');
+
+        $candidates = Booking::query()
+            ->where('instructor_id', $user->id)
+            ->whereDate('date', $today)
+            ->whereIn('status', [
+                BookingStatus::InProgress->value,
+                BookingStatus::Confirmed->value,
+            ])
+            ->get();
+
+        $active = $candidates->first(
+            fn (Booking $booking): bool => $booking->status === BookingStatus::InProgress
+        );
+
+        if (! $active) {
+            $active = $candidates->first(function (Booking $booking) use ($now): bool {
+                if ($booking->status !== BookingStatus::Confirmed) {
+                    return false;
+                }
+
+                $start = $booking->lessonStartAt();
+                $end = $booking->lessonEndAt();
+
+                return $start !== null
+                    && $end !== null
+                    && $now->greaterThanOrEqualTo($start)
+                    && $now->lessThanOrEqualTo($end);
+            });
+        }
+
+        if (! $active) {
+            return null;
+        }
+
+        $endsAt = $active->lessonEndAt();
+
+        if (! $endsAt && $active->started_at !== null) {
+            $endsAt = $active->started_at
+                ->copy()
+                ->timezone($tz)
+                ->addHours($active->resolvedDurationHours());
+        }
+
+        $endsAtLabel = $endsAt?->copy()->timezone($tz)->format('g:i A');
+        $name = $user->name ?: 'This instructor';
+        $untilPhrase = $endsAtLabel ? " (expected to finish around {$endsAtLabel})" : '';
+
+        return [
+            'in_session' => true,
+            'ends_at_label' => $endsAtLabel,
+            'message' => "{$name} is currently in a surf session{$untilPhrase} and may not be able to respond to your booking request right away.",
         ];
     }
 }

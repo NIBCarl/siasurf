@@ -418,6 +418,7 @@ class InstructorSearchController extends Controller
             // FR 1.8.2 - show the weekly schedule up front so students do not
             // have to guess which days this instructor actually works.
             'weeklyAvailability' => $availabilityService->weeklyPattern($instructor->id),
+            'instructorSessionWarning' => $availabilityService->activeSessionNotice($instructor),
         ]);
     }
 }

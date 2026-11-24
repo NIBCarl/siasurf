@@ -408,8 +408,6 @@ class XenditPaymentService implements PaymentServiceInterface
         try {
             if ($booking->payment) {
                 broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
-
-                $booking->student?->notify(new \App\Notifications\PaymentReceivedNotification($booking->payment->fresh()));
             }
 
             broadcast(new \App\Events\BookingConfirmed($booking))->toOthers();
@@ -419,6 +417,8 @@ class XenditPaymentService implements PaymentServiceInterface
                 'error' => $exception->getMessage(),
             ]);
         }
+
+        app(ReceiptService::class)->sendPaymentReceipts($booking);
     }
 
     /**

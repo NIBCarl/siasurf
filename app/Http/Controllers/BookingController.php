@@ -187,6 +187,7 @@ class BookingController extends Controller
             'prefill' => $studentProfile?->bookingPrefill() ?? [],
             'initialDate' => $initialDate,
             'initialStartTime' => $initialStartTime,
+            'instructorSessionWarning' => $this->availabilityService->activeSessionNotice($instructor),
             'step' => 1,
         ]);
     }
@@ -689,10 +690,13 @@ class BookingController extends Controller
                 ->with('info', 'This booking has already moved past the payment-method step.');
         }
 
+        $booking->load(['instructor.instructorProfile', 'surfSpot']);
+
         return Inertia::render('Booking/Payment', [
-            'booking' => $booking->load(['instructor.instructorProfile', 'surfSpot']),
+            'booking' => $booking,
             'step' => 3,
             'holdRemainingSeconds' => $booking->getPaymentTimeRemaining(),
+            'instructorSessionWarning' => $this->availabilityService->activeSessionNotice($booking->instructor ?? $booking->instructor_id),
         ]);
     }
 
@@ -940,6 +944,9 @@ class BookingController extends Controller
             'acceptRemainingSeconds' => $booking->getAcceptTimeRemaining(),
             'paymentRemainingSeconds' => $booking->getPaymentTimeRemaining(),
             'slotShare' => $this->buildSlotSharePayload($booking),
+            'instructorSessionWarning' => $booking->status === BookingStatus::Pending
+                ? $this->availabilityService->activeSessionNotice($booking->instructor ?? $booking->instructor_id)
+                : null,
         ]);
     }
 

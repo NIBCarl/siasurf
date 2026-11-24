@@ -48,6 +48,12 @@ interface StudentProfileInfo {
   country?: string | null
 }
 
+interface InstructorSessionWarning {
+  in_session: boolean
+  ends_at_label?: string | null
+  message: string
+}
+
 interface Props {
   instructor: Instructor
   surfSpots: SurfSpot[]
@@ -78,6 +84,7 @@ interface Props {
   allowedSurfSpotDifficulties?: string[]
   initialDate?: string | null
   initialStartTime?: string | null
+  instructorSessionWarning?: InstructorSessionWarning | null
 }
 
 const props = defineProps<Props>()
@@ -745,6 +752,34 @@ const submit = () => {
               <div class="p-4 sm:p-8 border-b border-sand-200 bg-gradient-to-r from-lagoon-50 to-transparent">
                 <h2 class="text-xl sm:text-2xl font-bold text-deep-950">Lesson Details</h2>
                 <p class="text-slate-600 mt-1 text-sm sm:text-base">Configure your surfing session with {{ instructor.name }}</p>
+              </div>
+
+              <!-- Instructor Currently in Session Warning (non-blocking) -->
+              <div
+                v-if="instructorSessionWarning?.in_session"
+                role="status"
+                class="mx-5 sm:mx-8 mt-6 p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3"
+              >
+                <div class="bg-amber-100 p-2 rounded-lg shrink-0">
+                  <svg class="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h4 class="text-sm font-bold text-amber-950">Instructor Currently in Session</h4>
+                    <span
+                      v-if="instructorSessionWarning.ends_at_label"
+                      class="inline-flex items-center rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-bold text-amber-950"
+                    >
+                      Until ~{{ instructorSessionWarning.ends_at_label }}
+                    </span>
+                  </div>
+                  <p class="text-xs text-amber-900 mt-1">{{ instructorSessionWarning.message }}</p>
+                  <p class="text-[11px] text-amber-800 mt-1">
+                    You can still submit your booking request — if they cannot respond within the 2-hour window, the request will expire automatically and you can book another instructor.
+                  </p>
+                </div>
               </div>
 
               <!-- Flash Info Alert -->

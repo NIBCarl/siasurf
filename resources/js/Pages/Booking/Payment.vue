@@ -26,10 +26,17 @@ interface Booking {
   }
 }
 
+interface InstructorSessionWarning {
+  in_session: boolean
+  ends_at_label?: string | null
+  message: string
+}
+
 interface Props {
   booking: Booking
   step: number
   holdRemainingSeconds?: number
+  instructorSessionWarning?: InstructorSessionWarning | null
 }
 
 const props = defineProps<Props>()
@@ -178,6 +185,31 @@ const goBack = () => {
             >
               Cancel &amp; Release Hold
             </button>
+          </div>
+        </div>
+
+        <!-- Instructor Currently in Session Warning (non-blocking) -->
+        <div
+          v-if="instructorSessionWarning?.in_session"
+          role="status"
+          class="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 sm:px-5 py-3.5 flex items-start gap-3"
+        >
+          <div class="mt-0.5 rounded-lg bg-amber-100 p-1.5 shrink-0">
+            <svg class="h-4 w-4 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <p class="text-xs font-bold text-amber-950">Instructor Currently in Session</p>
+              <span
+                v-if="instructorSessionWarning.ends_at_label"
+                class="inline-flex items-center rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-950"
+              >
+                Until ~{{ instructorSessionWarning.ends_at_label }}
+              </span>
+            </div>
+            <p class="mt-0.5 text-xs text-amber-900">{{ instructorSessionWarning.message }}</p>
           </div>
         </div>
 

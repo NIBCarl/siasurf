@@ -198,13 +198,11 @@ class MockPaymentService implements PaymentServiceInterface
      */
     private function broadcastPaymentReceived(Booking $booking): void
     {
-        try {
-            $booking->loadMissing(['student', 'instructor', 'surfSpot']);
+        $booking->loadMissing(['student', 'instructor', 'surfSpot', 'payment']);
 
+        try {
             if ($booking->payment) {
                 broadcast(new \App\Events\PaymentReceived($booking->payment->fresh()))->toOthers();
-
-                $booking->student?->notify(new \App\Notifications\PaymentReceivedNotification($booking->payment->fresh()));
             }
 
             broadcast(new \App\Events\BookingConfirmed($booking))->toOthers();
@@ -214,6 +212,8 @@ class MockPaymentService implements PaymentServiceInterface
                 'error' => $exception->getMessage(),
             ]);
         }
+
+        app(ReceiptService::class)->sendPaymentReceipts($booking);
     }
 
     /**
