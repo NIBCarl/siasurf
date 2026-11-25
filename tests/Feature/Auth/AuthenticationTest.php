@@ -73,6 +73,7 @@ class AuthenticationTest extends TestCase
             'phone' => '+63 912 345 6789',
             'skill_level' => 'beginner',
             'is_first_time' => true,
+            'terms_accepted' => true,
         ]);
 
         $this->assertAuthenticated();
@@ -92,6 +93,7 @@ class AuthenticationTest extends TestCase
             'password_confirmation' => 'password',
             'role' => 'instructor',
             'phone' => '+63 912 345 6789',
+            'terms_accepted' => true,
         ]);
 
         $this->assertAuthenticated();
@@ -122,6 +124,7 @@ class AuthenticationTest extends TestCase
             'password' => 'password',
             'password_confirmation' => 'password',
             'role' => 'invalid_role',
+            'terms_accepted' => true,
         ]);
 
         $response->assertSessionHasErrors(['role']);

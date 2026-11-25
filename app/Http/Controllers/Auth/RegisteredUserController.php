@@ -42,6 +42,10 @@ class RegisteredUserController extends Controller
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|in:student,instructor',
+            'terms_accepted' => ['required', 'accepted'],
+        ], [
+            'terms_accepted.required' => 'You must read and agree to the Terms of Service and Privacy Policy to create an account.',
+            'terms_accepted.accepted' => 'You must read and agree to the Terms of Service and Privacy Policy to create an account.',
         ]);
 
         $user = User::create([

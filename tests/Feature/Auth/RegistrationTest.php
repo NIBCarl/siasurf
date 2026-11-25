@@ -32,6 +32,7 @@ class RegistrationTest extends TestCase
             'role' => 'student',
             'skill_level' => 'beginner',
             'is_first_time' => true,
+            'terms_accepted' => true,
         ], $overrides);
     }
 
@@ -40,6 +41,20 @@ class RegistrationTest extends TestCase
         $response = $this->get('/register');
 
         $response->assertStatus(200);
+    }
+
+    public function test_registration_requires_terms_acceptance(): void
+    {
+        $this->post('/register', $this->payload(['terms_accepted' => false]))
+            ->assertSessionHasErrors(['terms_accepted']);
+
+        $payloadWithoutTerms = $this->payload();
+        unset($payloadWithoutTerms['terms_accepted']);
+
+        $this->post('/register', $payloadWithoutTerms)
+            ->assertSessionHasErrors(['terms_accepted']);
+
+        $this->assertGuest();
     }
 
     public function test_new_users_can_register(): void

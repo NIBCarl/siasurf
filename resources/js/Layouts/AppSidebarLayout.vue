@@ -538,7 +538,13 @@ const avatarUrl = computed(() => resolveAvatarUrl(user.value));
             </main>
 
             <footer class="app-shell-no-print border-t border-sand-200 px-4 py-5 text-center text-body-sm text-stone-500 sm:px-6 lg:px-8 lg:text-left print:hidden">
-                &copy; {{ getPhilippineYear() }} SiaSurf &middot; Siargao Island, Philippines
+                <div class="flex flex-col items-center justify-between gap-2 sm:flex-row">
+                    <span>&copy; {{ getPhilippineYear() }} SiaSurf &middot; Siargao Island, Philippines</span>
+                    <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
+                        <Link :href="route('legal.terms')" class="hover:text-deep-950 hover:underline">Terms of Service</Link>
+                        <Link :href="route('legal.privacy')" class="hover:text-deep-950 hover:underline">Privacy Policy</Link>
+                    </div>
+                </div>
             </footer>
         </div>
 

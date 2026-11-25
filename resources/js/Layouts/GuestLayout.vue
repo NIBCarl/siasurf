@@ -47,6 +47,10 @@ import { Link } from '@inertiajs/vue3';
                 <!-- Footer Info -->
                 <div class="mt-12 text-center text-sm text-sand-500 lg:text-left">
                     <p>&copy; 2026 SiaSurf. Professional Surfing Integration.</p>
+                    <div class="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs lg:justify-start">
+                        <Link :href="route('legal.terms')" class="underline decoration-sand-300 hover:text-deep-950">Terms of Service</Link>
+                        <Link :href="route('legal.privacy')" class="underline decoration-sand-300 hover:text-deep-950">Privacy Policy</Link>
+                    </div>
                 </div>
             </div>
         </div>

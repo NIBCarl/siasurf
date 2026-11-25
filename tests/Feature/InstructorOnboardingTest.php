@@ -41,6 +41,7 @@ class InstructorOnboardingTest extends TestCase
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'role' => 'instructor',
+            'terms_accepted' => true,
         ])->assertRedirect(route('verification.notice'));
 
         $user = User::where('email', 'newinst@example.test')->firstOrFail();

@@ -24,6 +24,7 @@ use App\Http\Controllers\Instructor\QrController as InstructorQrController;
 use App\Http\Controllers\Instructor\SuspensionController;
 use App\Http\Controllers\InstructorSearchController;
 use App\Http\Controllers\InstructorVerificationController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileAvatarController;
 use App\Http\Controllers\ProfileController;
@@ -40,6 +41,10 @@ use Inertia\Inertia;
 
 // Public routes
 Route::get('/', WelcomeController::class)->name('welcome');
+Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('legal.privacy');
+Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('legal.terms');
+Route::redirect('/privacy', '/privacy-policy', 301);
+Route::redirect('/terms', '/terms-of-service', 301);
 
 // Instructor search and public profile routes
 Route::get('/instructors', [InstructorSearchController::class, 'index'])->name('instructors.search');

@@ -606,9 +606,9 @@ onUnmounted(() => {
                     <div>
                         <h4 class="mb-6 font-bold text-white">Legal</h4>
                         <ul class="space-y-4">
-                            <li><a href="#" class="hover:text-white">Terms of Service</a></li>
-                            <li><a href="#" class="hover:text-white">Privacy Policy</a></li>
-                            <li><a href="#" class="hover:text-white">Digital Waivers</a></li>
+                            <li><Link :href="route('legal.terms')" class="hover:text-white">Terms of Service</Link></li>
+                            <li><Link :href="route('legal.privacy')" class="hover:text-white">Privacy Policy</Link></li>
+                            <li><Link :href="`${route('legal.terms')}#digital-waivers`" class="hover:text-white">Digital Waivers</Link></li>
                         </ul>
                     </div>
                 </div>

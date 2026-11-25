@@ -292,4 +292,24 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Legal Policies & SISA Privacy Contact
+    |--------------------------------------------------------------------------
+    |
+    | Public metadata displayed on /privacy-policy and /terms-of-service.
+    | Override via SIASURF_LEGAL_* environment variables in production.
+    |
+    */
+
+    'legal' => [
+        'effective_date' => env('SIASURF_LEGAL_EFFECTIVE_DATE', 'November 25, 2026'),
+        'last_updated' => env('SIASURF_LEGAL_LAST_UPDATED', 'November 25, 2026'),
+        'organization' => env('SIASURF_LEGAL_ORGANIZATION', 'Siargao Island Surfing Association (SISA)'),
+        'dpo_name' => env('SIASURF_LEGAL_DPO_NAME', 'SISA Data Protection Officer'),
+        'contact_email' => env('SIASURF_LEGAL_CONTACT_EMAIL', env('MAIL_FROM_ADDRESS', 'support@siasurf.ph')),
+        'contact_phone' => env('SIASURF_LEGAL_CONTACT_PHONE', 'Available at the SISA General Luna Office'),
+        'office_address' => env('SIASURF_LEGAL_OFFICE_ADDRESS', 'General Luna, Siargao Island, Surigao del Norte, Philippines'),
+    ],
+
 ];

@@ -89,6 +89,7 @@ class SisaWaiverAndHotelPickupTest extends TestCase
             'role' => 'student',
             'skill_level' => 'beginner',
             'is_first_time' => true,
+            'terms_accepted' => true,
         ])->assertRedirect(route('verification.notice'));
 
         $registered = User::where('email', 'maya@example.com')->with('studentProfile')->firstOrFail();

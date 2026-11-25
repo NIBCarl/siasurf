@@ -42,6 +42,7 @@ class StudentSkillAssessmentTest extends TestCase
             'role' => 'student',
             'skill_level' => 'advanced',
             'is_first_time' => false,
+            'terms_accepted' => true,
         ])->assertRedirect(route('verification.notice'));
 
         $user = User::where('email', 'newsurfer@example.test')->firstOrFail();

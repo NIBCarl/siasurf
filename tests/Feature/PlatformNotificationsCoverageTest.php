@@ -129,6 +129,7 @@ class PlatformNotificationsCoverageTest extends TestCase
             'password' => 'password',
             'password_confirmation' => 'password',
             'role' => 'student',
+            'terms_accepted' => true,
         ])->assertRedirect(route('verification.notice'));
 
         $student = User::where('email', 'maya@example.com')->firstOrFail();
@@ -155,6 +156,7 @@ class PlatformNotificationsCoverageTest extends TestCase
             'password' => 'password',
             'password_confirmation' => 'password',
             'role' => 'instructor',
+            'terms_accepted' => true,
         ])->assertRedirect(route('verification.notice'));
 
         $instructor = User::where('email', 'kuya@example.com')->firstOrFail();

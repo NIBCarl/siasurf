@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Checkbox from '@/Components/Checkbox.vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -17,6 +18,7 @@ const form = useForm({
     password: '',
     password_confirmation: '',
     role: props.defaultRole === 'instructor' ? 'instructor' : 'student',
+    terms_accepted: false,
 });
 
 const submit = () => {
@@ -134,6 +136,39 @@ const submit = () => {
                     class="mt-2"
                     :message="form.errors.password_confirmation"
                 />
+            </div>
+
+            <div class="mt-4">
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                    <Checkbox
+                        name="terms_accepted"
+                        v-model:checked="form.terms_accepted"
+                        class="mt-0.5 shrink-0"
+                        required
+                    />
+                    <span class="text-xs leading-relaxed text-slate-600">
+                        I have read and agree to SiaSurf&rsquo;s
+                        <a
+                            :href="route('legal.terms')"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="font-medium text-ocean-600 underline hover:text-ocean-700"
+                        >
+                            Terms of Service
+                        </a>
+                        and
+                        <a
+                            :href="route('legal.privacy')"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="font-medium text-ocean-600 underline hover:text-ocean-700"
+                        >
+                            Privacy Policy
+                        </a>.
+                    </span>
+                </label>
+
+                <InputError class="mt-2" :message="form.errors.terms_accepted" />
             </div>
 
             <div class="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
